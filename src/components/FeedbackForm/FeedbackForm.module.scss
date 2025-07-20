@@ -1,0 +1,57 @@
+/* src/components/FeedbackForm/FeedbackForm.module.scss */
+.feedbackForm {
+    width: 100%;
+    margin: 2rem 0;
+    padding: 1rem;
+    background-color: #fff;
+    border: 1px solid #ddd;
+    border-radius: 8px;
+  }
+  
+  .header {
+    font-size: 1.25rem;
+    font-weight: 600;
+    margin-bottom: 0.75rem;
+  }
+  
+  .textarea {
+    width: 100%;
+    min-height: 100px;
+    padding: 0.75rem;
+    border: 1px solid #ccc;
+    border-radius: 4px;
+    font-size: 1rem;
+    resize: vertical;
+    margin-bottom: 0.5rem;
+  }
+  
+  .error {
+    color: #c00;
+    margin-bottom: 0.5rem;
+  }
+  
+  .submitButton {
+    background: #0077c8;
+    color: #fff;
+    padding: 0.5rem 1.25rem;
+    border: none;
+    border-radius: 4px;
+    cursor: pointer;
+    transition: background-color 0.2s ease;
+  }
+  
+  .submitButton:disabled {
+    opacity: 0.6;
+    cursor: not-allowed;
+  }
+  
+  .successMessage {
+    width: 100%;
+    margin: 2rem 0;
+    padding: 1rem;
+    background-color: #e6ffed;
+    border: 1px solid #b7eb8f;
+    border-radius: 8px;
+    color: #389e0d;
+    font-weight: 500;
+  }

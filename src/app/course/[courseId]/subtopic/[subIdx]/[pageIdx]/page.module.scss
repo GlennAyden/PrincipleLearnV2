@@ -1,0 +1,592 @@
+/* src/app/course/[courseId]/subtopic/[subIdx]/[pageIdx]/page.module.scss */
+
+/* Progress bar */
+.progressBar {
+  display: flex;
+  gap: 0.5rem;
+  margin-bottom: 1rem;
+}
+.progressStep {
+  flex: 1;
+  height: 8px;
+  background: #ddd;
+  border-radius: 4px;
+}
+.activeStep {
+  background: #0077c8;
+}
+
+/* Title */
+.topicTitle {
+  font-size: 1.75rem;
+  margin-bottom: 1rem;
+}
+
+/* Paragraphs */
+.pageParagraph {
+  margin-bottom: 1.5rem;
+  line-height: 1.6;
+  font-size: 1rem;
+  color: #333;
+  max-width: 100%;
+  overflow-wrap: break-word;
+  text-align: justify;
+}
+
+/* Add paragraph spacing for better readability */
+.pageParagraph:not(:last-child) {
+  padding-bottom: 0.5rem;
+}
+
+/* First paragraph styling for emphasis */
+.pageParagraph:first-of-type {
+  font-size: 1.05rem;
+}
+
+/* Key Takeaways */
+.keyTakeawaysWrapper {
+  margin: 2rem 0;
+}
+.takeawayList {
+  list-style-position: inside;
+  margin: 0;
+  padding-left: 1rem;
+}
+.takeawayItem {
+  margin-bottom: 0.5rem;
+  line-height: 1.6;
+}
+
+/* Quiz section wrapper */
+.quizSectionWrapper {
+  width: 100%;
+  margin: 2rem 0;
+}
+
+/* WhatNext wrapper */
+.whatNextWrapper {
+  margin: 2rem 0;
+}
+
+/* Feedback wrapper */
+.feedbackWrapper {
+  margin: 2rem 0;
+}
+
+/* Next Subtopics wrapper */
+.nextSubtopicsWrapper {
+  margin: 2rem 0;
+}
+
+/* Navigation Buttons */
+.navigationButtons {
+  display: flex;
+  justify-content: space-between;
+  margin: 2rem 0;
+}
+.backBtn,
+.nextBtn {
+  background: #0077c8;
+  color: #fff;
+  padding: 0.75rem 1.5rem;
+  border: none;
+  border-radius: 4px;
+  box-shadow: 0 4px #005a9e;
+  cursor: pointer;
+  transition: transform 0.1s, box-shadow 0.1s;
+}
+.nextBtn:active {
+  transform: translateY(4px);
+  box-shadow: 0 0 #005a9e;
+}
+
+/* Ask Question Section (legacy) */
+.askSection {
+  display: flex;
+  flex-direction: column;
+  gap: 1rem;
+  width: 100%;
+  margin: 2rem 0;
+}
+.askSection > button {
+  background: #0077c8;
+  color: #fff;
+  padding: 0.75rem 1.25rem;
+  border: none;
+  border-radius: 4px;
+  box-shadow: 0 4px #005a9e;
+  cursor: pointer;
+  transition: transform 0.1s, box-shadow 0.1s;
+}
+.askSection > button:active {
+  transform: translateY(4px);
+  box-shadow: 0 0 #005a9e;
+}
+
+/* Interactive Buttons (legacy) */
+.interactiveButtons {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 1rem;
+  margin: 1.5rem 0;
+}
+.interactiveButtons button {
+  background: #0077c8;
+  color: #fff;
+  padding: 0.75rem 1.25rem;
+  border: none;
+  border-radius: 4px;
+  box-shadow: 0 4px #005a9e;
+  cursor: pointer;
+  transition: transform 0.1s, box-shadow 0.1s;
+}
+.interactiveButtons button:active {
+  transform: translateY(4px);
+  box-shadow: 0 0 #005a9e;
+}
+
+/* Examples section styling unchanged */
+.examplesSectionWrapper {
+  width: 100%;
+  margin: 2rem 0;
+  padding: 1rem;
+}
+.examplesSection {
+  margin-top: 1rem;
+}
+.exampleItem {
+  border-left: 4px solid #0070f3;
+  background-color: #f9f9f9;
+  padding: 1rem;
+  margin-bottom: 1rem;
+  border-radius: 4px;
+}
+
+/* ------------------------------ */
+/* Interactive Feature Components */
+/* ------------------------------ */
+
+/* Initial buttons before opening card */
+.initialButtons {
+  display: flex;
+  gap: 1rem;
+  justify-content: center;
+  margin: 2rem 0;
+}
+.initialBtn {
+  background: #fff;
+  border: 2px solid #0077c8;
+  border-radius: 8px;
+  padding: 1rem 2rem;
+  font-size: 1rem;
+  cursor: pointer;
+  transition: background 0.2s, color 0.2s;
+}
+.initialBtn:hover {
+  background: #0077c8;
+  color: #fff;
+}
+
+/* Tabbed card container */
+.cardContainer {
+  position: relative;
+  border: 2px solid #0077c8;
+  border-radius: 8px;
+  padding: 1.5rem;
+  background: #fff;
+  box-shadow: 0 2px 10px rgba(0,0,0,0.1);
+  margin: 2rem 0;
+}
+
+/* Close (×) button */
+.closeBtn {
+  position: absolute;
+  top: 0.5rem;
+  right: 0.5rem;
+  background: none;
+  border: none;
+  font-size: 1.5rem;
+  color: #333;
+  line-height: 1;
+  cursor: pointer;
+  z-index: 2;
+}
+
+/* Tab navigation */
+.tabNav {
+  display: flex;
+  margin-bottom: 1.5rem;
+  border-bottom: 1px solid #ddd;
+}
+
+.tab {
+  padding: 0.75rem 1.5rem;
+  background: #fff;
+  border: none;
+  border-bottom: 3px solid transparent;
+  color: #555;
+  font-size: 1rem;
+  cursor: pointer;
+  transition: all 0.2s;
+}
+
+.tab:hover {
+  color: #0077c8;
+}
+
+.activeTab {
+  border-bottom: 3px solid #0077c8;
+  color: #0077c8;
+  font-weight: 600;
+}
+
+/* Tab content area */
+.tabContent {
+  padding: 0.5rem;
+}
+
+/* Challenge actions (refresh, input, submit) */
+.challengeActions {
+  display: flex;
+  flex-direction: column;
+  gap: 1rem;
+  margin: 1rem 0 1.5rem;
+}
+
+.regenerateBtn {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.5rem;
+  background: #f8f9fa;
+  border: 1px solid #dee2e6;
+  border-radius: 4px;
+  padding: 0.5rem 1rem;
+  color: #495057;
+  font-size: 0.9rem;
+  cursor: pointer;
+  transition: all 0.2s;
+  align-self: flex-end;
+}
+
+.regenerateBtn:hover:not(:disabled) {
+  background: #e9ecef;
+  border-color: #ced4da;
+}
+
+.regenerateBtn:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+}
+
+.answerInputContainer {
+  display: flex;
+  width: 100%;
+  border: 1px solid #ced4da;
+  border-radius: 8px;
+  overflow: hidden;
+}
+
+.answerInput {
+  flex: 1;
+  padding: 0.75rem 1rem;
+  border: none;
+  outline: none;
+  font-size: 1rem;
+}
+
+.submitButton {
+  background-color: #0077c8;
+  color: white;
+  border: none;
+  padding: 0.75rem 1.5rem;
+  font-size: 1rem;
+  cursor: pointer;
+  transition: background-color 0.2s;
+}
+
+.submitButton:hover:not(:disabled) {
+  background-color: #0066b0;
+}
+
+.submitButton:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+}
+
+.loadingContainer {
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  padding: 2rem 0;
+}
+
+.loadingMessage {
+  color: #6c757d;
+  font-style: italic;
+}
+
+.startChallengeBtn {
+  padding: 0.75rem 1.5rem;
+  background-color: #0077c8;
+  color: white;
+  border: none;
+  border-radius: 6px;
+  font-size: 1rem;
+  cursor: pointer;
+  transition: background-color 0.2s;
+  
+  &:hover {
+    background-color: #005fa3;
+  }
+}
+
+@keyframes spin {
+  0% { transform: rotate(0deg); }
+  100% { transform: rotate(360deg); }
+}
+
+.loadingSpinner {
+  display: inline-block;
+  width: 18px;
+  height: 18px;
+  border: 2px solid rgba(255,255,255,0.3);
+  border-radius: 50%;
+  border-top-color: #0077c8;
+  animation: spin 1s linear infinite;
+}
+
+/* Challenge section enhancements */
+.challengeHistory {
+  margin-bottom: 2rem;
+}
+
+.historyTitle {
+  margin-bottom: 0.75rem;
+  font-size: 1.1rem;
+  color: #444;
+}
+
+.historyList {
+  max-height: 180px;
+  overflow-y: auto;
+  border: 1px solid #ddd;
+  border-radius: 6px;
+}
+
+.historyItem {
+  padding: 0.75rem 1rem;
+  border-bottom: 1px solid #eee;
+  cursor: pointer;
+  transition: background-color 0.2s;
+  
+  &:hover {
+    background-color: #f0f8ff;
+  }
+  
+  &:last-child {
+    border-bottom: none;
+  }
+}
+
+.activeHistoryItem {
+  background-color: #e6f4ff;
+  border-left: 3px solid #0077c8;
+}
+
+.historyQuestion {
+  display: flex;
+  align-items: flex-start;
+}
+
+.historyNumber {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 24px;
+  height: 24px;
+  margin-right: 10px;
+  background-color: #0077c8;
+  color: white;
+  border-radius: 50%;
+  font-size: 0.85rem;
+  font-weight: 600;
+}
+
+.historyText {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  display: -webkit-box;
+  -webkit-line-clamp: 1;
+  -webkit-box-orient: vertical;
+}
+
+.challengeReview {
+  width: 100%;
+}
+
+.challengeAnswer {
+  padding: 1rem;
+  background-color: #f9f9f9;
+  border-radius: 6px;
+  margin-bottom: 1.5rem;
+}
+
+.answerLabel {
+  font-weight: 600;
+  margin-bottom: 0.5rem;
+  color: #555;
+}
+
+.answerContent {
+  line-height: 1.5;
+}
+
+.newChallengeBtn {
+  padding: 0.75rem 1.5rem;
+  background-color: #0077c8;
+  color: white;
+  border: none;
+  border-radius: 6px;
+  font-size: 1rem;
+  cursor: pointer;
+  margin-top: 1rem;
+  transition: background-color 0.2s;
+  
+  &:hover {
+    background-color: #005fa3;
+  }
+}
+
+/* Examples actions (refresh) - REMOVED */
+.examplesActions {
+  display: none; /* Hide these styles as they're no longer needed */
+}
+.examplesActions button {
+  display: none; /* Hide these styles as they're no longer needed */
+}
+
+/* Loading & error messages */
+.loading, 
+.error {
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  min-height: 200px;
+  font-size: 1.1rem;
+  color: #444;
+}
+
+.error {
+  flex-direction: column;
+  gap: 1rem;
+  color: #e03a3e;
+}
+
+.error button {
+  background: #e03a3e;
+  color: white;
+  border: none;
+  padding: 0.5rem 1.5rem;
+  border-radius: 4px;
+  cursor: pointer;
+}
+
+/* Skeleton Loading Animation */
+@keyframes pulse {
+  0% {
+    opacity: 0.6;
+  }
+  50% {
+    opacity: 0.8;
+  }
+  100% {
+    opacity: 0.6;
+  }
+}
+
+.skeletonContainer {
+  width: 100%;
+}
+
+.skeletonTitle {
+  height: 36px;
+  width: 60%;
+  background-color: #e0e0e0;
+  border-radius: 6px;
+  margin-bottom: 2rem;
+  animation: pulse 1.5s infinite ease-in-out;
+}
+
+.skeletonContent {
+  margin-bottom: 2rem;
+}
+
+.skeletonParagraph {
+  height: 16px;
+  background-color: #e0e0e0;
+  border-radius: 4px;
+  margin-bottom: 1.5rem;
+  animation: pulse 1.5s infinite ease-in-out;
+}
+
+.skeletonParagraph:nth-child(1) {
+  width: 95%;
+}
+
+.skeletonParagraph:nth-child(2) {
+  width: 90%;
+}
+
+.skeletonParagraph:nth-child(3) {
+  width: 85%;
+}
+
+.skeletonParagraph:nth-child(4) {
+  width: 80%;
+}
+
+.skeletonParagraph:nth-child(5) {
+  width: 75%;
+}
+
+.skeletonButtonsContainer {
+  display: flex;
+  gap: 1rem;
+  justify-content: center;
+  margin: 2rem 0;
+}
+
+.skeletonButton {
+  height: 48px;
+  background-color: #e0e0e0;
+  border-radius: 8px;
+  flex: 1;
+  max-width: 160px;
+  animation: pulse 1.5s infinite ease-in-out;
+}
+
+.skeletonNavButton {
+  height: 42px;
+  width: 100px;
+  background-color: #e0e0e0;
+  border-radius: 4px;
+  margin-left: auto;
+  animation: pulse 1.5s infinite ease-in-out;
+}
+
+/* Responsive adjustments */
+@media (max-width: 640px) {
+  .initialButtons {
+    flex-direction: column;
+  }
+  
+  .skeletonButtonsContainer {
+    flex-direction: column;
+    align-items: stretch;
+  }
+  
+  .skeletonButton {
+    max-width: none;
+  }
+}

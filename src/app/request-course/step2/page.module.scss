@@ -1,0 +1,97 @@
+/* Path: src/app/request-course/step2/page.module.scss */
+
+.wrapper {
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  min-height: 100vh;
+}
+
+.card {
+  width: 100%;
+  max-width: 720px;
+  margin: 0 auto;
+  padding: 2rem;
+  background: #0075C9;
+  border-radius: 12px;
+  box-shadow: 4px 4px 8px rgba(0, 0, 0, 0.2);
+  color: #fff;
+  font-family: inherit;
+
+  h1 {
+    font-size: 2.5rem;
+    margin-bottom: 1.5rem;
+    text-align: center;
+  }
+
+  .group {
+    margin-bottom: 1.5rem;
+    border: none;
+    padding: 0;
+
+    legend {
+      font-weight: 600;
+      font-size: 1rem;
+      margin-bottom: 0.75rem;
+      display: block;
+    }
+
+    label {
+      display: flex;
+      align-items: center;
+      margin-bottom: 0.5rem;
+      font-size: 1rem;
+
+      input[type='radio'] {
+        margin-right: 0.5rem;
+        accent-color: #171f26;
+      }
+    }
+  }
+
+  .textareaLabel {
+    display: block;
+    font-weight: 600;
+    font-size: 1rem;
+    margin-bottom: 1rem;
+
+    textarea {
+      width: 100%;
+      margin-top: 0.5rem;
+      padding: 1rem;
+      border: none;
+      border-radius: 8px;
+      font-size: 1rem;
+      background: #fff;
+      color: #000;
+      font-family: inherit;
+      min-height: 120px;
+      resize: vertical;
+    }
+  }
+
+  .error {
+    color: #ffcccc;
+    margin-bottom: 1rem;
+    text-align: center;
+  }
+
+  button {
+    display: block;
+    width: 100%;
+    padding: 1rem;
+    margin-top: 1rem;
+    background: #171f26;
+    color: #fff;
+    border: none;
+    border-radius: 8px;
+    font-size: 1.2rem;
+    font-weight: 600;
+    cursor: pointer;
+    box-shadow: 4px 4px 4px rgba(0, 0, 0, 0.2);
+    transition: opacity 0.2s;
+  }
+  button:hover {
+    opacity: 0.9;
+  }
+}

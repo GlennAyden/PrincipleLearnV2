@@ -1,0 +1,67 @@
+// src/components/AskQuestion/QuestionBox.module.scss
+
+.questionBoxContainer {
+  display: flex;
+  flex-direction: column;
+  width: 100%;
+  margin-bottom: 1rem;
+}
+
+.questionForm {
+  display: flex;
+  flex-direction: column;
+  width: 100%;
+}
+
+.inputContainer {
+  display: flex;
+  width: 100%;
+  border: 1px solid #ccc;
+  border-radius: 8px;
+  overflow: hidden;
+  background: white;
+}
+
+.inputField {
+  flex: 1;
+  padding: 0.75rem 1rem;
+  border: none;
+  outline: none;
+  font-size: 1rem;
+  line-height: 1.4;
+  background: transparent;
+}
+
+.inputField::placeholder {
+  color: #999;
+}
+
+.enterButton {
+  background: #0077c8;
+  color: #fff;
+  border: none;
+  padding: 0.5rem 1.5rem;
+  font-size: 1rem;
+  cursor: pointer;
+  transition: background 0.2s;
+}
+
+.enterButton:hover {
+  background: #005fa3;
+}
+
+.enterButton:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+}
+
+/* Responsive adjustments */
+@media (max-width: 640px) {
+  .inputContainer {
+    flex-direction: column;
+  }
+  
+  .enterButton {
+    width: 100%;
+  }
+}

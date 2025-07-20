@@ -1,0 +1,22 @@
+[build]
+  command = "npx prisma generate && npm run build"
+  publish = ".next"
+
+[build.environment]
+  NODE_VERSION = "18"
+
+[[plugins]]
+  package = "@netlify/plugin-nextjs"
+
+[functions]
+  node_bundler = "esbuild"
+  # Extended timeout for course generation
+
+# Next.js API Routes - REMOVE manual redirects, let Next.js plugin handle it
+# The @netlify/plugin-nextjs handles API routing automatically
+
+# Auth callback redirect only
+[[redirects]]
+  from = "/auth/callback"
+  to = "/dashboard"
+  status = 302 

@@ -1,0 +1,64 @@
+/* src/app/globals.scss */
+
+/* 1. Reset dasar */
+*, *::before, *::after {
+  margin: 0;
+  padding: 0;
+  box-sizing: border-box;
+}
+
+/* 2. Variabel warna & font */
+$color-background: #f8fafb;  /* mirip gray-50 */
+$color-text: #1f2937;        /* mirip gray-900 */
+$font-sans: 'Poppins', system-ui, sans-serif;
+
+/* 3. Base styles */
+html, body {
+  min-height: 100%;
+  background-color: $color-background;
+  color: $color-text;
+  font-family: $font-sans;
+  line-height: 1.5;
+  -webkit-font-smoothing: antialiased;
+}
+
+/* 4. Link & button reset */
+a {
+  color: inherit;
+  text-decoration: none;
+}
+button {
+  font: inherit;
+  cursor: pointer;
+}
+
+/* 5. Utility: centered container */
+.container {
+  width: 100%;
+  max-width: 1280px;
+  margin-left: auto;
+  margin-right: auto;
+  padding-left: 1rem;
+  padding-right: 1rem;
+}
+
+/* 6. Font weight utilities */
+.font-light {
+  font-weight: 300;
+}
+
+.font-regular {
+  font-weight: 400;
+}
+
+.font-medium {
+  font-weight: 500;
+}
+
+.font-semibold {
+  font-weight: 600;
+}
+
+.font-bold {
+  font-weight: 700;
+}

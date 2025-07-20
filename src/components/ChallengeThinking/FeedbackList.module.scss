@@ -1,0 +1,128 @@
+/* src/components/ChallengeThinking/FeedbackList.module.scss */
+.feedbackList {
+  width: 100%;
+  border-radius: 8px;
+  padding: 1.25rem;
+  margin-top: 1.5rem;
+  background-color: #f8f9fa;
+  border-left: 4px solid #6c757d;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.08);
+}
+
+/* Feedback types */
+.positive {
+  border-left-color: #28a745;
+  background-color: #f0fff4;
+}
+
+.negative {
+  border-left-color: #dc3545;
+  background-color: #fff5f5;
+}
+
+.neutral {
+  border-left-color: #0077c8;
+  background-color: #f0f8ff;
+}
+
+.feedbackLabel {
+  display: flex;
+  align-items: center;
+  margin-bottom: 0.75rem;
+  font-weight: 600;
+  font-size: 1.1rem;
+  color: #333;
+}
+
+.feedbackIcon {
+  margin-right: 0.5rem;
+  display: flex;
+  align-items: center;
+  color: #0077c8;
+}
+
+.positive .feedbackIcon {
+  color: #28a745;
+}
+
+.negative .feedbackIcon {
+  color: #dc3545;
+}
+
+.feedbackContent {
+  margin-left: 1.75rem;
+}
+
+.feedbackParagraph {
+  margin: 0 0 0.75rem 0;
+  line-height: 1.5;
+  color: #444;
+}
+
+.feedbackHeader {
+  margin: 1rem 0 0.5rem 0;
+  font-size: 1.05rem;
+  font-weight: 600;
+  color: #333;
+  border-bottom: 1px solid #eee;
+  padding-bottom: 0.25rem;
+}
+
+.numberedItem,
+.bulletItem {
+  display: flex;
+  margin: 0.5rem 0;
+  align-items: flex-start;
+}
+
+.itemNumber,
+.bulletPoint {
+  margin-right: 0.5rem;
+  font-weight: 600;
+  min-width: 1.25rem;
+}
+
+.positive .itemNumber,
+.positive .bulletPoint {
+  color: #28a745;
+}
+
+.negative .itemNumber,
+.negative .bulletPoint {
+  color: #dc3545;
+}
+
+.neutral .itemNumber,
+.neutral .bulletPoint {
+  color: #0077c8;
+}
+
+.itemContent {
+  flex: 1;
+  line-height: 1.5;
+}
+
+.feedbackParagraph strong {
+  font-weight: 600;
+  color: #0077c8;
+}
+
+.positive .feedbackParagraph strong {
+  color: #28a745;
+}
+
+.negative .feedbackParagraph strong {
+  color: #dc3545;
+}
+
+/* Responsive adjustments */
+@media (max-width: 640px) {
+  .feedbackList {
+    padding: 1rem;
+  }
+  
+  .feedbackContent {
+    margin-left: 0.5rem;
+  }
+}
+  

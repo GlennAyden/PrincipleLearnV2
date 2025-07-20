@@ -1,0 +1,15 @@
+/* src/app/admin/layout.module.scss */
+
+.container {
+  display: flex;
+  /* Izinkan konten mengisi tinggi viewport dan melebar */
+  min-height: 100vh;
+}
+
+.card {
+  /* Biarkan konten mengambil sisa ruang */
+  flex: 1;
+  /* Pastikan layout halaman (header + main) tetap vertikal */
+  display: flex;
+  flex-direction: column;
+}

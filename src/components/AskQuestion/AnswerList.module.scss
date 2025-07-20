@@ -1,0 +1,152 @@
+/* src/components/AskQuestion/AnswerList.module.scss */
+
+.answerList {
+  display: flex;
+  flex-direction: column;
+  width: 100%;
+  margin-bottom: 1.5rem;
+}
+
+.answerItem {
+  margin-bottom: 1.5rem;
+}
+
+.questionSection,
+.answerSection {
+  position: relative;
+  margin-bottom: 0.75rem;
+  display: flex;
+  flex-direction: column;
+}
+
+.bullet {
+  position: absolute;
+  left: 0;
+  color: #0077c8;
+  font-size: 1rem;
+}
+
+.questionLabel,
+.answerLabel {
+  font-weight: 600;
+  margin: 0 0 0.25rem 1.5rem;
+  color: #333;
+}
+
+.questionText,
+.answerText {
+  margin: 0 0 0 1.5rem;
+  line-height: 1.5;
+  color: #444;
+}
+
+.answerText {
+  /* For formatted content */
+  p {
+    margin-bottom: 0.75rem;
+  }
+}
+
+/* Formatted content styles */
+.paragraphItem {
+  margin-bottom: 0.75rem;
+}
+
+.numberedItem {
+  display: flex;
+  margin: 0.5rem 0;
+  padding-left: 0;
+}
+
+.itemNumber {
+  font-weight: 600;
+  color: #0077c8;
+  margin-right: 0.5rem;
+  min-width: 1.5rem;
+}
+
+.itemContent {
+  flex: 1;
+}
+
+.bulletItem {
+  margin-bottom: 0.5rem;
+  padding-left: 0.25rem;
+}
+
+.formattedList {
+  margin: 0.5rem 0 1rem 1.5rem;
+  padding-left: 1rem;
+  list-style-type: disc;
+}
+
+.headingItem {
+  margin: 1.25rem 0 0.75rem 0;
+  font-weight: 600;
+  font-size: 1.1rem;
+  color: #222;
+  border-bottom: 1px solid #eee;
+  padding-bottom: 0.25rem;
+}
+
+/* Framework item styling (5W+1H) */
+.frameworkItem {
+  display: flex;
+  margin: 0.75rem 0;
+  align-items: flex-start;
+}
+
+.frameworkNumber {
+  font-weight: 600;
+  color: #0077c8;
+  margin-right: 0.5rem;
+  min-width: 1.5rem;
+}
+
+.frameworkType {
+  font-weight: 600;
+  margin-right: 0.5rem;
+  color: #333;
+}
+
+.frameworkContent {
+  flex: 1;
+}
+
+/* Handle existing lists in answers */
+.answerText ul,
+.answerText ol {
+  margin: 0.5rem 0 0.5rem 2.5rem;
+}
+
+.answerText li {
+  margin-bottom: 0.25rem;
+}
+
+/* Responsive adjustments */
+@media (max-width: 640px) {
+  .questionLabel,
+  .answerLabel,
+  .questionText,
+  .answerText {
+    margin-left: 1.25rem;
+  }
+  
+  .numberedItem,
+  .formattedList {
+    margin-left: 0.25rem;
+  }
+  
+  .frameworkItem {
+    flex-wrap: wrap;
+  }
+  
+  .frameworkType {
+    flex-basis: 100%;
+    margin: 0.25rem 0 0.25rem 1.5rem;
+  }
+  
+  .frameworkContent {
+    margin-left: 1.5rem;
+  }
+}

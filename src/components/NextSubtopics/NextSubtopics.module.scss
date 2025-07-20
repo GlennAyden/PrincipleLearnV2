@@ -1,0 +1,45 @@
+/* src/components/NextSubtopics/NextSubtopics.module.scss */
+
+.wrapper {
+  width: 100%;
+  margin: 2rem 0;
+  padding: 1rem;
+  border: 2px solid #0077c8;
+  border-radius: 8px;
+  background-color: #f9fafb;
+}
+
+.heading {
+  margin: 0 0 1rem;
+  font-size: 1.25rem;
+  font-weight: 600;
+}
+
+.list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+}
+
+.item {
+  margin: 0;
+}
+
+.button {
+  width: 100%;
+  text-align: left;
+  background: none;
+  border: 1px solid #005a9e;
+  border-radius: 4px;
+  padding: 0.5rem 1rem;
+  cursor: pointer;
+  transition: background 0.2s, color 0.2s;
+}
+
+.button:hover {
+  background: #005a9e;
+  color: #fff;
+}

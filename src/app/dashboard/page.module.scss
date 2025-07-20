@@ -1,0 +1,141 @@
+/* File: src/app/dashboard/page.module.scss */
+
+.container {
+  padding: 0;
+}
+
+.header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  background: #0075C9;
+  padding: 1rem 2rem;
+}
+
+.appName {
+  color: #fff;
+  font-size: 1.5rem;
+  font-weight: 700;
+}
+
+.logoutBtn {
+  background: #171F26;
+  color: #fff;
+  padding: 0.5rem 1rem;
+  border: none;
+  border-radius: 8px;
+  box-shadow: 4px 4px 0 rgba(0,0,0,0.2);
+  cursor: pointer;
+  transition: opacity 0.2s;
+}
+.logoutBtn:hover {
+  opacity: 0.9;
+}
+
+.actionsBar {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin: 2rem 2rem 1rem;
+}
+
+.pageTitle {
+  font-size: 2rem;
+  font-weight: 700;
+  text-shadow: 2px 2px rgba(0,0,0,0.3);
+}
+
+.createBtn {
+  background: #171F26;
+  color: #fff;
+  padding: 0.75rem 1.5rem;
+  border: none;
+  border-radius: 8px;
+  box-shadow: 4px 4px 0 rgba(0,0,0,0.2);
+  cursor: pointer;
+  transition: opacity 0.2s;
+}
+.createBtn:hover {
+  opacity: 0.9;
+}
+
+.list {
+  list-style: none;
+  padding: 0 2rem;
+  margin: 0;
+}
+
+.listItem {
+  display: flex;
+  align-items: center;
+  margin-bottom: 1rem;
+}
+
+.card {
+  flex: 1;
+  display: flex;
+  align-items: center;
+  padding: 1rem 1.5rem;
+  background: #0075C9;
+  border-radius: 12px;
+  box-shadow: 4px 4px 8px rgba(0,0,0,0.2);
+  cursor: pointer;
+}
+
+.accent {
+  width: 12px;
+  height: 100%;
+  background: #171F26;
+  border-radius: 4px;
+  margin-right: 1rem;
+}
+
+.cardContent {
+  color: #fff;
+}
+
+.level {
+  margin: 0;
+  font-size: 0.875rem;
+  opacity: 0.8;
+}
+
+.title {
+  margin: 0.25rem 0 0;
+  font-size: 1.25rem;
+  font-weight: 600;
+}
+
+.deleteBtn {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  width: 56px;
+  height: 72px;
+  margin-left: 1rem;
+  background: #0075C9;
+  border: none;
+  border-radius: 12px;
+  box-shadow: 4px 4px 8px rgba(0,0,0,0.2);
+  cursor: pointer;
+  transition: opacity 0.2s;
+}
+.deleteBtn:hover {
+  opacity: 0.8;
+}
+.icon {
+  font-size: 1.5rem;
+  color: #fff;
+}
+.deleteLabel {
+  margin-top: 0.25rem;
+  font-size: 0.75rem;
+  color: #fff;
+}
+
+.empty {
+  text-align: center;
+  color: #555;
+  padding: 2rem 0;
+}

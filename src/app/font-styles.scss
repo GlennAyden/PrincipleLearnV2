@@ -1,0 +1,151 @@
+/* src/app/font-styles.scss */
+
+/*
+  Pedoman penggunaan font Poppins
+
+  Light:     300 - Teks sekunder, caption, deskripsi ringan
+  Regular:   400 - Body text, paragraf, input text
+  Medium:    500 - Subtitle, button, emphasis, interface elements
+  SemiBold:  600 - Heading (h2, h3, h4), section title
+  Bold:      700 - Heading utama (h1), brand text
+*/
+
+/* 1. Typography Basics */
+body {
+  font-family: 'Poppins', system-ui, sans-serif;
+  font-weight: 400;
+  line-height: 1.5;
+  -webkit-font-smoothing: antialiased;
+}
+
+/* 2. Headings */
+h1, .h1 {
+  font-weight: 700;
+  margin-bottom: 0.75em;
+}
+
+h2, .h2 {
+  font-weight: 600;
+  margin-bottom: 0.75em;
+}
+
+h3, .h3 {
+  font-weight: 600;
+  margin-bottom: 0.5em;
+}
+
+h4, .h4 {
+  font-weight: 600;
+  margin-bottom: 0.5em;
+}
+
+h5, .h5, h6, .h6 {
+  font-weight: 500;
+  margin-bottom: 0.5em;
+}
+
+/* 3. Interface Elements */
+button, 
+.button,
+[type="button"],
+[type="submit"],
+[type="reset"] {
+  font-weight: 500;
+}
+
+/* 4. Cards & Panels */
+.card-title,
+.panel-title {
+  font-weight: 600;
+}
+
+.card-subtitle {
+  font-weight: 500;
+}
+
+/* 5. Navigation */
+.nav-item {
+  font-weight: 500;
+}
+
+.nav-item.active {
+  font-weight: 600;
+}
+
+/* 6. Utility Classes */
+.font-light {
+  font-weight: 300 !important;
+}
+
+.font-regular {
+  font-weight: 400 !important;
+}
+
+.font-medium {
+  font-weight: 500 !important;
+}
+
+.font-semibold {
+  font-weight: 600 !important;
+}
+
+.font-bold {
+  font-weight: 700 !important;
+}
+
+/* 7. Tables */
+th {
+  font-weight: 600;
+}
+
+td {
+  font-weight: 400;
+}
+
+/* 8. Forms */
+label {
+  font-weight: 500;
+}
+
+input, 
+textarea, 
+select {
+  font-weight: 400;
+}
+
+/* 9. Alert & Messages */
+.alert-title,
+.message-title {
+  font-weight: 600;
+}
+
+.alert-content,
+.message-content {
+  font-weight: 400;
+}
+
+/* 10. Brand Specific */
+.logo, 
+.brand {
+  font-weight: 700;
+}
+
+/* 11. Fix for specific components */
+button.active {
+  font-weight: 500;
+}
+
+.navItem, 
+.sidebar .navItem {
+  font-weight: 400;
+}
+
+.active, 
+.sidebar .active {
+  font-weight: 500;
+}
+
+/* Make font rendering smoother overall */
+* {
+  text-rendering: optimizeLegibility;
+} 
