@@ -1,63 +1,7 @@
-Jul 21 08:57:33.21
-GET
-200
-principle-learn-v2.vercel.app
-/api/courses
-2
-[Get Courses] Found 1 courses for user
-Jul 21 08:57:30.61
-POST
-200
-principle-learn-v2.vercel.app
-/api/generate-course/log
-Generate course log (not saved to DB yet): { id: 'course-log-1753063051885', userId: 'sal@gmail.com', courseName: 'aku ingin belajar python', parameter: '{"topic":"aku ingin belajar python","goal":"aku ingin belajar python","level":"Beginner","extraTopics":"aku ingin belajar python","problem":"aku ingin belajar python","assumption":"aku ingin belajar python"}', createdAt: '2025-07-21T01:57:31.885Z' }
-Jul 21 08:57:23.17
-POST
-200
-principle-learn-v2.vercel.app
-/api/generate-course
-27
-[Generate Course] Returning outline to client
-Jul 21 08:57:19.04
-GET
-200
-principle-learn-v2.vercel.app
-/request-course/step3
-Jul 21 08:57:13.38
-GET
-200
-principle-learn-v2.vercel.app
-/request-course/step2
-Jul 21 08:57:03.06
-GET
-200
-principle-learn-v2.vercel.app
-/request-course/step1
-Jul 21 08:56:52.63
-GET
-200
-principle-learn-v2.vercel.app
-/api/courses
-2
-[Get Courses] Found 0 courses for user
-Jul 21 08:56:51.83
-GET
-200
-principle-learn-v2.vercel.app
-/dashboard
-Jul 21 08:56:49.38
-POST
-200
-principle-learn-v2.vercel.app
-/api/auth/login
-User logged in successfully: dd630bf6-b738-4644-863d-ccee6b222bb3
-Jul 21 08:56:42.53
-GET
-200
-principle-learn-v2.vercel.app
-/signup
-Jul 21 08:56:41.08
-GET
-200
-principle-learn-v2.vercel.app
-/login
+Test Debug Endpoint
+
+{"success":true,"debug":{"courseId":"eee6a846-785e-4902-a656-88777e9942f6","course":{"id":"eee6a846-785e-4902-a656-88777e9942f6","title":"aku ingin belajar python","difficulty_level":"Beginner","created_at":"2025-07-21T01:57:27.236866+00:00"},"subtopicsCount":4,"parsedSubtopicsCount":4,"parseErrors":0,"outlineCount":4},"data":{"course":{"id":"eee6a846-785e-4902-a656-88777e9942f6","title":"aku ingin belajar python","description":"aku ingin belajar python","subject":"aku ingin belajar python","difficulty_level":"Beginner","estimated_duration":60,"created_by":"dd630bf6-b738-4644-863d-ccee6b222bb3","created_at":"2025-07-21T01:57:27.236866+00:00","updated_at":"2025-07-21T01:57:27.236866+00:00"},"subtopics":[{"id":"41bf2430-c2d8-4333-839f-74d8e93de85e","title":"Module 1","order_index":0,"contentParsed":true,"contentPreview":{"module":"1. Pengenalan Python","subtopics":["1.1 Apa itu Python?","1.2 Keuntungan menggunakan Python","1.3 Instalasi Python di sistem operasi Anda"]}},{"id":"aa26134e-1063-4dc0-9b9f-8767172ec48d","title":"Module 2","order_index":1,"contentParsed":true,"contentPreview":{"module":"2. Dasar-dasar Python","subtopics":["2.1 Variabel dan Tipe Data","2.2 Operasi Dasar di Python","2.3 Struktur Kontrol: Percabangan dan Perulangan"]}},{"id":"0d360414-afec-4574-b960-e01343a372d0","title":"Module 3","order_index":2,"contentParsed":true,"contentPreview":{"module":"3. Fungsi dan Modul","subtopics":["3.1 Pengenalan Fungsi","3.2 Memahami Parameter dan Argumen","3.3 Menggunakan Modul dalam Python"]}},{"id":"8f2f1ad8-172c-4759-b619-8bee35d88be7","title":"Module 4","order_index":3,"contentParsed":true,"contentPreview":{"module":"4. Pemrograman Berorientasi Objek (OOP) dengan Python","subtopics":["4.1 Konsep Dasar OOP","4.2 Class dan Object","4.3 Pewarisan (Inheritance) dalam OOP"]}}],"outline":[{"module":"1. Pengenalan Python","subtopics":["1.1 Apa itu Python?","1.2 Keuntungan menggunakan Python","1.3 Instalasi Python di sistem operasi Anda"]},{"module":"2. Dasar-dasar Python","subtopics":["2.1 Variabel dan Tipe Data","2.2 Operasi Dasar di Python","2.3 Struktur Kontrol: Percabangan dan Perulangan"]},{"module":"3. Fungsi dan Modul","subtopics":["3.1 Pengenalan Fungsi","3.2 Memahami Parameter dan Argumen","3.3 Menggunakan Modul dalam Python"]},{"module":"4. Pemrograman Berorientasi Objek (OOP) dengan Python","subtopics":["4.1 Konsep Dasar OOP","4.2 Class dan Object","4.3 Pewarisan (Inheritance) dalam OOP"]}],"parseErrors":[]}}
+
+Test Course API
+
+{"success":true,"course":{"id":"eee6a846-785e-4902-a656-88777e9942f6","title":"aku ingin belajar python","description":"aku ingin belajar python","subject":"aku ingin belajar python","difficulty_level":"Beginner","estimated_duration":60,"created_by":"dd630bf6-b738-4644-863d-ccee6b222bb3","created_at":"2025-07-21T01:57:27.236866+00:00","updated_at":"2025-07-21T01:57:27.236866+00:00","subtopics":[{"id":"41bf2430-c2d8-4333-839f-74d8e93de85e","course_id":"eee6a846-785e-4902-a656-88777e9942f6","title":"Module 1","content":"{\"module\":\"1. Pengenalan Python\",\"subtopics\":[\"1.1 Apa itu Python?\",\"1.2 Keuntungan menggunakan Python\",\"1.3 Instalasi Python di sistem operasi Anda\"]}","order_index":0,"created_at":"2025-07-21T01:57:28.068084+00:00","updated_at":"2025-07-21T01:57:28.068084+00:00"},{"id":"aa26134e-1063-4dc0-9b9f-8767172ec48d","course_id":"eee6a846-785e-4902-a656-88777e9942f6","title":"Module 2","content":"{\"module\":\"2. Dasar-dasar Python\",\"subtopics\":[\"2.1 Variabel dan Tipe Data\",\"2.2 Operasi Dasar di Python\",\"2.3 Struktur Kontrol: Percabangan dan Perulangan\"]}","order_index":1,"created_at":"2025-07-21T01:57:28.336634+00:00","updated_at":"2025-07-21T01:57:28.336634+00:00"},{"id":"0d360414-afec-4574-b960-e01343a372d0","course_id":"eee6a846-785e-4902-a656-88777e9942f6","title":"Module 3","content":"{\"module\":\"3. Fungsi dan Modul\",\"subtopics\":[\"3.1 Pengenalan Fungsi\",\"3.2 Memahami Parameter dan Argumen\",\"3.3 Menggunakan Modul dalam Python\"]}","order_index":2,"created_at":"2025-07-21T01:57:29.139041+00:00","updated_at":"2025-07-21T01:57:29.139041+00:00"},{"id":"8f2f1ad8-172c-4759-b619-8bee35d88be7","course_id":"eee6a846-785e-4902-a656-88777e9942f6","title":"Module 4","content":"{\"module\":\"4. Pemrograman Berorientasi Objek (OOP) dengan Python\",\"subtopics\":[\"4.1 Konsep Dasar OOP\",\"4.2 Class dan Object\",\"4.3 Pewarisan (Inheritance) dalam OOP\"]}","order_index":3,"created_at":"2025-07-21T01:57:29.908529+00:00","updated_at":"2025-07-21T01:57:29.908529+00:00"}]}}

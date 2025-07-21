@@ -86,20 +86,41 @@ export default function CourseOverviewPage() {
         console.log(`[Course Page] DEBUG: Response result:`, result);
         
         if (result.success) {
+          console.log(`[Course Page] DEBUG: Processing successful response`);
+          console.log(`[Course Page] DEBUG: Course data:`, result.course);
+          console.log(`[Course Page] DEBUG: Subtopics count:`, result.course.subtopics?.length);
+          
+          // Check if subtopics exist
+          if (!result.course.subtopics || !Array.isArray(result.course.subtopics)) {
+            console.error(`[Course Page] ERROR: No subtopics or invalid subtopics array`);
+            setError('Course has no content available');
+            return;
+          }
+          
           // Transform subtopics to outline format
+          console.log(`[Course Page] DEBUG: Transforming ${result.course.subtopics.length} subtopics`);
           const outline: ModuleOutline[] = result.course.subtopics.map((subtopic: any, index: number) => {
+            console.log(`[Course Page] DEBUG: Processing subtopic ${index}:`, subtopic);
+            
             let content;
             try {
               content = JSON.parse(subtopic.content);
-            } catch {
+              console.log(`[Course Page] DEBUG: Parsed content for subtopic ${index}:`, content);
+            } catch (parseError) {
+              console.error(`[Course Page] ERROR: Failed to parse subtopic ${index} content:`, parseError);
               content = { module: subtopic.title, subtopics: [] };
             }
             
-            return {
+            const moduleData = {
               module: content.module || subtopic.title || `Module ${index + 1}`,
               subtopics: content.subtopics || []
             };
+            
+            console.log(`[Course Page] DEBUG: Module data ${index}:`, moduleData);
+            return moduleData;
           });
+          
+          console.log(`[Course Page] DEBUG: Final outline:`, outline);
           
           const courseData: Course = {
             id: result.course.id,
@@ -108,8 +129,10 @@ export default function CourseOverviewPage() {
             outline
           };
           
+          console.log(`[Course Page] DEBUG: Final course data:`, courseData);
+          
           setCourse(courseData);
-          console.log(`[Course Page] Course loaded with ${outline.length} modules`);
+          console.log(`[Course Page] SUCCESS: Course loaded with ${outline.length} modules`);
           
         } else {
           console.error('[Course Page] Failed to load course:', result.error);
