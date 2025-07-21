@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
-// import prisma from '@/lib/prisma'; // Removed for mock implementation
+import { DatabaseService } from '@/lib/database';
 import { verifyToken } from '@/lib/jwt';
 
 export async function GET(req: NextRequest) {
@@ -26,31 +26,21 @@ export async function GET(req: NextRequest) {
       );
     }
     
-    // Mock user data based on token payload
-    const mockUsers = {
-      'user-123': {
-        id: 'user-123',
-        email: 'user@example.com',
-        role: 'USER',
-        isVerified: true
-      },
-      'admin-456': {
-        id: 'admin-456',
-        email: 'admin@example.com',
-        role: 'ADMIN',
-        isVerified: true
-      }
-    };
+    // Get user data from database
+    const users = await DatabaseService.getRecords('users', {
+      filter: { id: payload.userId },
+      limit: 1
+    });
     
-    const user = mockUsers[payload.userId as keyof typeof mockUsers];
-    
-    // If user doesn't exist in mock data, return unauthorized
-    if (!user) {
+    // If user doesn't exist in database, return unauthorized
+    if (users.length === 0) {
       return NextResponse.json(
         { error: 'User not found' },
         { status: 401 }
       );
     }
+    
+    const user = users[0];
     
     // Return user data without sensitive fields
     return NextResponse.json({
@@ -58,7 +48,7 @@ export async function GET(req: NextRequest) {
         id: user.id,
         email: user.email,
         role: user.role,
-        isVerified: user.isVerified
+        name: user.name || null
       }
     });
   } catch (error: any) {
