@@ -160,20 +160,28 @@ Output harus berupa MURNI JSON array tanpa blok kode Markdown:
     }
     
     // 8. Save course to database
+    console.log(`[Generate Course] DEBUG: userId = ${userId}`);
+    console.log(`[Generate Course] DEBUG: outline length = ${outline?.length}`);
+    
     if (userId) {
       console.log(`[Generate Course] Saving course to database for user: ${userId}`);
       
       try {
         // Validate user exists
+        console.log(`[Generate Course] DEBUG: Looking up user with email: ${userId}`);
         const users = await DatabaseService.getRecords('users', {
           filter: { email: userId },
           limit: 1
         });
         
+        console.log(`[Generate Course] DEBUG: Found ${users.length} users`);
+        console.log(`[Generate Course] DEBUG: Users data:`, users);
+        
         if (users.length === 0) {
           console.warn(`[Generate Course] User with email ${userId} not found in database`);
         } else {
           const user = users[0];
+          console.log(`[Generate Course] DEBUG: User found:`, { id: user.id, email: user.email });
           
           // Create course record
           const courseData = {
@@ -185,10 +193,14 @@ Output harus berupa MURNI JSON array tanpa blok kode Markdown:
             created_by: user.id
           };
           
+          console.log(`[Generate Course] DEBUG: Course data to insert:`, courseData);
+          
           const course = await DatabaseService.insertRecord('courses', courseData);
           console.log(`[Generate Course] Course created with ID: ${course.id}`);
+          console.log(`[Generate Course] DEBUG: Course created successfully:`, course);
           
           // Create subtopics for each module
+          console.log(`[Generate Course] DEBUG: Creating ${outline.length} subtopics`);
           for (let i = 0; i < outline.length; i++) {
             const module = outline[i];
             const subtopicData = {
@@ -198,13 +210,17 @@ Output harus berupa MURNI JSON array tanpa blok kode Markdown:
               order_index: i
             };
             
-            await DatabaseService.insertRecord('subtopics', subtopicData);
+            console.log(`[Generate Course] DEBUG: Creating subtopic ${i + 1}:`, subtopicData);
+            const subtopic = await DatabaseService.insertRecord('subtopics', subtopicData);
+            console.log(`[Generate Course] DEBUG: Subtopic created:`, subtopic);
           }
           
           console.log(`[Generate Course] Created ${outline.length} subtopics for course`);
         }
       } catch (error) {
         console.error('[Generate Course] Error saving to database:', error);
+        console.error('[Generate Course] Error details:', error instanceof Error ? error.message : error);
+        console.error('[Generate Course] Error stack:', error instanceof Error ? error.stack : 'No stack');
         // Continue execution even if database save fails
       }
     } else {
