@@ -3,6 +3,7 @@ import './globals.scss';
 import './font-styles.scss';
 import { ReactNode } from 'react';
 import { RequestCourseProvider } from '../context/RequestCourseContext';
+import { AuthProvider } from '@/hooks/useAuth';
 import Head from 'next/head';
 
 export default function RootLayout({
@@ -21,9 +22,11 @@ export default function RootLayout({
         />
       </Head>
       <body>
-        <RequestCourseProvider>
-          {children}
-        </RequestCourseProvider>
+        <AuthProvider>
+          <RequestCourseProvider>
+            {children}
+          </RequestCourseProvider>
+        </AuthProvider>
       </body>
     </html>
   );
