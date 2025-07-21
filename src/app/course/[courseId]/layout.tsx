@@ -5,7 +5,6 @@
 import { ReactNode, useEffect, useState } from 'react';
 import Link from 'next/link';
 import { useRouter, useParams, useSearchParams } from 'next/navigation';
-import { useLocalStorage } from '@/hooks/useLocalStorage';
 import styles from './layout.module.scss';
 import { Level } from '@/context/RequestCourseContext';
 
@@ -16,7 +15,7 @@ interface Subtopic {
 
 interface ModuleOutline {
   module: string;
-  subtopics: Subtopic[];
+  subtopics: (Subtopic | string)[];
 }
 
 interface Course {
@@ -45,15 +44,54 @@ export default function CourseLayout({ children }: { children: ReactNode }) {
       ? parseInt(subIdxParam, 10)
       : -1;
 
-  const [courses] = useLocalStorage<Course[]>('pl_courses', []);
   const [course, setCourse] = useState<Course | null>(null);
+  const [loading, setLoading] = useState(true);
   const [showMobileMenu, setShowMobileMenu] = useState<boolean>(false);
 
   useEffect(() => {
-    if (!courseId) return;
-    const found = courses.find((c) => c.id === courseId) || null;
-    setCourse(found);
-  }, [courses, courseId]);
+    async function loadCourse() {
+      if (!courseId) return;
+      
+      setLoading(true);
+      
+      try {
+        const response = await fetch(`/api/courses/${courseId}`);
+        const result = await response.json();
+        
+        if (result.success && result.course) {
+          // Transform subtopics to outline format
+          const outline: ModuleOutline[] = result.course.subtopics?.map((subtopic: any) => {
+            let content;
+            try {
+              content = JSON.parse(subtopic.content);
+            } catch (parseError) {
+              content = { module: subtopic.title, subtopics: [] };
+            }
+            
+            return {
+              module: content.module || subtopic.title || 'Module',
+              subtopics: content.subtopics || []
+            };
+          }) || [];
+          
+          const courseData: Course = {
+            id: result.course.id,
+            title: result.course.title,
+            level: result.course.difficulty_level || 'Beginner',
+            outline
+          };
+          
+          setCourse(courseData);
+        }
+      } catch (error) {
+        console.error('[Layout] Error loading course:', error);
+      } finally {
+        setLoading(false);
+      }
+    }
+    
+    loadCourse();
+  }, [courseId]);
 
   // Close mobile menu when changing routes
   useEffect(() => {
@@ -64,7 +102,7 @@ export default function CourseLayout({ children }: { children: ReactNode }) {
     router.push('/login');
   };
 
-  if (!course?.outline) {
+  if (loading || !course?.outline) {
     return <div className={styles.loading}>Loading outline…</div>;
   }
 
