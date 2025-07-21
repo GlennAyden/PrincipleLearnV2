@@ -38,20 +38,27 @@ export async function POST(req: Request) {
     }
 
     // Check if user already exists in database
+    console.log('Debug: Checking if user exists with email:', email);
     try {
       const existingUsers = await DatabaseService.getRecords('users', {
         filter: { email },
         limit: 1
       });
       
+      console.log('Debug: Existing users query result:', existingUsers);
+      
       if (existingUsers.length > 0) {
+        console.log('Debug: User already exists');
         return NextResponse.json(
           { error: 'User with this email already exists' },
           { status: 409 }
         );
       }
+      
+      console.log('Debug: No existing user found, proceeding with registration');
     } catch (error) {
-      console.error('Error checking existing user:', error);
+      console.error('Debug: Error checking existing user:', error);
+      console.error('Debug: Error details:', error instanceof Error ? error.message : error);
       // Continue with registration if database check fails
     }
 
@@ -66,9 +73,18 @@ export async function POST(req: Request) {
       role: 'user'
     };
 
-    const newUser = await DatabaseService.insertRecord('users', userData);
+    console.log('Debug: Attempting to create user with data:', userData);
     
-    console.log(`User created in database: ${email}`);
+    let newUser;
+    try {
+      newUser = await DatabaseService.insertRecord('users', userData);
+      console.log('Debug: User successfully created:', newUser);
+      console.log(`User created in database: ${email}`);
+    } catch (createError) {
+      console.error('Debug: Error creating user:', createError);
+      console.error('Debug: Create error details:', createError instanceof Error ? createError.message : createError);
+      throw createError;
+    }
 
     // Return success without sensitive data
     return NextResponse.json({
