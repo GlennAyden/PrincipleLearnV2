@@ -2,6 +2,7 @@ import { NextResponse } from 'next/server';
 import bcrypt from 'bcryptjs';
 import { validateEmail, validatePassword } from '@/lib/validation';
 import { registerRateLimiter } from '@/lib/rate-limit';
+import { DatabaseService } from '@/lib/database';
 
 export async function POST(req: Request) {
   try {
@@ -36,29 +37,38 @@ export async function POST(req: Request) {
       );
     }
 
-    // Mock check for existing users
-    const existingMockEmails = ['user@example.com', 'admin@example.com', 'existing@example.com'];
-    
-    if (existingMockEmails.includes(email)) {
-      return NextResponse.json(
-        { error: 'User with this email already exists' },
-        { status: 409 }
-      );
+    // Check if user already exists in database
+    try {
+      const existingUsers = await DatabaseService.getRecords('users', {
+        filter: { email },
+        limit: 1
+      });
+      
+      if (existingUsers.length > 0) {
+        return NextResponse.json(
+          { error: 'User with this email already exists' },
+          { status: 409 }
+        );
+      }
+    } catch (error) {
+      console.error('Error checking existing user:', error);
+      // Continue with registration if database check fails
     }
 
-    // Hash password (still do this for demonstration)
+    // Hash password
     const salt = await bcrypt.genSalt(10);
     const passwordHash = await bcrypt.hash(password, salt);
 
-    // Mock user creation - no email verification needed
-    const newUser = {
-      id: `user-${Date.now()}`,
+    // Create user in Supabase database
+    const userData = {
       email,
-      role: 'USER',
-      isVerified: true // Auto-verified since we removed email verification
+      password_hash: passwordHash,
+      role: 'user'
     };
+
+    const newUser = await DatabaseService.insertRecord('users', userData);
     
-    console.log(`Mock user created: ${email}`);
+    console.log(`User created in database: ${email}`);
 
     // Return success without sensitive data
     return NextResponse.json({
@@ -66,8 +76,7 @@ export async function POST(req: Request) {
       user: {
         id: newUser.id,
         email: newUser.email,
-        role: newUser.role,
-        isVerified: newUser.isVerified
+        role: newUser.role
       },
       message: 'Registration successful. You can now log in.'
     });
