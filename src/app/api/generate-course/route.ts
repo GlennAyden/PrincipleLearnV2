@@ -1,7 +1,7 @@
 // src/app/api/generate-course/route.ts
 import { NextRequest, NextResponse } from 'next/server';
 import { OpenAI } from 'openai';
-// import prisma from '@/lib/prisma'; // Removed for mock implementation
+import { DatabaseService } from '@/lib/database';
 
 // Add CORS headers for API
 const corsHeaders = {
@@ -159,31 +159,56 @@ Output harus berupa MURNI JSON array tanpa blok kode Markdown:
       throw new Error('Invalid JSON response from AI');
     }
     
-    // 8. Mock logging of course generation activity
+    // 8. Save course to database
     if (userId) {
-      console.log(`[Generate Course] Mock activity logging for user: ${userId}`);
+      console.log(`[Generate Course] Saving course to database for user: ${userId}`);
       
-      // Mock user validation
-      const validEmails = ['user@example.com', 'admin@example.com', 'test@example.com'];
-      
-      if (!validEmails.includes(userId)) {
-        console.warn(`[Generate Course] User with email ${userId} not found in mock data`);
-      } else {
-        // Mock activity logging
-        const mockLogEntry = {
-          id: `log-${Date.now()}`,
-          userId: userId,
-          courseName: topic,
-          parameter: JSON.stringify({
-            topic, goal, level, extraTopics, problem, assumption
-          }),
-          createdAt: new Date().toISOString()
-        };
+      try {
+        // Validate user exists
+        const users = await DatabaseService.getRecords('users', {
+          filter: { email: userId },
+          limit: 1
+        });
         
-        console.log('[Generate Course] Mock activity logged:', mockLogEntry);
+        if (users.length === 0) {
+          console.warn(`[Generate Course] User with email ${userId} not found in database`);
+        } else {
+          const user = users[0];
+          
+          // Create course record
+          const courseData = {
+            title: topic,
+            description: goal,
+            subject: topic,
+            difficulty_level: level,
+            estimated_duration: outline.length * 15, // 15 minutes per module estimate
+            created_by: user.id
+          };
+          
+          const course = await DatabaseService.insertRecord('courses', courseData);
+          console.log(`[Generate Course] Course created with ID: ${course.id}`);
+          
+          // Create subtopics for each module
+          for (let i = 0; i < outline.length; i++) {
+            const module = outline[i];
+            const subtopicData = {
+              course_id: course.id,
+              title: module.title || `Module ${i + 1}`,
+              content: JSON.stringify(module),
+              order_index: i
+            };
+            
+            await DatabaseService.insertRecord('subtopics', subtopicData);
+          }
+          
+          console.log(`[Generate Course] Created ${outline.length} subtopics for course`);
+        }
+      } catch (error) {
+        console.error('[Generate Course] Error saving to database:', error);
+        // Continue execution even if database save fails
       }
     } else {
-      console.warn('[Generate Course] No userId provided, activity not logged');
+      console.warn('[Generate Course] No userId provided, course not saved');
     }
 
     // 9. Kirim balik outline

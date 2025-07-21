@@ -4,7 +4,7 @@ import { generateAccessToken, generateRefreshToken, getTokenExpiration } from '@
 import { validateEmail } from '@/lib/validation';
 import { loginRateLimiter } from '@/lib/rate-limit';
 import { randomBytes } from 'crypto';
-// import prisma from '@/lib/prisma'; // Removed for mock implementation
+import { DatabaseService } from '@/lib/database';
 
 export async function POST(req: Request) {
   try {
@@ -38,30 +38,13 @@ export async function POST(req: Request) {
       );
     }
 
-    // Mock user data for testing
-    const mockUsers = [
-      {
-        id: 'user-123',
-        email: 'user@example.com',
-        passwordHash: '$2a$10$92IXUNpkjO0rOQ5byMi.Ye4oKoEa3Ro9llC/.og/at2.uheWG/igi', // password
-        role: 'USER',
-        isVerified: true,
-        failedLoginAttempts: 0,
-        lockedUntil: null
-      },
-      {
-        id: 'admin-456',
-        email: 'admin@example.com',
-        passwordHash: '$2a$10$92IXUNpkjO0rOQ5byMi.Ye4oKoEa3Ro9llC/.og/at2.uheWG/igi', // password
-        role: 'ADMIN',
-        isVerified: true,
-        failedLoginAttempts: 0,
-        lockedUntil: null
-      }
-    ];
+    // Find user by email in database
+    const users = await DatabaseService.getRecords('users', {
+      filter: { email },
+      limit: 1
+    });
 
-    // Find user by email in mock data
-    const user = mockUsers.find(u => u.email === email);
+    const user = users.length > 0 ? users[0] : null;
 
     // Check if user exists
     if (!user) {
@@ -71,19 +54,8 @@ export async function POST(req: Request) {
       );
     }
     
-    // Check if account is locked (mock check)
-    if (user.lockedUntil && user.lockedUntil > new Date()) {
-      return NextResponse.json(
-        { 
-          error: 'Account is temporarily locked due to multiple failed login attempts',
-          unlockTime: user.lockedUntil
-        },
-        { status: 403 }
-      );
-    }
-
-    // Mock password verification (accept "password" as valid password)
-    const isPasswordValid = password === 'password' || await bcrypt.compare(password, user.passwordHash);
+    // Password verification
+    const isPasswordValid = await bcrypt.compare(password, user.password_hash);
     if (!isPasswordValid) {
       return NextResponse.json(
         { error: 'Invalid credentials' },
@@ -107,9 +79,8 @@ export async function POST(req: Request) {
       role: user.role
     });
     
-    // Mock database update - in real implementation, would update user record
-    // For mock purposes, we'll just log the successful login
-    console.log(`Mock login update for user ${user.id}: reset failed attempts, updated last login`);
+    // Log successful login
+    console.log(`User logged in successfully: ${user.id}`);
     
     // Create response
     const response = NextResponse.json({
@@ -117,8 +88,7 @@ export async function POST(req: Request) {
       user: {
         id: user.id,
         email: user.email,
-        role: user.role,
-        isVerified: user.isVerified
+        role: user.role
       }
     });
     
