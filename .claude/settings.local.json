@@ -23,7 +23,9 @@
       "Bash(git branch:*)",
       "Bash(git remote add:*)",
       "Bash(git push:*)",
-      "Bash(ls:*)"
+      "Bash(ls:*)",
+      "Bash(npx tsc:*)",
+      "WebFetch(domain:principle-learn-v2.vercel.app)"
     ],
     "deny": []
   }

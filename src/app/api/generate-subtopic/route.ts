@@ -127,9 +127,109 @@ export async function POST(request: Request) {
           }
         }
       }
+
+      // Validate quiz data
+      if (!data.quiz || !Array.isArray(data.quiz)) {
+        console.warn('Quiz data is missing or invalid, adding fallback quiz');
+        hasIssues = true;
+        data.quiz = [
+          {
+            question: "Apa yang telah Anda pelajari dari materi ini?",
+            options: [
+              "Konsep dasar yang dijelaskan dalam materi",
+              "Penerapan praktis dari teori yang dipelajari", 
+              "Hubungan antara konsep dengan implementasi",
+              "Semua jawaban di atas benar"
+            ],
+            correctIndex: 3
+          },
+          {
+            question: "Manakah dari pernyataan berikut yang paling tepat?",
+            options: [
+              "Materi ini mudah dipahami",
+              "Materi ini memerlukan pemahaman mendalam",
+              "Materi ini dapat diterapkan langsung",
+              "Semua pernyataan di atas benar"
+            ],
+            correctIndex: 3
+          },
+          {
+            question: "Bagaimana cara terbaik untuk menguasai materi ini?",
+            options: [
+              "Membaca berulang-ulang",
+              "Praktik dan latihan",
+              "Diskusi dengan orang lain",
+              "Kombinasi membaca, praktik, dan diskusi"
+            ],
+            correctIndex: 3
+          },
+          {
+            question: "Apa langkah selanjutnya setelah memahami materi ini?",
+            options: [
+              "Melanjutkan ke materi berikutnya",
+              "Mengulang materi dari awal",
+              "Mencoba menerapkan dalam praktek",
+              "Melanjutkan sambil tetap berlatih"
+            ],
+            correctIndex: 3
+          },
+          {
+            question: "Seberapa penting pemahaman materi ini untuk pembelajaran selanjutnya?",
+            options: [
+              "Tidak terlalu penting",
+              "Cukup penting sebagai dasar",
+              "Sangat penting untuk materi lanjutan",
+              "Esensial untuk seluruh pembelajaran"
+            ],
+            correctIndex: 2
+          }
+        ];
+      } else if (data.quiz.length !== 5) {
+        console.warn(`Expected 5 quiz questions, got ${data.quiz.length}, fixing...`);
+        hasIssues = true;
+        
+        // If we have some questions, pad with fallback
+        while (data.quiz.length < 5) {
+          data.quiz.push({
+            question: `Pertanyaan tambahan ${data.quiz.length + 1}: Apa yang dapat Anda simpulkan dari materi ini?`,
+            options: [
+              "Materi memberikan pemahaman baru",
+              "Materi memperkuat konsep sebelumnya",
+              "Materi membuka wawasan lebih luas",
+              "Semua jawaban di atas benar"
+            ],
+            correctIndex: 3
+          });
+        }
+        
+        // If too many questions, trim to 5
+        if (data.quiz.length > 5) {
+          data.quiz = data.quiz.slice(0, 5);
+        }
+      } else {
+        // Validate each quiz question
+        for (let i = 0; i < data.quiz.length; i++) {
+          const quiz = data.quiz[i];
+          if (!quiz.question || !Array.isArray(quiz.options) || quiz.options.length !== 4 || 
+              typeof quiz.correctIndex !== 'number' || quiz.correctIndex < 0 || quiz.correctIndex > 3) {
+            console.warn(`Quiz question ${i + 1} has invalid structure, fixing...`);
+            hasIssues = true;
+            data.quiz[i] = {
+              question: `Pertanyaan ${i + 1}: Apa yang dapat Anda pelajari dari bagian ini?`,
+              options: [
+                "Konsep teoritis",
+                "Penerapan praktis", 
+                "Pemahaman mendalam",
+                "Semua aspek di atas"
+              ],
+              correctIndex: 3
+            };
+          }
+        }
+      }
       
       if (hasIssues) {
-        console.warn('Generated content had issues with paragraph counts that were automatically fixed');
+        console.warn('Generated content had issues that were automatically fixed');
       }
       
     } catch (parseErr) {
