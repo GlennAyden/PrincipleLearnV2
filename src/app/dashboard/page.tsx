@@ -3,7 +3,7 @@
 
 import { useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
-import { useLocalStorage } from '@/hooks/useLocalStorage';
+import { useAuth } from '@/hooks/useAuth';
 import styles from './page.module.scss';
 
 type Level = 'Beginner' | 'Intermediate' | 'Advance';
@@ -16,26 +16,21 @@ interface Course {
 
 export default function DashboardPage() {
   const router = useRouter();
-  const [mounted, setMounted] = useState(false);
-  const [user, , removeUser] = useLocalStorage<{ email: string } | null>('pl_user', null);
+  const { user, isLoading: authLoading, isAuthenticated, logout } = useAuth();
   const [courses, setCourses] = useState<Course[]>([]);
   const [loading, setLoading] = useState(true);
 
-  // pastikan hanya render setelah mount & ada user
+  // Redirect to login if not authenticated
   useEffect(() => {
-    setMounted(true);
-  }, []);
-
-  useEffect(() => {
-    if (mounted && !user) {
+    if (!authLoading && !isAuthenticated) {
       router.replace('/login');
     }
-  }, [mounted, user, router]);
+  }, [authLoading, isAuthenticated, router]);
 
   // Load courses from database
   useEffect(() => {
     const loadCourses = async () => {
-      if (!user?.email) {
+      if (!user?.email || authLoading) {
         setLoading(false);
         return;
       }
@@ -59,16 +54,16 @@ export default function DashboardPage() {
       }
     };
     
-    if (mounted && user) {
+    if (user && !authLoading) {
       loadCourses();
     }
-  }, [mounted, user]);
+  }, [user, authLoading]);
 
-  if (!mounted || !user) return null;
+  if (authLoading) return <div className={styles.loading}>Loading...</div>;
+  if (!isAuthenticated) return null;
 
-  const handleLogout = () => {
-    removeUser();
-    router.replace('/login');
+  const handleLogout = async () => {
+    await logout();
   };
 
   const handleDelete = async (id: string) => {

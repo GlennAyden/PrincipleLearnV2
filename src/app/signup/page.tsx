@@ -1,11 +1,11 @@
 // src/app/signup/page.tsx
 "use client";
 
-import { useState, FormEvent } from "react";
+import { useState, FormEvent, useEffect } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import styles from "./page.module.scss";
-import { useLocalStorage } from "@/hooks/useLocalStorage";
+import { useAuth } from "@/hooks/useAuth";
 
 export default function SignUpPage() {
   const [email, setEmail] = useState("");
@@ -13,10 +13,14 @@ export default function SignUpPage() {
   const [error, setError] = useState("");
   const [isLoading, setIsLoading] = useState(false);
   const router = useRouter();
-  const [, setUser] = useLocalStorage<{ email: string } | null>(
-    'pl_user',
-    null
-  );
+  const { isAuthenticated, login } = useAuth();
+
+  // Redirect if already authenticated
+  useEffect(() => {
+    if (isAuthenticated) {
+      router.replace('/dashboard');
+    }
+  }, [isAuthenticated, router]);
 
   const handleSignUp = async (e: FormEvent) => {
     e.preventDefault();
@@ -54,11 +58,15 @@ export default function SignUpPage() {
         return;
       }
       
-      // Set user in local storage with email
-      setUser({ email });
+      // Auto-login after successful registration
+      const loginResult = await login(email, password);
       
-      // Redirect ke request course (no email verification needed)
-      router.push("/request-course/step1");
+      if (loginResult.success) {
+        // Redirect ke request course (no email verification needed)
+        router.push("/request-course/step1");
+      } else {
+        setError("Registration successful, but auto-login failed. Please sign in manually.");
+      }
     } catch (err: any) {
       setError("Network error. Please check your connection and try again.");
       console.error("Registration error:", err);

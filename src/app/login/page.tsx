@@ -1,28 +1,26 @@
 // Path: src/app/login/page.tsx
 'use client';
 
-import { useState, FormEvent } from 'react';
+import { useState, FormEvent, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 import Link from 'next/link';
 import styles from './page.module.scss';
-import { useLocalStorage } from '@/hooks/useLocalStorage';
-import { migrateCourses } from '@/lib/migrateCourses';
+import { useAuth } from '@/hooks/useAuth';
 
 export default function LoginPage() {
   const router = useRouter();
+  const { user, isAuthenticated, login } = useAuth();
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [error, setError] = useState('');
   const [isLoading, setIsLoading] = useState(false);
 
-  // Store user in local storage
-  const [, setUser] = useLocalStorage<{ email: string, id?: string, role?: string } | null>(
-    'pl_user',
-    null
-  );
-  
-  // Get existing courses
-  const [courses] = useLocalStorage<{ id: string }[]>('pl_courses', []);
+  // Redirect if already authenticated
+  useEffect(() => {
+    if (isAuthenticated) {
+      router.replace('/dashboard');
+    }
+  }, [isAuthenticated, router]);
 
   const handleSubmit = async (e: FormEvent) => {
     e.preventDefault();
@@ -40,29 +38,19 @@ export default function LoginPage() {
     setIsLoading(true);
     
     try {
-      // Login via our API
-      const response = await fetch('/api/auth/login', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({ email, password }),
-      });
+      // Use the login function from useAuth hook
+      const result = await login(email, password);
       
-      const data = await response.json();
-      
-      if (!response.ok) {
-        throw new Error(data.error || 'Login failed');
+      if (!result.success) {
+        setError(result.error || 'Login failed');
+        return;
       }
       
-      // Simpan user ke localStorage
-      setUser({
-        email: data.user?.email || email,
-        id: data.user?.id,
-        role: data.user?.role || 'USER',
-      });
-      migrateCourses(email);
-      if (courses.length > 0) {
+      // Check if user has any courses
+      const coursesResponse = await fetch(`/api/courses?userId=${encodeURIComponent(email)}`);
+      const coursesResult = await coursesResponse.json();
+      
+      if (coursesResult.success && coursesResult.courses.length > 0) {
         router.replace('/dashboard');
       } else {
         router.replace('/request-course/step1');
