@@ -115,11 +115,58 @@ export default function SubtopicPage() {
   const [loadingChallenge, setLoadingChallenge] = useState<boolean>(false);
   const [loadingExamples, setLoadingExamples] = useState(false);
 
-  const [courses, setCourses] = useLocalStorage<any[]>('pl_courses', []);
-  const course = courses.find((c) => c.id === courseId) || null;
+  const [course, setCourse] = useState<any>(null);
+  const [courseLoading, setCourseLoading] = useState(true);
   const [data, setData] = useState<SubtopicResponse | null>(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string>('');
+
+  // Load course data from database API
+  useEffect(() => {
+    async function loadCourse() {
+      if (!courseId) return;
+      
+      setCourseLoading(true);
+      
+      try {
+        const response = await fetch(`/api/courses/${courseId}`);
+        const result = await response.json();
+        
+        if (result.success && result.course) {
+          // Transform subtopics to outline format
+          const outline = result.course.subtopics?.map((subtopic: any) => {
+            let content;
+            try {
+              content = JSON.parse(subtopic.content);
+            } catch (parseError) {
+              content = { module: subtopic.title, subtopics: [] };
+            }
+            
+            return {
+              module: content.module || subtopic.title || 'Module',
+              subtopics: content.subtopics || []
+            };
+          }) || [];
+          
+          const courseData = {
+            id: result.course.id,
+            title: result.course.title,
+            level: result.course.difficulty_level || 'Beginner',
+            outline
+          };
+          
+          setCourse(courseData);
+        }
+      } catch (error) {
+        console.error('[Subtopic] Error loading course:', error);
+        setError('Failed to load course data');
+      } finally {
+        setCourseLoading(false);
+      }
+    }
+    
+    loadCourse();
+  }, [courseId]);
 
   useEffect(() => {
     if (!course?.outline) return;
@@ -151,20 +198,18 @@ export default function SubtopicPage() {
         const json = (await res.json()) as SubtopicResponse;
         setData(json);
 
-        const updated = [...courses];
-        const idx = updated.findIndex((c) => c.id === course.id);
-        if (idx !== -1) {
-          const prev = updated[idx].subtopicDetails || {};
-          const modCache = prev[moduleIndex] || {};
-          updated[idx] = {
-            ...updated[idx],
-            subtopicDetails: {
-              ...prev,
-              [moduleIndex]: { ...modCache, [subtopicIndex]: json },
+        // Cache the generated content in course state
+        const updated = {
+          ...course,
+          subtopicDetails: {
+            ...course.subtopicDetails,
+            [moduleIndex]: {
+              ...course.subtopicDetails?.[moduleIndex],
+              [subtopicIndex]: json,
             },
-          };
-          setCourses(updated);
-        }
+          },
+        };
+        setCourse(updated);
       } catch (e: any) {
         setError(e.message);
       } finally {
@@ -172,7 +217,7 @@ export default function SubtopicPage() {
       }
     }
     loadSubtopic();
-  }, [course, moduleIndex, subtopicIndex, courses, setCourses]);
+  }, [course, moduleIndex, subtopicIndex]);
 
   // Initialize challenge question when opening the tab
   useEffect(() => {
@@ -194,7 +239,8 @@ export default function SubtopicPage() {
     }
   }, [courseId, moduleIndex, subtopicIndex, pageNumber]);
 
-  if (!course) return <div className={styles.loading}>Loading course…</div>;
+  if (courseLoading) return <div className={styles.loading}>Loading course…</div>;
+  if (!course) return <div className={styles.error}>Course not found</div>;
   if (loading && !data) return <SkeletonLoading />;
   if (error) return <div className={styles.error}>Error: {error}</div>;
   if (!data) return <div className={styles.error}>No content available.</div>;
