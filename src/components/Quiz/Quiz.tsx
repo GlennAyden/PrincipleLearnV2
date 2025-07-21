@@ -16,9 +16,15 @@ export interface QuizProps {
   courseId?: string;
   /** Subtopic name */
   subtopic?: string;
+  /** Actual subtopic title from database */
+  subtopicTitle?: string;
+  /** Module index */
+  moduleIndex?: number;
+  /** Subtopic index */
+  subtopicIndex?: number;
 }
 
-export default function Quiz({ questions = [], courseId = '', subtopic = '' }: QuizProps) {
+export default function Quiz({ questions = [], courseId = '', subtopic = '', subtopicTitle = '', moduleIndex = 0, subtopicIndex = 0 }: QuizProps) {
   // gunakan safeItems untuk mencegah undefined
   const safeItems = questions;
   // Get user from auth hook
@@ -66,7 +72,7 @@ export default function Quiz({ questions = [], courseId = '', subtopic = '' }: Q
     const score = Math.round((correctCount / safeItems.length) * 100);
     
     // Jika user, courseId, dan subtopic tersedia, simpan ke database
-    if (user?.email && courseId && subtopic) {
+    if (user?.email && courseId) {
       await submitQuizToServer(answers, score);
     }
   };
@@ -86,16 +92,22 @@ export default function Quiz({ questions = [], courseId = '', subtopic = '' }: Q
           userId: user.email,
           courseId,
           subtopic,
+          subtopicTitle,
+          moduleIndex,
+          subtopicIndex,
           score,
           answers
         }),
       });
       
       if (response.ok) {
+        const result = await response.json();
         setSubmitted(true);
-        console.log('Quiz attempt saved successfully');
+        console.log('Quiz attempt saved successfully:', result.message);
+        console.log('Matching details:', result.details);
       } else {
-        console.error('Failed to save quiz attempt');
+        const errorResult = await response.json();
+        console.error('Failed to save quiz attempt:', errorResult);
       }
     } catch (error) {
       console.error('Error saving quiz attempt:', error);

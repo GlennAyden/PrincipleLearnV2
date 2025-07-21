@@ -686,11 +686,16 @@ export default function SubtopicPage() {
       {pageNumber === contentCount && <KeyTakeaways items={data.keyTakeaways} />}
 
       {/* Quiz */}
-      {pageNumber === contentCount + 1 && (
+      {pageNumber === contentCount + 1 && course?.outline && (
         <Quiz 
           questions={data.quiz} 
           courseId={courseId}
           subtopic={`Module ${moduleIndex + 1}, Subtopic ${subtopicIndex + 1}`}
+          subtopicTitle={typeof course.outline[moduleIndex]?.subtopics?.[subtopicIndex] === 'string' 
+            ? course.outline[moduleIndex].subtopics[subtopicIndex] 
+            : course.outline[moduleIndex]?.subtopics?.[subtopicIndex]?.title}
+          moduleIndex={moduleIndex}
+          subtopicIndex={subtopicIndex}
         />
       )}
 
