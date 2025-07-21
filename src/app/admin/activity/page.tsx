@@ -108,142 +108,131 @@ export default function AdminActivityPage() {
       .then(setUsers)
   }, [authLoading, admin])
   
-  // Load available courses for dropdown
+  // Load available courses for dropdown from database
   useEffect(() => {
     if (authLoading || !admin) return
     
-    // Fetch courses from API or localStorage
-    try {
-      // Attempt to gather all courses from both the legacy key and all user-specific keys
-      const allCourses: any[] = [];
-      
-      // Check legacy key
-      const storedCourses = localStorage.getItem('pl_courses');
-      if (storedCourses) {
-        try {
-          const parsedCourses = JSON.parse(storedCourses);
-          allCourses.push(...parsedCourses);
-        } catch (error) {
-          console.error('Error parsing legacy courses:', error);
-        }
-      }
-      
-      // Check all localStorage items for user-specific course keys
-      for (let i = 0; i < localStorage.length; i++) {
-        const key = localStorage.key(i);
-        if (key && key.startsWith('pl_courses_')) {
-          try {
-            const userCourses = localStorage.getItem(key);
-            if (userCourses) {
-              const parsedUserCourses = JSON.parse(userCourses);
-              allCourses.push(...parsedUserCourses);
+    async function loadAllCourses() {
+      try {
+        // Fetch all users first to get their course data
+        const usersResponse = await fetch('/api/admin/users');
+        const usersResult = await usersResponse.json();
+        
+        if (usersResult.success && usersResult.users) {
+          const allCourses: any[] = [];
+          
+          // For each user, fetch their courses
+          for (const user of usersResult.users) {
+            try {
+              const coursesResponse = await fetch(`/api/courses?userId=${encodeURIComponent(user.email)}`);
+              const coursesResult = await coursesResponse.json();
+              
+              if (coursesResult.success && coursesResult.courses) {
+                allCourses.push(...coursesResult.courses);
+              }
+            } catch (error) {
+              console.error(`Error fetching courses for user ${user.email}:`, error);
             }
-          } catch (error) {
-            console.error(`Error parsing user courses for key ${key}:`, error);
           }
+          
+          // Create a map to deduplicate courses by ID
+          const courseMap = new Map();
+          allCourses.forEach((course) => {
+            if (course && course.id) {
+              courseMap.set(course.id, course);
+            }
+          });
+          
+          // Map to format needed for dropdown
+          const courseOptions = Array.from(courseMap.values()).map((course: any) => ({
+            id: course.id,
+            title: course.title
+          }));
+          
+          setCourses(courseOptions);
         }
+      } catch (error) {
+        console.error('Error loading courses:', error);
       }
-      
-      // Create a map to deduplicate courses by ID
-      const courseMap = new Map();
-      allCourses.forEach((course) => {
-        if (course && course.id) {
-          courseMap.set(course.id, course);
-        }
-      });
-      
-      // Map to format needed for dropdown
-      const courseOptions = Array.from(courseMap.values()).map((course: any) => ({
-        id: course.id,
-        title: course.title
-      }));
-      
-      setCourses(courseOptions);
-    } catch (error) {
-      console.error('Error loading courses:', error);
     }
+    
+    loadAllCourses();
   }, [authLoading, admin])
   
-  // Load topics based on selected course
+  // Load topics based on selected course from database
   useEffect(() => {
     if (!selectedCourse) {
       setTopics([])
       return
     }
     
-    try {
-      // Find the course in any of the user-specific keys or legacy key
-      let selectedCourseData = null;
-      
-      // Check legacy key first
-      const storedCourses = localStorage.getItem('pl_courses');
-      if (storedCourses) {
-        try {
-          const parsedCourses = JSON.parse(storedCourses);
-          selectedCourseData = parsedCourses.find((c: any) => c.id === selectedCourse);
-        } catch (error) {
-          console.error('Error parsing legacy courses:', error);
-        }
-      }
-      
-      // If not found, check user-specific keys
-      if (!selectedCourseData) {
-        for (let i = 0; i < localStorage.length; i++) {
-          const key = localStorage.key(i);
-          if (key && key.startsWith('pl_courses_')) {
-            try {
-              const userCourses = localStorage.getItem(key);
-              if (userCourses) {
-                const parsedUserCourses = JSON.parse(userCourses);
-                selectedCourseData = parsedUserCourses.find((c: any) => c.id === selectedCourse);
-                if (selectedCourseData) break;
-              }
-            } catch (error) {
-              console.error(`Error parsing user courses for key ${key}:`, error);
-            }
-          }
-        }
-      }
-      
-      if (selectedCourseData?.outline) {
-        // Flatten all modules and subtopics into a single array of topics
-        const allTopics: { id: string; title: string }[] = []
+    async function loadCourseTopics() {
+      try {
+        // Fetch course details from database
+        const response = await fetch(`/api/courses/${selectedCourse}`);
+        const result = await response.json();
         
-        selectedCourseData.outline.forEach((module: any, moduleIndex: number) => {
-          // Add the module as a topic option
-          allTopics.push({
-            id: `Module ${moduleIndex + 1}`,
-            title: `Module ${moduleIndex + 1}: ${module.module}`
-          })
+        if (result.success && result.course) {
+          const selectedCourseData = result.course;
           
-          // Add each subtopic
-          if (module.subtopics && module.subtopics.length > 0) {
-            module.subtopics.forEach((subtopic: any, subtopicIndex: number) => {
-              const subtopicTitle = typeof subtopic === 'string' 
-                ? subtopic 
-                : subtopic.title
-                
-              // Clean up the title by removing redundant numbering
-              const cleanTitle = subtopicTitle
-                .replace(/^\d+\.\s*\d+\.?\s*/g, '')
-                .replace(/^\d+\.\s*/g, '')
-              
+          // Transform subtopics to outline format
+          const outline = selectedCourseData.subtopics?.map((subtopic: any) => {
+            let content;
+            try {
+              content = JSON.parse(subtopic.content);
+            } catch (parseError) {
+              content = { module: subtopic.title, subtopics: [] };
+            }
+            
+            return {
+              module: content.module || subtopic.title || 'Module',
+              subtopics: content.subtopics || []
+            };
+          }) || [];
+          
+          if (outline.length > 0) {
+            // Flatten all modules and subtopics into a single array of topics
+            const allTopics: { id: string; title: string }[] = []
+            
+            outline.forEach((module: any, moduleIndex: number) => {
+              // Add the module as a topic option
               allTopics.push({
-                id: `Module ${moduleIndex + 1}, Subtopic ${subtopicIndex + 1}`,
-                title: `${moduleIndex + 1}.${subtopicIndex + 1} ${cleanTitle}`
+                id: `Module ${moduleIndex + 1}`,
+                title: `Module ${moduleIndex + 1}: ${module.module}`
               })
+              
+              // Add each subtopic
+              if (module.subtopics && module.subtopics.length > 0) {
+                module.subtopics.forEach((subtopic: any, subtopicIndex: number) => {
+                  const subtopicTitle = typeof subtopic === 'string' 
+                    ? subtopic 
+                    : subtopic.title
+                    
+                  // Clean up the title by removing redundant numbering
+                  const cleanTitle = subtopicTitle
+                    .replace(/^\d+\.\s*\d+\.?\s*/g, '')
+                    .replace(/^\d+\.\s*/g, '')
+                  
+                  allTopics.push({
+                    id: `Module ${moduleIndex + 1}, Subtopic ${subtopicIndex + 1}`,
+                    title: `${moduleIndex + 1}.${subtopicIndex + 1} ${cleanTitle}`
+                  })
+                })
+              }
             })
+            
+            setTopics(allTopics)
+          } else {
+            setTopics([])
           }
-        })
-        
-        setTopics(allTopics)
-      } else {
+        }
+      } catch (error) {
+        console.error('Error loading course topics:', error)
         setTopics([])
       }
-    } catch (error) {
-      console.error('Error loading topics:', error)
-      setTopics([])
     }
+    
+    loadCourseTopics();
   }, [selectedCourse])
 
   // common helper to build query params

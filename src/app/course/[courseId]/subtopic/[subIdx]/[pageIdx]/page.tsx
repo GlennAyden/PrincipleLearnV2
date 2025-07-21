@@ -226,18 +226,37 @@ export default function SubtopicPage() {
     }
   }, [activeTab]);
 
-  // Load challenge history from localStorage on initial render
+  // Load challenge history from database on initial render
   useEffect(() => {
-    const savedChallenges = localStorage.getItem(`challenges-${courseId}-${moduleIndex}-${subtopicIndex}-${pageNumber}`);
-    if (savedChallenges) {
+    async function loadChallengeHistory() {
+      if (!user?.email) return;
+
       try {
-        const parsedData = JSON.parse(savedChallenges);
-        setChallengeData(parsedData);
-      } catch (e) {
-        console.error('Error parsing saved challenges:', e);
+        const response = await fetch(
+          `/api/challenge-response?userId=${encodeURIComponent(user.email)}&courseId=${courseId}&moduleIndex=${moduleIndex}&subtopicIndex=${subtopicIndex}&pageNumber=${pageNumber}`
+        );
+        
+        if (response.ok) {
+          const result = await response.json();
+          if (result.success && result.responses) {
+            // Transform API response to match component format
+            const transformedData = result.responses.map((resp: any) => ({
+              question: resp.question,
+              answer: resp.answer,
+              feedback: resp.feedback
+            }));
+            setChallengeData(transformedData);
+          }
+        }
+      } catch (error) {
+        console.error('Error loading challenge history from database:', error);
+        // Fall back to empty array if load fails
+        setChallengeData([]);
       }
     }
-  }, [courseId, moduleIndex, subtopicIndex, pageNumber]);
+
+    loadChallengeHistory();
+  }, [user?.email, courseId, moduleIndex, subtopicIndex, pageNumber]);
 
   if (courseLoading) return <div className={styles.loading}>Loading course…</div>;
   if (!course) return <div className={styles.error}>Course not found</div>;
@@ -330,22 +349,35 @@ export default function SubtopicPage() {
       const responseData = await response.json();
       setChallengeFeedback(responseData.feedback);
       
-      // Save to challenge history
-      const newChallengeData = [
-        ...challengeData, 
-        {
-          question: challengeQ,
-          answer: challengeAnswer,
-          feedback: responseData.feedback
-        }
-      ];
+      // Save to challenge history in state
+      const newChallengeItem = {
+        question: challengeQ,
+        answer: challengeAnswer,
+        feedback: responseData.feedback
+      };
+      const newChallengeData = [...challengeData, newChallengeItem];
       setChallengeData(newChallengeData);
       
-      // Save to localStorage
-      localStorage.setItem(
-        `challenges-${courseId}-${moduleIndex}-${subtopicIndex}-${pageNumber}`, 
-        JSON.stringify(newChallengeData)
-      );
+      // Save to database via API
+      try {
+        await fetch('/api/challenge-response', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            userId: user?.email,
+            courseId: courseId,
+            moduleIndex: moduleIndex,
+            subtopicIndex: subtopicIndex,
+            pageNumber: pageNumber,
+            question: challengeQ,
+            answer: challengeAnswer,
+            feedback: responseData.feedback
+          })
+        });
+      } catch (saveError) {
+        console.error('Error saving challenge to database:', saveError);
+        // Continue execution even if save fails
+      }
     } catch (error) {
       console.error('Error submitting challenge:', error);
     } finally {
