@@ -1,7 +1,7 @@
 // src/components/AskQuestion/QuestionBox.tsx
 import React, { useState } from 'react';
 import styles from './QuestionBox.module.scss';
-import { useLocalStorage } from '@/hooks/useLocalStorage';
+import { useAuth } from '@/hooks/useAuth';
 
 interface QuestionBoxProps {
   context: string;
@@ -13,7 +13,7 @@ interface QuestionBoxProps {
 export default function QuestionBox({ context, onAnswer, courseId = '', subtopic = '' }: QuestionBoxProps) {
   const [question, setQuestion] = useState('');
   const [loading, setLoading] = useState(false);
-  const [user] = useLocalStorage<{ email: string } | null>('pl_user', null);
+  const { user } = useAuth();
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();

@@ -3,7 +3,7 @@
 'use client';
 import React, { useState } from 'react';
 import styles from './FeedbackForm.module.scss';
-import { useLocalStorage } from '@/hooks/useLocalStorage';
+import { useAuth } from '@/hooks/useAuth';
 
 export interface FeedbackFormProps {
   /** ID subtopik untuk attribut feedback */
@@ -26,7 +26,7 @@ export default function FeedbackForm({
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [success, setSuccess] = useState(false);
-  const [user] = useLocalStorage<{ email: string } | null>('pl_user', null);
+  const { user } = useAuth();
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();

@@ -1,7 +1,7 @@
 // src/components/Quiz/Quiz.tsx
 import React, { useState, useEffect } from 'react';
 import styles from './Quiz.module.scss';
-import { useLocalStorage } from '@/hooks/useLocalStorage';
+import { useAuth } from '@/hooks/useAuth';
 
 export interface QuizItem {
   question: string;
@@ -21,8 +21,8 @@ export interface QuizProps {
 export default function Quiz({ questions = [], courseId = '', subtopic = '' }: QuizProps) {
   // gunakan safeItems untuk mencegah undefined
   const safeItems = questions;
-  // Get user from localStorage
-  const [user] = useLocalStorage<{ email: string } | null>('pl_user', null);
+  // Get user from auth hook
+  const { user } = useAuth();
   
   // state untuk jawaban yang dipilih per soal (null = belum menjawab)
   const [selectedAnswers, setSelectedAnswers] = useState<(number | null)[]>(

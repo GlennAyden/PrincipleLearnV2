@@ -4,7 +4,7 @@
 import { useState, useEffect, useRef } from 'react';
 import { useRouter } from 'next/navigation';
 import { useRequestCourse } from '../../../context/RequestCourseContext';
-import { useLocalStorage } from '@/hooks/useLocalStorage';
+import { useAuth } from '@/hooks/useAuth';
 import styles from './page.module.scss';
 import { Level } from '@/context/RequestCourseContext';
 
@@ -30,8 +30,7 @@ const LOADING_PHRASES = [
 export default function RequestCourseStep3() {
   const router = useRouter();
   const { answers, setPartial } = useRequestCourse();
-  const [courses, setCourses] = useLocalStorage<Course[]>('pl_courses', []);
-  const [user] = useLocalStorage<{ email: string } | null>('pl_user', null);
+  const { user, isAuthenticated, isLoading: authLoading } = useAuth();
 
   const [problem, setProblem] = useState(answers.problem);
   const [assumption, setAssumption] = useState(answers.assumption);
@@ -42,6 +41,13 @@ export default function RequestCourseStep3() {
 
   const percentRef = useRef(0);
   const phraseRef = useRef(0);
+
+  // Redirect to login if not authenticated
+  useEffect(() => {
+    if (!authLoading && !isAuthenticated) {
+      router.replace('/login');
+    }
+  }, [authLoading, isAuthenticated, router]);
 
   useEffect(() => {
     let progInterval: number;
@@ -123,14 +129,9 @@ export default function RequestCourseStep3() {
       const data = await res.json();
       if (!res.ok) throw new Error(data.error || `API Error: ${res.status}`);
 
-      const outline = data.outline as ModuleOutline[];
-      const newCourse: Course = {
-        id: Date.now().toString(),
-        title: answers.topic,
-        level: answers.level as Level,
-        outline,
-      };
-      setCourses([...courses, newCourse]);
+      // Course is automatically saved to database by the API
+      // No need to save to localStorage anymore
+      console.log('Course generated successfully:', data.course);
 
       // Log the successful course generation
       try {
@@ -167,6 +168,14 @@ export default function RequestCourseStep3() {
       setLoading(false);
     }
   };
+
+  if (authLoading) {
+    return <div className={styles.loading}>Loading...</div>;
+  }
+
+  if (!isAuthenticated) {
+    return null;
+  }
 
   if (loading) {
     return (
