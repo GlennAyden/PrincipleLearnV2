@@ -62,69 +62,78 @@ export default function CourseOverviewPage() {
       ? parseInt(moduleParam, 10)
       : 0;
 
-  const [courses, setCourses] = useLocalStorage<Course[]>(
-    'pl_courses',
-    []
-  );
   const [course, setCourse] = useState<Course | null>(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
 
-  // ambil course dari localStorage
+  // Load course from database instead of localStorage
   useEffect(() => {
-    if (!courseId) return;
-    const found = courses.find((c) => c.id === courseId) || null;
-    setCourse(found);
-  }, [courses, courseId]);
-
-  // generate outline kalau belum ada
-  useEffect(() => {
-    async function loadOutline() {
-      if (!course || course.outline) return;
+    async function loadCourse() {
+      if (!courseId) return;
+      
       setLoading(true);
       setError('');
+      
       try {
-        const res = await fetch('/api/generate-course', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({
-            topic: course.title,
-            goal: '',
-            level: course.level,
-            extraTopics: '',
-            problem: '',
-            assumption: '',
-          }),
-        });
-        const json = await res.json();
-        if (!res.ok) throw new Error(json.error || 'Failed to generate outline');
-        const updated: Course = { ...course, outline: json.outline };
-        setCourse(updated);
-        setCourses((prev) =>
-          prev.map((c) => (c.id === courseId ? updated : c))
-        );
-      } catch (e: any) {
-        setError(e.message);
+        console.log(`[Course Page] Loading course: ${courseId}`);
+        
+        const response = await fetch(`/api/courses/${courseId}`);
+        const result = await response.json();
+        
+        if (result.success) {
+          // Transform subtopics to outline format
+          const outline: ModuleOutline[] = result.course.subtopics.map((subtopic: any, index: number) => {
+            let content;
+            try {
+              content = JSON.parse(subtopic.content);
+            } catch {
+              content = { module: subtopic.title, subtopics: [] };
+            }
+            
+            return {
+              module: content.module || subtopic.title || `Module ${index + 1}`,
+              subtopics: content.subtopics || []
+            };
+          });
+          
+          const courseData: Course = {
+            id: result.course.id,
+            title: result.course.title,
+            level: result.course.difficulty_level || 'Beginner',
+            outline
+          };
+          
+          setCourse(courseData);
+          console.log(`[Course Page] Course loaded with ${outline.length} modules`);
+          
+        } else {
+          console.error('[Course Page] Failed to load course:', result.error);
+          setError(result.error || 'Failed to load course');
+        }
+      } catch (error) {
+        console.error('[Course Page] Error loading course:', error);
+        setError('Error loading course');
       } finally {
         setLoading(false);
       }
     }
-    loadOutline();
-  }, [course, courses, courseId, setCourses]);
+    
+    loadCourse();
+  }, [courseId]);
 
-  if (!course) return <div className={styles.loading}>Loading course…</div>;
   if (loading) return <SkeletonLoading />;
   if (error)
     return (
       <div className={styles.error}>
         Error: {error}{' '}
-        <button onClick={() => router.refresh()}>Retry</button>
+        <button onClick={() => window.location.reload()}>Retry</button>
       </div>
     );
-  if (!course.outline) {
+  if (!course) return <div className={styles.loading}>Course not found</div>;
+  if (!course.outline || course.outline.length === 0) {
     return (
       <div className={styles.error}>
-        Outline not available. <button onClick={() => router.refresh()}>Retry</button>
+        No course content available. <button onClick={() => window.location.reload()}>Retry</button>
       </div>
     );
   }
