@@ -4,6 +4,7 @@
 import React, { useState, useEffect } from 'react';
 import { useRouter, useParams, useSearchParams } from 'next/navigation';
 import { useLocalStorage } from '@/hooks/useLocalStorage';
+import { useAuth } from '@/hooks/useAuth';
 import QuestionBox from '@/components/AskQuestion/QuestionBox';
 import AnswerList from '@/components/AskQuestion/AnswerList';
 import ChallengeBox from '@/components/ChallengeThinking/ChallengeBox';
@@ -72,6 +73,7 @@ const SkeletonLoading = () => {
 
 export default function SubtopicPage() {
   const router = useRouter();
+  const { user } = useAuth();
   // Cast params to ensure courseId, subIdx, pageIdx are strings
   const { courseId, subIdx: pathSubIdx, pageIdx: pathPageIdx } =
     useParams() as { courseId: string; subIdx: string; pageIdx: string };
