@@ -75,10 +75,15 @@ export default function CourseOverviewPage() {
       setError('');
       
       try {
-        console.log(`[Course Page] Loading course: ${courseId}`);
+        console.log(`[Course Page] DEBUG: Loading course: ${courseId}`);
+        console.log(`[Course Page] DEBUG: Fetching from: /api/courses/${courseId}`);
         
         const response = await fetch(`/api/courses/${courseId}`);
+        console.log(`[Course Page] DEBUG: Response status:`, response.status);
+        console.log(`[Course Page] DEBUG: Response ok:`, response.ok);
+        
         const result = await response.json();
+        console.log(`[Course Page] DEBUG: Response result:`, result);
         
         if (result.success) {
           // Transform subtopics to outline format

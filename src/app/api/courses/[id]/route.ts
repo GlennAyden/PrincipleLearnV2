@@ -36,15 +36,22 @@ export async function GET(
   try {
     const courseId = params.id;
     
-    console.log(`[Get Course] Fetching course with ID: ${courseId}`);
+    console.log(`[Get Course] DEBUG: Starting fetch for course ID: ${courseId}`);
+    console.log(`[Get Course] DEBUG: Course ID type:`, typeof courseId);
+    console.log(`[Get Course] DEBUG: Course ID length:`, courseId.length);
     
     // Get course from database
+    console.log(`[Get Course] DEBUG: Querying courses table`);
     const courses = await DatabaseService.getRecords('courses', {
       filter: { id: courseId },
       limit: 1
     });
     
+    console.log(`[Get Course] DEBUG: Course query result:`, courses);
+    console.log(`[Get Course] DEBUG: Found ${courses.length} courses`);
+    
     if (courses.length === 0) {
+      console.log(`[Get Course] DEBUG: Course not found, returning 404`);
       return NextResponse.json({
         success: false,
         error: 'Course not found'
@@ -52,22 +59,29 @@ export async function GET(
     }
     
     const course = courses[0];
+    console.log(`[Get Course] DEBUG: Course data:`, course);
     
     // Get subtopics for this course
+    console.log(`[Get Course] DEBUG: Querying subtopics table`);
     const subtopics = await DatabaseService.getRecords('subtopics', {
       filter: { course_id: courseId },
       orderBy: { column: 'order_index', ascending: true }
     });
     
+    console.log(`[Get Course] DEBUG: Subtopics query result:`, subtopics);
     console.log(`[Get Course] Found course with ${subtopics.length} subtopics`);
     
-    return NextResponse.json({
+    const response = {
       success: true,
       course: {
         ...course,
         subtopics
       }
-    });
+    };
+    
+    console.log(`[Get Course] DEBUG: Returning response:`, response);
+    
+    return NextResponse.json(response);
     
   } catch (error) {
     console.error('[Get Course] Error fetching course:', error);
