@@ -58,18 +58,46 @@ export async function POST(req: NextRequest) {
       );
     }
 
-    // Save each quiz answer to database
-    const submissionIds = [];
-    for (const answer of data.answers) {
-      const submissionData = {
-        user_id: user.id,
-        quiz_id: data.courseId, // Using courseId as quiz_id for now
-        answer: answer.userAnswer,
-        is_correct: answer.isCorrect
-      };
+    // Find quiz questions in database to get proper quiz IDs
+    const quizQuestions = await DatabaseService.getRecords('quiz', {
+      filter: { course_id: data.courseId },
+      orderBy: 'created_at'
+    });
 
-      const submission = await DatabaseService.insertRecord('quiz_submissions', submissionData);
-      submissionIds.push(submission.id);
+    if (quizQuestions.length === 0) {
+      return NextResponse.json(
+        { error: "Quiz questions not found in database. Please regenerate the subtopic content." },
+        { status: 404 }
+      );
+    }
+
+    // Save each quiz answer to database with proper quiz_id
+    const submissionIds = [];
+    for (let i = 0; i < data.answers.length; i++) {
+      const answer = data.answers[i];
+      
+      // Find matching quiz question by question text or index
+      let matchingQuiz = quizQuestions.find(q => q.question === answer.question);
+      
+      // If not found by question text, try by index
+      if (!matchingQuiz && i < quizQuestions.length) {
+        matchingQuiz = quizQuestions[i];
+      }
+      
+      if (matchingQuiz) {
+        const submissionData = {
+          user_id: user.id,
+          quiz_id: matchingQuiz.id, // Use actual quiz question ID
+          answer: answer.userAnswer,
+          is_correct: answer.isCorrect
+        };
+
+        const submission = await DatabaseService.insertRecord('quiz_submissions', submissionData);
+        submissionIds.push(submission.id);
+        console.log(`Saved submission for quiz ${matchingQuiz.id}:`, answer.question.substring(0, 50) + '...');
+      } else {
+        console.warn(`No matching quiz found for answer ${i}:`, answer.question.substring(0, 50) + '...');
+      }
     }
     
     console.log(`Quiz submission saved to database:`, {

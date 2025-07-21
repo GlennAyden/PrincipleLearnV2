@@ -2,7 +2,7 @@
 
 import { NextResponse } from 'next/server'
 import type { NextRequest } from 'next/server'
-// import prisma from '@/lib/prisma' // Removed for mock implementation
+import { DatabaseService } from '@/lib/database'
 
 export async function GET(req: NextRequest) {
   try {
@@ -24,57 +24,81 @@ export async function GET(req: NextRequest) {
       where.createdAt = { gte: start, lt: end }
     }
   
-    // Mock journal logs data
-    const mockLogs = [
-      {
-        id: 'journal-1',
-        createdAt: new Date('2025-01-15'),
-        subtopic: 'Module 1 - Introduction to Programming',
-        content: 'Today I learned about variables and data types. Very helpful content!',
-        userId: 'user-123',
-        userEmail: 'user@example.com'
-      },
-      {
-        id: 'journal-2',
-        createdAt: new Date('2025-01-14'),
-        subtopic: 'Module 2 - Control Structures',
-        content: 'The concept of loops was challenging but I think I understand it now.',
-        userId: 'admin-456',
-        userEmail: 'admin@example.com'
-      },
-      {
-        id: 'journal-3',
-        createdAt: new Date('2025-01-13'),
-        subtopic: 'Module 3 - Functions',
-        content: 'Functions make code more organized and reusable. Great explanation!',
-        userId: 'user-789',
-        userEmail: 'test@example.com'
+    // Get real journal data from database
+    try {
+      // Get journal entries
+      const journals = await DatabaseService.getRecords('jurnal', {
+        orderBy: 'created_at desc'
+      });
+      
+      // Get users for user info
+      const users = await DatabaseService.getRecords('users');
+      
+      // Get courses for course info
+      const courses = await DatabaseService.getRecords('courses');
+      
+      // Join and transform the data
+      const enrichedJournals = journals.map(journal => {
+        const user = users.find(u => u.id === journal.user_id);
+        const course = courses.find(c => c.id === journal.course_id);
+        
+        return {
+          id: journal.id,
+          createdAt: new Date(journal.created_at),
+          subtopic: course?.title || 'Unknown Course',
+          content: journal.content,
+          reflection: journal.reflection,
+          userId: user?.id,
+          userEmail: user?.email,
+          courseId: journal.course_id
+        };
+      }).filter(j => j.userEmail); // Only include entries with valid user data
+      
+      // Apply filters
+      let filteredJournals = enrichedJournals;
+      
+      if (userId) {
+        filteredJournals = filteredJournals.filter(j => j.userId === userId);
       }
-    ];
-    
-    // Apply filters to mock data
-    let filteredLogs = mockLogs;
-    if (userId) filteredLogs = filteredLogs.filter(log => log.userId === userId);
-    if (course) filteredLogs = filteredLogs.filter(log => log.subtopic.includes('Module'));
-    if (topic) filteredLogs = filteredLogs.filter(log => log.subtopic.includes(topic));
-    if (date) {
-      const filterDate = new Date(date);
-      filteredLogs = filteredLogs.filter(log => 
-        log.createdAt.toDateString() === filterDate.toDateString()
-      );
+      
+      if (course) {
+        filteredJournals = filteredJournals.filter(j => 
+          j.subtopic.toLowerCase().includes(course.toLowerCase()) ||
+          j.courseId === course
+        );
+      }
+      
+      if (topic) {
+        filteredJournals = filteredJournals.filter(j => 
+          j.subtopic.toLowerCase().includes(topic.toLowerCase())
+        );
+      }
+      
+      if (date) {
+        const filterDate = new Date(date);
+        filteredJournals = filteredJournals.filter(j => 
+          j.createdAt.toDateString() === filterDate.toDateString()
+        );
+      }
+      
+      // Shape response to match JournalLogItem in AdminActivityPage
+      const payload = filteredJournals.map((journal) => ({
+        id: journal.id,
+        timestamp: journal.createdAt.toLocaleDateString('id-ID'),
+        topic: journal.subtopic,
+        content: journal.content,
+        reflection: journal.reflection,
+        userEmail: journal.userEmail,
+        userId: journal.userId
+      }));
+      
+      return NextResponse.json(payload);
+      
+    } catch (dbError) {
+      console.error('Database error in journal logs:', dbError);
+      // Return empty array if no data or database error
+      return NextResponse.json([]);
     }
-    
-    // Shape response to match JournalLogItem in AdminActivityPage
-    const payload = filteredLogs.map((log) => ({
-      id: log.id,
-      timestamp: log.createdAt.toLocaleDateString('id-ID'),
-      topic: log.subtopic,
-      content: log.content,
-      userEmail: log.userEmail,
-      userId: log.userId
-    }))
-  
-    return NextResponse.json(payload)
   } catch (error) {
     console.error('Error fetching journal logs:', error);
     return NextResponse.json(

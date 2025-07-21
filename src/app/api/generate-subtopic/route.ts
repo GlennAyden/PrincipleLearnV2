@@ -287,6 +287,51 @@ export async function POST(request: Request) {
           });
         
         console.log('💾 Subtopic data cached successfully');
+
+        // Also save quiz questions to database for proper data structure
+        if (data.quiz && Array.isArray(data.quiz) && data.quiz.length > 0) {
+          try {
+            // First, find or create subtopic record
+            const { data: subtopicData } = await supabase
+              .from('subtopics')
+              .select('id')
+              .eq('course_id', courseId)
+              .eq('title', subtopic)
+              .single();
+
+            const subtopicId = subtopicData?.id;
+            
+            if (subtopicId) {
+              // Save each quiz question to database
+              const quizInserts = data.quiz.map((q: any, index: number) => ({
+                course_id: courseId,
+                subtopic_id: subtopicId,
+                question: q.question,
+                options: q.options, // JSONB array
+                correct_answer: q.options[q.correctIndex], // Store the actual correct answer text
+                explanation: `Jawaban yang benar adalah: ${q.options[q.correctIndex]}`,
+                created_at: new Date().toISOString()
+              }));
+
+              const { error: quizError } = await supabase
+                .from('quiz')
+                .upsert(quizInserts, { 
+                  onConflict: 'course_id,subtopic_id,question',
+                  ignoreDuplicates: false 
+                });
+
+              if (quizError) {
+                console.warn('Quiz save error:', quizError);
+              } else {
+                console.log(`📝 Saved ${data.quiz.length} quiz questions to database`);
+              }
+            } else {
+              console.warn('Subtopic not found for quiz saving:', { courseId, subtopic });
+            }
+          } catch (quizSaveError) {
+            console.warn('Quiz database save failed:', quizSaveError);
+          }
+        }
       } catch (saveError) {
         // Don't fail the request if caching fails
         console.warn('Cache save failed:', saveError);
