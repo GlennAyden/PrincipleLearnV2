@@ -291,13 +291,43 @@ export async function POST(request: Request) {
         // Also save quiz questions to database for proper data structure
         if (data.quiz && Array.isArray(data.quiz) && data.quiz.length > 0) {
           try {
-            // First, find or create subtopic record
-            const { data: subtopicData } = await supabase
+            // Find subtopic record by matching the module content, not the individual subtopic name
+            const { data: allSubtopics } = await supabase
               .from('subtopics')
-              .select('id')
-              .eq('course_id', courseId)
-              .eq('title', subtopic)
-              .single();
+              .select('id, title, content')
+              .eq('course_id', courseId);
+
+            let subtopicData = null;
+            
+            // Find the subtopic that contains this module in its content
+            if (allSubtopics) {
+              for (const sub of allSubtopics) {
+                try {
+                  const parsedContent = JSON.parse(sub.content);
+                  if (parsedContent.module === moduleTitle) {
+                    subtopicData = sub;
+                    break;
+                  }
+                } catch (parseError) {
+                  // If content is not valid JSON, try direct title match
+                  if (sub.title === moduleTitle) {
+                    subtopicData = sub;
+                    break;
+                  }
+                }
+              }
+            }
+            
+            // Fallback: try direct lookup by subtopic parameter
+            if (!subtopicData) {
+              const { data: fallbackData } = await supabase
+                .from('subtopics')
+                .select('id, title')
+                .eq('course_id', courseId)
+                .eq('title', subtopic)
+                .single();
+              subtopicData = fallbackData;
+            }
 
             const subtopicId = subtopicData?.id;
             
@@ -323,10 +353,15 @@ export async function POST(request: Request) {
               if (quizError) {
                 console.warn('Quiz save error:', quizError);
               } else {
-                console.log(`📝 Saved ${data.quiz.length} quiz questions to database`);
+                console.log(`📝 Saved ${data.quiz.length} quiz questions to database for subtopic: ${subtopicData.title} (${subtopicId})`);
               }
             } else {
-              console.warn('Subtopic not found for quiz saving:', { courseId, subtopic });
+              console.warn('Subtopic not found for quiz saving:', { 
+                courseId, 
+                moduleTitle, 
+                subtopic, 
+                availableSubtopics: allSubtopics?.map(s => ({ id: s.id, title: s.title })) 
+              });
             }
           } catch (quizSaveError) {
             console.warn('Quiz database save failed:', quizSaveError);
