@@ -194,7 +194,11 @@ export default function SubtopicPage() {
         const res = await fetch('/api/generate-subtopic', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ module: moduleTitle, subtopic: subTitle }),
+          body: JSON.stringify({ 
+            module: moduleTitle, 
+            subtopic: subTitle,
+            courseId: courseId 
+          }),
         });
         if (!res.ok) throw new Error('Failed to load subtopic');
         const json = (await res.json()) as SubtopicResponse;
@@ -219,7 +223,40 @@ export default function SubtopicPage() {
       }
     }
     loadSubtopic();
-  }, [course, moduleIndex, subtopicIndex]);
+
+    // Background preload next subtopics for faster navigation
+    const preloadNextSubtopics = async () => {
+      if (!course?.outline || !data) return;
+      
+      const currentModule = course.outline[moduleIndex];
+      const nextSubtopicIndex = subtopicIndex + 1;
+      
+      // Preload next subtopic in same module
+      if (currentModule?.subtopics?.[nextSubtopicIndex]) {
+        const nextSubTitle = typeof currentModule.subtopics[nextSubtopicIndex] === 'string' 
+          ? currentModule.subtopics[nextSubtopicIndex] 
+          : currentModule.subtopics[nextSubtopicIndex].title;
+        
+        // Background fetch without blocking UI
+        setTimeout(() => {
+          fetch('/api/generate-subtopic', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ 
+              module: currentModule.module, 
+              subtopic: nextSubTitle,
+              courseId: courseId 
+            }),
+          }).catch(() => {}); // Silently handle errors
+        }, 3000); // Delay to not interfere with current loading
+      }
+    };
+
+    // Only preload after current content is loaded
+    if (data) {
+      preloadNextSubtopics();
+    }
+  }, [course, moduleIndex, subtopicIndex, data, courseId]);
 
   // Initialize challenge question when opening the tab
   useEffect(() => {

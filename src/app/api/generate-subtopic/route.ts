@@ -24,12 +24,39 @@ export async function POST(request: Request) {
         { status: 400 }
       );
     }
-    const { module: moduleTitle, subtopic } = payload;
+    const { module: moduleTitle, subtopic, courseId } = payload;
     if (!moduleTitle || !subtopic) {
       return NextResponse.json(
         { error: 'module and subtopic are required' },
         { status: 400 }
       );
+    }
+
+    // Database caching for performance optimization
+    if (courseId) {
+      try {
+        const { createClient } = await import('@supabase/supabase-js');
+        const supabase = createClient(
+          process.env.NEXT_PUBLIC_SUPABASE_URL!,
+          process.env.SUPABASE_SERVICE_ROLE_KEY!
+        );
+
+        // Check cache first
+        const cacheKey = `${courseId}-${moduleTitle}-${subtopic}`;
+        const { data: cached } = await supabase
+          .from('subtopic_cache')
+          .select('content')
+          .eq('cache_key', cacheKey)
+          .single();
+
+        if (cached?.content) {
+          console.log('🚀 Returning cached subtopic data');
+          return NextResponse.json(cached.content);
+        }
+      } catch (cacheError) {
+        // Continue with generation if cache fails
+        console.warn('Cache read failed:', cacheError);
+      }
     }
 
     // Sistem prompt: instruksi pembuatan konten dalam Bahasa Indonesia
@@ -238,6 +265,32 @@ export async function POST(request: Request) {
         { error: 'Invalid JSON from AI' },
         { status: 500 }
       );
+    }
+
+    // Save to cache for next time
+    if (courseId && data) {
+      try {
+        const { createClient } = await import('@supabase/supabase-js');
+        const supabase = createClient(
+          process.env.NEXT_PUBLIC_SUPABASE_URL!,
+          process.env.SUPABASE_SERVICE_ROLE_KEY!
+        );
+
+        const cacheKey = `${courseId}-${moduleTitle}-${subtopic}`;
+        await supabase
+          .from('subtopic_cache')
+          .upsert({
+            cache_key: cacheKey,
+            content: data,
+            created_at: new Date().toISOString(),
+            updated_at: new Date().toISOString()
+          });
+        
+        console.log('💾 Subtopic data cached successfully');
+      } catch (saveError) {
+        // Don't fail the request if caching fails
+        console.warn('Cache save failed:', saveError);
+      }
     }
 
     return NextResponse.json(data);
