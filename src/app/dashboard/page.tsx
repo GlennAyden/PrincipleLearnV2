@@ -18,7 +18,8 @@ export default function DashboardPage() {
   const router = useRouter();
   const [mounted, setMounted] = useState(false);
   const [user, , removeUser] = useLocalStorage<{ email: string } | null>('pl_user', null);
-  const [courses, setCourses] = useLocalStorage<Course[]>('pl_courses', []);
+  const [courses, setCourses] = useState<Course[]>([]);
+  const [loading, setLoading] = useState(true);
 
   // pastikan hanya render setelah mount & ada user
   useEffect(() => {
@@ -31,6 +32,38 @@ export default function DashboardPage() {
     }
   }, [mounted, user, router]);
 
+  // Load courses from database
+  useEffect(() => {
+    const loadCourses = async () => {
+      if (!user?.email) {
+        setLoading(false);
+        return;
+      }
+      
+      try {
+        console.log('[Dashboard] Loading courses from database');
+        
+        const response = await fetch(`/api/courses?userId=${encodeURIComponent(user.email)}`);
+        const result = await response.json();
+        
+        if (result.success) {
+          setCourses(result.courses);
+          console.log(`[Dashboard] Loaded ${result.courses.length} courses`);
+        } else {
+          console.error('[Dashboard] Failed to load courses:', result.error);
+        }
+      } catch (error) {
+        console.error('[Dashboard] Error loading courses:', error);
+      } finally {
+        setLoading(false);
+      }
+    };
+    
+    if (mounted && user) {
+      loadCourses();
+    }
+  }, [mounted, user]);
+
   if (!mounted || !user) return null;
 
   const handleLogout = () => {
@@ -38,9 +71,34 @@ export default function DashboardPage() {
     router.replace('/login');
   };
 
-  const handleDelete = (id: string) => {
-    // hapus course dari array dan simpan ulang ke localStorage
-    setCourses(courses.filter(c => c.id !== id));
+  const handleDelete = async (id: string) => {
+    try {
+      console.log(`[Dashboard] Deleting course: ${id}`);
+      
+      // Delete from database first
+      const response = await fetch(`/api/courses/${id}`, {
+        method: 'DELETE',
+      });
+      
+      const result = await response.json();
+      
+      if (!result.success) {
+        console.error('[Dashboard] Failed to delete course from database:', result.error);
+        alert('Failed to delete course: ' + result.error);
+        return;
+      }
+      
+      console.log('[Dashboard] Course deleted from database successfully');
+      
+      // Then remove from localStorage
+      setCourses(courses.filter(c => c.id !== id));
+      
+      console.log('[Dashboard] Course removed from localStorage');
+      
+    } catch (error) {
+      console.error('[Dashboard] Error deleting course:', error);
+      alert('Error deleting course: ' + (error instanceof Error ? error.message : 'Unknown error'));
+    }
   };
 
   return (
@@ -66,7 +124,9 @@ export default function DashboardPage() {
 
       {/* Daftar course */}
       <ul className={styles.list}>
-        {courses.length > 0 ? (
+        {loading ? (
+          <p className={styles.empty}>Loading courses...</p>
+        ) : courses.length > 0 ? (
           courses.map(course => (
             <li key={course.id} className={styles.listItem}>
               {/* Card untuk navigasi ke detail course */}
