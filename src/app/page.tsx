@@ -4,17 +4,26 @@
 import { useState } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
+import { useRequestCourse } from "@/context/RequestCourseContext";
 import styles from "./page.module.scss";
 
 export default function HomePage() {
   const [query, setQuery] = useState("");
   const router = useRouter();
+  const { setPartial, reset } = useRequestCourse();
 
   const handleLearn = () => {
     const trimmed = query.trim();
     if (!trimmed) return; // jangan push kalau kosong
-    // nanti ganti '/search' ke route hasil belajarmu
-    router.push(`/search?query=${encodeURIComponent(trimmed)}`);
+    
+    // Reset context first to ensure clean state
+    reset();
+    
+    // Pre-fill topic dari homepage input ke RequestCourse context
+    setPartial({ topic: trimmed });
+    
+    // Navigate to request-course step1 dengan data yang sudah di-prefill
+    router.push('/request-course/step1');
   };
 
   return (
