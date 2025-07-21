@@ -650,11 +650,23 @@ export default function SubtopicPage() {
 
       {/* Quiz */}
       {pageNumber === contentCount + 1 && (
-        <Quiz 
-          questions={data.quiz} 
-          courseId={courseId}
-          subtopic={`Module ${moduleIndex + 1}, Subtopic ${subtopicIndex + 1}`}
-        />
+        <div>
+          <h2 style={{ marginBottom: '1rem' }}>Quiz Section</h2>
+          {console.log('Quiz data:', data.quiz)}
+          {data.quiz && data.quiz.length > 0 ? (
+            <Quiz 
+              questions={data.quiz} 
+              courseId={courseId}
+              subtopic={`Module ${moduleIndex + 1}, Subtopic ${subtopicIndex + 1}`}
+            />
+          ) : (
+            <div style={{ padding: '2rem', textAlign: 'center', backgroundColor: '#f5f5f5', border: '2px dashed #ccc' }}>
+              <h3>Quiz tidak tersedia</h3>
+              <p>Data quiz: {JSON.stringify(data.quiz)}</p>
+              <p>Quiz length: {data.quiz?.length || 'undefined'}</p>
+            </div>
+          )}
+        </div>
       )}
 
       {/* WhatNext + FeedbackForm + NextSubtopics */}
