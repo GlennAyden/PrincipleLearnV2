@@ -116,8 +116,17 @@ export default function Quiz({ questions = [], courseId = '', subtopic = '', sub
     }
   };
 
-  // jika tidak ada soal, jangan render apa-apa atau tampilkan pesan
-  if (!safeItems.length) return null;
+  // jika tidak ada soal, tampilkan pesan loading atau fallback
+  if (!safeItems.length) {
+    return (
+      <section className={styles.quizSection}>
+        <h3 className={styles.quizHeader}>Quiz Time!</h3>
+        <div className={styles.noQuizMessage}>
+          <p>Quiz sedang disiapkan untuk subtopik ini. Silakan lanjut ke bagian selanjutnya atau kembali lagi nanti.</p>
+        </div>
+      </section>
+    );
+  }
 
   return (
     <section className={styles.quizSection}>

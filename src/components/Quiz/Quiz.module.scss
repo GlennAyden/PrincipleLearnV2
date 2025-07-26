@@ -76,3 +76,17 @@
     box-shadow: 0 0 #005a9e;
   }
   
+  .noQuizMessage {
+    padding: 1rem;
+    background-color: #fff;
+    border-radius: 6px;
+    border: 1px solid #e0e0e0;
+    text-align: center;
+    color: #666;
+  }
+  
+  .noQuizMessage p {
+    margin: 0;
+    font-style: italic;
+  }
+  

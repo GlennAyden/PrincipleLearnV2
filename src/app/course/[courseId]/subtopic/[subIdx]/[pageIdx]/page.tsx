@@ -682,26 +682,50 @@ export default function SubtopicPage() {
         </>
       )}
 
-      {/* Key Takeaways */}
-      {pageNumber === contentCount && <KeyTakeaways items={data.keyTakeaways} />}
-
-      {/* Quiz */}
-      {pageNumber === contentCount + 1 && course?.outline && (
-        <Quiz 
-          questions={data.quiz} 
-          courseId={courseId}
-          subtopic={`Module ${moduleIndex + 1}, Subtopic ${subtopicIndex + 1}`}
-          subtopicTitle={typeof course.outline[moduleIndex]?.subtopics?.[subtopicIndex] === 'string' 
-            ? course.outline[moduleIndex].subtopics[subtopicIndex] 
-            : course.outline[moduleIndex]?.subtopics?.[subtopicIndex]?.title}
-          moduleIndex={moduleIndex}
-          subtopicIndex={subtopicIndex}
-        />
+      {/* Key Takeaways Section */}
+      {pageNumber === contentCount && (
+        <div className={styles.sectionContainer}>
+          <div className={styles.sectionHeader}>
+            <h2 className={styles.sectionTitle}>💡 Key Takeaways</h2>
+            <p className={styles.sectionDescription}>
+              Poin-poin penting yang perlu Anda ingat dari materi ini
+            </p>
+          </div>
+          <KeyTakeaways items={data.keyTakeaways} />
+        </div>
       )}
 
-      {/* WhatNext + FeedbackForm + NextSubtopics */}
+      {/* Quiz Time Section */}
+      {pageNumber === contentCount + 1 && course?.outline && (
+        <div className={styles.sectionContainer}>
+          <div className={styles.sectionHeader}>
+            <h2 className={styles.sectionTitle}>🧠 Quiz Time!</h2>
+            <p className={styles.sectionDescription}>
+              Uji pemahaman Anda tentang materi yang telah dipelajari
+            </p>
+          </div>
+          <Quiz 
+            questions={data.quiz} 
+            courseId={courseId}
+            subtopic={`Module ${moduleIndex + 1}, Subtopic ${subtopicIndex + 1}`}
+            subtopicTitle={typeof course.outline[moduleIndex]?.subtopics?.[subtopicIndex] === 'string' 
+              ? course.outline[moduleIndex].subtopics[subtopicIndex] 
+              : course.outline[moduleIndex]?.subtopics?.[subtopicIndex]?.title}
+            moduleIndex={moduleIndex}
+            subtopicIndex={subtopicIndex}
+          />
+        </div>
+      )}
+
+      {/* Feedback & Next Steps Section */}
       {pageNumber === contentCount + 2 && (
-        <>
+        <div className={styles.sectionContainer}>
+          <div className={styles.sectionHeader}>
+            <h2 className={styles.sectionTitle}>📝 Feedback & Next Steps</h2>
+            <p className={styles.sectionDescription}>
+              Berikan masukan dan lihat langkah selanjutnya dalam pembelajaran Anda
+            </p>
+          </div>
           <WhatNext
             summary={data.whatNext.summary}
             encouragement={data.whatNext.encouragement}
@@ -716,7 +740,7 @@ export default function SubtopicPage() {
             items={course.outline[moduleIndex].subtopics}
             moduleIndex={moduleIndex}
           />
-        </>
+        </div>
       )}
 
       {/* Navigation */}
