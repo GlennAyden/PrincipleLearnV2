@@ -83,18 +83,23 @@ Asumsi awal pengguna: ${assumption}
 2. Untuk setiap modul, buat 4-6 subtopik yang saling berkaitan
 3. Setiap subtopik harus memiliki:
    - Judul yang jelas dan deskriptif
-   - Overview singkat (1-2 kalimat) yang menjelaskan konsep utama
+   - Overview singkat (1-2 kalimat) yang menjelaskan konsep utama yang akan dipelajari
 4. Pastikan konten sesuai dengan level ${level} dan tujuan pembelajaran
 
-## FORMAT OUTPUT (SIMPLE)
+## FORMAT OUTPUT (WITH SUMMARIES)
 Output harus berupa MURNI JSON array tanpa blok kode Markdown:
 [
   {
     "module": "1. Judul Modul Lengkap", 
     "subtopics": [
-      "1.1 Judul Subtopik Deskriptif",
-      "1.2 Judul Subtopik Deskriptif",
-      "1.3 Judul Subtopik Deskriptif"
+      {
+        "title": "1.1 Judul Subtopik Deskriptif",
+        "overview": "Penjelasan singkat 1-2 kalimat tentang apa yang akan dipelajari dalam subtopik ini."
+      },
+      {
+        "title": "1.2 Judul Subtopik Deskriptif", 
+        "overview": "Penjelasan singkat 1-2 kalimat tentang konsep yang akan dibahas."
+      }
     ]
   }
 ]
@@ -205,7 +210,7 @@ Output harus berupa MURNI JSON array tanpa blok kode Markdown:
             const module = outline[i];
             const subtopicData = {
               course_id: course.id,
-              title: module.title || `Module ${i + 1}`,
+              title: module.module || `Module ${i + 1}`,
               content: JSON.stringify(module),
               order_index: i
             };
