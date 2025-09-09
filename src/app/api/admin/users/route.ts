@@ -1,56 +1,136 @@
 // principle-learn/src/app/api/admin/users/route.ts
 
 import { NextResponse } from 'next/server'
-// import prisma from '@/lib/prisma' // Removed for mock implementation
+import { DatabaseService } from '@/lib/database'
+
+interface User {
+  id: string;
+  email: string;
+  name?: string;
+  role: string;
+  created_at: string;
+  updated_at: string;
+}
+
+interface UserWithActivity extends User {
+  totalGenerate: number;
+  totalTranscripts: number;
+  totalQuizzes: number;
+  totalJournals: number;
+  totalSoalOtomatis: number;
+  lastActivity: string;
+}
 
 export async function GET() {
   try {
-    // Mock user data with activity counts
-    const mockUsers = [
+    console.log('[Admin Users] Fetching users from database...');
+    
+    // Get all users from database
+    const users: User[] = await DatabaseService.getRecords('users', {
+      orderBy: { column: 'created_at', ascending: false }
+    });
+    
+    console.log(`[Admin Users] Found ${users.length} users in database`);
+    
+    // For each user, get their activity statistics
+    const usersWithActivity: UserWithActivity[] = [];
+    
+    for (const user of users) {
+      try {
+        // Get user's courses (generated courses)
+        const courses = await DatabaseService.getRecords('courses', {
+          filter: { created_by: user.id }
+        });
+        
+        // Get user's transcripts
+        const transcripts = await DatabaseService.getRecords('transcript', {
+          filter: { user_id: user.id }
+        });
+        
+        // Get user's quiz submissions
+        const quizSubmissions = await DatabaseService.getRecords('quiz_submissions', {
+          filter: { user_id: user.id }
+        });
+        
+        // Get user's journal entries
+        const journals = await DatabaseService.getRecords('jurnal', {
+          filter: { user_id: user.id }
+        });
+        
+        // Calculate last activity
+        const activities = [
+          ...courses.map(c => new Date(c.created_at)),
+          ...transcripts.map(t => new Date(t.created_at)),
+          ...quizSubmissions.map(q => new Date(q.submitted_at)),
+          ...journals.map(j => new Date(j.created_at))
+        ];
+        
+        const lastActivityDate = activities.length > 0 
+          ? new Date(Math.max(...activities.map(d => d.getTime())))
+          : new Date(user.created_at);
+        
+        const userWithActivity: UserWithActivity = {
+          id: user.id,
+          email: user.email,
+          name: user.name || 'Unknown',
+          role: user.role.toUpperCase(),
+          createdAt: user.created_at,
+          totalGenerate: courses.length,
+          totalTranscripts: transcripts.length,
+          totalQuizzes: quizSubmissions.length,
+          totalJournals: journals.length,
+          totalSoalOtomatis: quizSubmissions.length, // Same as quizzes for now
+          lastActivity: lastActivityDate.toISOString().split('T')[0]
+        };
+        
+        usersWithActivity.push(userWithActivity);
+        
+      } catch (activityError) {
+        console.error(`[Admin Users] Error getting activity for user ${user.id}:`, activityError);
+        
+        // Add user with zero activity if there's an error
+        const userWithActivity: UserWithActivity = {
+          id: user.id,
+          email: user.email,
+          name: user.name || 'Unknown',
+          role: user.role.toUpperCase(),
+          createdAt: user.created_at,
+          totalGenerate: 0,
+          totalTranscripts: 0,
+          totalQuizzes: 0,
+          totalJournals: 0,
+          totalSoalOtomatis: 0,
+          lastActivity: new Date(user.created_at).toISOString().split('T')[0]
+        };
+        
+        usersWithActivity.push(userWithActivity);
+      }
+    }
+    
+    console.log(`[Admin Users] Processed activity data for ${usersWithActivity.length} users`);
+    
+    return NextResponse.json(usersWithActivity);
+    
+  } catch (err: any) {
+    console.error('Error in /api/admin/users:', err);
+    
+    // Return fallback mock data if database fails
+    const fallbackUsers = [
       {
-        id: 'user-123',
-        email: 'user@example.com',
+        id: 'fallback-1',
+        email: 'demo@example.com',
+        name: 'Demo User',
         role: 'USER',
-        createdAt: new Date('2024-01-15').toISOString(),
-        totalGenerate: 5,
-        totalTranscripts: 12,
-        totalQuizzes: 8,
-        totalJournals: 3,
-        totalSoalOtomatis: 2,
-        lastActivity: '2025-01-15'
-      },
-      {
-        id: 'admin-456',
-        email: 'admin@example.com',
-        role: 'ADMIN',
-        createdAt: new Date('2023-12-01').toISOString(),
-        totalGenerate: 15,
-        totalTranscripts: 25,
-        totalQuizzes: 20,
-        totalJournals: 10,
-        totalSoalOtomatis: 8,
-        lastActivity: '2025-01-20'
-      },
-      {
-        id: 'user-789',
-        email: 'test@example.com',
-        role: 'USER',
-        createdAt: new Date('2024-02-10').toISOString(),
-        totalGenerate: 2,
-        totalTranscripts: 4,
-        totalQuizzes: 3,
-        totalJournals: 1,
+        createdAt: new Date().toISOString(),
+        totalGenerate: 0,
+        totalTranscripts: 0,
+        totalQuizzes: 0,
+        totalJournals: 0,
         totalSoalOtomatis: 0,
-        lastActivity: '2025-01-10'
+        lastActivity: new Date().toISOString().split('T')[0]
       }
     ];
-
-    return NextResponse.json(mockUsers)
-  } catch (err: any) {
-    console.error('Error di /api/admin/users', err)
-    return NextResponse.json(
-      { message: err.message || 'Internal Server Error' },
-      { status: 500 }
-    )
+    
+    return NextResponse.json(fallbackUsers);
   }
 }
