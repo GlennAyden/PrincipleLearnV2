@@ -74,6 +74,7 @@ Example format for this level: "${difficulty.example}"`
       model: 'gpt-5-mini',
       messages: [systemMessage, userMessage] as any,
       temperature: 0.7,
+      max_completion_tokens: 800,
     });
 
     const question = response.choices?.[0]?.message?.content?.trim() || '';

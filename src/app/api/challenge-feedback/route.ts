@@ -95,7 +95,7 @@ Please provide appropriate feedback for this answer, considering the user's leve
       model: 'gpt-5-mini',
       messages: [systemMessage, userMessage] as any,
       temperature: 0.7,
-      max_tokens: 600,
+      max_completion_tokens: 600,
     });
 
     const feedbackRaw = response.choices?.[0]?.message?.content?.trim() || '';

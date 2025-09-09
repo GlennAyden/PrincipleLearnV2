@@ -40,6 +40,7 @@ Guidelines for your examples:
       model: 'gpt-5-mini',
       messages: [systemMessage, userMessage] as any,
       temperature: 0.7, // Add slight randomness for varied examples on regenerate
+      max_completion_tokens: 1500,
     });
 
     const raw = response.choices?.[0]?.message?.content ?? '';
