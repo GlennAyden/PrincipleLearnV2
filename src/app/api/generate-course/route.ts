@@ -16,13 +16,9 @@ export async function OPTIONS() {
 }
 
 // 1. Ambil API key dari env
-let apiKey = process.env.OPENAI_API_KEY;
-// 2. Fallback ke admin key kalau perlu (FIXED: proper validation)
-if (!apiKey || apiKey === 'your-openai-api-key-here' || apiKey === 'sk-your-openai-api-key') {
-  console.warn(
-    'Env key invalid or missing, falling back to hardcoded admin key for testing'
-  );
-  apiKey = 'sk-proj-your-openai-api-key-here';
+const apiKey = process.env.OPENAI_API_KEY;
+if (!apiKey) {
+  throw new Error('Missing OPENAI_API_KEY environment variable on the server');
 }
 
 const openai = new OpenAI({ apiKey });
@@ -120,8 +116,8 @@ Output harus berupa MURNI JSON array tanpa blok kode Markdown:
         
         response = await Promise.race([
           openai.chat.completions.create({
-            model: 'gpt-5-mini',
-            messages: [systemMessage, userMessage] as any,
+            model: 'gpt-5-mini-2025-08-07',
+            messages: [systemMessage, userMessage],
             max_completion_tokens: 1500, // Reduced for faster response
           }),
           new Promise((_, reject) => 

@@ -2,11 +2,9 @@
 import { NextResponse } from 'next/server';
 import { OpenAI } from 'openai';
 
-// Ambil API key dari env, fallback ke admin key saat testing
-let apiKey = process.env.OPENAI_API_KEY;
-if (!apiKey || apiKey === 'your-openai-api-key-here' || apiKey === 'sk-your-openai-api-key') {
-  console.warn('Env key invalid or missing, falling back to hardcoded admin key for testing');
-  apiKey = 'sk-proj-your-openai-api-key-here';
+const apiKey = process.env.OPENAI_API_KEY;
+if (!apiKey) {
+  throw new Error('Missing OPENAI_API_KEY environment variable on the server');
 }
 
 const openai = new OpenAI({ apiKey });
@@ -71,8 +69,8 @@ Example format for this level: "${difficulty.example}"`
     };
 
     const response = await openai.chat.completions.create({
-      model: 'gpt-5-mini',
-      messages: [systemMessage, userMessage] as any,
+      model: 'gpt-5-mini-2025-08-07',
+      messages: [systemMessage, userMessage],
       max_completion_tokens: 800,
     });
 

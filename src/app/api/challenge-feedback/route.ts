@@ -2,11 +2,9 @@
 import { NextResponse } from 'next/server';
 import { OpenAI } from 'openai';
 
-// Ambil API key dari env, fallback ke admin key jika perlu
-let apiKey = process.env.OPENAI_API_KEY;
-if (!apiKey || apiKey === 'your-openai-api-key-here' || apiKey === 'sk-your-openai-api-key') {
-  console.warn('Env key invalid or missing, falling back to hardcoded admin key for testing');
-  apiKey = 'sk-proj-your-openai-api-key-here';
+const apiKey = process.env.OPENAI_API_KEY;
+if (!apiKey) {
+  throw new Error('Missing OPENAI_API_KEY environment variable on the server');
 }
 
 const openai = new OpenAI({ apiKey });
