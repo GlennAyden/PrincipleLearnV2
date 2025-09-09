@@ -122,7 +122,6 @@ Output harus berupa MURNI JSON array tanpa blok kode Markdown:
           openai.chat.completions.create({
             model: 'gpt-5-mini',
             messages: [systemMessage, userMessage] as any,
-            temperature: 0.7, 
             max_completion_tokens: 1500, // Reduced for faster response
           }),
           new Promise((_, reject) => 
