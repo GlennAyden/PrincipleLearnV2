@@ -91,12 +91,18 @@ export async function POST(request: Request) {
     };
 
     const resp = await openai.chat.completions.create({
-      model: 'gpt-5-mini-2025-08-07',
+      model: 'gpt-4o-mini',
       messages: [systemMessage, userMessage],
-      max_completion_tokens: 4000,
+      max_tokens: 4000,
     });
 
     const raw = resp.choices?.[0]?.message?.content ?? '';
+    if (!raw.trim()) {
+      return NextResponse.json(
+        { error: 'Empty response from model' },
+        { status: 502 }
+      );
+    }
     const cleaned = raw.replace(/```json|```/g, '').trim();
     const sanitized = cleaned.replace(/,(?=\s*?[}\]])/g, '').trim();
 

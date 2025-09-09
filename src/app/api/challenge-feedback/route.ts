@@ -90,9 +90,9 @@ Please provide appropriate feedback for this answer, considering the user's leve
     };
 
     const response = await openai.chat.completions.create({
-      model: 'gpt-5-mini',
+      model: 'gpt-4o-mini',
       messages: [systemMessage, userMessage] as any,
-      max_completion_tokens: 600,
+      max_tokens: 600,
     });
 
     const feedbackRaw = response.choices?.[0]?.message?.content?.trim() || '';

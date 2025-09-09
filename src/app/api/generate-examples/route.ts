@@ -35,12 +35,15 @@ Guidelines for your examples:
     };
 
     const response = await openai.chat.completions.create({
-      model: 'gpt-5-mini-2025-08-07',
+      model: 'gpt-4o-mini',
       messages: [systemMessage, userMessage],
-      max_completion_tokens: 1500,
+      max_tokens: 1500,
     });
 
     const raw = response.choices?.[0]?.message?.content ?? '';
+    if (!raw.trim()) {
+      throw new Error('Empty response from model');
+    }
     // Clean JSON block if wrapped
     const cleaned = raw.replace(/```json\s*/, '').replace(/```/g, '').trim();
 

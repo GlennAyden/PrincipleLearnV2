@@ -116,9 +116,9 @@ Output harus berupa MURNI JSON array tanpa blok kode Markdown:
         
         response = await Promise.race([
           openai.chat.completions.create({
-            model: 'gpt-5-mini-2025-08-07',
+            model: 'gpt-4o-mini',
             messages: [systemMessage, userMessage],
-            max_completion_tokens: 1500, // Reduced for faster response
+            max_tokens: 1500, // Reduced for faster response
           }),
           new Promise((_, reject) => 
             setTimeout(() => reject(new Error('OpenAI API timeout after 60 seconds')), 60000)
@@ -143,7 +143,10 @@ Output harus berupa MURNI JSON array tanpa blok kode Markdown:
     console.log('[Generate Course] Received response from OpenAI');
     
     // 6. Ambil dan bersihkan output
-    const textRaw = response.choices[0].message?.content ?? '[]';
+    const textRaw = response.choices?.[0]?.message?.content;
+    if (!textRaw || !textRaw.trim()) {
+      throw new Error('Empty response from model');
+    }
     const cleaned = textRaw
       .replace(/```json\s*/g, '')
       .replace(/```/g, '')

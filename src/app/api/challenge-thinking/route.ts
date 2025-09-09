@@ -69,9 +69,9 @@ Example format for this level: "${difficulty.example}"`
     };
 
     const response = await openai.chat.completions.create({
-      model: 'gpt-5-mini-2025-08-07',
+      model: 'gpt-4o-mini',
       messages: [systemMessage, userMessage],
-      max_completion_tokens: 800,
+      max_tokens: 800,
     });
 
     const question = response.choices?.[0]?.message?.content?.trim() || '';

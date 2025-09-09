@@ -51,9 +51,9 @@ Please answer this question in Indonesian language with a conversational, friend
 
     // Call OpenAI Chat Completion
     const res = await openai.chat.completions.create({
-      model: 'gpt-5-mini-2025-08-07',
+      model: 'gpt-4o-mini',
       messages,
-      max_completion_tokens: 2000,
+      max_tokens: 2000,
     });
 
     const answer = res.choices?.[0]?.message?.content || '';
