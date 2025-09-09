@@ -4,103 +4,142 @@ import { NextResponse } from 'next/server'
 import type { NextRequest } from 'next/server'
 import { DatabaseService } from '@/lib/database'
 
+interface Journal {
+  id: string;
+  user_id: string;
+  course_id: string;
+  content: string;
+  reflection?: string;
+  created_at: string;
+  updated_at: string;
+}
+
+interface User {
+  id: string;
+  email: string;
+}
+
+interface Course {
+  id: string;
+  title: string;
+}
+
 export async function GET(req: NextRequest) {
+  console.log('[Activity API] Starting journal activity fetch');
+  
   try {
     const { searchParams } = new URL(req.url)
     const userId = searchParams.get('userId')
-    const date   = searchParams.get('date')     // filter "Tanggal"
-    const course = searchParams.get('course')   // filter "Course"
-    const topic  = searchParams.get('topic')    // filter "Topic/Subtopic"
+    const date = searchParams.get('date')
+    const course = searchParams.get('course')
+    const topic = searchParams.get('topic')
   
-    // Build dynamic filters
-    const where: any = {}
-    if (userId)  where.userId   = userId
-    if (course)  where.courseId = course
-    if (topic)   where.subtopic = topic
-    if (date) {
-      const start = new Date(date)
-      const end   = new Date(date)
-      end.setDate(start.getDate() + 1)
-      where.createdAt = { gte: start, lt: end }
-    }
-  
-    // Get real journal data from database
+    console.log('[Activity API] Request params:', { userId, date, course, topic });
+
+    // Get all journal entries from database
+    let journals: Journal[] = [];
     try {
-      // Get journal entries
-      const journals = await DatabaseService.getRecords('jurnal', {
-        orderBy: 'created_at desc'
+      journals = await DatabaseService.getRecords<Journal>('jurnal', {
+        orderBy: { column: 'created_at', ascending: false }
       });
-      
-      // Get users for user info
-      const users = await DatabaseService.getRecords('users');
-      
-      // Get courses for course info
-      const courses = await DatabaseService.getRecords('courses');
-      
-      // Join and transform the data
-      const enrichedJournals = journals.map(journal => {
-        const user = users.find(u => u.id === journal.user_id);
-        const course = courses.find(c => c.id === journal.course_id);
-        
-        return {
-          id: journal.id,
-          createdAt: new Date(journal.created_at),
-          subtopic: course?.title || 'Unknown Course',
-          content: journal.content,
-          reflection: journal.reflection,
-          userId: user?.id,
-          userEmail: user?.email,
-          courseId: journal.course_id
-        };
-      }).filter(j => j.userEmail); // Only include entries with valid user data
-      
-      // Apply filters
-      let filteredJournals = enrichedJournals;
-      
-      if (userId) {
-        filteredJournals = filteredJournals.filter(j => j.userId === userId);
-      }
-      
-      if (course) {
-        filteredJournals = filteredJournals.filter(j => 
-          j.subtopic.toLowerCase().includes(course.toLowerCase()) ||
-          j.courseId === course
-        );
-      }
-      
-      if (topic) {
-        filteredJournals = filteredJournals.filter(j => 
-          j.subtopic.toLowerCase().includes(topic.toLowerCase())
-        );
-      }
-      
-      if (date) {
-        const filterDate = new Date(date);
-        filteredJournals = filteredJournals.filter(j => 
-          j.createdAt.toDateString() === filterDate.toDateString()
-        );
-      }
-      
-      // Shape response to match JournalLogItem in AdminActivityPage
-      const payload = filteredJournals.map((journal) => ({
-        id: journal.id,
-        timestamp: journal.createdAt.toLocaleDateString('id-ID'),
-        topic: journal.subtopic,
-        content: journal.content,
-        reflection: journal.reflection,
-        userEmail: journal.userEmail,
-        userId: journal.userId
-      }));
-      
-      return NextResponse.json(payload);
-      
     } catch (dbError) {
-      console.error('Database error in journal logs:', dbError);
-      // Return empty array if no data or database error
-      return NextResponse.json([]);
+      console.error('[Activity API] Database error fetching journals:', dbError);
+      return NextResponse.json([], { status: 200 });
     }
+
+    console.log(`[Activity API] Found ${journals.length} total journal entries in database`);
+    
+    // Filter journals based on parameters
+    let filteredJournals = journals;
+    
+    // Filter by user if specified
+    if (userId) {
+      filteredJournals = filteredJournals.filter(journal => journal.user_id === userId);
+      console.log(`[Activity API] Filtered by user ${userId}: ${filteredJournals.length} journals`);
+    }
+    
+    // Filter by date if specified
+    if (date) {
+      const targetDate = new Date(date);
+      const startOfDay = new Date(targetDate);
+      startOfDay.setHours(0, 0, 0, 0);
+      const endOfDay = new Date(targetDate);
+      endOfDay.setHours(23, 59, 59, 999);
+      
+      filteredJournals = filteredJournals.filter(journal => {
+        const journalDate = new Date(journal.created_at);
+        return journalDate >= startOfDay && journalDate <= endOfDay;
+      });
+      console.log(`[Activity API] Filtered by date ${date}: ${filteredJournals.length} journals`);
+    }
+    
+    // Filter by course if specified
+    if (course) {
+      filteredJournals = filteredJournals.filter(journal => journal.course_id === course);
+      console.log(`[Activity API] Filtered by course ${course}: ${filteredJournals.length} journals`);
+    }
+
+    // Get additional information for each journal
+    const payload = [];
+    for (const journal of filteredJournals) {
+      try {
+        // Get user info
+        const users: User[] = await DatabaseService.getRecords<User>('users', {
+          filter: { id: journal.user_id },
+          limit: 1
+        });
+        
+        // Get course info
+        const courses: Course[] = await DatabaseService.getRecords<Course>('courses', {
+          filter: { id: journal.course_id },
+          limit: 1
+        });
+        
+        const user = users.length > 0 ? users[0] : null;
+        const courseData = courses.length > 0 ? courses[0] : null;
+        
+        // Use course title as topic (since journal is course-level)
+        const topicName = courseData?.title || 'Unknown Course';
+        
+        // Filter by topic if specified (match against course title)
+        if (topic && !topicName.toLowerCase().includes(topic.toLowerCase())) {
+          continue; // Skip this journal if topic doesn't match
+        }
+        
+        // Create activity log item
+        const logItem = {
+          id: journal.id,
+          timestamp: new Date(journal.created_at).toLocaleDateString('id-ID'),
+          topic: topicName,
+          content: journal.content || 'No content available',
+          userEmail: user?.email || 'Unknown User',
+          userId: journal.user_id
+        };
+        
+        payload.push(logItem);
+        
+      } catch (infoError) {
+        console.error(`[Activity API] Error getting info for journal ${journal.id}:`, infoError);
+        
+        // Add journal with minimal info
+        const logItem = {
+          id: journal.id,
+          timestamp: new Date(journal.created_at).toLocaleDateString('id-ID'),
+          topic: 'Unknown Topic',
+          content: journal.content || 'No content available',
+          userEmail: 'Unknown User',
+          userId: journal.user_id
+        };
+        
+        payload.push(logItem);
+      }
+    }
+    
+    console.log(`[Activity API] Returning ${payload.length} formatted journal records`);
+    return NextResponse.json(payload);
+    
   } catch (error) {
-    console.error('Error fetching journal logs:', error);
+    console.error('[Activity API] Error fetching journal logs:', error);
     return NextResponse.json(
       { error: 'Failed to fetch journal logs' },
       { status: 500 }

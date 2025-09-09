@@ -1,5 +1,13 @@
 import { NextRequest, NextResponse } from 'next/server'
-// import prisma from '@/lib/prisma' // Removed for mock implementation
+import { DatabaseService } from '@/lib/database'
+
+interface User {
+  id: string;
+  email: string;
+  role: string;
+  created_at: string;
+  updated_at: string;
+}
 
 export async function DELETE(
   _req: NextRequest,
@@ -7,40 +15,67 @@ export async function DELETE(
 ) {
   try {
     const userId = params.id;
+    console.log(`[Admin Delete User] Attempting to delete user: ${userId}`);
     
-    // Mock user data for validation
-    const mockUsers = {
-      'user-123': { id: 'user-123', email: 'user@example.com', role: 'USER' },
-      'admin-456': { id: 'admin-456', email: 'admin@example.com', role: 'ADMIN' },
-      'user-789': { id: 'user-789', email: 'test@example.com', role: 'USER' }
-    };
+    // Get user from database
+    let users: User[] = [];
+    try {
+      users = await DatabaseService.getRecords<User>('users', {
+        filter: { id: userId },
+        limit: 1
+      });
+    } catch (dbError) {
+      console.error('[Admin Delete User] Database error getting user:', dbError);
+      return NextResponse.json(
+        { error: 'Database connection error' },
+        { status: 500 }
+      );
+    }
     
-    const user = mockUsers[userId as keyof typeof mockUsers];
-    
-    if (!user) {
+    if (users.length === 0) {
+      console.log(`[Admin Delete User] User not found: ${userId}`);
       return NextResponse.json(
         { error: "User not found" },
         { status: 404 }
       );
     }
     
+    const user = users[0];
+    console.log(`[Admin Delete User] Found user: ${user.email}, Role: ${user.role}`);
+    
     // Check if user is an admin
-    if (user.role === 'ADMIN') {
+    if (user.role.toLowerCase() === 'admin') {
+      console.log(`[Admin Delete User] Cannot delete admin user: ${user.email}`);
       return NextResponse.json(
         { error: "Cannot delete admin users" },
         { status: 403 }
       );
     }
     
-    // Mock deletion process
-    console.log(`Mock deletion of user ${userId} and all associated data`);
+    // Delete user and all associated data (CASCADE delete should handle this)
+    console.log(`[Admin Delete User] Deleting user ${userId} and all associated data`);
     
-    return NextResponse.json({ 
-      success: true,
-      message: `User ${user.email} and all associated data successfully deleted`
-    });
+    try {
+      // Delete the user (CASCADE should delete associated records automatically)
+      await DatabaseService.deleteRecord('users', userId);
+      
+      console.log(`[Admin Delete User] Successfully deleted user: ${user.email}`);
+      
+      return NextResponse.json({ 
+        success: true,
+        message: `User ${user.email} and all associated data successfully deleted`
+      });
+      
+    } catch (deleteError) {
+      console.error('[Admin Delete User] Error deleting user:', deleteError);
+      return NextResponse.json(
+        { error: 'Failed to delete user from database' },
+        { status: 500 }
+      );
+    }
+    
   } catch (error: any) {
-    console.error('Error deleting user:', error);
+    console.error('[Admin Delete User] Error in DELETE endpoint:', error);
     return NextResponse.json(
       { error: error.message || "Failed to delete user" },
       { status: 500 }
