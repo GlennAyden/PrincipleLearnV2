@@ -93,10 +93,6 @@ export default function AdminLoginPage() {
         >
           {loading ? 'Logging in...' : 'Login'}
         </button>
-        
-        <div className={styles.hint}>
-          <small>Use: admin@principlelearn.com / admin123</small>
-        </div>
       </form>
     </div>
   )

@@ -75,9 +75,14 @@ export async function POST(request: Request) {
     }
 
     // Validate password
+    console.log(`[Admin Login] Comparing password for: ${email}`)
+    console.log(`[Admin Login] Password length: ${password.length}`)
+    console.log(`[Admin Login] Hash from DB: ${user.password_hash}`)
+    
     let isValid = false
     try {
       isValid = await bcrypt.compare(password, user.password_hash)
+      console.log(`[Admin Login] Password comparison result: ${isValid}`)
     } catch (bcryptError) {
       console.error('[Admin Login] Bcrypt error:', bcryptError)
       return NextResponse.json(
@@ -88,6 +93,7 @@ export async function POST(request: Request) {
 
     if (!isValid) {
       console.log(`[Admin Login] Invalid password for: ${email}`)
+      console.log(`[Admin Login] Expected password: admin123`)
       return NextResponse.json(
         { message: 'Email atau password salah' },
         { status: 401 }
