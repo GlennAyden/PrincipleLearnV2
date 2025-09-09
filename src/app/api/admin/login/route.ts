@@ -1,12 +1,20 @@
 // src/app/api/admin/login/route.ts
 import { NextResponse } from 'next/server'
-// import prisma from '@/lib/prisma' // Removed for mock implementation
 import bcrypt from 'bcrypt'
 import jwt from 'jsonwebtoken'
+import { DatabaseService } from '@/lib/database'
 
 const JWT_SECRET = process.env.JWT_SECRET!
 if (!JWT_SECRET) {
   throw new Error('JWT_SECRET belum di‐set di env')
+}
+
+interface User {
+  id: string;
+  email: string;
+  password_hash: string;
+  name?: string;
+  role: string;
 }
 
 export async function POST(request: Request) {
@@ -20,67 +28,105 @@ export async function POST(request: Request) {
       )
     }
 
-    // Allow simple username or email format
+    // Validate email format
     const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/
-    if (!emailRegex.test(email) && email !== 'admin') {
+    if (!emailRegex.test(email)) {
       return NextResponse.json(
-        { message: 'Format email tidak valid atau gunakan username "admin"' },
+        { message: 'Format email tidak valid' },
         { status: 400 }
       )
     }
 
-    // Simple admin credentials for easy access
-    const adminUsers = {
-      'admin@admin.com': {
-        id: 'admin-456',
-        email: 'admin@admin.com',
-        passwordHash: '$2a$10$92IXUNpkjO0rOQ5byMi.Ye4oKoEa3Ro9llC/.og/at2.uheWG/igi', // password
-        role: 'ADMIN'
-      },
-      'admin': {
-        id: 'admin-123',
-        email: 'admin',
-        passwordHash: '$2a$10$92IXUNpkjO0rOQ5byMi.Ye4oKoEa3Ro9llC/.og/at2.uheWG/igi', // password
-        role: 'ADMIN'
-      }
-    };
+    console.log(`[Admin Login] Attempting login for: ${email}`)
 
-    const user = adminUsers[email as keyof typeof adminUsers];
+    // Get user from database
+    let users: User[] = []
+    try {
+      users = await DatabaseService.getRecords<User>('users', {
+        filter: { email: email },
+        limit: 1
+      })
+    } catch (dbError) {
+      console.error('[Admin Login] Database error:', dbError)
+      return NextResponse.json(
+        { message: 'Database connection error' },
+        { status: 500 }
+      )
+    }
 
-    if (!user) {
+    if (users.length === 0) {
+      console.log(`[Admin Login] User not found: ${email}`)
       return NextResponse.json(
         { message: 'Email atau password salah' },
         { status: 401 }
       )
     }
 
-    // Mock password validation (accept "password" or check hash)
-    const isValid = password === 'password' || await bcrypt.compare(password, user.passwordHash);
+    const user = users[0]
+    console.log(`[Admin Login] User found: ${user.email}, Role: ${user.role}`)
+
+    // Check if user has admin role
+    if (user.role !== 'admin') {
+      console.log(`[Admin Login] Access denied - user role: ${user.role}`)
+      return NextResponse.json(
+        { message: 'Akses ditolak. Hanya admin yang dapat login.' },
+        { status: 403 }
+      )
+    }
+
+    // Validate password
+    let isValid = false
+    try {
+      isValid = await bcrypt.compare(password, user.password_hash)
+    } catch (bcryptError) {
+      console.error('[Admin Login] Bcrypt error:', bcryptError)
+      return NextResponse.json(
+        { message: 'Password validation error' },
+        { status: 500 }
+      )
+    }
+
     if (!isValid) {
+      console.log(`[Admin Login] Invalid password for: ${email}`)
       return NextResponse.json(
         { message: 'Email atau password salah' },
         { status: 401 }
       )
     }
 
-    // generate JWT
+    console.log(`[Admin Login] Login successful for: ${email}`)
+
+    // Generate JWT token
     const token = jwt.sign(
-      { userId: user.id, role: user.role },
+      { 
+        userId: user.id, 
+        email: user.email,
+        role: user.role 
+      },
       JWT_SECRET,
       { expiresIn: '2h' }
     )
 
-    // kirim cookie + data user
+    // Send response with cookie and user data
     const response = NextResponse.json(
-      { user: { id: user.id, email: user.email, role: user.role } },
+      { 
+        user: { 
+          id: user.id, 
+          email: user.email, 
+          name: user.name || 'Admin User',
+          role: user.role 
+        } 
+      },
       { status: 200 }
     )
+    
     response.cookies.set('token', token, {
       httpOnly: true,
       secure: process.env.NODE_ENV === 'production',
       path: '/',
-      maxAge: 2 * 60 * 60, // 2 jam
+      maxAge: 2 * 60 * 60, // 2 hours
     })
+    
     return response
 
   } catch (err: any) {

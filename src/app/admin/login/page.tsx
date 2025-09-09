@@ -5,7 +5,6 @@
 import React, { useState } from 'react'
 import { useRouter } from 'next/navigation'
 import styles from './page.module.scss'
-import { supabase } from '@/lib/supabaseClient';
 
 export default function AdminLoginPage() {
   const [email, setEmail] = useState('')
@@ -17,26 +16,40 @@ export default function AdminLoginPage() {
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
     setError('')
+    
     if (!email.trim() || !password.trim()) {
-      setError('Please fill both email and password.');
+      setError('Email dan password wajib diisi');
       return;
     }
+    
     setLoading(true);
+    
     try {
-      // Login via Supabase Auth
-      const { data, error: supaError } = await supabase.auth.signInWithPassword({
-        email,
-        password,
+      console.log('[Admin Login] Attempting login...')
+      
+      // Login via custom admin API
+      const response = await fetch('/api/admin/login', {
+        method: 'POST',
+        headers: { 
+          'Content-Type': 'application/json' 
+        },
+        body: JSON.stringify({ email, password }),
       });
-      if (supaError) {
-        throw new Error(supaError.message);
+
+      const data = await response.json();
+      
+      if (!response.ok) {
+        throw new Error(data.message || 'Login failed');
       }
-      // Assuming setUser and router.replace are defined elsewhere or will be added.
-      // For now, we'll just redirect to dashboard on success.
-      router.replace('/admin/dashboard');
+      
+      console.log('[Admin Login] Login successful:', data.user)
+      
+      // Redirect to admin dashboard on success
+      router.push('/admin/dashboard');
+      
     } catch (err: any) {
+      console.error('[Admin Login] Login error:', err);
       setError(err.message || 'Login failed. Please check your credentials.');
-      console.error('Login error:', err);
     } finally {
       setLoading(false);
     }
@@ -54,7 +67,7 @@ export default function AdminLoginPage() {
           <input
             type="email"
             className={styles.input}
-            placeholder="Email"
+            placeholder="admin@principlelearn.com"
             value={email}
             onChange={(e) => setEmail(e.target.value)}
             required
@@ -66,7 +79,7 @@ export default function AdminLoginPage() {
           <input
             type="password"
             className={styles.input}
-            placeholder="Password"
+            placeholder="Enter your password"
             value={password}
             onChange={(e) => setPassword(e.target.value)}
             required
@@ -78,8 +91,12 @@ export default function AdminLoginPage() {
           className={styles.button}
           disabled={loading}
         >
-          {loading ? 'Signing in…' : 'Sign in'}
+          {loading ? 'Logging in...' : 'Login'}
         </button>
+        
+        <div className={styles.hint}>
+          <small>Use: admin@principlelearn.com / admin123</small>
+        </div>
       </form>
     </div>
   )
