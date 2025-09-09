@@ -25,7 +25,10 @@
       "Bash(git push:*)",
       "Bash(ls:*)",
       "Bash(npx tsc:*)",
-      "WebFetch(domain:principle-learn-v2.vercel.app)"
+      "WebFetch(domain:principle-learn-v2.vercel.app)",
+      "Bash(rg:*)",
+      "Bash(npm run lint)",
+      "Bash(grep:*)"
     ],
     "deny": []
   }

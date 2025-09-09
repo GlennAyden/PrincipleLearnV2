@@ -53,7 +53,7 @@ Please answer this question in Indonesian language with a conversational, friend
 
     // Call OpenAI Chat Completion
     const res = await openai.chat.completions.create({
-      model: 'gpt-4o-mini',
+      model: 'gpt-5-mini',
       messages,
     });
 

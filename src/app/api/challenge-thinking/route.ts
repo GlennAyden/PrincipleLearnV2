@@ -71,7 +71,7 @@ Example format for this level: "${difficulty.example}"`
     };
 
     const response = await openai.chat.completions.create({
-      model: 'gpt-4o-mini',
+      model: 'gpt-5-mini',
       messages: [systemMessage, userMessage] as any,
       temperature: 0.7,
     });

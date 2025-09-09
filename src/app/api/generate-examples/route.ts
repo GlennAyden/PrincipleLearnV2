@@ -37,7 +37,7 @@ Guidelines for your examples:
     };
 
     const response = await openai.chat.completions.create({
-      model: 'gpt-4o-mini',
+      model: 'gpt-5-mini',
       messages: [systemMessage, userMessage] as any,
       temperature: 0.7, // Add slight randomness for varied examples on regenerate
     });
