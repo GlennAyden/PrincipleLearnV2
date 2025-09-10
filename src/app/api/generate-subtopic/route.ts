@@ -88,7 +88,7 @@ export async function POST(request: Request) {
     const resp = await openai.chat.completions.create({
       model: defaultOpenAIModel,
       messages: [systemMessage, userMessage],
-      max_completion_tokens: 4000,
+      max_tokens: 4000,
     });
 
     const raw = resp.choices?.[0]?.message?.content ?? '';

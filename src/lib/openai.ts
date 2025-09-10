@@ -11,5 +11,5 @@ if (!apiKey) {
 export const openai = new OpenAI({ apiKey });
 
 // Centralized default model (overridable via env)
-export const defaultOpenAIModel = process.env.OPENAI_MODEL || 'gpt-5-mini-2025-08-07';
+export const defaultOpenAIModel = process.env.OPENAI_MODEL || 'gpt-4o-mini';
 

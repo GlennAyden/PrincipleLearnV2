@@ -112,7 +112,7 @@ Output harus berupa MURNI JSON array tanpa blok kode Markdown:
           openai.chat.completions.create({
             model: defaultOpenAIModel,
             messages: [systemMessage, userMessage],
-            max_completion_tokens: 1500, // Reduced for faster response
+            max_tokens: 1500, // Reduced for faster response
           }),
           new Promise((_, reject) => 
             setTimeout(() => reject(new Error('OpenAI API timeout after 60 seconds')), 60000)

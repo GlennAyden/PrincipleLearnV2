@@ -58,8 +58,10 @@ SUPABASE_SERVICE_ROLE_KEY=your-service-role-key-here
 # JWT Configuration
 JWT_SECRET=your-jwt-secret-key-here
 
-# Optional: OpenAI API Key (for AI features)
+# Optional: OpenAI (for AI features)
 OPENAI_API_KEY=your-openai-api-key-here
+# Default model used by the app (optional)
+OPENAI_MODEL=gpt-5-mini
 ```
 
 4. Set up Supabase database:
@@ -128,6 +130,9 @@ NEXT_PUBLIC_SUPABASE_URL=https://your-project-id.supabase.co
 NEXT_PUBLIC_SUPABASE_ANON_KEY=your-anon-key
 SUPABASE_SERVICE_ROLE_KEY=your-service-role-key
 JWT_SECRET=strong-random-secret-for-production
+OPENAI_API_KEY=your-openai-api-key
+# Optional: override default model
+OPENAI_MODEL=gpt-5-mini
 ```
 
 ## Development
