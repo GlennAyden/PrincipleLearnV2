@@ -1,6 +1,6 @@
 // src/app/api/generate-course/route.ts
 import { NextRequest, NextResponse } from 'next/server';
-import { OpenAI } from 'openai';
+import { openai, defaultOpenAIModel } from '@/lib/openai';
 import { DatabaseService } from '@/lib/database';
 
 // Add CORS headers for API
@@ -15,13 +15,7 @@ export async function OPTIONS() {
   return new NextResponse(null, { status: 200, headers: corsHeaders });
 }
 
-// 1. Ambil API key dari env
-const apiKey = process.env.OPENAI_API_KEY;
-if (!apiKey) {
-  throw new Error('Missing OPENAI_API_KEY environment variable on the server');
-}
-
-const openai = new OpenAI({ apiKey });
+// OpenAI client and model are centralized in src/lib/openai
 
 export async function POST(req: NextRequest) {
   console.log('[Generate Course] Starting course generation process');
@@ -116,9 +110,9 @@ Output harus berupa MURNI JSON array tanpa blok kode Markdown:
         
         response = await Promise.race([
           openai.chat.completions.create({
-            model: 'gpt-4o-mini',
+            model: defaultOpenAIModel,
             messages: [systemMessage, userMessage],
-            max_tokens: 1500, // Reduced for faster response
+            max_completion_tokens: 1500, // Reduced for faster response
           }),
           new Promise((_, reject) => 
             setTimeout(() => reject(new Error('OpenAI API timeout after 60 seconds')), 60000)

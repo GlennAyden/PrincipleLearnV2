@@ -1,14 +1,9 @@
 // src/app/api/ask-question/route.ts
 import { NextResponse, NextRequest } from 'next/server';
-import OpenAI from 'openai';
+import { openai, defaultOpenAIModel } from '@/lib/openai';
 import { DatabaseService } from '@/lib/database';
 
-const apiKey = process.env.OPENAI_API_KEY;
-if (!apiKey) {
-  throw new Error('Missing OPENAI_API_KEY environment variable on the server');
-}
-
-const openai = new OpenAI({ apiKey });
+// OpenAI client and model are centralized in src/lib/openai
 
 export async function POST(request: NextRequest) {
   try {
@@ -51,9 +46,9 @@ Please answer this question in Indonesian language with a conversational, friend
 
     // Call OpenAI Chat Completion
     const res = await openai.chat.completions.create({
-      model: 'gpt-4o-mini',
+      model: defaultOpenAIModel,
       messages,
-      max_tokens: 2000,
+      max_completion_tokens: 2000,
     });
 
     const answer = res.choices?.[0]?.message?.content || '';

@@ -1,14 +1,9 @@
 // src/app/api/generate-subtopic/route.ts
 
 import { NextResponse } from 'next/server';
-import { OpenAI } from 'openai';
+import { openai, defaultOpenAIModel } from '@/lib/openai';
 
-const apiKey = process.env.OPENAI_API_KEY;
-if (!apiKey) {
-  throw new Error('Missing OPENAI_API_KEY environment variable on the server');
-}
-
-const openai = new OpenAI({ apiKey });
+// OpenAI client and model are centralized in src/lib/openai
 
 export async function POST(request: Request) {
   try {
@@ -91,9 +86,9 @@ export async function POST(request: Request) {
     };
 
     const resp = await openai.chat.completions.create({
-      model: 'gpt-4o-mini',
+      model: defaultOpenAIModel,
       messages: [systemMessage, userMessage],
-      max_tokens: 4000,
+      max_completion_tokens: 4000,
     });
 
     const raw = resp.choices?.[0]?.message?.content ?? '';

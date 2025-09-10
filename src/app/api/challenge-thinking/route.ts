@@ -1,13 +1,8 @@
 // src/app/api/challenge-thinking/route.ts
 import { NextResponse } from 'next/server';
-import { OpenAI } from 'openai';
+import { openai, defaultOpenAIModel } from '@/lib/openai';
 
-const apiKey = process.env.OPENAI_API_KEY;
-if (!apiKey) {
-  throw new Error('Missing OPENAI_API_KEY environment variable on the server');
-}
-
-const openai = new OpenAI({ apiKey });
+// OpenAI client and model are centralized in src/lib/openai
 
 export async function POST(req: Request) {
   try {
@@ -69,9 +64,9 @@ Example format for this level: "${difficulty.example}"`
     };
 
     const response = await openai.chat.completions.create({
-      model: 'gpt-4o-mini',
+      model: defaultOpenAIModel,
       messages: [systemMessage, userMessage],
-      max_tokens: 800,
+      max_completion_tokens: 800,
     });
 
     const question = response.choices?.[0]?.message?.content?.trim() || '';
