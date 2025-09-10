@@ -234,7 +234,8 @@ export default function CourseOverviewPage() {
                 className={styles.getStartedBtn}
                 onClick={() =>
                   router.push(
-                    `/course/${courseId}/subtopic/${activeModule}/${idx}?module=${activeModule}&subIdx=${idx}`
+                    // Always start at first section of the subtopic (pageIdx=0)
+                    `/course/${courseId}/subtopic/${activeModule}/0?module=${activeModule}&subIdx=${idx}`
                   )
                 }
               >
