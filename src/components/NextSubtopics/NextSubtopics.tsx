@@ -10,11 +10,14 @@ export interface NextSubtopicsProps {
   items?: Array<string | { title: string }>;
   /** Index modul saat ini */
   moduleIndex: number;
+  /** Course outline untuk mendapatkan module berikutnya */
+  courseOutline?: Array<{ module: string; subtopics: Array<string | { title: string }> }>;
 }
 
 export default function NextSubtopics({
   items = [],
   moduleIndex,
+  courseOutline = [],
 }: NextSubtopicsProps) {
   const router = useRouter();
   const { courseId } = useParams<{ courseId: string }>();
@@ -23,38 +26,68 @@ export default function NextSubtopics({
   const raw = searchParams.get('subIdx');
   const currentSubIdx = raw !== null && !isNaN(Number(raw)) ? Number(raw) : 0;
 
-  if (!items.length) {
-    return null;
+  // Build next subtopics: remaining in current module + first few from next module
+  const nextItems: Array<{ idx: number; moduleIdx: number; title: string }> = [];
+
+  // 1. Add remaining subtopics from current module
+  if (items.length > 0) {
+    for (let i = currentSubIdx + 1; i < items.length; i++) {
+      const item = items[i];
+      nextItems.push({
+        idx: i,
+        moduleIdx: moduleIndex,
+        title: typeof item === 'string' ? item : item.title,
+      });
+    }
   }
 
-  // Build list subtopics dan exclude yang sedang aktif
-  const nextItems = items
-    .map((item, idx) => ({
-      idx,
-      title: typeof item === 'string' ? item : item.title,
-    }))
-    .filter(({ idx }) => idx !== currentSubIdx);
+  // 2. Add first few subtopics from next module (if exists)
+  const nextModule = courseOutline[moduleIndex + 1];
+  if (nextModule && nextModule.subtopics.length > 0) {
+    // Add up to 3 subtopics from next module
+    const maxFromNextModule = Math.min(3, nextModule.subtopics.length);
+    for (let i = 0; i < maxFromNextModule; i++) {
+      const item = nextModule.subtopics[i];
+      nextItems.push({
+        idx: i,
+        moduleIdx: moduleIndex + 1,
+        title: typeof item === 'string' ? item : item.title,
+      });
+    }
+  }
 
   if (!nextItems.length) {
-    return null;
+    return (
+      <div className={styles.wrapper}>
+        <h3 className={styles.heading}>🎉 Selamat!</h3>
+        <p className={styles.completionMessage}>
+          Anda telah menyelesaikan semua materi dalam kursus ini!
+        </p>
+      </div>
+    );
   }
 
   return (
     <div className={styles.wrapper}>
       <h3 className={styles.heading}>Next Subtopics</h3>
       <ul className={styles.list}>
-        {nextItems.map(({ idx, title }) => (
-          <li key={idx} className={styles.item}>
+        {nextItems.map(({ idx, moduleIdx, title }, listIndex) => (
+          <li key={`${moduleIdx}-${idx}`} className={styles.item}>
             <button
               className={styles.button}
               onClick={() =>
                 // Arahkan ke halaman pertama (pageIdx=0) subtopic yang dipilih,
                 // sambil melewatkan moduleIndex dan subIdx sebagai query.
                 router.push(
-                  `/course/${courseId}/subtopic/${moduleIndex}/0?module=${moduleIndex}&subIdx=${idx}`
+                  `/course/${courseId}/subtopic/${moduleIdx}/0?module=${moduleIdx}&subIdx=${idx}`
                 )
               }
             >
+              {moduleIdx !== moduleIndex && (
+                <span className={styles.moduleLabel}>
+                  Module {moduleIdx + 1}:
+                </span>
+              )}
               {title}
             </button>
           </li>

@@ -739,6 +739,7 @@ export default function SubtopicPage() {
           <NextSubtopics
             items={course.outline[moduleIndex].subtopics}
             moduleIndex={moduleIndex}
+            courseOutline={course.outline}
           />
         </div>
       )}
