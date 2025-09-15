@@ -49,13 +49,14 @@ export async function POST(request: Request) {
       }
     }
 
-    // Sistem prompt: instruksi pembuatan konten dalam Bahasa Indonesia
+    // System prompt: content generation with dynamic language policy
     const systemMessage = {
       role: 'system',
       content: [
         'You are an expert educational content creator that generates structured, comprehensive learning content in JSON format.',
-        'All responses must be in Bahasa Indonesia.',
-        'You excel at explaining concepts thoroughly and providing detailed, informative content.',
+        'Language policy:',
+        '- Write in the same language as the provided module title and subtopic text.',
+        '- If mixed, choose the dominant language; do not translate proper technical terms.',
         'Output must exactly follow this JSON schema without additional fields or markdown:',
         '{',
         '  "objectives": [string],',
@@ -67,21 +68,21 @@ export async function POST(request: Request) {
       ].join('\n')
     };
 
-    // User prompt: permintaan konten untuk subtopik tertentu
+    // User prompt: request content for a specific subtopic
     const userMessage = {
       role: 'user',
       content: [
-        `Buat konten untuk subtopik "${subtopic}" dalam modul "${moduleTitle}":`,
-        '- Daftar tujuan pembelajaran (`objectives`).',
-        '- Array `pages` dengan:',
-        '  * `title` untuk setiap halaman yang jelas dan deskriptif',
-        '  * Array `paragraphs` dengan TEPAT 3-5 paragraf yang komprehensif untuk setiap halaman.',
-        '  * Setiap paragraf harus berisi 2-4 kalimat yang menjelaskan konsep dengan detail.',
-        '  * Paragraf harus saling terkait dan membangun pemahaman yang kohesif.',
-        '- Daftar `keyTakeaways`.',
-        '- `quiz` dengan 5 pertanyaan (masing-masing 4 opsi & `correctIndex`).',
-        '- Objek `whatNext` berisi `summary` dan `encouragement`.',
-        'Kembalikan hanya objek JSON tanpa teks lain.'
+        `Generate content for subtopic "${subtopic}" in module "${moduleTitle}":`,
+        '- Learning objectives list (`objectives`).',
+        '- `pages` array with:',
+        '  * `title` for each page (clear and descriptive)',
+        '  * `paragraphs` array with EXACTLY 3-5 comprehensive paragraphs per page.',
+        '  * Each paragraph should be 2-4 sentences with detailed explanations.',
+        '  * Paragraphs should build a cohesive understanding.',
+        '- `keyTakeaways` list.',
+        '- `quiz` with 5 questions (each has 4 options & `correctIndex`).',
+        '- `whatNext` object containing `summary` and `encouragement`.',
+        'Return only the JSON object without any extra text.'
       ].join(' ')
     };
 
@@ -334,7 +335,7 @@ export async function POST(request: Request) {
                 question: q.question,
                 options: q.options, // JSONB array
                 correct_answer: q.options[q.correctIndex], // Store the actual correct answer text
-                explanation: `Jawaban yang benar adalah: ${q.options[q.correctIndex]}`,
+                explanation: `The correct answer is: ${q.options[q.correctIndex]}`,
                 created_at: new Date().toISOString()
               }));
 

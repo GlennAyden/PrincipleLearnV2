@@ -15,18 +15,20 @@ export async function POST(req: Request) {
       role: 'system',
       content: `You are an educational assistant that provides illustrative examples to deepen understanding of a given topic.
 
+Language policy:
+- Write in the same language as the provided context text.
+- If mixed, choose the dominant language and avoid unnecessary translation.
+
 Guidelines for your examples:
-- Write in Indonesian language with a conversational, friendly tone (tidak terlalu formal)
 - Use clear, straightforward language that's easy to understand
 - Provide practical, real-world examples that relate to everyday experiences when possible
-- Ensure examples are culturally relevant to an Indonesian audience
 - Make examples concise but complete enough to illustrate the concept
 - Create a detailed, compelling example that clearly demonstrates the main concept`
     };
     
     const userMessage = {
       role: 'user',
-      content: `Here is the context of the subtopic:\n${context}\n\nPlease generate one detailed, concise, real-world example in Indonesian language that illustrates the key concepts in the context. Use a conversational, friendly tone (tidak terlalu formal). Return the result as a JSON object with an "examples" array containing a single string.`
+      content: `Here is the context of the subtopic:\n${context}\n\nPlease generate one detailed, concise, real-world example in the same language as the context above. Return the result as a JSON object with an "examples" array containing a single string.`
     };
 
     const response = await openai.chat.completions.create({
@@ -48,7 +50,7 @@ Guidelines for your examples:
       
       // Ensure we have exactly 1 example
       if (!parsed.examples || !Array.isArray(parsed.examples) || parsed.examples.length === 0) {
-        parsed.examples = ['Contoh tidak tersedia.'];
+        parsed.examples = ['No example available.'];
       } else if (parsed.examples.length > 1) {
         // Just take the first example if multiple are returned
         parsed.examples = [parsed.examples[0]];

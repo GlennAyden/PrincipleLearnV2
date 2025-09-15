@@ -50,50 +50,57 @@ export async function POST(req: NextRequest) {
     // 4. Prompt yang lebih komprehensif
     const systemMessage = {
       role: 'system',
-      content: `You are an expert educational content developer specialized in creating detailed, comprehensive, and structured learning plans. 
+      content: `You are an expert educational content developer specialized in creating detailed, comprehensive, and structured learning plans.
 Your expertise lies in breaking down complex topics into logical modules with clear, informative subtopics that build upon each other.
-You create content that is appropriate for the user's skill level, connects to real-world problems, and addresses common misconceptions.`
+You create content that is appropriate for the user's skill level, connects to real-world problems, and addresses common misconceptions.
+
+Language policy:
+- Write all outputs in the same language as the user's inputs.
+- Detect the dominant language from the combined user inputs (topic, goal, extraTopics, problem, assumption).
+- If inputs are mixed, choose the dominant language; if ambiguous, mirror the language of the "topic" field.
+- Do not translate the user's inputs; preserve technical terms in the chosen language.`
     };
     
     const userMessage = {
       role: 'user',
       content: `
-Buatkan outline pembelajaran komprehensif untuk topik "${topic}" dengan tujuan "${goal}".
+Create a comprehensive learning outline for the topic "${topic}" with the learning goal "${goal}".
 
-## TINGKAT PENGETAHUAN PENGGUNA
+USER KNOWLEDGE LEVEL
 Level: ${level}
 
-## INFORMASI TAMBAHAN
-Topik spesifik yang ingin dipelajari: ${extraTopics || "Tidak ada preferensi khusus."}
-Masalah nyata yang ingin dipecahkan: ${problem}
-Asumsi awal pengguna: ${assumption}
+ADDITIONAL INFORMATION
+Specific topics to include: ${extraTopics || "No specific preferences."}
+Real-world problem to solve: ${problem}
+User's initial assumption: ${assumption}
 
-## PANDUAN PEMBUATAN KONTEN (OPTIMIZED FOR SPEED)
-1. Buat 4-5 modul utama yang membangun pengetahuan secara bertahap
-2. Untuk setiap modul, buat 4-6 subtopik yang saling berkaitan
-3. Setiap subtopik harus memiliki:
-   - Judul yang jelas dan deskriptif
-   - Overview singkat (1-2 kalimat) yang menjelaskan konsep utama yang akan dipelajari
-4. Pastikan konten sesuai dengan level ${level} dan tujuan pembelajaran
+CONTENT CREATION GUIDE (OPTIMIZED FOR SPEED)
+1. Create 4-5 main modules that progressively build knowledge.
+2. For each module, create 4-6 related subtopics.
+3. Each subtopic must include:
+   - A clear, descriptive title
+   - A brief overview (1-2 sentences) explaining the key concept to be learned
+4. Ensure the content matches the ${level} level and the learning goal
 
-## FORMAT OUTPUT (WITH SUMMARIES)
-Output harus berupa MURNI JSON array tanpa blok kode Markdown:
+OUTPUT FORMAT (WITH SUMMARIES)
+Return a PURE JSON array (no Markdown code fences):
 [
   {
-    "module": "1. Judul Modul Lengkap", 
+    "module": "1. Full Module Title",
     "subtopics": [
       {
-        "title": "1.1 Judul Subtopik Deskriptif",
-        "overview": "Penjelasan singkat 1-2 kalimat tentang apa yang akan dipelajari dalam subtopik ini."
+        "title": "1.1 Descriptive Subtopic Title",
+        "overview": "A concise 1-2 sentence explanation of what is covered in this subtopic."
       },
       {
-        "title": "1.2 Judul Subtopik Deskriptif", 
-        "overview": "Penjelasan singkat 1-2 kalimat tentang konsep yang akan dibahas."
+        "title": "1.2 Descriptive Subtopic Title",
+        "overview": "A concise 1-2 sentence explanation of the concept."
       }
     ]
   }
 ]
-      `
+
+Important: Write all titles and overviews in the same language as the user's inputs above.`
     };
 
     console.log('[Generate Course] Calling OpenAI API');

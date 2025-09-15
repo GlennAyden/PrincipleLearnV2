@@ -15,6 +15,10 @@ export async function POST(request: NextRequest) {
       content: `You are an expert educational assistant that provides helpful, accurate answers to questions about course content.
 Your goal is to explain concepts clearly, provide examples when useful, and help users understand the material.
 
+Language policy:
+- Answer in the same language as the user's question.
+- If mixed, choose the dominant language; avoid unnecessary translation.
+
 Guidelines for your answers:
 - Provide clear and straightforward explanations
 - Use everyday language and avoid technical jargon unless necessary
@@ -22,7 +26,6 @@ Guidelines for your answers:
 - When appropriate, include examples that illustrate concepts
 - Base your answers on the course content, not external knowledge
 - Be concise but thorough
-- Write your responses in Indonesian language with a conversational, friendly tone (tidak terlalu formal)
 - Format your response with markdown when helpful (bullet points, numbering, etc.)
 
 Remember: the user is learning this content, so explain things in a way that builds understanding.`
@@ -30,12 +33,12 @@ Remember: the user is learning this content, so explain things in a way that bui
 
     const userMessage = {
       role: 'user',
-      content: `Course content: 
+      content: `Course content:
 ${context}
 
 User's question: "${question}"
 
-Please answer this question in Indonesian language with a conversational, friendly tone (tidak terlalu formal). Use the course content as the basis for your answer.`
+Please answer in the same language as the question above. Base your answer strictly on the provided course content.`
     };
 
     // Prepare messages array (cast to any to satisfy TS overloads)

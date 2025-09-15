@@ -45,6 +45,10 @@ export async function POST(req: Request) {
       content: `You are an expert educational assistant that generates clear, engaging questions based on learning content.
 Your goal is to create questions that help learners think more deeply about the material while matching their skill level.
 
+Language policy:
+- Write in the same language as the provided content/context.
+- If mixed, choose the dominant language.
+
 For the current user with "${level}" skill level, create a ${difficulty.complexity} question - ${difficulty.description}.
 The question should:
 - Be clear, conversational, and easy to understand
@@ -53,14 +57,13 @@ The question should:
 - Encourage thinking but be appropriate for the user's level
 - Avoid academic jargon unless necessary for the subject
 - Be formatted as a single straightforward question
-- Be written in Indonesian language with a conversational, friendly tone (not too formal)
 
 Example format for this level: "${difficulty.example}"`
     };
 
     const userMessage = {
       role: 'user',
-      content: `Here is the learning content:\n\n${context}\n\nBased on this content, generate one thoughtful question that challenges the user's understanding at a "${level}" level. The question must be in Indonesian language with a conversational, friendly tone (not too formal).`
+      content: `Here is the learning content:\n\n${context}\n\nBased on this content, generate one thoughtful question that challenges the user's understanding at a "${level}" level. Use the same language as the content above.`
     };
 
     const response = await openai.chat.completions.create({
