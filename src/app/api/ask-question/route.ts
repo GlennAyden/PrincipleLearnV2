@@ -1,14 +1,58 @@
 // src/app/api/ask-question/route.ts
 import { NextResponse, NextRequest } from 'next/server';
 import { openai, defaultOpenAIModel } from '@/lib/openai';
-import { DatabaseService } from '@/lib/database';
+import { adminDb, DatabaseError } from '@/lib/database';
+import { verifyToken } from '@/lib/jwt';
 
 // OpenAI client and model are centralized in src/lib/openai
 
 export async function POST(request: NextRequest) {
   try {
     // Parse request body for question and context
-    const { question, context, userId, courseId, subtopic } = await request.json();
+    const {
+      question,
+      context,
+      userId,
+      courseId,
+      subtopic,
+      moduleIndex,
+      subtopicIndex,
+      pageNumber,
+    } = await request.json();
+
+    const normalizeIndex = (value: unknown) => {
+      if (typeof value === 'number' && Number.isFinite(value)) return value;
+      if (typeof value === 'string') {
+        const parsed = parseInt(value, 10);
+        if (!Number.isNaN(parsed)) return parsed;
+      }
+      return 0;
+    };
+
+    if (!question || !question.trim() || !context) {
+      return NextResponse.json(
+        { error: 'Missing required fields: question and context are required.' },
+        { status: 400 }
+      );
+    }
+
+    if (!userId || !courseId) {
+      return NextResponse.json(
+        { error: 'User identifier and courseId are required.' },
+        { status: 400 }
+      );
+    }
+
+    const accessToken = request.cookies.get('access_token')?.value;
+    const tokenPayload = accessToken ? verifyToken(accessToken) : null;
+
+    if (!tokenPayload) {
+      return NextResponse.json({ error: 'Not authenticated' }, { status: 401 });
+    }
+
+    if (tokenPayload.userId !== userId) {
+      return NextResponse.json({ error: 'User mismatch' }, { status: 403 });
+    }
 
     const systemMessage = {
       role: 'system',
@@ -55,49 +99,45 @@ Please answer in the same language as the question above. Base your answer stric
     });
 
     const answer = res.choices?.[0]?.message?.content || '';
+    const normalizedQuestion = question.trim();
     
     // Save QnA transcript to database
-    if (userId && courseId && subtopic) {
+    if (courseId) {
       try {
-        // Find user in database
-        const users = await DatabaseService.getRecords('users', {
-          filter: { email: userId },
-          limit: 1
-        });
-        
-        if (users.length === 0) {
-          console.warn(`User with email ${userId} not found in database`);
-        } else {
-          const user = users[0];
-          
-          // Find course in database
-          const courses = await DatabaseService.getRecords('courses', {
-            filter: { id: courseId },
-            limit: 1
-          });
-          
-          if (courses.length === 0) {
-            console.warn(`Course with ID ${courseId} not found in database`);
-          } else {
-            // Save transcript to database
-            const transcriptData = {
-              user_id: user.id,
-              course_id: courseId,
-              content: `Q: ${question}\n\nA: ${answer}`,
-              notes: `Subtopic: ${subtopic}`
-            };
-            
-            const savedTranscript = await DatabaseService.insertRecord('transcript', transcriptData);
-            console.log('QnA transcript saved to database:', {
-              id: savedTranscript.id,
-              user: userId,
-              course: courseId,
-              subtopic
-            });
-          }
+        const timestamp = new Date().toISOString();
+        const transcriptData = {
+          user_id: userId,
+          course_id: courseId,
+          module_index: normalizeIndex(moduleIndex),
+          subtopic_index: normalizeIndex(subtopicIndex),
+          page_number: normalizeIndex(pageNumber),
+          subtopic_label: subtopic || null,
+          question: normalizedQuestion,
+          answer,
+          created_at: timestamp,
+          updated_at: timestamp
+        };
+
+        const { error: insertError } = await adminDb
+          .from('ask_question_history')
+          .insert(transcriptData);
+
+        if (insertError) {
+          throw new DatabaseError('Failed to insert transcript record', insertError);
         }
+
+        console.log('QnA transcript saved to database:', {
+          user: userId,
+          course: courseId,
+          subtopic,
+          moduleIndex: transcriptData.module_index,
+          subtopicIndex: transcriptData.subtopic_index,
+          pageNumber: transcriptData.page_number
+        });
       } catch (error) {
-        console.error('Error saving QnA transcript to database:', error);
+        const message =
+          error instanceof DatabaseError ? error.message : 'Unexpected database error';
+        console.error('Error saving QnA transcript to database:', message, error);
         // Continue execution even if database save fails
       }
     }

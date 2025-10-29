@@ -560,6 +560,9 @@ export default function SubtopicPage() {
                       onAnswer={(q, a) => setAskData([...askData, { question: q, answer: a }])}
                       courseId={courseId}
                       subtopic={`Module ${moduleIndex + 1}, Subtopic ${subtopicIndex + 1}`}
+                      moduleIndex={moduleIndex}
+                      subtopicIndex={subtopicIndex}
+                      pageNumber={pageNumber}
                     />
                   </>
                 )}

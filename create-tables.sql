@@ -80,6 +80,21 @@ CREATE TABLE IF NOT EXISTS transcript (
     updated_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
 );
 
+-- Ask Question history table
+CREATE TABLE IF NOT EXISTS ask_question_history (
+    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    user_id UUID REFERENCES users(id) ON DELETE CASCADE,
+    course_id UUID REFERENCES courses(id) ON DELETE CASCADE,
+    module_index INTEGER DEFAULT 0,
+    subtopic_index INTEGER DEFAULT 0,
+    page_number INTEGER DEFAULT 0,
+    subtopic_label TEXT,
+    question TEXT NOT NULL,
+    answer TEXT NOT NULL,
+    created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
+    updated_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
+);
+
 -- User progress table
 CREATE TABLE IF NOT EXISTS user_progress (
     id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
@@ -110,6 +125,7 @@ ALTER TABLE quiz ENABLE ROW LEVEL SECURITY;
 ALTER TABLE quiz_submissions ENABLE ROW LEVEL SECURITY;
 ALTER TABLE jurnal ENABLE ROW LEVEL SECURITY;
 ALTER TABLE transcript ENABLE ROW LEVEL SECURITY;
+ALTER TABLE ask_question_history ENABLE ROW LEVEL SECURITY;
 ALTER TABLE user_progress ENABLE ROW LEVEL SECURITY;
 ALTER TABLE feedback ENABLE ROW LEVEL SECURITY;
 
@@ -129,6 +145,7 @@ CREATE POLICY "Users can manage their quiz submissions" ON quiz_submissions FOR 
 CREATE POLICY "Users can manage their journal entries" ON jurnal FOR ALL TO authenticated USING (auth.uid()::text = user_id::text);
 
 CREATE POLICY "Users can manage their transcripts" ON transcript FOR ALL TO authenticated USING (auth.uid()::text = user_id::text);
+CREATE POLICY "Users can manage their ask question history" ON ask_question_history FOR ALL TO authenticated USING (auth.uid()::text = user_id::text);
 
 CREATE POLICY "Users can manage their progress" ON user_progress FOR ALL TO authenticated USING (auth.uid()::text = user_id::text);
 
@@ -142,5 +159,9 @@ CREATE INDEX IF NOT EXISTS idx_quiz_subtopic_id ON quiz(subtopic_id);
 CREATE INDEX IF NOT EXISTS idx_quiz_submissions_user_id ON quiz_submissions(user_id);
 CREATE INDEX IF NOT EXISTS idx_jurnal_user_id ON jurnal(user_id);
 CREATE INDEX IF NOT EXISTS idx_transcript_user_id ON transcript(user_id);
+CREATE INDEX IF NOT EXISTS idx_ask_question_history_user_id ON ask_question_history(user_id);
+CREATE INDEX IF NOT EXISTS idx_ask_question_history_course_id ON ask_question_history(course_id);
+CREATE INDEX IF NOT EXISTS idx_ask_question_history_created_at ON ask_question_history(created_at);
+CREATE INDEX IF NOT EXISTS idx_ask_question_history_user_course ON ask_question_history(user_id, course_id);
 CREATE INDEX IF NOT EXISTS idx_user_progress_user_id ON user_progress(user_id);
 CREATE INDEX IF NOT EXISTS idx_feedback_user_id ON feedback(user_id);

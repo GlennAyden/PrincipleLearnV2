@@ -8,9 +8,20 @@ interface QuestionBoxProps {
   onAnswer: (question: string, answer: string) => void;
   courseId?: string;
   subtopic?: string;
+  moduleIndex?: number;
+  subtopicIndex?: number;
+  pageNumber?: number;
 }
 
-export default function QuestionBox({ context, onAnswer, courseId = '', subtopic = '' }: QuestionBoxProps) {
+export default function QuestionBox({
+  context,
+  onAnswer,
+  courseId = '',
+  subtopic = '',
+  moduleIndex = 0,
+  subtopicIndex = 0,
+  pageNumber = 0,
+}: QuestionBoxProps) {
   const [question, setQuestion] = useState('');
   const [loading, setLoading] = useState(false);
   const { user } = useAuth();
@@ -19,17 +30,26 @@ export default function QuestionBox({ context, onAnswer, courseId = '', subtopic
     e.preventDefault();
     const trimmed = question.trim();
     if (!trimmed) return;
+    if (!user?.id) {
+      console.warn('AskQuestion submission blocked: user not authenticated');
+      onAnswer(trimmed, 'You must be logged in to ask a question.');
+      return;
+    }
+
     setLoading(true);
     try {
       const res = await fetch('/api/ask-question', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ 
-          question: trimmed, 
+        body: JSON.stringify({
+          question: trimmed,
           context,
-          userId: user?.email || '',
+          userId: user.id,
           courseId,
-          subtopic
+          subtopic,
+          moduleIndex,
+          subtopicIndex,
+          pageNumber,
         }),
       });
       const data = await res.json();
