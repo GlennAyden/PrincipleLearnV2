@@ -47,6 +47,7 @@ export default function CourseLayout({ children }: { children: ReactNode }) {
   const [course, setCourse] = useState<Course | null>(null);
   const [loading, setLoading] = useState(true);
   const [showMobileMenu, setShowMobileMenu] = useState<boolean>(false);
+  const [isSidebarCollapsed, setIsSidebarCollapsed] = useState<boolean>(false);
 
   useEffect(() => {
     async function loadCourse() {
@@ -98,6 +99,10 @@ export default function CourseLayout({ children }: { children: ReactNode }) {
     setShowMobileMenu(false);
   }, [router]);
 
+  const toggleSidebar = () => {
+    setIsSidebarCollapsed((prev) => !prev);
+  };
+
   const handleLogout = () => {
     router.push('/login');
   };
@@ -107,7 +112,11 @@ export default function CourseLayout({ children }: { children: ReactNode }) {
   }
 
   return (
-    <div className={styles.container}>
+    <div
+      className={`${styles.container} ${
+        isSidebarCollapsed ? styles.sidebarCollapsedState : ''
+      }`}
+    >
       {/* HEADER */}
       <header className={styles.header}>
         <div className={styles.headerContent}>
@@ -160,20 +169,44 @@ export default function CourseLayout({ children }: { children: ReactNode }) {
         </div>
       </header>
 
-      <div className={styles.grid}>
+      <div
+        className={`${styles.grid} ${
+          isSidebarCollapsed ? styles.gridCollapsed : ''
+        }`}
+      >
         {/* SIDEBAR */}
-        <aside className={`${styles.sidebar} ${showMobileMenu ? styles.sidebarVisible : ''}`}>
+        <aside
+          className={`${styles.sidebar} ${
+            showMobileMenu ? styles.sidebarVisible : ''
+          } ${isSidebarCollapsed ? styles.sidebarCollapsed : ''}`}
+        >
           <div className={styles.sidebarHeader}>
-            <div className={styles.sidebarHeaderIcon}>
+            <div className={styles.sidebarHeaderContent}>
+              <div className={styles.sidebarHeaderIcon}>
+                <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" width="24" height="24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                  <path d="M4 19.5A2.5 2.5 0 0 1 6.5 17H20"/>
+                  <path d="M6.5 2H20v20H6.5A2.5 2.5 0 0 1 4 19.5v-15A2.5 2.5 0 0 1 6.5 2z"/>
+                </svg>
+              </div>
+              <div className={styles.sidebarHeaderText}>
+                <div className={styles.coursesLabel}>Courses</div>
+                <div className={styles.levelLabel}>{course.level}</div>
+              </div>
+            </div>
+            <button
+              type="button"
+              className={styles.sidebarToggle}
+              onClick={toggleSidebar}
+              aria-label={isSidebarCollapsed ? 'Expand sidebar' : 'Collapse sidebar'}
+            >
               <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" width="24" height="24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                <path d="M4 19.5A2.5 2.5 0 0 1 6.5 17H20"/>
-                <path d="M6.5 2H20v20H6.5A2.5 2.5 0 0 1 4 19.5v-15A2.5 2.5 0 0 1 6.5 2z"/>
+                {isSidebarCollapsed ? (
+                  <path d="M9 6l6 6-6 6" />
+                ) : (
+                  <path d="M15 6l-6 6 6 6" />
+                )}
               </svg>
-            </div>
-            <div>
-              <div className={styles.coursesLabel}>Courses</div>
-              <div className={styles.levelLabel}>{course.level}</div>
-            </div>
+            </button>
           </div>
 
           {course.outline.map((mod, idx) => (
@@ -183,12 +216,13 @@ export default function CourseLayout({ children }: { children: ReactNode }) {
                 className={`${styles.navModuleTitle} ${
                   activeModule === idx ? styles.activeModule : ''
                 }`}
+                title={mod.module}
               >
                 <span className={styles.moduleNumber}>{idx + 1}</span>
                 <span className={styles.moduleText}>{mod.module}</span>
               </Link>
 
-              {activeModule === idx && (
+              {activeModule === idx && !isSidebarCollapsed && (
                 <ul className={styles.subList}>
                   {mod.subtopics.map((sub, j) => {
                     const rawTitle = typeof sub === 'string' ? sub : sub.title;
@@ -202,6 +236,7 @@ export default function CourseLayout({ children }: { children: ReactNode }) {
                           className={`${styles.subListItem} ${
                             j === activeSubIdx ? styles.activeSub : ''
                           }`}
+                          title={cleanTitle}
                         >
                           <span className={styles.subtopicNumber}>{j + 1}</span>
                           <span className={styles.subtopicText}>{cleanTitle}</span>
