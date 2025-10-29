@@ -268,11 +268,11 @@ export default function SubtopicPage() {
   // Load challenge history from database on initial render
   useEffect(() => {
     async function loadChallengeHistory() {
-      if (!user?.email) return;
+      if (!user?.id) return;
 
       try {
         const response = await fetch(
-          `/api/challenge-response?userId=${encodeURIComponent(user.email)}&courseId=${courseId}&moduleIndex=${moduleIndex}&subtopicIndex=${subtopicIndex}&pageNumber=${pageNumber}`
+          `/api/challenge-response?userId=${encodeURIComponent(user.id)}&courseId=${courseId}&moduleIndex=${moduleIndex}&subtopicIndex=${subtopicIndex}&pageNumber=${pageNumber}`
         );
         
         if (response.ok) {
@@ -295,7 +295,7 @@ export default function SubtopicPage() {
     }
 
     loadChallengeHistory();
-  }, [user?.email, courseId, moduleIndex, subtopicIndex, pageNumber]);
+  }, [user?.id, courseId, moduleIndex, subtopicIndex, pageNumber]);
 
   if (courseLoading) return <div className={styles.loading}>Loading course…</div>;
   if (!course) return <div className={styles.error}>Course not found</div>;
@@ -366,6 +366,10 @@ export default function SubtopicPage() {
   // Handle challenge answer submission
   const handleChallengeSubmit = async () => {
     if (!challengeAnswer.trim() || !challengeQ || loadingChallenge) return;
+    if (!user?.id) {
+      console.warn('Challenge submission skipped: missing user ID');
+      return;
+    }
     
     setLoadingChallenge(true);
     
@@ -399,11 +403,11 @@ export default function SubtopicPage() {
       
       // Save to database via API
       try {
-        await fetch('/api/challenge-response', {
+        const saveResponse = await fetch('/api/challenge-response', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({
-            userId: user?.email,
+            userId: user?.id,
             courseId: courseId,
             moduleIndex: moduleIndex,
             subtopicIndex: subtopicIndex,
@@ -413,6 +417,11 @@ export default function SubtopicPage() {
             feedback: responseData.feedback
           })
         });
+
+        if (!saveResponse.ok) {
+          const errorDetails = await saveResponse.json().catch(() => ({}));
+          console.error('Failed to persist challenge response:', errorDetails);
+        }
       } catch (saveError) {
         console.error('Error saving challenge to database:', saveError);
         // Continue execution even if save fails
