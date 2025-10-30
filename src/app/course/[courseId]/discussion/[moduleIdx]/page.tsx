@@ -135,6 +135,7 @@ export default function DiscussionModulePage() {
   const [initializing, setInitializing] = useState(true);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
+  const [requiresPreparation, setRequiresPreparation] = useState(false);
 
   const [inputValue, setInputValue] = useState('');
   const [selectedOption, setSelectedOption] = useState<string | null>(null);
@@ -280,6 +281,7 @@ export default function DiscussionModulePage() {
 
         const data = await response.json();
         if (!cancelled) {
+          setRequiresPreparation(false);
           setSession({
             id: data.session.id,
             status: data.session.status === 'completed' ? 'completed' : 'in_progress',
@@ -293,7 +295,15 @@ export default function DiscussionModulePage() {
         }
       } catch (err: any) {
         if (!cancelled) {
-          setError(err?.message ?? 'Tidak dapat memulai sesi diskusi');
+          const message = err?.message ?? 'Tidak dapat memulai sesi diskusi';
+          if (/unable to resolve discussion context/i.test(message) || /discussion session not found/i.test(message)) {
+            setRequiresPreparation(true);
+            setError(
+              'Diskusi penutup baru tersedia setelah semua subtopik modul selesai dipelajari dan digenerate.'
+            );
+          } else {
+            setError(message);
+          }
         }
       } finally {
         if (!cancelled) {
@@ -335,6 +345,7 @@ export default function DiscussionModulePage() {
 
         const data = await response.json();
         if (!cancelled) {
+          setRequiresPreparation(false);
           setSession({
             id: data.session.id,
             status: data.session.status === 'completed' ? 'completed' : 'in_progress',
@@ -348,7 +359,15 @@ export default function DiscussionModulePage() {
         }
       } catch (err: any) {
         if (!cancelled) {
-          setError(err?.message ?? 'Tidak dapat memuat sesi diskusi');
+          const message = err?.message ?? 'Tidak dapat memuat sesi diskusi';
+          if (/unable to resolve discussion context/i.test(message) || /discussion session not found/i.test(message)) {
+            setRequiresPreparation(true);
+            setError(
+              'Diskusi penutup baru tersedia setelah semua subtopik modul selesai dipelajari dan digenerate.'
+            );
+          } else {
+            setError(message);
+          }
         }
       } finally {
         if (!cancelled) {
@@ -458,6 +477,9 @@ export default function DiscussionModulePage() {
     course && moduleIndex + 1 < course.outline.length
       ? `/course/${courseId}?module=${moduleIndex + 1}`
       : `/course/${courseId}`;
+  const handleGoToModule = () => {
+    router.push(`/course/${courseId}?module=${moduleIndex}`);
+  };
 
   const formatAssessment = (assessment: any): string => {
     if (typeof assessment === 'string') {
@@ -542,15 +564,32 @@ export default function DiscussionModulePage() {
           </Link>
           <h1 className={styles.title}>Diskusi Penutup</h1>
           <p className={styles.subtitle}>
-            Modul <strong>{moduleTitle}</strong> · {subtitleLabel}{' '}
+            Modul <strong>{moduleTitle}</strong> - {subtitleLabel}{' '}
             <strong>{displaySubtopicTitle}</strong>
           </p>
         </div>
         <span className={`${styles.statusBadge} ${statusBadge}`}>{statusLabel}</span>
       </header>
 
-      {initializing ? (
-        <div className={styles.loadingPanel}>Menyiapkan sesi diskusi…</div>
+      {requiresPreparation ? (
+        <div className={styles.preparationNotice}>
+          <h2>Lengkapi Materi Terlebih Dahulu</h2>
+          <p>
+            Diskusi penutup modul akan aktif setelah Anda mempelajari semua subtopik dan
+            menjalankan generator kontennya. Pastikan setiap subtopik sudah dibuka minimal
+            sekali.
+          </p>
+          <ol className={styles.preparationList}>
+            <li>Buka setiap subtopik pada modul ini melalui menu di kiri.</li>
+            <li>Tekan tombol <strong>Get Started</strong> dan tunggu materi selesai digenerate.</li>
+            <li>Setelah semua subtopik lengkap, kembali ke halaman diskusi penutup.</li>
+          </ol>
+          <button type="button" className={styles.preparationButton} onClick={handleGoToModule}>
+            Pelajari Subtopik Modul
+          </button>
+        </div>
+      ) : initializing ? (
+        <div className={styles.loadingPanel}>Menyiapkan sesi diskusi...</div>
       ) : (
         <>
           {error && <div className={styles.error}>{error}</div>}
