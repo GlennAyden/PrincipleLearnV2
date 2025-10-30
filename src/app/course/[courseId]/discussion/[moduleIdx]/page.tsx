@@ -542,7 +542,7 @@ export default function DiscussionModulePage() {
           </Link>
           <h1 className={styles.title}>Diskusi Penutup</h1>
           <p className={styles.subtitle}>
-            Modul <strong>{moduleTitle}</strong> - {subtitleLabel}{' }
+            Modul <strong>{moduleTitle}</strong> · {subtitleLabel}{' '}
             <strong>{displaySubtopicTitle}</strong>
           </p>
         </div>

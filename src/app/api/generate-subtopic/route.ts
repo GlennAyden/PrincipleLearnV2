@@ -2,7 +2,7 @@
 
 import { NextResponse } from 'next/server';
 import { openai, defaultOpenAIModel } from '@/lib/openai';
-import { generateDiscussionTemplate } from '@/services/discussion/generateDiscussionTemplate';
+import { generateDiscussionTemplate, generateModuleDiscussionTemplate } from '@/services/discussion/generateDiscussionTemplate';
 
 // OpenAI client and model are centralized in src/lib/openai
 
@@ -314,7 +314,9 @@ export async function POST(request: Request) {
                 }
               }
             }
-            
+
+            const moduleRecord = subtopicData;
+
             // Fallback: try direct lookup by subtopic parameter
             if (!subtopicData) {
               const { data: fallbackData } = await supabase
@@ -364,20 +366,65 @@ export async function POST(request: Request) {
                   misconceptions: extractMisconceptions(data),
                 });
 
-                if (templateResult) {
-                  console.log('[GenerateSubtopic] Discussion template stored', {
-                    subtopicId,
-                    templateId: templateResult.templateId,
-                    version: templateResult.templateVersion,
-                  });
-                } else {
-                  console.warn('[GenerateSubtopic] Discussion template generation skipped');
-                }
-              } catch (discussionError) {
-                console.error('[GenerateSubtopic] Failed to generate discussion template', discussionError);
+              if (templateResult) {
+                console.log('[GenerateSubtopic] Discussion template stored', {
+                  subtopicId,
+                  templateId: templateResult.templateId,
+                  version: templateResult.templateVersion,
+                });
+              } else {
+                console.warn('[GenerateSubtopic] Discussion template generation skipped');
               }
-            } else {
-              console.warn('Subtopic not found for quiz saving:', { 
+
+              if (
+                moduleRecord?.id &&
+                courseId &&
+                isDiscussionLabel(subtopic)
+              ) {
+                try {
+                  const moduleContext = await assembleModuleDiscussionContext({
+                    supabase,
+                    courseId,
+                    moduleTitle,
+                    moduleRecord,
+                  });
+
+                  if (moduleContext) {
+                    const moduleTemplateResult = await generateModuleDiscussionTemplate({
+                      courseId,
+                      subtopicId: moduleContext.moduleId,
+                      moduleTitle,
+                      summary: moduleContext.summary,
+                      learningObjectives: moduleContext.learningObjectives,
+                      keyTakeaways: moduleContext.keyTakeaways,
+                      misconceptions: moduleContext.misconceptions,
+                      subtopics: moduleContext.subtopics,
+                    });
+
+                    if (moduleTemplateResult) {
+                      console.log('[GenerateSubtopic] Module-level discussion template stored', {
+                        moduleId: moduleContext.moduleId,
+                        templateId: moduleTemplateResult.templateId,
+                        version: moduleTemplateResult.templateVersion,
+                      });
+                    } else {
+                      console.warn('[GenerateSubtopic] Module-level discussion template generation skipped');
+                    }
+                  } else {
+                    console.warn('[GenerateSubtopic] Module discussion context incomplete, skipping generation', {
+                      courseId,
+                      moduleTitle,
+                    });
+                  }
+                } catch (moduleTemplateError) {
+                  console.error('[GenerateSubtopic] Failed to generate module-level discussion template', moduleTemplateError);
+                }
+              }
+            } catch (discussionError) {
+              console.error('[GenerateSubtopic] Failed to generate discussion template', discussionError);
+            }
+          } else {
+            console.warn('Subtopic not found for quiz saving:', { 
                 courseId, 
                 moduleTitle, 
                 subtopic, 
@@ -439,5 +486,173 @@ function extractMisconceptions(content: any): string[] {
   }
 
   return [];
+}
+
+function isDiscussionLabel(label: string): boolean {
+  if (!label) return false;
+  const normalized = label.toLowerCase();
+  return normalized.includes('diskusi penutup') || normalized.includes('closing discussion');
+}
+
+interface ModuleDiscussionContextParams {
+  supabase: any;
+  courseId: string;
+  moduleTitle: string;
+  moduleRecord: { id?: string; title?: string; content?: string | null };
+}
+
+interface ModuleDiscussionContextResult {
+  moduleId: string;
+  summary: string;
+  learningObjectives: string[];
+  keyTakeaways: string[];
+  misconceptions: string[];
+  subtopics: Array<{
+    title: string;
+    summary: string;
+    objectives: string[];
+    keyTakeaways: string[];
+    misconceptions: string[];
+  }>;
+}
+
+async function assembleModuleDiscussionContext({
+  supabase,
+  courseId,
+  moduleTitle,
+  moduleRecord,
+}: ModuleDiscussionContextParams): Promise<ModuleDiscussionContextResult | null> {
+  if (!moduleRecord?.id) {
+    return null;
+  }
+
+  let outline: any = null;
+  try {
+    outline = moduleRecord.content ? JSON.parse(moduleRecord.content) : null;
+  } catch (parseError) {
+    console.warn('[GenerateSubtopic] Failed to parse module content for discussion aggregation', {
+      courseId,
+      moduleTitle,
+      error: parseError,
+    });
+  }
+
+  const moduleSubtopics = Array.isArray(outline?.subtopics) ? outline.subtopics : [];
+  const aggregated: ModuleDiscussionContextResult['subtopics'] = [];
+  const learningObjectives: string[] = [];
+  const keyTakeaways: string[] = [];
+  const misconceptions: string[] = [];
+
+  for (const sub of moduleSubtopics) {
+    const isDiscussion =
+      typeof sub === 'object' &&
+      (sub?.type === 'discussion' || sub?.isDiscussion === true || isDiscussionLabel(String(sub?.title ?? '')));
+    if (isDiscussion) {
+      continue;
+    }
+
+    const subtopicTitle =
+      typeof sub === 'string'
+        ? sub
+        : typeof sub?.title === 'string'
+        ? sub.title
+        : '';
+
+    if (!subtopicTitle) {
+      continue;
+    }
+
+    const cacheKey = `${courseId}-${moduleTitle}-${subtopicTitle}`;
+    let cachedContent: any = null;
+
+    try {
+      const { data: cacheRow } = await supabase
+        .from('subtopic_cache')
+        .select('content')
+        .eq('cache_key', cacheKey)
+        .single();
+      cachedContent = cacheRow?.content ?? null;
+    } catch (cacheError) {
+      console.warn('[GenerateSubtopic] Failed to load cached content for module aggregation', {
+        courseId,
+        moduleTitle,
+        subtopicTitle,
+        error: cacheError,
+      });
+    }
+
+    const objectives = Array.isArray(cachedContent?.objectives)
+      ? cachedContent.objectives.filter((item: any) => typeof item === 'string' && item.trim())
+      : [];
+    const takeaways = Array.isArray(cachedContent?.keyTakeaways)
+      ? cachedContent.keyTakeaways.filter((item: any) => typeof item === 'string' && item.trim())
+      : [];
+    const subMisconceptions = extractMisconceptions(cachedContent);
+    const summaryText =
+      buildDiscussionSummary(cachedContent) ||
+      (typeof sub === 'object' && typeof sub.overview === 'string' ? sub.overview : '') ||
+      objectives.join('; ');
+
+    aggregated.push({
+      title: subtopicTitle,
+      summary: summaryText,
+      objectives,
+      keyTakeaways: takeaways,
+      misconceptions: subMisconceptions,
+    });
+
+    pushUniqueRange(learningObjectives, objectives);
+    pushUniqueRange(keyTakeaways, takeaways);
+    pushUniqueRange(misconceptions, subMisconceptions);
+  }
+
+  if (!aggregated.length) {
+    return null;
+  }
+
+  const summary = buildModuleSummary(moduleTitle, aggregated);
+
+  return {
+    moduleId: moduleRecord.id,
+    summary,
+    learningObjectives,
+    keyTakeaways,
+    misconceptions,
+    subtopics: aggregated,
+  };
+}
+
+function pushUniqueRange(target: string[], values: string[]) {
+  for (const value of values) {
+    if (typeof value === 'string' && value.trim() && !target.includes(value)) {
+      target.push(value);
+    }
+  }
+}
+
+function buildModuleSummary(
+  moduleTitle: string,
+  subtopics: ModuleDiscussionContextResult['subtopics']
+): string {
+  const sections = subtopics.map((item, index) => {
+    const lines: string[] = [`${index + 1}. ${item.title}`];
+    if (item.summary) {
+      lines.push(`Ringkasan: ${item.summary}`);
+    }
+    if (item.objectives.length) {
+      lines.push('Tujuan utama:');
+      lines.push(...item.objectives.map((goal) => `- ${goal}`));
+    }
+    if (item.keyTakeaways.length) {
+      lines.push('Poin penting:');
+      lines.push(...item.keyTakeaways.map((point) => `- ${point}`));
+    }
+    return lines.join('\n');
+  });
+
+  return [
+    `Modul "${moduleTitle}" mencakup ${subtopics.length} subtopik utama dengan fokus berikut:`,
+    ...sections,
+  ].join('\n\n');
 }
 
