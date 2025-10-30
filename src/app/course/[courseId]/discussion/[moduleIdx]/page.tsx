@@ -13,6 +13,8 @@ type OutlineSubtopic = {
 };
 
 type OutlineModule = {
+  id: string;
+  rawTitle?: string;
   module: string;
   subtopics: (OutlineSubtopic | string)[];
 };
@@ -106,12 +108,20 @@ export default function DiscussionModulePage() {
     return Number.isNaN(parsed) ? 0 : parsed;
   }, [params?.moduleIdx]);
 
-  const targetIndexParam = searchParams.get('target') ?? searchParams.get('subIdx');
+  const scopeParam = searchParams.get('scope');
+  const discussionScope: 'module' | 'subtopic' =
+    scopeParam === 'module' ? 'module' : 'subtopic';
+  const moduleIdParam = searchParams.get('moduleId') ?? undefined;
+  const targetParamRaw =
+    discussionScope === 'module'
+      ? null
+      : searchParams.get('target') ?? searchParams.get('subIdx');
   const targetSubtopicIndex = useMemo(() => {
-    if (targetIndexParam === null) return 0;
-    const parsed = Number(targetIndexParam);
+    if (discussionScope === 'module') return null;
+    if (targetParamRaw === null) return 0;
+    const parsed = Number(targetParamRaw);
     return Number.isNaN(parsed) ? 0 : parsed;
-  }, [targetIndexParam]);
+  }, [discussionScope, targetParamRaw]);
 
   const queryTitle = searchParams.get('title') ?? '';
 
@@ -201,18 +211,29 @@ export default function DiscussionModulePage() {
 
   const targetSubtopic = useMemo(() => {
     if (!moduleData?.subtopics) return null;
+    if (discussionScope === 'module' || targetSubtopicIndex === null) return null;
     return moduleData.subtopics[targetSubtopicIndex] ?? null;
-  }, [moduleData?.subtopics, targetSubtopicIndex]);
+  }, [discussionScope, moduleData?.subtopics, targetSubtopicIndex]);
 
   const apiSubtopicTitle = useMemo(() => {
     if (queryTitle) return queryTitle;
+    if (discussionScope === 'module') {
+      return moduleData?.module ?? moduleData?.rawTitle ?? '';
+    }
     if (!targetSubtopic) return moduleData?.module ?? '';
     return typeof targetSubtopic === 'string'
       ? targetSubtopic
       : targetSubtopic?.title ?? moduleData?.module ?? '';
-  }, [moduleData?.module, queryTitle, targetSubtopic]);
+  }, [discussionScope, moduleData?.module, moduleData?.rawTitle, queryTitle, targetSubtopic]);
 
   const displaySubtopicTitle = useMemo(() => {
+    if (discussionScope === 'module') {
+      const base =
+        moduleData?.module ||
+        moduleData?.rawTitle ||
+        'Seluruh materi modul ini';
+      return `Seluruh materi modul ${cleanTitle(base) || base}`;
+    }
     const raw =
       queryTitle ||
       (typeof targetSubtopic === 'string' ? targetSubtopic : targetSubtopic?.title) ||
@@ -220,9 +241,11 @@ export default function DiscussionModulePage() {
       '';
     const cleaned = cleanTitle(raw);
     return cleaned || raw || 'Subtopik';
-  }, [moduleData?.module, queryTitle, targetSubtopic]);
+  }, [discussionScope, moduleData?.module, moduleData?.rawTitle, queryTitle, targetSubtopic]);
 
   const moduleTitle = moduleData?.module ?? 'Modul';
+  const moduleSubtopicId = moduleIdParam ?? moduleData?.id ?? null;
+  const subtitleLabel = discussionScope === 'module' ? 'Cakupan Diskusi' : 'Subtopik';
 
   useEffect(() => {
     if (!courseId || !apiSubtopicTitle) return;
@@ -230,15 +253,20 @@ export default function DiscussionModulePage() {
 
     async function startNewSession() {
       try {
+        const payload: Record<string, any> = {
+          courseId,
+          subtopicTitle: apiSubtopicTitle,
+          moduleTitle: moduleTitle || undefined,
+        };
+        if (moduleSubtopicId) {
+          payload.subtopicId = moduleSubtopicId;
+        }
+
         const response = await fetch('/api/discussion/start', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           credentials: 'include',
-          body: JSON.stringify({
-            courseId,
-            subtopicTitle: apiSubtopicTitle,
-            moduleTitle: moduleTitle || undefined,
-          }),
+          body: JSON.stringify(payload),
         });
 
         if (response.status === 401) {
@@ -281,8 +309,13 @@ export default function DiscussionModulePage() {
       try {
         const params = new URLSearchParams({
           courseId,
-          subtopicTitle: apiSubtopicTitle,
         });
+        if (moduleSubtopicId) {
+          params.set('subtopicId', moduleSubtopicId);
+        }
+        if (apiSubtopicTitle) {
+          params.set('subtopicTitle', apiSubtopicTitle);
+        }
         const response = await fetch(`/api/discussion/history?${params.toString()}`, {
           credentials: 'include',
         });
@@ -329,7 +362,7 @@ export default function DiscussionModulePage() {
     return () => {
       cancelled = true;
     };
-  }, [apiSubtopicTitle, courseId, moduleTitle]);
+  }, [apiSubtopicTitle, courseId, moduleSubtopicId, moduleTitle]);
 
   const handleSubmit = async (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
@@ -509,7 +542,7 @@ export default function DiscussionModulePage() {
           </Link>
           <h1 className={styles.title}>Diskusi Penutup</h1>
           <p className={styles.subtitle}>
-            Modul <strong>{moduleTitle}</strong> • Subtopik{' '}
+            Modul <strong>{moduleTitle}</strong> - {subtitleLabel}{' }
             <strong>{displaySubtopicTitle}</strong>
           </p>
         </div>

@@ -14,6 +14,8 @@ interface Subtopic {
 }
 
 interface ModuleOutline {
+  id: string;
+  rawTitle?: string;
   module: string;
   subtopics: (Subtopic | string)[];
 }
@@ -61,7 +63,7 @@ export default function CourseLayout({ children }: { children: ReactNode }) {
         
         if (result.success && result.course) {
           // Transform subtopics to outline format
-          const outline: ModuleOutline[] = result.course.subtopics?.map((subtopic: any) => {
+          const outline: ModuleOutline[] = result.course.subtopics?.map((subtopic: any, index: number) => {
             let content;
             try {
               content = JSON.parse(subtopic.content);
@@ -70,6 +72,8 @@ export default function CourseLayout({ children }: { children: ReactNode }) {
             }
             
             return {
+              id: String(subtopic.id ?? `module-${index}`),
+              rawTitle: subtopic.title ?? undefined,
               module: content.module || subtopic.title || 'Module',
               subtopics: content.subtopics || []
             };
@@ -234,17 +238,22 @@ export default function CourseLayout({ children }: { children: ReactNode }) {
                     sub?.isDiscussion === true ||
                     (typeof rawTitle === 'string' &&
                       rawTitle.toLowerCase().includes('diskusi penutup')));
-                const targetIndex = j > 0 ? j - 1 : 0;
-                const previous = mod.subtopics[targetIndex];
-                const targetTitle =
-                  typeof previous === 'string'
-                    ? previous
-                    : previous?.title ?? mod.module;
 
                 const href = isDiscussion
-                  ? `/course/${courseId}/discussion/${idx}?module=${idx}&subIdx=${j}&target=${targetIndex}&title=${encodeURIComponent(
-                      targetTitle
-                    )}`
+                  ? (() => {
+                      const params = new URLSearchParams({
+                        module: String(idx),
+                        subIdx: String(j),
+                        scope: 'module',
+                      });
+                      if (mod.id) {
+                        params.set('moduleId', String(mod.id));
+                      }
+                      if (typeof mod.module === 'string' && mod.module.trim()) {
+                        params.set('title', mod.module);
+                      }
+                      return `/course/${courseId}/discussion/${idx}?${params.toString()}`;
+                    })()
                   : `/course/${courseId}/subtopic/${idx}/${j}?module=${idx}&subIdx=${j}`;
 
                 return (

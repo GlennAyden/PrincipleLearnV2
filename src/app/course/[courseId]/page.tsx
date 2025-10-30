@@ -13,6 +13,8 @@ interface SubtopicSummary {
   overview: string;
 }
 interface ModuleOutline {
+  id: string;
+  rawTitle?: string;
   module: string;
   subtopics: (SubtopicSummary | string)[];
 }
@@ -83,22 +85,25 @@ interface DiscussionCardProps {
   courseId: string;
   moduleIndex: number;
   moduleTitle: string;
+  moduleId: string;
   subtopicTitle: string;
   displaySubtopicTitle: string;
   displayIndex: number;
-  targetSubtopicIndex: number;
+  scope: 'module' | 'subtopic';
 }
 
 function DiscussionCard({
   courseId,
   moduleIndex,
   moduleTitle,
+  moduleId,
   subtopicTitle,
   displaySubtopicTitle,
   displayIndex,
-  targetSubtopicIndex,
+  scope,
 }: DiscussionCardProps) {
   const router = useRouter();
+  const isModuleScope = scope === 'module';
   const [loading, setLoading] = useState(false);
   const [session, setSession] = useState<{
     id: string;
@@ -111,14 +116,19 @@ function DiscussionCard({
   useEffect(() => {
     let cancelled = false;
     async function fetchStatus() {
-      if (!subtopicTitle) return;
+      if (!courseId) return;
       setLoading(true);
       setError(null);
       try {
         const params = new URLSearchParams({
           courseId,
-          subtopicTitle,
         });
+        if (moduleId) {
+          params.set('subtopicId', moduleId);
+        }
+        if (subtopicTitle) {
+          params.set('subtopicTitle', subtopicTitle);
+        }
         const res = await fetch(`/api/discussion/history?${params.toString()}`, {
           credentials: 'include',
         });
@@ -157,7 +167,7 @@ function DiscussionCard({
     return () => {
       cancelled = true;
     };
-  }, [courseId, subtopicTitle]);
+  }, [courseId, moduleId, subtopicTitle]);
 
   const status: 'idle' | 'in_progress' | 'completed' = session
     ? session.status
@@ -173,14 +183,20 @@ function DiscussionCard({
 
   const learningGoals = session?.learningGoals ?? [];
   const completedGoals = learningGoals.filter((goal) => goal.covered).length;
+  const cleanedModuleTitle = cleanTitle(moduleTitle);
 
   const handleNavigate = () => {
     const params = new URLSearchParams({
       module: String(moduleIndex),
       subIdx: String(displayIndex),
-      target: String(targetSubtopicIndex),
-      title: subtopicTitle,
+      scope,
     });
+    if (moduleId) {
+      params.set('moduleId', moduleId);
+    }
+    if (subtopicTitle) {
+      params.set('title', subtopicTitle);
+    }
     router.push(
       `/course/${courseId}/discussion/${moduleIndex}?${params.toString()}`
     );
@@ -197,9 +213,20 @@ function DiscussionCard({
       </div>
       <div className={styles.cardText}>
         <p>
-          Tutup subtopik <strong>{displaySubtopicTitle}</strong> dalam modul{' '}
-          <strong>{moduleTitle}</strong> melalui dialog Socratic empat fase. Mentor
-          virtual akan mengecek capaian dan memberi umpan balik.
+          {isModuleScope ? (
+            <>
+              Rekap seluruh materi dalam modul{' '}
+              <strong>{cleanedModuleTitle || moduleTitle}</strong> lewat dialog Socratic empat
+              fase. Mentor virtual akan membantu menilai capaian setiap subtopik dan memberikan
+              umpan balik.
+            </>
+          ) : (
+            <>
+              Tutup subtopik <strong>{displaySubtopicTitle}</strong> dalam modul{' '}
+              <strong>{cleanedModuleTitle || moduleTitle}</strong> melalui dialog Socratic empat
+              fase. Mentor virtual akan mengecek capaian dan memberi umpan balik.
+            </>
+          )}
         </p>
         {session && (
           <p className={styles.discussionMeta}>
@@ -284,7 +311,9 @@ export default function CourseOverviewPage() {
               content = { module: subtopic.title, subtopics: [] };
             }
             
-            const moduleData = {
+            const moduleData: ModuleOutline = {
+              id: String(subtopic.id ?? `module-${index}`),
+              rawTitle: subtopic.title ?? undefined,
               module: content.module || subtopic.title || `Module ${index + 1}`,
               subtopics: content.subtopics || []
             };
@@ -391,25 +420,21 @@ export default function CourseOverviewPage() {
             (sub?.type === 'discussion' || sub?.isDiscussion === true);
 
           if (isDiscussion) {
-            const previous = currentModule.subtopics[idx - 1];
-            const targetRawTitle =
-              typeof previous === 'string'
-                ? previous
-                : typeof previous?.title === 'string'
-                ? previous.title
-                : currentModule.module;
-            const displayTargetTitle = cleanTitle(targetRawTitle) || currentModule.module;
-
+            const moduleScopeTitle = currentModule.module;
+            const discussionDisplay = `Seluruh materi modul ${
+              cleanTitle(moduleScopeTitle) || moduleScopeTitle
+            }`;
             return (
               <DiscussionCard
                 key={`discussion-${idx}`}
                 courseId={courseId}
                 moduleIndex={activeModule}
-                moduleTitle={currentModule.module}
-                subtopicTitle={targetRawTitle}
-                displaySubtopicTitle={displayTargetTitle}
+                moduleTitle={moduleScopeTitle}
+                moduleId={currentModule.id}
+                subtopicTitle={moduleScopeTitle}
+                displaySubtopicTitle={discussionDisplay}
                 displayIndex={idx}
-                targetSubtopicIndex={Math.max(0, idx - 1)}
+                scope="module"
               />
             );
           }
