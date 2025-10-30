@@ -426,6 +426,66 @@ export default function DiscussionModulePage() {
       ? `/course/${courseId}?module=${moduleIndex + 1}`
       : `/course/${courseId}`;
 
+  const formatAssessment = (assessment: any): string => {
+    if (typeof assessment === 'string') {
+      return assessment;
+    }
+    if (!assessment || typeof assessment !== 'object') {
+      return String(assessment ?? '');
+    }
+
+    const fragments: string[] = [];
+
+    const mainText =
+      typeof assessment.comment === 'string' && assessment.comment.trim()
+        ? assessment.comment.trim()
+        : typeof assessment.notes === 'string' && assessment.notes.trim()
+        ? assessment.notes.trim()
+        : typeof assessment.message === 'string' && assessment.message.trim()
+        ? assessment.message.trim()
+        : '';
+
+    if (mainText) {
+      fragments.push(mainText);
+    }
+
+    const goalIdentifier =
+      assessment.goalId ?? assessment.goal_id ?? assessment.goal ?? null;
+
+    if (goalIdentifier !== null && goalIdentifier !== undefined) {
+      const goalLabel = `Goal ${goalIdentifier}`;
+      const satisfied =
+        typeof assessment.satisfied === 'boolean'
+          ? assessment.satisfied
+          : typeof assessment.satisfied === 'string'
+          ? assessment.satisfied.toLowerCase() === 'true'
+          : null;
+      if (satisfied !== null) {
+        fragments.push(
+          `${goalLabel} ${satisfied ? 'tercapai' : 'belum tercapai'}`
+        );
+      } else {
+        fragments.push(goalLabel);
+      }
+    } else if (typeof assessment.satisfied === 'boolean') {
+      fragments.push(assessment.satisfied ? 'Goal tercapai' : 'Goal belum tercapai');
+    }
+
+    if (typeof assessment.explanation === 'string' && assessment.explanation.trim()) {
+      fragments.push(assessment.explanation.trim());
+    }
+
+    if (!fragments.length) {
+      try {
+        return JSON.stringify(assessment);
+      } catch {
+        return '[Assessment tidak tersedia]';
+      }
+    }
+
+    return fragments.join(' - ');
+  };
+
   if (courseError) {
     return (
       <div className={styles.container}>
@@ -515,7 +575,7 @@ export default function DiscussionModulePage() {
                       {Array.isArray(meta.assessments) && meta.assessments.length > 0 && (
                         <ul className={styles.assessmentList}>
                           {meta.assessments.map((item: any, idx: number) => (
-                            <li key={idx}>{item?.comment ?? item}</li>
+                            <li key={idx}>{formatAssessment(item)}</li>
                           ))}
                         </ul>
                       )}

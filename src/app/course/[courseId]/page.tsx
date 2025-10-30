@@ -177,7 +177,7 @@ function DiscussionCard({
   const handleNavigate = () => {
     const params = new URLSearchParams({
       module: String(moduleIndex),
-      subIdx: String(targetSubtopicIndex),
+      subIdx: String(displayIndex),
       target: String(targetSubtopicIndex),
       title: subtopicTitle,
     });

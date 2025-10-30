@@ -234,10 +234,17 @@ export default function CourseLayout({ children }: { children: ReactNode }) {
                     sub?.isDiscussion === true ||
                     (typeof rawTitle === 'string' &&
                       rawTitle.toLowerCase().includes('diskusi penutup')));
+                const targetIndex = j > 0 ? j - 1 : 0;
+                const previous = mod.subtopics[targetIndex];
+                const targetTitle =
+                  typeof previous === 'string'
+                    ? previous
+                    : previous?.title ?? mod.module;
+
                 const href = isDiscussion
-                  ? `/course/${courseId}/discussion/${idx}?module=${idx}&subIdx=${
-                      j > 0 ? j - 1 : 0
-                    }&title=${encodeURIComponent(rawTitle)}`
+                  ? `/course/${courseId}/discussion/${idx}?module=${idx}&subIdx=${j}&target=${targetIndex}&title=${encodeURIComponent(
+                      targetTitle
+                    )}`
                   : `/course/${courseId}/subtopic/${idx}/${j}?module=${idx}&subIdx=${j}`;
 
                 return (
