@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 
 import { verifyToken } from '@/lib/jwt';
 import { adminDb } from '@/lib/database';
+import { resolveDiscussionSubtopicId } from '@/lib/discussion/resolveSubtopic';
 
 type TemplateRecord = {
   id: string;
@@ -30,16 +31,29 @@ export async function POST(request: NextRequest) {
     }
 
     const body = await request.json().catch(() => null);
-    const { courseId, subtopicId } = body || {};
+    const { courseId, subtopicId: rawSubtopicId, subtopicTitle, moduleTitle } = body || {};
 
-    if (!courseId || !subtopicId) {
+    if (!courseId) {
       return NextResponse.json(
-        { error: 'courseId and subtopicId are required' },
+        { error: 'courseId is required' },
         { status: 400 }
       );
     }
 
-    const templateRow = await fetchLatestTemplate(subtopicId);
+    const subtopicId = await resolveDiscussionSubtopicId({
+      courseId,
+      subtopicId: rawSubtopicId,
+      subtopicTitle,
+    });
+
+    if (!subtopicId) {
+      return NextResponse.json(
+        { error: 'Unable to resolve discussion context for this subtopic' },
+        { status: 404 }
+      );
+    }
+
+    const templateRow = await fetchLatestTemplate({ subtopicId, courseId, subtopicTitle, moduleTitle });
     if (!templateRow) {
       return NextResponse.json(
         { error: 'Discussion template not found for this subtopic' },
@@ -97,7 +111,14 @@ export async function POST(request: NextRequest) {
   }
 }
 
-async function fetchLatestTemplate(subtopicId: string): Promise<TemplateRecord | null> {
+async function fetchLatestTemplate(params: {
+  subtopicId: string;
+  courseId?: string;
+  subtopicTitle?: string | null;
+  moduleTitle?: string | null;
+}): Promise<TemplateRecord | null> {
+  const { subtopicId, courseId, subtopicTitle } = params;
+
   const { data, error } = await adminDb
     .from('discussion_templates')
     .select('id, version, template, source')
@@ -105,12 +126,29 @@ async function fetchLatestTemplate(subtopicId: string): Promise<TemplateRecord |
     .order('version', { ascending: false })
     .limit(1);
 
-  if (error) {
-    console.error('[DiscussionStart] Failed to load template', error);
-    return null;
+  if (!error && data?.[0]) {
+    return data[0];
   }
 
-  return data?.[0] ?? null;
+  if (courseId && subtopicTitle) {
+    const { data: fallback, error: fallbackError } = await adminDb
+      .from('discussion_templates')
+      .select('id, version, template, source')
+      .eq('course_id', courseId)
+      .contains('source', { subtopicTitle })
+      .order('version', { ascending: false })
+      .limit(1);
+
+    if (!fallbackError && fallback?.[0]) {
+      return fallback[0];
+    }
+  }
+
+  if (error) {
+    console.error('[DiscussionStart] Failed to load template', error);
+  }
+
+  return null;
 }
 
 async function fetchExistingSession(userId: string, courseId: string, subtopicId: string): Promise<SessionRecord | null> {

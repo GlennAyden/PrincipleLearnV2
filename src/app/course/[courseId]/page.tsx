@@ -23,6 +23,35 @@ interface Course {
   outline?: ModuleOutline[];
 }
 
+type DiscussionPhase =
+  | 'diagnosis'
+  | 'exploration'
+  | 'explanation'
+  | 'practice'
+  | 'synthesis'
+  | 'consolidation'
+  | 'completed';
+
+const PHASE_LABELS: Record<string, string> = {
+  diagnosis: 'Diagnosis',
+  exploration: 'Penjelasan',
+  explanation: 'Penjelasan',
+  practice: 'Latihan',
+  synthesis: 'Konsolidasi',
+  consolidation: 'Konsolidasi',
+  completed: 'Selesai',
+};
+
+function getPhaseLabel(phase?: string) {
+  if (!phase) return 'Belum Mulai';
+  return PHASE_LABELS[phase.toLowerCase()] ?? phase;
+}
+
+function cleanTitle(value?: string) {
+  if (!value) return '';
+  return value.replace(/^\d+\.\s*\d+\.?\s*/g, '').replace(/^\d+\.\s*/g, '');
+}
+
 // Skeleton loading component for course outline
 const SkeletonLoading = () => {
   return (
@@ -50,6 +79,150 @@ const SkeletonLoading = () => {
   );
 };
 
+interface DiscussionCardProps {
+  courseId: string;
+  moduleIndex: number;
+  moduleTitle: string;
+  subtopicTitle: string;
+  displaySubtopicTitle: string;
+  displayIndex: number;
+  targetSubtopicIndex: number;
+}
+
+function DiscussionCard({
+  courseId,
+  moduleIndex,
+  moduleTitle,
+  subtopicTitle,
+  displaySubtopicTitle,
+  displayIndex,
+  targetSubtopicIndex,
+}: DiscussionCardProps) {
+  const router = useRouter();
+  const [loading, setLoading] = useState(false);
+  const [session, setSession] = useState<{
+    id: string;
+    status: 'in_progress' | 'completed';
+    phase: string;
+    learningGoals: Array<{ id: string; description: string; covered: boolean }>;
+  } | null>(null);
+  const [error, setError] = useState<string | null>(null);
+
+  useEffect(() => {
+    let cancelled = false;
+    async function fetchStatus() {
+      if (!subtopicTitle) return;
+      setLoading(true);
+      setError(null);
+      try {
+        const params = new URLSearchParams({
+          courseId,
+          subtopicTitle,
+        });
+        const res = await fetch(`/api/discussion/history?${params.toString()}`, {
+          credentials: 'include',
+        });
+        if (res.status === 404) {
+          if (!cancelled) {
+            setSession(null);
+          }
+          return;
+        }
+        if (!res.ok) {
+          throw new Error('Gagal memuat status diskusi');
+        }
+        const data = await res.json();
+        if (!cancelled) {
+          setSession({
+            id: data.session.id,
+            status: data.session.status === 'completed' ? 'completed' : 'in_progress',
+            phase: data.session.phase,
+            learningGoals: Array.isArray(data.session.learningGoals)
+              ? data.session.learningGoals
+              : [],
+          });
+        }
+      } catch (err: any) {
+        if (!cancelled) {
+          setError(err?.message ?? 'Tidak dapat memuat status diskusi');
+        }
+      } finally {
+        if (!cancelled) {
+          setLoading(false);
+        }
+      }
+    }
+
+    fetchStatus();
+    return () => {
+      cancelled = true;
+    };
+  }, [courseId, subtopicTitle]);
+
+  const status: 'idle' | 'in_progress' | 'completed' = session
+    ? session.status
+    : 'idle';
+  const badgeClass =
+    status === 'completed'
+      ? styles.discussionBadgeDone
+      : status === 'in_progress'
+      ? styles.discussionBadgeProgress
+      : styles.discussionBadgeIdle;
+  const badgeLabel =
+    status === 'completed' ? 'Done' : status === 'in_progress' ? 'In Progress' : 'Ready';
+
+  const learningGoals = session?.learningGoals ?? [];
+  const completedGoals = learningGoals.filter((goal) => goal.covered).length;
+
+  const handleNavigate = () => {
+    const params = new URLSearchParams({
+      module: String(moduleIndex),
+      subIdx: String(targetSubtopicIndex),
+      target: String(targetSubtopicIndex),
+      title: subtopicTitle,
+    });
+    router.push(
+      `/course/${courseId}/discussion/${moduleIndex}?${params.toString()}`
+    );
+  };
+
+  return (
+    <div className={styles.card}>
+      <div className={styles.cardIndex}>
+        {moduleIndex + 1}.{displayIndex + 1}
+      </div>
+      <div className={styles.cardTitleRow}>
+        <div className={styles.cardTitle}>Diskusi Penutup</div>
+        <span className={`${styles.discussionBadge} ${badgeClass}`}>{badgeLabel}</span>
+      </div>
+      <div className={styles.cardText}>
+        <p>
+          Tutup subtopik <strong>{displaySubtopicTitle}</strong> dalam modul{' '}
+          <strong>{moduleTitle}</strong> melalui dialog Socratic empat fase. Mentor
+          virtual akan mengecek capaian dan memberi umpan balik.
+        </p>
+        {session && (
+          <p className={styles.discussionMeta}>
+            Fase saat ini: <strong>{getPhaseLabel(session.phase)}</strong> •{' '}
+            {completedGoals}/{learningGoals.length} goals tercapai
+          </p>
+        )}
+        {error && <p className={styles.discussionError}>{error}</p>}
+      </div>
+      <button
+        className={styles.getStartedBtn}
+        onClick={handleNavigate}
+        disabled={loading}
+      >
+        {status === 'idle'
+          ? 'Mulai Diskusi'
+          : status === 'completed'
+          ? 'Lihat Riwayat Diskusi'
+          : 'Lanjutkan Diskusi'}
+      </button>
+    </div>
+  );
+}
 export default function CourseOverviewPage() {
   const router = useRouter();
   const { courseId } = useParams<{ courseId: string }>();
@@ -213,13 +386,40 @@ export default function CourseOverviewPage() {
       {/* daftar kartu subtopik */}
       <div className={styles.cardsContainer}>
         {currentModule.subtopics.map((sub, idx) => {
-          const rawTitle = typeof sub === 'string' ? sub : sub.title;
-          // Remove redundant numbering patterns like "2. " or "2.1 " at the beginning
-          const title = rawTitle.replace(/^\d+\.\s*\d+\.?\s*/g, '').replace(/^\d+\.\s*/g, '');
+          const isDiscussion =
+            typeof sub === 'object' &&
+            (sub?.type === 'discussion' || sub?.isDiscussion === true);
+
+          if (isDiscussion) {
+            const previous = currentModule.subtopics[idx - 1];
+            const targetRawTitle =
+              typeof previous === 'string'
+                ? previous
+                : typeof previous?.title === 'string'
+                ? previous.title
+                : currentModule.module;
+            const displayTargetTitle = cleanTitle(targetRawTitle) || currentModule.module;
+
+            return (
+              <DiscussionCard
+                key={`discussion-${idx}`}
+                courseId={courseId}
+                moduleIndex={activeModule}
+                moduleTitle={currentModule.module}
+                subtopicTitle={targetRawTitle}
+                displaySubtopicTitle={displayTargetTitle}
+                displayIndex={idx}
+                targetSubtopicIndex={Math.max(0, idx - 1)}
+              />
+            );
+          }
+
+          const rawTitle = typeof sub === 'string' ? sub : sub?.title ?? '';
+          const title = cleanTitle(rawTitle);
           const overview =
             typeof sub === 'string'
               ? 'Ringkasan singkat subtopik akan segera tersedia.'
-              : sub.overview;
+              : sub?.overview ?? 'Ringkasan singkat subtopik akan segera tersedia.';
 
           return (
             <div key={idx} className={styles.card}>
@@ -227,14 +427,11 @@ export default function CourseOverviewPage() {
                 {activeModule + 1}.{idx + 1}
               </div>
               <div className={styles.cardTitle}>{title}</div>
-              <div className={styles.cardText}>
-                {formatOverview(overview)}
-              </div>
+              <div className={styles.cardText}>{formatOverview(overview)}</div>
               <button
                 className={styles.getStartedBtn}
                 onClick={() =>
                   router.push(
-                    // Always start at first section of the subtopic (pageIdx=0)
                     `/course/${courseId}/subtopic/${activeModule}/0?module=${activeModule}&subIdx=${idx}`
                   )
                 }

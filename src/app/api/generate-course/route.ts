@@ -209,11 +209,11 @@ Important: Write all titles and overviews in the same language as the user's inp
           // Create subtopics for each module
           console.log(`[Generate Course] DEBUG: Creating ${outline.length} subtopics`);
           for (let i = 0; i < outline.length; i++) {
-            const module = outline[i];
+            const outlineModule = outline[i];
             const subtopicData = {
               course_id: course.id,
-              title: module.module || `Module ${i + 1}`,
-              content: JSON.stringify(module),
+              title: outlineModule.module || `Module ${i + 1}`,
+              content: JSON.stringify(outlineModule),
               order_index: i
             };
             

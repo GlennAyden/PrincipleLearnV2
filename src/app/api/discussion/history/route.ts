@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 
 import { verifyToken } from '@/lib/jwt';
 import { adminDb } from '@/lib/database';
+import { resolveDiscussionSubtopicId } from '@/lib/discussion/resolveSubtopic';
 
 interface SessionRecord {
   id: string;
@@ -33,10 +34,11 @@ export async function GET(request: NextRequest) {
     const sessionId = searchParams.get('sessionId');
     const courseId = searchParams.get('courseId');
     const subtopicId = searchParams.get('subtopicId');
+    const subtopicTitle = searchParams.get('subtopicTitle');
 
-    if (!sessionId && (!courseId || !subtopicId)) {
+    if (!sessionId && (!courseId || (!subtopicId && !subtopicTitle))) {
       return NextResponse.json(
-        { error: 'Provide either sessionId or both courseId and subtopicId' },
+        { error: 'Provide either sessionId or courseId with subtopic context' },
         { status: 400 }
       );
     }
@@ -45,7 +47,17 @@ export async function GET(request: NextRequest) {
     if (sessionId) {
       session = await fetchSessionById(sessionId);
     } else {
-      session = await fetchLatestSession(tokenPayload.userId, courseId!, subtopicId!);
+      const resolvedSubtopicId = await resolveDiscussionSubtopicId({
+        courseId,
+        subtopicId,
+        subtopicTitle,
+      });
+
+      if (!resolvedSubtopicId) {
+        return NextResponse.json({ error: 'Discussion session not found' }, { status: 404 });
+      }
+
+      session = await fetchLatestSession(tokenPayload.userId, courseId!, resolvedSubtopicId);
     }
 
     if (!session || session.user_id !== tokenPayload.userId) {

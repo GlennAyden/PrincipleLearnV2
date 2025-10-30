@@ -15,7 +15,6 @@ export default [
   ...compat.extends('next/core-web-vitals'),
   {
     rules: {
-<<<<<<< HEAD
       // Disable all problematic rules for development
       '@typescript-eslint/no-explicit-any': 'off',
       '@typescript-eslint/no-unused-vars': 'off',
@@ -26,9 +25,6 @@ export default [
       'no-unused-vars': 'off',
       '@typescript-eslint/ban-ts-comment': 'off',
       '@typescript-eslint/no-empty-function': 'off'
-=======
-      'react-hooks/rules-of-hooks': 'error',
->>>>>>> 5caecbc5b9af3522dde0e40bc0eb53536170354d
     },
   },
 ]
