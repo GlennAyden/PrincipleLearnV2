@@ -23,12 +23,18 @@ interface TemplatePhase {
 interface TemplateGoal {
   id: string;
   description: string;
+  rubric?: {
+    success_summary?: string;
+    checklist?: string[];
+    failure_signals?: string[];
+  };
 }
 
 interface DiscussionTemplatePayload {
   templateId: string;
   phases: TemplatePhase[];
   learning_goals: TemplateGoal[];
+  closing_message?: string;
 }
 
 function isTemplateStep(step: any): step is TemplateStep {
@@ -61,7 +67,14 @@ function isTemplateGoal(goal: any): goal is TemplateGoal {
     goal &&
     typeof goal === 'object' &&
     typeof goal.id === 'string' &&
-    typeof goal.description === 'string'
+    typeof goal.description === 'string' &&
+    (goal.rubric === undefined ||
+      (typeof goal.rubric === 'object' &&
+        (goal.rubric.success_summary === undefined || typeof goal.rubric.success_summary === 'string') &&
+        (goal.rubric.checklist === undefined ||
+          (Array.isArray(goal.rubric.checklist) && goal.rubric.checklist.every((item: any) => typeof item === 'string'))) &&
+        (goal.rubric.failure_signals === undefined ||
+          (Array.isArray(goal.rubric.failure_signals) && goal.rubric.failure_signals.every((item: any) => typeof item === 'string')))))
   );
 }
 
@@ -75,7 +88,8 @@ function isValidTemplate(data: any): data is DiscussionTemplatePayload {
     data.phases.every(isTemplatePhase) &&
     Array.isArray(data.learning_goals) &&
     data.learning_goals.length > 0 &&
-    data.learning_goals.every(isTemplateGoal)
+    data.learning_goals.every(isTemplateGoal) &&
+    (data.closing_message === undefined || typeof data.closing_message === 'string')
   );
 }
 
@@ -143,9 +157,24 @@ const responseFormat = {
             properties: {
               id: { type: 'string' },
               description: { type: 'string' },
+              rubric: {
+                type: 'object',
+                properties: {
+                  success_summary: { type: 'string' },
+                  checklist: {
+                    type: 'array',
+                    items: { type: 'string' },
+                  },
+                  failure_signals: {
+                    type: 'array',
+                    items: { type: 'string' },
+                  },
+                },
+              },
             },
           },
         },
+        closing_message: { type: 'string' },
       },
     },
   },
@@ -246,6 +275,8 @@ function buildSystemPrompt() {
     'Language must match the learner materials; do not translate unless specified.',
     'Phases must progress from diagnosis to synthesis and ensure coverage of the learning goals.',
     'Each step should encourage reflection, justification, or application rather than giving direct answers.',
+    'Provide measurable rubrics for each learning goal to help facilitators evaluate responses.',
+    'Add a closing message that the coach can deliver when mastery is achieved.',
   ].join('\n');
 }
 
@@ -280,6 +311,8 @@ function buildPrompt({
     '- Include at least one step with `expected_type` set to "mcq" complete with `options`, `answer`, and feedback.',
     '- Ensure every step lists relevant `goal_refs` referencing the learning goals you define.',
     '- Learning goals should be 3-5 statements derived from objectives and takeaways.',
+    '- For each learning goal, provide a `rubric` object containing `success_summary`, a `checklist` of concrete indicators (2-4 items), and optional `failure_signals` describing common misconceptions.',
+    '- Add a `closing_message` string that congratulates the learner and reinforces next steps when all goals are satisfied.',
     '- Encourage deeper thinking; avoid revealing final answers directly.',
     '',
     'Return only JSON that matches the schema.',
@@ -312,5 +345,6 @@ function normalizeTemplate(template: DiscussionTemplatePayload) {
     templateId: template.templateId,
     phases,
     learning_goals: template.learning_goals,
+    closing_message: template.closing_message,
   };
 }

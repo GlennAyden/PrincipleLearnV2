@@ -7,6 +7,7 @@ type TemplateRecord = {
   id: string;
   version: string;
   template: any;
+  source?: any;
 };
 
 type SessionRecord = {
@@ -15,6 +16,8 @@ type SessionRecord = {
   phase: string;
   learning_goals: any;
   template_id: string;
+  course_id: string;
+  subtopic_id: string;
 };
 
 export async function POST(request: NextRequest) {
@@ -52,7 +55,7 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    let session = await fetchExistingSession(tokenPayload.userId, subtopicId);
+    let session = await fetchExistingSession(tokenPayload.userId, courseId, subtopicId);
     if (!session) {
       session = await createSession({
         userId: tokenPayload.userId,
@@ -78,6 +81,7 @@ export async function POST(request: NextRequest) {
 
     const messages = await fetchMessages(session.id);
     const currentStep = getCurrentStep(templateRow.template, messages);
+    await ensureProgressRecord(tokenPayload.userId, session.course_id, session.subtopic_id);
 
     return NextResponse.json({
       session: serializeSession(session),
@@ -96,7 +100,7 @@ export async function POST(request: NextRequest) {
 async function fetchLatestTemplate(subtopicId: string): Promise<TemplateRecord | null> {
   const { data, error } = await adminDb
     .from('discussion_templates')
-    .select('id, version, template')
+    .select('id, version, template, source')
     .eq('subtopic_id', subtopicId)
     .order('version', { ascending: false })
     .limit(1);
@@ -109,11 +113,12 @@ async function fetchLatestTemplate(subtopicId: string): Promise<TemplateRecord |
   return data?.[0] ?? null;
 }
 
-async function fetchExistingSession(userId: string, subtopicId: string): Promise<SessionRecord | null> {
+async function fetchExistingSession(userId: string, courseId: string, subtopicId: string): Promise<SessionRecord | null> {
   const { data, error } = await adminDb
     .from('discussion_sessions')
-    .select('id, status, phase, learning_goals, template_id')
+    .select('id, status, phase, learning_goals, template_id, course_id, subtopic_id')
     .eq('user_id', userId)
+    .eq('course_id', courseId)
     .eq('subtopic_id', subtopicId)
     .limit(1);
 
@@ -146,7 +151,7 @@ async function createSession(params: {
       phase: firstPhaseId,
       learning_goals: goals,
     })
-    .select('id, status, phase, learning_goals, template_id')
+    .select('id, status, phase, learning_goals, template_id, course_id, subtopic_id')
     .single();
 
   if (error || !data) {
@@ -239,6 +244,7 @@ function buildInitialGoals(goals: any) {
     .map((goal) => ({
       id: goal.id,
       description: goal.description ?? '',
+      rubric: goal.rubric ?? null,
       covered: false,
     }));
 }
@@ -249,5 +255,39 @@ function serializeSession(session: SessionRecord) {
     status: session.status,
     phase: session.phase,
     learningGoals: Array.isArray(session.learning_goals) ? session.learning_goals : [],
+    courseId: session.course_id,
+    subtopicId: session.subtopic_id,
   };
+}
+
+async function ensureProgressRecord(userId: string, courseId: string, subtopicId: string) {
+  try {
+    const { data, error } = await adminDb
+      .from('user_progress')
+      .select('id, is_completed')
+      .eq('user_id', userId)
+      .eq('course_id', courseId)
+      .eq('subtopic_id', subtopicId)
+      .limit(1);
+
+    if (error) {
+      console.warn('[DiscussionStart] Failed to check user progress', error);
+      return;
+    }
+
+    if (!data || data.length === 0) {
+      const { error: insertError } = await adminDb.from('user_progress').insert({
+        user_id: userId,
+        course_id: courseId,
+        subtopic_id: subtopicId,
+        is_completed: false,
+      });
+
+      if (insertError) {
+        console.warn('[DiscussionStart] Failed to create user progress record', insertError);
+      }
+    }
+  } catch (progressError) {
+    console.warn('[DiscussionStart] ensureProgressRecord error', progressError);
+  }
 }

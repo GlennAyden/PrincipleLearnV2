@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 
 import { verifyToken } from '@/lib/jwt';
 import { adminDb } from '@/lib/database';
+import { openai, defaultOpenAIModel } from '@/lib/openai';
 
 interface SessionRecord {
   id: string;
@@ -18,6 +19,7 @@ type TemplateRecord = {
   id: string;
   template: any;
   version: string;
+  source?: any;
 };
 
 export async function POST(request: NextRequest) {
@@ -67,24 +69,72 @@ export async function POST(request: NextRequest) {
       );
     }
 
+    await ensureProgressRecord(session.user_id, session.course_id, session.subtopic_id);
+
     const messages = await fetchMessages(session.id);
-    const agentMessages = messages.filter((msg) => msg.role === 'agent');
-    const currentStep = agentMessages.length ? steps[Math.min(agentMessages.length - 1, steps.length - 1)] : steps[0];
+    const agentMessages = messages.filter(
+      (msg) =>
+        msg.role === 'agent' &&
+        (!msg.metadata ||
+          (msg.metadata.type !== 'coach_feedback' && msg.metadata.type !== 'closing'))
+    );
+    const currentStepIndex =
+      agentMessages.length > 0 ? Math.min(agentMessages.length - 1, steps.length - 1) : 0;
+    const currentStep = steps[currentStepIndex] ?? steps[0];
+    const trimmedAnswer = message.trim();
+
+    let learningGoals = mergeGoalDetails(
+      normalizeGoals(session.learning_goals),
+      templateRow.template?.learning_goals
+    );
+
+    const evaluation = await evaluateStepResponse({
+      responseText: trimmedAnswer,
+      step: currentStep?.step,
+      templateGoals: templateRow.template?.learning_goals,
+      templateSource: templateRow.source,
+      currentGoals: learningGoals,
+    });
+
+    const studentMetadata = {
+      phase: currentStep?.phaseId ?? null,
+      evaluation,
+    };
 
     await adminDb.from('discussion_messages').insert({
       session_id: session.id,
       role: 'student',
-      content: message.trim(),
+      content: trimmedAnswer,
       step_key: currentStep?.step?.key ?? null,
-      metadata: {
-        phase: currentStep?.phaseId ?? null,
-      },
+      metadata: studentMetadata,
     });
 
-    let learningGoals = normalizeGoals(session.learning_goals);
-    learningGoals = markGoalsCovered(learningGoals, currentStep?.step?.goal_refs);
+    if (evaluation.coachFeedback) {
+      await adminDb.from('discussion_messages').insert({
+        session_id: session.id,
+        role: 'agent',
+        content: evaluation.coachFeedback,
+        step_key: currentStep?.step?.key ? `${currentStep.step.key}-feedback` : 'feedback',
+        metadata: {
+          type: 'coach_feedback',
+          assessments: evaluation.assessments ?? [],
+        },
+      });
+    }
 
-    const nextStep = agentMessages.length < steps.length ? steps[agentMessages.length] : null;
+    const coveredSet = new Set(evaluation.coveredGoals);
+    learningGoals = learningGoals.map((goal) =>
+      coveredSet.has(goal.id) ? { ...goal, covered: true } : goal
+    );
+
+    const allGoalsCovered =
+      learningGoals.length > 0 && learningGoals.every((goal) => goal.covered === true);
+
+    const nextStepCandidateIndex = currentStepIndex + 1;
+    let nextStep =
+      !allGoalsCovered && nextStepCandidateIndex < steps.length
+        ? steps[nextStepCandidateIndex]
+        : null;
 
     if (nextStep) {
       await adminDb.from('discussion_messages').insert({
@@ -107,7 +157,8 @@ export async function POST(request: NextRequest) {
         })
         .eq('id', session.id);
     } else {
-      learningGoals = learningGoals.map((goal) => ({ ...goal, covered: true }));
+      const closingMessage =
+        templateRow.template?.closing_message || buildDefaultClosingMessage(learningGoals);
 
       await adminDb
         .from('discussion_sessions')
@@ -117,6 +168,20 @@ export async function POST(request: NextRequest) {
           learning_goals: learningGoals,
         })
         .eq('id', session.id);
+
+      await adminDb.from('discussion_messages').insert({
+        session_id: session.id,
+        role: 'agent',
+        content: closingMessage,
+        step_key: 'closing',
+        metadata: {
+          type: 'closing',
+          goals: learningGoals,
+        },
+      });
+
+      nextStep = null;
+      await markProgressCompleted(session.user_id, session.course_id, session.subtopic_id);
     }
 
     const updatedMessages = await fetchMessages(session.id);
@@ -167,7 +232,7 @@ async function fetchTemplate(session: SessionRecord): Promise<TemplateRecord | n
   if (session.template_id) {
     const { data, error } = await adminDb
       .from('discussion_templates')
-      .select('id, template, version')
+      .select('id, template, version, source')
       .eq('id', session.template_id)
       .limit(1);
 
@@ -178,7 +243,7 @@ async function fetchTemplate(session: SessionRecord): Promise<TemplateRecord | n
 
   const { data, error } = await adminDb
     .from('discussion_templates')
-    .select('id, template, version')
+    .select('id, template, version, source')
     .eq('subtopic_id', session.subtopic_id)
     .order('version', { ascending: false })
     .limit(1);
@@ -225,7 +290,7 @@ function flattenTemplate(template: any) {
   return flattened;
 }
 
-function normalizeGoals(goals: any): Array<{ id: string; description: string; covered: boolean }> {
+function normalizeGoals(goals: any): Array<{ id: string; description: string; covered: boolean; rubric?: any }> {
   if (!Array.isArray(goals)) {
     return [];
   }
@@ -234,18 +299,380 @@ function normalizeGoals(goals: any): Array<{ id: string; description: string; co
     id: goal?.id ?? '',
     description: goal?.description ?? '',
     covered: Boolean(goal?.covered),
+    rubric: goal?.rubric ?? null,
   }));
 }
 
-function markGoalsCovered(
-  goals: Array<{ id: string; description: string; covered: boolean }>,
-  refs: string[] | undefined
+function mergeGoalDetails(
+  currentGoals: Array<{ id: string; description: string; covered: boolean; rubric?: any }>,
+  templateGoals: any
 ) {
-  if (!Array.isArray(refs) || refs.length === 0) {
-    return goals;
+  const templateArray = Array.isArray(templateGoals) ? templateGoals : [];
+  if (!templateArray.length) {
+    return currentGoals;
+  }
+  const currentMap = new Map(currentGoals.map((goal) => [goal.id, goal]));
+
+  const merged = templateArray.map((goal: any) => {
+    const existing = currentMap.get(goal?.id);
+    return {
+      id: goal?.id ?? existing?.id ?? '',
+      description: goal?.description ?? existing?.description ?? '',
+      rubric: goal?.rubric ?? existing?.rubric ?? null,
+      covered: existing?.covered ?? false,
+    };
+  });
+
+  const additional = currentGoals.filter(
+    (goal) => !merged.some((item) => item.id === goal.id)
+  );
+
+  return [...merged, ...additional];
+}
+
+interface StepEvaluationResult {
+  coveredGoals: string[];
+  assessments?: Array<{ goalId: string; satisfied: boolean; notes?: string }>;
+  coachFeedback?: string;
+  evaluator: 'mcq' | 'llm' | 'fallback';
+}
+
+interface EvaluateStepParams {
+  responseText: string;
+  step?: any;
+  templateGoals?: any[];
+  templateSource?: any;
+  currentGoals: Array<{ id: string; description: string; covered: boolean; rubric?: any }>;
+}
+
+async function evaluateStepResponse({
+  responseText,
+  step,
+  templateGoals = [],
+  templateSource,
+  currentGoals,
+}: EvaluateStepParams): Promise<StepEvaluationResult> {
+  const goalRefs: string[] = Array.isArray(step?.goal_refs) ? step.goal_refs.filter(Boolean) : [];
+
+  if (!step || goalRefs.length === 0) {
+    return {
+      coveredGoals: [],
+      assessments: [],
+      coachFeedback: undefined,
+      evaluator: 'fallback',
+    };
   }
 
-  return goals.map((goal) =>
-    refs.includes(goal.id) ? { ...goal, covered: true } : goal
-  );
+  // Handle MCQ locally
+  if (
+    (step.expected_type === 'mcq' || step.options) &&
+    (typeof step.answer === 'string' || typeof step.answer === 'number')
+  ) {
+    const normalizedAnswer =
+      typeof step.answer === 'number'
+        ? step.options?.[step.answer] ?? `${step.answer}`
+        : String(step.answer || '').trim().toLowerCase();
+
+    const normalizedResponse = responseText.trim().toLowerCase();
+    const letters = ['a', 'b', 'c', 'd', 'e', 'f'];
+
+    let isCorrect = false;
+    if (typeof step.answer === 'number' && step.options?.length) {
+      const index = step.answer;
+      const optionText = step.options[index]?.trim().toLowerCase();
+      const letterMatch = letters[index] ?? '';
+      const numericMatch = String(index + 1);
+
+      isCorrect =
+        normalizedResponse === optionText ||
+        normalizedResponse === letterMatch ||
+        normalizedResponse === numericMatch;
+    } else {
+      isCorrect = normalizedResponse === normalizedAnswer;
+      if (!isCorrect && step.options?.length) {
+        const matchedIndex = step.options.findIndex(
+          (opt: string) => opt.trim().toLowerCase() === normalizedResponse
+        );
+        const answerIndex = step.options.findIndex(
+          (opt: string) => opt.trim().toLowerCase() === normalizedAnswer
+        );
+        if (matchedIndex >= 0 && answerIndex >= 0 && matchedIndex === answerIndex) {
+          isCorrect = true;
+        }
+      }
+    }
+
+    const coveredGoals = isCorrect ? goalRefs : [];
+    const feedback = isCorrect
+      ? step.feedback?.correct ??
+        'Tepat! Jawabanmu menunjukkan pemahaman yang kuat terhadap konsep ini.'
+      : step.feedback?.incorrect ??
+        'Belum tepat. Coba telaah kembali poin utama sebelum melanjutkan.';
+
+    return {
+      coveredGoals,
+      assessments: goalRefs.map((goalId) => ({
+        goalId,
+        satisfied: coveredGoals.includes(goalId),
+        notes: coveredGoals.includes(goalId)
+          ? 'Menjawab pilihan ganda dengan benar.'
+          : 'Jawaban pilihan ganda belum tepat.',
+      })),
+      coachFeedback: feedback,
+      evaluator: 'mcq',
+    };
+  }
+
+  // LLM evaluation for open/reflection responses
+  try {
+    const goalDetails = goalRefs.map((goalId) => {
+      const templateGoal = templateGoals.find((goal) => goal?.id === goalId);
+      const currentGoal = currentGoals.find((goal) => goal.id === goalId);
+      return {
+        id: goalId,
+        description: templateGoal?.description ?? currentGoal?.description ?? goalId,
+        rubric: templateGoal?.rubric ?? currentGoal?.rubric ?? null,
+      };
+    });
+
+    const contextParts: string[] = [];
+    if (templateSource?.summary) {
+      contextParts.push(`Ringkasan Subtopik: ${templateSource.summary}`);
+    }
+    if (Array.isArray(templateSource?.keyTakeaways) && templateSource.keyTakeaways.length > 0) {
+      contextParts.push(
+        'Poin Penting:\n' +
+          templateSource.keyTakeaways.map((item: string) => `- ${item}`).join('\n')
+      );
+    }
+    if (Array.isArray(templateSource?.learningObjectives) && templateSource.learningObjectives.length > 0) {
+      contextParts.push(
+        'Learning Objectives:\n' +
+          templateSource.learningObjectives.map((item: string) => `- ${item}`).join('\n')
+      );
+    }
+
+    const contextBlock = contextParts.join('\n\n');
+    const goalsBlock = goalDetails
+      .map((goal) => {
+        const checklist = Array.isArray(goal.rubric?.checklist)
+          ? goal.rubric.checklist.map((item: string) => `    • ${item}`).join('\n')
+          : '';
+        const failureSignals = Array.isArray(goal.rubric?.failure_signals)
+          ? goal.rubric.failure_signals.map((item: string) => `    • ${item}`).join('\n')
+          : '';
+        return [
+          `- Goal ID: ${goal.id}`,
+          `  Deskripsi: ${goal.description}`,
+          `  Ringkasan Keberhasilan: ${goal.rubric?.success_summary ?? 'Tidak tersedia'}`,
+          checklist ? `  Checklist:\n${checklist}` : '',
+          failureSignals ? `  Sinyal Kesalahan:\n${failureSignals}` : '',
+        ]
+          .filter(Boolean)
+          .join('\n');
+      })
+      .join('\n\n');
+
+    const evaluationSchema = {
+      type: 'json_schema',
+      json_schema: {
+        name: 'goal_assessment',
+        schema: {
+          type: 'object',
+          required: ['goalAssessments'],
+          properties: {
+            goalAssessments: {
+              type: 'array',
+              items: {
+                type: 'object',
+                required: ['goalId', 'satisfied'],
+                properties: {
+                  goalId: { type: 'string' },
+                  satisfied: { type: 'boolean' },
+                  notes: { type: 'string' },
+                },
+              },
+            },
+            coachFeedback: { type: 'string' },
+          },
+        },
+      },
+    } as const;
+
+    const completion = await openai.chat.completions.create({
+      model: defaultOpenAIModel,
+      response_format: evaluationSchema,
+      max_tokens: 700,
+      messages: [
+        {
+          role: 'system',
+          content:
+            'You are a learning facilitator evaluating a learner’s response. Use the rubric to judge whether each goal is satisfied. Respond only with JSON that matches the required schema.',
+        },
+        {
+          role: 'user',
+          content: [
+            contextBlock ? contextBlock : 'Ringkasan tidak tersedia.',
+            '',
+            'Goals yang dinilai:',
+            goalsBlock,
+            '',
+            `Pertanyaan/Penugasan: ${step?.prompt ?? '-'}`,
+            `Jawaban peserta: ${responseText}`,
+            '',
+            'Nilailah setiap goal dengan menandai satisfied true/false dan cantumkan catatan singkat. Buat juga coachFeedback ringkas (2-3 kalimat) dalam bahasa yang sama dengan materi.',
+          ].join('\n'),
+        },
+      ],
+    });
+
+    const raw = completion.choices?.[0]?.message?.content ?? '';
+    const parsed = JSON.parse(raw.trim() || '{}');
+    const goalAssessments = Array.isArray(parsed.goalAssessments)
+      ? parsed.goalAssessments
+          .filter((assessment: any) => goalRefs.includes(assessment?.goalId))
+          .map((assessment: any) => ({
+            goalId: assessment.goalId,
+            satisfied: Boolean(assessment.satisfied),
+            notes: assessment.notes,
+          }))
+      : [];
+
+    const coveredGoals = goalAssessments
+      .filter((assessment) => assessment.satisfied)
+      .map((assessment) => assessment.goalId);
+
+    return {
+      coveredGoals,
+      assessments: goalAssessments,
+      coachFeedback: parsed.coachFeedback,
+      evaluator: 'llm',
+    };
+  } catch (error) {
+    console.warn('[DiscussionRespond] Evaluation fallback triggered', error);
+    return {
+      coveredGoals: [],
+      assessments: goalRefs.map((goalId) => ({
+        goalId,
+        satisfied: false,
+        notes: 'Evaluation fallback: tidak dapat menilai secara otomatis.',
+      })),
+      coachFeedback:
+        'Terima kasih atas jawabanmu. Mari kita ulas kembali poin pentingnya dan pastikan sudah sesuai dengan tujuan.',
+      evaluator: 'fallback',
+    };
+  }
+}
+
+function buildDefaultClosingMessage(
+  goals: Array<{ id: string; description: string; covered: boolean }>
+) {
+  const accomplished = goals
+    .filter((goal) => goal.covered)
+    .map((goal) => `- ${goal.description}`)
+    .join('\n');
+  const pending = goals
+    .filter((goal) => !goal.covered)
+    .map((goal) => `- ${goal.description}`)
+    .join('\n');
+
+  if (pending) {
+    return [
+      'Terima kasih untuk tanggapanmu. Ada beberapa poin yang masih bisa kamu perdalam:',
+      pending ? `Fokuskan ulang pada:\n${pending}` : '',
+      'Silakan tinjau kembali materi di atas sebelum melanjutkan, lalu kembali ke sesi diskusi kapan saja untuk menyempurnakan pemahamanmu.',
+    ]
+      .filter(Boolean)
+      .join('\n\n');
+  }
+
+  return [
+    'Hebat! Kamu sudah menuntaskan seluruh tujuan diskusi untuk subtopik ini.',
+    accomplished ? `Poin yang sudah kamu kuasai:\n${accomplished}` : '',
+    'Jika ingin memperdalam lagi, kamu bisa mencoba menerapkan konsep ini pada situasi nyata atau melanjutkan ke materi berikutnya.',
+  ]
+    .filter(Boolean)
+    .join('\n\n');
+}
+
+async function ensureProgressRecord(userId: string, courseId: string, subtopicId: string) {
+  try {
+    const { data, error } = await adminDb
+      .from('user_progress')
+      .select('id')
+      .eq('user_id', userId)
+      .eq('course_id', courseId)
+      .eq('subtopic_id', subtopicId)
+      .limit(1);
+
+    if (error) {
+      console.warn('[DiscussionRespond] Failed to check progress', error);
+      return;
+    }
+
+    if (!data || data.length === 0) {
+      const { error: insertError } = await adminDb
+        .from('user_progress')
+        .insert({
+          user_id: userId,
+          course_id: courseId,
+          subtopic_id: subtopicId,
+          is_completed: false,
+        });
+
+      if (insertError) {
+        console.warn('[DiscussionRespond] Failed to insert progress', insertError);
+      }
+    }
+  } catch (progressError) {
+    console.warn('[DiscussionRespond] ensureProgressRecord error', progressError);
+  }
+}
+
+async function markProgressCompleted(userId: string, courseId: string, subtopicId: string) {
+  try {
+    const now = new Date().toISOString();
+    const { data, error } = await adminDb
+      .from('user_progress')
+      .select('id')
+      .eq('user_id', userId)
+      .eq('course_id', courseId)
+      .eq('subtopic_id', subtopicId)
+      .limit(1);
+
+    if (error) {
+      console.warn('[DiscussionRespond] Failed to fetch progress for completion', error);
+      return;
+    }
+
+    if (!data || data.length === 0) {
+      const { error: insertError } = await adminDb
+        .from('user_progress')
+        .insert({
+          user_id: userId,
+          course_id: courseId,
+          subtopic_id: subtopicId,
+          is_completed: true,
+          completion_date: now,
+        });
+
+      if (insertError) {
+        console.warn('[DiscussionRespond] Failed to insert completed progress', insertError);
+      }
+    } else {
+      const { error: updateError } = await adminDb
+        .from('user_progress')
+        .update({
+          is_completed: true,
+          completion_date: now,
+        })
+        .eq('id', data[0].id);
+
+      if (updateError) {
+        console.warn('[DiscussionRespond] Failed to update progress completion', updateError);
+      }
+    }
+  } catch (completionError) {
+    console.warn('[DiscussionRespond] markProgressCompleted error', completionError);
+  }
 }
