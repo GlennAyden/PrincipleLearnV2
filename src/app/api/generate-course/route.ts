@@ -162,6 +162,9 @@ Important: Write all titles and overviews in the same language as the user's inp
       console.error('[Generate Course] Failed to parse JSON:', { cleaned, parseErr });
       throw new Error('Invalid JSON response from AI');
     }
+
+    // 7.1 Tambahkan node diskusi penutup untuk setiap subtopik
+    outline = appendDiscussionNodes(outline);
     
     // 8. Save course to database
     console.log(`[Generate Course] DEBUG: userId = ${userId}`);
@@ -243,4 +246,50 @@ Important: Write all titles and overviews in the same language as the user's inp
       { status: 500, headers: corsHeaders }
     );
   }
+}
+
+function appendDiscussionNodes(modules: any[]): any[] {
+  if (!Array.isArray(modules)) return [];
+
+  return modules.map((module, moduleIdx) => {
+    const currentModule = module ?? {};
+    const originalSubtopics = Array.isArray(currentModule.subtopics)
+      ? currentModule.subtopics.filter((item: any) => !!item)
+      : [];
+
+    const hasDiscussion = originalSubtopics.some(
+      (item: any) =>
+        item &&
+        typeof item === 'object' &&
+        (item.type === 'discussion' ||
+          item.isDiscussion === true ||
+          (typeof item.title === 'string' && item.title.toLowerCase().includes('diskusi penutup')))
+    );
+
+    if (hasDiscussion) {
+      return {
+        ...currentModule,
+        subtopics: originalSubtopics,
+      };
+    }
+
+    const baseTitle: string =
+      typeof currentModule.module === 'string' && currentModule.module.trim()
+        ? currentModule.module.trim()
+        : `Module ${moduleIdx + 1}`;
+
+    const discussionSubtopic = {
+      title: 'Diskusi Penutup',
+      overview:
+        'Gunakan sesi diskusi ini untuk mengevaluasi pemahaman, menghubungkan materi dengan pengalaman nyata, dan memastikan seluruh tujuan pembelajaran tercapai.',
+      type: 'discussion',
+      isDiscussion: true,
+      moduleTitle: baseTitle,
+    };
+
+    return {
+      ...currentModule,
+      subtopics: [...originalSubtopics, discussionSubtopic],
+    };
+  });
 }

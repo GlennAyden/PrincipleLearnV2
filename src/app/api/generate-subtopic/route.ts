@@ -2,6 +2,7 @@
 
 import { NextResponse } from 'next/server';
 import { openai, defaultOpenAIModel } from '@/lib/openai';
+import { generateDiscussionTemplate } from '@/services/discussion/generateDiscussionTemplate';
 
 // OpenAI client and model are centralized in src/lib/openai
 
@@ -351,6 +352,30 @@ export async function POST(request: Request) {
               } else {
                 console.log(`📝 Saved ${data.quiz.length} quiz questions to database for subtopic: ${subtopicData.title} (${subtopicId})`);
               }
+              try {
+                const templateResult = await generateDiscussionTemplate({
+                  courseId,
+                  subtopicId,
+                  moduleTitle,
+                  subtopicTitle: subtopic,
+                  learningObjectives: Array.isArray(data.objectives) ? data.objectives : [],
+                  summary: buildDiscussionSummary(data),
+                  keyTakeaways: Array.isArray(data.keyTakeaways) ? data.keyTakeaways : [],
+                  misconceptions: extractMisconceptions(data),
+                });
+
+                if (templateResult) {
+                  console.log('[GenerateSubtopic] Discussion template stored', {
+                    subtopicId,
+                    templateId: templateResult.templateId,
+                    version: templateResult.templateVersion,
+                  });
+                } else {
+                  console.warn('[GenerateSubtopic] Discussion template generation skipped');
+                }
+              } catch (discussionError) {
+                console.error('[GenerateSubtopic] Failed to generate discussion template', discussionError);
+              }
             } else {
               console.warn('Subtopic not found for quiz saving:', { 
                 courseId, 
@@ -378,3 +403,41 @@ export async function POST(request: Request) {
     );
   }
 }
+
+function buildDiscussionSummary(content: any): string {
+  const summaryParts: string[] = [];
+
+  if (content?.whatNext?.summary) {
+    summaryParts.push(content.whatNext.summary);
+  }
+
+  if (Array.isArray(content?.keyTakeaways) && content.keyTakeaways.length > 0) {
+    summaryParts.push(
+      'Key takeaways:\n' + content.keyTakeaways.map((item: string) => `- ${item}`).join('\n')
+    );
+  }
+
+  if (Array.isArray(content?.objectives) && content.objectives.length > 0) {
+    summaryParts.push(
+      'Learning objectives:\n' + content.objectives.map((item: string) => `- ${item}`).join('\n')
+    );
+  }
+
+  if (Array.isArray(content?.pages) && content.pages.length > 0) {
+    const firstPage = content.pages[0];
+    if (Array.isArray(firstPage?.paragraphs) && firstPage.paragraphs.length > 0) {
+      summaryParts.push(firstPage.paragraphs[0]);
+    }
+  }
+
+  return summaryParts.join('\n\n');
+}
+
+function extractMisconceptions(content: any): string[] {
+  if (Array.isArray(content?.commonPitfalls) && content.commonPitfalls.length > 0) {
+    return content.commonPitfalls;
+  }
+
+  return [];
+}
+
