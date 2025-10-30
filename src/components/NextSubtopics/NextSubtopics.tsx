@@ -11,7 +11,10 @@ export interface NextSubtopicsProps {
   /** Index modul saat ini */
   moduleIndex: number;
   /** Course outline untuk mendapatkan module berikutnya */
-  courseOutline?: Array<{ module: string; subtopics: Array<string | { title: string }> }>;
+  courseOutline?: Array<{
+    module: string;
+    subtopics: Array<string | { title: string; type?: string; isDiscussion?: boolean }>;
+  }>;
 }
 
 export default function NextSubtopics({
@@ -27,16 +30,27 @@ export default function NextSubtopics({
   const currentSubIdx = raw !== null && !isNaN(Number(raw)) ? Number(raw) : 0;
 
   // Build next subtopics: remaining in current module + first few from next module
-  const nextItems: Array<{ idx: number; moduleIdx: number; title: string }> = [];
+  const nextItems: Array<{
+    idx: number;
+    moduleIdx: number;
+    title: string;
+    isDiscussion: boolean;
+  }> = [];
 
   // 1. Add remaining subtopics from current module
   if (items.length > 0) {
     for (let i = currentSubIdx + 1; i < items.length; i++) {
       const item = items[i];
+      const title = typeof item === 'string' ? item : item.title;
+      const isDiscussion =
+        typeof item === 'object' &&
+        (item?.type === 'discussion' || item?.isDiscussion === true || title?.toLowerCase().includes('diskusi penutup'));
+
       nextItems.push({
         idx: i,
         moduleIdx: moduleIndex,
-        title: typeof item === 'string' ? item : item.title,
+        title,
+        isDiscussion,
       });
     }
   }
@@ -48,10 +62,16 @@ export default function NextSubtopics({
     const maxFromNextModule = Math.min(3, nextModule.subtopics.length);
     for (let i = 0; i < maxFromNextModule; i++) {
       const item = nextModule.subtopics[i];
+      const title = typeof item === 'string' ? item : item.title;
+      const isDiscussion =
+        typeof item === 'object' &&
+        (item?.type === 'discussion' || item?.isDiscussion === true || title?.toLowerCase().includes('diskusi penutup'));
+
       nextItems.push({
         idx: i,
         moduleIdx: moduleIndex + 1,
-        title: typeof item === 'string' ? item : item.title,
+        title,
+        isDiscussion,
       });
     }
   }
@@ -71,7 +91,7 @@ export default function NextSubtopics({
     <div className={styles.wrapper}>
       <h3 className={styles.heading}>Next Subtopics</h3>
       <ul className={styles.list}>
-        {nextItems.map(({ idx, moduleIdx, title }, listIndex) => (
+        {nextItems.map(({ idx, moduleIdx, title, isDiscussion }) => (
           <li key={`${moduleIdx}-${idx}`} className={styles.item}>
             <button
               className={styles.button}
@@ -79,7 +99,11 @@ export default function NextSubtopics({
                 // Arahkan ke halaman pertama (pageIdx=0) subtopic yang dipilih,
                 // sambil melewatkan moduleIndex dan subIdx sebagai query.
                 router.push(
-                  `/course/${courseId}/subtopic/${moduleIdx}/0?module=${moduleIdx}&subIdx=${idx}`
+                  isDiscussion
+                    ? `/course/${courseId}/discussion/${moduleIdx}?module=${moduleIdx}&subIdx=${
+                        idx > 0 ? idx - 1 : 0
+                      }&title=${encodeURIComponent(title)}`
+                    : `/course/${courseId}/subtopic/${moduleIdx}/0?module=${moduleIdx}&subIdx=${idx}`
                 )
               }
             >

@@ -224,19 +224,30 @@ export default function CourseLayout({ children }: { children: ReactNode }) {
 
               {activeModule === idx && !isSidebarCollapsed && (
                 <ul className={styles.subList}>
-                  {mod.subtopics.map((sub, j) => {
-                    const rawTitle = typeof sub === 'string' ? sub : sub.title;
-                    // Remove redundant numbering patterns like "2. " or "2.1 " at the beginning
-                    const cleanTitle = rawTitle.replace(/^\d+\.\s*\d+\.?\s*/g, '').replace(/^\d+\.\s*/g, '');
-                    
-                    return (
-                      <li key={j}>
-                        <Link
-                          href={`/course/${courseId}/subtopic/${idx}/${j}?module=${idx}&subIdx=${j}`}
-                          className={`${styles.subListItem} ${
-                            j === activeSubIdx ? styles.activeSub : ''
-                          }`}
-                          title={cleanTitle}
+              {mod.subtopics.map((sub, j) => {
+                const rawTitle = typeof sub === 'string' ? sub : sub.title;
+                // Remove redundant numbering patterns like "2. " or "2.1 " at the beginning
+                const cleanTitle = rawTitle.replace(/^\d+\.\s*\d+\.?\s*/g, '').replace(/^\d+\.\s*/g, '');
+                const isDiscussion =
+                  typeof sub === 'object' &&
+                  (sub?.type === 'discussion' ||
+                    sub?.isDiscussion === true ||
+                    (typeof rawTitle === 'string' &&
+                      rawTitle.toLowerCase().includes('diskusi penutup')));
+                const href = isDiscussion
+                  ? `/course/${courseId}/discussion/${idx}?module=${idx}&subIdx=${
+                      j > 0 ? j - 1 : 0
+                    }&title=${encodeURIComponent(rawTitle)}`
+                  : `/course/${courseId}/subtopic/${idx}/${j}?module=${idx}&subIdx=${j}`;
+
+                return (
+                  <li key={j}>
+                    <Link
+                      href={href}
+                      className={`${styles.subListItem} ${
+                        j === activeSubIdx ? styles.activeSub : ''
+                      }`}
+                      title={cleanTitle}
                         >
                           <span className={styles.subtopicNumber}>{j + 1}</span>
                           <span className={styles.subtopicText}>{cleanTitle}</span>
