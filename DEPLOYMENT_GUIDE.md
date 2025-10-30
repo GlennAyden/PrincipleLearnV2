@@ -20,6 +20,20 @@
 - [x] API endpoints functional
 - [x] Database connection verified
 
+### Monitoring Tables & Admin Seed
+
+Before deploying the monitoring dashboard, run the SQL scripts below against your Supabase project (via the SQL editor or `supabase db remote commit`):
+
+```bash
+# Create monitoring tables + indexes
+psql "$SUPABASE_DB_URL" -f sql/20251030_api_logs_discussion_admin_actions.sql
+
+# Seed a default ADMIN account (email: admin@principlelearn.com / password: Admin123!)
+psql "$SUPABASE_DB_URL" -f sql/20251030_seed_admin_user.sql
+```
+
+> Replace `$SUPABASE_DB_URL` with your connection string or execute the scripts through the Supabase web console.
+
 ---
 
 ## 🔧 Deployment Steps

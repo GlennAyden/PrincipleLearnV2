@@ -3,6 +3,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { verifyToken } from '@/lib/jwt';
 import { adminDb } from '@/lib/database';
 import { openai, defaultOpenAIModel } from '@/lib/openai';
+import { withApiLogging } from '@/lib/api-logger';
 
 interface SessionRecord {
   id: string;
@@ -22,7 +23,7 @@ type TemplateRecord = {
   source?: any;
 };
 
-export async function POST(request: NextRequest) {
+async function postHandler(request: NextRequest) {
   try {
     const accessToken = request.cookies.get('access_token')?.value;
     const tokenPayload = accessToken ? verifyToken(accessToken) : null;
@@ -212,6 +213,10 @@ export async function POST(request: NextRequest) {
     );
   }
 }
+
+export const POST = withApiLogging(postHandler, {
+  label: 'discussion.respond',
+});
 
 async function fetchSession(sessionId: string): Promise<SessionRecord | null> {
   const { data, error } = await adminDb

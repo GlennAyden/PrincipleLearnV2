@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 
 import { verifyToken } from '@/lib/jwt';
 import { adminDb } from '@/lib/database';
+import { withApiLogging } from '@/lib/api-logger';
 import { resolveDiscussionSubtopicId } from '@/lib/discussion/resolveSubtopic';
 
 interface SessionRecord {
@@ -21,7 +22,7 @@ type TemplateRecord = {
   version: string;
 };
 
-export async function GET(request: NextRequest) {
+async function getHandler(request: NextRequest) {
   try {
     const accessToken = request.cookies.get('access_token')?.value;
     const tokenPayload = accessToken ? verifyToken(accessToken) : null;
@@ -89,6 +90,10 @@ export async function GET(request: NextRequest) {
     );
   }
 }
+
+export const GET = withApiLogging(getHandler, {
+  label: 'discussion.history',
+});
 
 async function fetchSessionById(sessionId: string): Promise<SessionRecord | null> {
   const { data, error } = await adminDb

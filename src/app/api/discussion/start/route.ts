@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 
 import { verifyToken } from '@/lib/jwt';
 import { adminDb } from '@/lib/database';
+import { withApiLogging } from '@/lib/api-logger';
 import { resolveDiscussionSubtopicId } from '@/lib/discussion/resolveSubtopic';
 
 type TemplateRecord = {
@@ -21,7 +22,7 @@ type SessionRecord = {
   subtopic_id: string;
 };
 
-export async function POST(request: NextRequest) {
+async function postHandler(request: NextRequest) {
   try {
     const accessToken = request.cookies.get('access_token')?.value;
     const tokenPayload = accessToken ? verifyToken(accessToken) : null;
@@ -110,6 +111,10 @@ export async function POST(request: NextRequest) {
     );
   }
 }
+
+export const POST = withApiLogging(postHandler, {
+  label: 'discussion.start',
+});
 
 async function fetchLatestTemplate(params: {
   subtopicId: string;

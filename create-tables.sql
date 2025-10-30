@@ -117,6 +117,36 @@ CREATE TABLE IF NOT EXISTS feedback (
     created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
 );
 
+-- API logs table for monitoring requests
+CREATE TABLE IF NOT EXISTS api_logs (
+    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    method VARCHAR(16),
+    path TEXT,
+    query TEXT,
+    status_code INTEGER,
+    duration_ms INTEGER,
+    ip_address VARCHAR(64),
+    user_agent TEXT,
+    user_id TEXT,
+    user_email TEXT,
+    user_role TEXT,
+    label TEXT,
+    metadata JSONB,
+    error_message TEXT,
+    created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
+);
+
+-- Admin interventions on discussion sessions
+CREATE TABLE IF NOT EXISTS discussion_admin_actions (
+    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    session_id UUID REFERENCES discussion_sessions(id) ON DELETE CASCADE,
+    admin_id TEXT,
+    admin_email TEXT,
+    action VARCHAR(50),
+    payload JSONB,
+    created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
+);
+
 -- Enable Row Level Security
 ALTER TABLE users ENABLE ROW LEVEL SECURITY;
 ALTER TABLE courses ENABLE ROW LEVEL SECURITY;
@@ -128,6 +158,8 @@ ALTER TABLE transcript ENABLE ROW LEVEL SECURITY;
 ALTER TABLE ask_question_history ENABLE ROW LEVEL SECURITY;
 ALTER TABLE user_progress ENABLE ROW LEVEL SECURITY;
 ALTER TABLE feedback ENABLE ROW LEVEL SECURITY;
+ALTER TABLE api_logs ENABLE ROW LEVEL SECURITY;
+ALTER TABLE discussion_admin_actions ENABLE ROW LEVEL SECURITY;
 
 -- Create basic RLS policies (users can only access their own data)
 CREATE POLICY "Users can view their own data" ON users FOR SELECT USING (auth.uid()::text = id::text);
@@ -165,3 +197,6 @@ CREATE INDEX IF NOT EXISTS idx_ask_question_history_created_at ON ask_question_h
 CREATE INDEX IF NOT EXISTS idx_ask_question_history_user_course ON ask_question_history(user_id, course_id);
 CREATE INDEX IF NOT EXISTS idx_user_progress_user_id ON user_progress(user_id);
 CREATE INDEX IF NOT EXISTS idx_feedback_user_id ON feedback(user_id);
+CREATE INDEX IF NOT EXISTS idx_api_logs_created_at ON api_logs(created_at);
+CREATE INDEX IF NOT EXISTS idx_api_logs_path ON api_logs(path);
+CREATE INDEX IF NOT EXISTS idx_discussion_admin_actions_session ON discussion_admin_actions(session_id);
