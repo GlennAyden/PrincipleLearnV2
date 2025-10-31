@@ -68,12 +68,14 @@ interface ModulePrerequisiteDetails {
     generatedSubtopics: number;
     totalQuizQuestions: number;
     answeredQuizQuestions: number;
+    minQuestionsPerSubtopic: number;
   };
   subtopics: Array<{
     key: string;
     title: string;
     generated: boolean;
     quizQuestionCount: number;
+    answeredCount: number;
     quizCompleted: boolean;
     missingQuestions: string[];
   }>;
@@ -678,25 +680,30 @@ export default function DiscussionModulePage() {
           </p>
           {prereqDetails && (
             <>
-              <div className={styles.preparationSummary}>
-                <span>
-                  Subtopik siap: {prereqDetails.summary.generatedSubtopics}/
-                  {prereqDetails.summary.expectedSubtopics}
-                </span>
-                <span>
-                  Kuis dijawab: {prereqDetails.summary.answeredQuizQuestions}/
-                  {prereqDetails.summary.totalQuizQuestions}
-                </span>
-              </div>
+          <div className={styles.preparationSummary}>
+            <span>
+              Subtopik siap: {prereqDetails.summary.generatedSubtopics}/
+              {prereqDetails.summary.expectedSubtopics}
+            </span>
+            <span>
+              Kuis dijawab: {prereqDetails.summary.answeredQuizQuestions}/
+              {prereqDetails.summary.totalQuizQuestions}
+              {prereqDetails.summary.expectedSubtopics > 0
+                ? ` (≥${prereqDetails.summary.minQuestionsPerSubtopic} per subtopik)`
+                : ''}
+            </span>
+          </div>
               <ul className={styles.preparationStatusList}>
                 {prereqDetails.subtopics.map((item) => {
-                  const statusLabel = !item.generated
-                    ? 'Belum digenerate'
-                    : item.quizQuestionCount === 0
-                    ? 'Kuis belum tersedia'
-                    : item.quizCompleted
-                    ? 'Siap'
-                    : 'Kuis belum selesai';
+                const statusLabel = !item.generated
+                  ? 'Belum digenerate'
+                  : item.quizQuestionCount === 0
+                  ? 'Kuis belum tersedia'
+                  : item.quizQuestionCount < prereqDetails.summary.minQuestionsPerSubtopic
+                  ? 'Kuis belum lengkap'
+                  : item.quizCompleted
+                  ? 'Siap'
+                  : 'Kuis belum selesai';
                   const statusClass =
                     item.generated && item.quizCompleted
                       ? styles.statusReady
@@ -705,6 +712,12 @@ export default function DiscussionModulePage() {
                     <li key={item.key} className={styles.preparationStatusItem}>
                       <div>
                         <strong>{cleanTitle(item.title) || item.title}</strong>
+                        <p className={styles.preparationStats}>
+                          Kuis terjawab: {item.answeredCount}/{Math.max(
+                            item.quizQuestionCount,
+                            prereqDetails.summary.minQuestionsPerSubtopic
+                          )}
+                        </p>
                         {!item.generated && (
                           <p className={styles.preparationHint}>
                             Buka subtopik ini dan jalankan generator materi melalui tombol{' '}
@@ -716,6 +729,13 @@ export default function DiscussionModulePage() {
                             Kerjakan kuis pada akhir subtopik ini untuk menandai penyelesaian.
                           </p>
                         )}
+                        {item.generated &&
+                          item.quizQuestionCount < prereqDetails.summary.minQuestionsPerSubtopic && (
+                            <p className={styles.preparationHint}>
+                              Kuis terbaru belum lengkap. Buka kembali subtopik ini dan jalankan{' '}
+                              <strong>Get Started</strong> untuk memastikan pertanyaan diperbarui.
+                            </p>
+                          )}
                       </div>
                       <span className={`${styles.preparationStatusBadge} ${statusClass}`}>
                         {statusLabel}

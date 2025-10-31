@@ -14,6 +14,7 @@ interface SubtopicStatus {
   title: string;
   generated: boolean;
   quizQuestionCount: number;
+  answeredCount: number;
   quizCompleted: boolean;
   missingQuestions: string[];
 }
@@ -128,21 +129,51 @@ async function getHandler(request: NextRequest) {
       cacheMap.set(entry.cache_key, entry.content);
     });
 
-    const { data: quizRows, error: quizError } = await adminDb
-      .from('quiz')
-      .select('id, question, explanation, created_at')
+    const { data: templateRows, error: templateError } = await adminDb
+      .from('discussion_templates')
+      .select('id, source, generated_by')
       .eq('course_id', courseId)
       .eq('subtopic_id', moduleId);
+
+    if (templateError) {
+      console.warn('[DiscussionModuleStatus] Failed to fetch templates', templateError);
+    }
+
+    const templateMap = new Map<string, any>();
+    (templateRows ?? []).forEach((row: any) => {
+      if ((row?.generated_by ?? 'auto') === 'auto') {
+        const src = row?.source ?? {};
+        const title = typeof src?.subtopicTitle === 'string' ? src.subtopicTitle : null;
+        if (title) {
+          templateMap.set(normalizeString(title), row);
+        }
+      }
+    });
+
+  const { data: quizRows, error: quizError } = await adminDb
+    .from('quiz')
+    .select('id, question, explanation, created_at')
+    .eq('course_id', courseId)
+    .eq('subtopic_id', moduleId)
+    .order('created_at', { ascending: false });
 
     if (quizError) {
       console.error('[DiscussionModuleStatus] Failed to fetch quiz rows', quizError);
       return NextResponse.json({ error: 'Failed to load quiz data' }, { status: 500 });
     }
 
-    const quizRowsByKey = new Map<string, { id: string; question: string }>();
+    const quizRowsByKey = new Map<
+      string,
+      { primaryId: string; ids: string[]; question: string }
+    >();
     (quizRows ?? []).forEach((row) => {
       if (typeof row?.question === 'string') {
-        quizRowsByKey.set(normalizeString(row.question), { id: row.id, question: row.question });
+        const key = normalizeString(row.question);
+        if (!quizRowsByKey.has(key)) {
+          quizRowsByKey.set(key, { primaryId: row.id, ids: [row.id], question: row.question });
+        } else {
+          quizRowsByKey.get(key)!.ids.push(row.id);
+        }
       }
     });
 
@@ -168,14 +199,15 @@ async function getHandler(request: NextRequest) {
     const statuses: SubtopicStatus[] = learningSubtopics.map((item) => {
       const cacheKey = `${courseId}-${moduleTitle}-${item.title}`;
       const cacheContent = cacheMap.get(cacheKey);
-      const generated = Boolean(cacheContent);
+      const normalizedTitle = normalizeString(item.title);
+      const generated = Boolean(cacheContent) || templateMap.has(normalizedTitle);
 
       const quizQuestions =
         generated && Array.isArray(cacheContent?.quiz)
           ? cacheContent.quiz
           : [];
 
-      const questionIds: string[] = [];
+      const questionBuckets: Array<{ ids: string[]; question: string }> = [];
       const missingQuestions: string[] = [];
 
       if (Array.isArray(quizQuestions) && quizQuestions.length > 0) {
@@ -186,35 +218,42 @@ async function getHandler(request: NextRequest) {
               : '';
           const normalized = normalizeString(questionText);
           if (normalized && quizRowsByKey.has(normalized)) {
-            questionIds.push(quizRowsByKey.get(normalized)!.id);
+            const bucket = quizRowsByKey.get(normalized)!;
+            questionBuckets.push({ ids: bucket.ids, question: bucket.question });
           } else if (questionText) {
             missingQuestions.push(questionText);
           }
         });
       }
 
+      const answeredCount = questionBuckets.filter((bucket) =>
+        bucket.ids.some((id) => submissionSet.has(id))
+      ).length;
+      const quizQuestionCount = questionBuckets.length;
       const quizCompleted =
-        questionIds.length > 0 && questionIds.every((id) => submissionSet.has(id));
+        quizQuestionCount >= QUIZ_MIN_QUESTIONS_PER_SUBTOPIC &&
+        answeredCount === quizQuestionCount;
 
       return {
         key: cacheKey,
         title: item.title,
         generated,
-        quizQuestionCount: questionIds.length,
+        quizQuestionCount,
+        answeredCount,
         quizCompleted,
         missingQuestions,
       };
     });
 
     const generatedCount = statuses.filter((item) => item.generated).length;
-    const totalQuizQuestions = quizIds.length;
-    const answeredQuizQuestions = submissionSet.size;
+    const totalQuizQuestions = statuses.reduce((sum, item) => sum + item.quizQuestionCount, 0);
+    const answeredQuizQuestions = statuses.reduce((sum, item) => sum + item.answeredCount, 0);
 
     const ready = statuses.every(
       (status) =>
         status.generated &&
         status.quizQuestionCount >= QUIZ_MIN_QUESTIONS_PER_SUBTOPIC &&
-        status.quizCompleted
+        status.answeredCount === status.quizQuestionCount
     );
 
     const responseBody = {
@@ -224,6 +263,7 @@ async function getHandler(request: NextRequest) {
         generatedSubtopics: generatedCount,
         totalQuizQuestions,
         answeredQuizQuestions,
+        minQuestionsPerSubtopic: QUIZ_MIN_QUESTIONS_PER_SUBTOPIC,
       },
       subtopics: statuses,
     };
@@ -238,4 +278,3 @@ async function getHandler(request: NextRequest) {
 export const GET = withApiLogging(getHandler, {
   label: 'discussion.module-status',
 });
-
