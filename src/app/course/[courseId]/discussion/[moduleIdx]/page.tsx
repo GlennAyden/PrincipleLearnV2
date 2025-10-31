@@ -61,6 +61,24 @@ interface DiscussionStep {
   phase?: string;
 }
 
+interface ModulePrerequisiteDetails {
+  ready: boolean;
+  summary: {
+    expectedSubtopics: number;
+    generatedSubtopics: number;
+    totalQuizQuestions: number;
+    answeredQuizQuestions: number;
+  };
+  subtopics: Array<{
+    key: string;
+    title: string;
+    generated: boolean;
+    quizQuestionCount: number;
+    quizCompleted: boolean;
+    missingQuestions: string[];
+  }>;
+}
+
 const PHASE_SEQUENCE = ['diagnosis', 'exploration', 'practice', 'synthesis'];
 
 const PHASE_LABELS: Record<string, string> = {
@@ -136,6 +154,8 @@ export default function DiscussionModulePage() {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
   const [requiresPreparation, setRequiresPreparation] = useState(false);
+  const [prereqDetails, setPrereqDetails] = useState<ModulePrerequisiteDetails | null>(null);
+  const [prereqChecked, setPrereqChecked] = useState(discussionScope !== 'module');
 
   const [inputValue, setInputValue] = useState('');
   const [selectedOption, setSelectedOption] = useState<string | null>(null);
@@ -249,7 +269,77 @@ export default function DiscussionModulePage() {
   const subtitleLabel = discussionScope === 'module' ? 'Cakupan Diskusi' : 'Subtopik';
 
   useEffect(() => {
+    if (discussionScope !== 'module') {
+      setPrereqDetails(null);
+      setPrereqChecked(true);
+      setRequiresPreparation(false);
+      return;
+    }
+
+    if (!courseId || !moduleSubtopicId) {
+      return;
+    }
+
+    let cancelled = false;
+    setPrereqChecked(false);
+
+    async function evaluatePrerequisites() {
+      try {
+        const params = new URLSearchParams({
+          courseId,
+          moduleId: String(moduleSubtopicId),
+        });
+        const response = await fetch(`/api/discussion/module-status?${params.toString()}`, {
+          credentials: 'include',
+        });
+
+        if (!response.ok) {
+          const payload = await response.json().catch(() => null);
+          throw new Error(payload?.error || 'Gagal memeriksa prasyarat diskusi');
+        }
+
+        const data = (await response.json()) as ModulePrerequisiteDetails;
+        if (!cancelled) {
+          setPrereqDetails(data);
+          setRequiresPreparation(!data.ready);
+          if (data.ready) {
+            setError('');
+          } else {
+            setError(
+              'Selesaikan seluruh subtopik (termasuk kuis) sebelum memulai diskusi penutup.'
+            );
+          }
+        }
+      } catch (err: any) {
+        if (!cancelled) {
+          setPrereqDetails(null);
+          setRequiresPreparation(true);
+          setError(err?.message ?? 'Gagal memeriksa prasyarat diskusi');
+        }
+      } finally {
+        if (!cancelled) {
+          setPrereqChecked(true);
+        }
+      }
+    }
+
+    evaluatePrerequisites();
+
+    return () => {
+      cancelled = true;
+    };
+  }, [courseId, discussionScope, moduleSubtopicId]);
+
+  useEffect(() => {
     if (!courseId || !apiSubtopicTitle) return;
+    if (discussionScope === 'module') {
+      if (!prereqChecked) return;
+      if (requiresPreparation) {
+        setLoading(false);
+        setInitializing(false);
+        return;
+      }
+    }
     let cancelled = false;
 
     async function startNewSession() {
@@ -381,7 +471,15 @@ export default function DiscussionModulePage() {
     return () => {
       cancelled = true;
     };
-  }, [apiSubtopicTitle, courseId, moduleSubtopicId, moduleTitle]);
+  }, [
+    apiSubtopicTitle,
+    courseId,
+    moduleSubtopicId,
+    moduleTitle,
+    discussionScope,
+    prereqChecked,
+    requiresPreparation,
+  ]);
 
   const handleSubmit = async (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
@@ -575,15 +673,66 @@ export default function DiscussionModulePage() {
         <div className={styles.preparationNotice}>
           <h2>Lengkapi Materi Terlebih Dahulu</h2>
           <p>
-            Diskusi penutup modul akan aktif setelah Anda mempelajari semua subtopik dan
-            menjalankan generator kontennya. Pastikan setiap subtopik sudah dibuka minimal
-            sekali.
+            Diskusi penutup modul akan aktif setelah semua subtopik selesai dipelajari dan seluruh
+            kuis subtopik telah dikerjakan.
           </p>
-          <ol className={styles.preparationList}>
-            <li>Buka setiap subtopik pada modul ini melalui menu di kiri.</li>
-            <li>Tekan tombol <strong>Get Started</strong> dan tunggu materi selesai digenerate.</li>
-            <li>Setelah semua subtopik lengkap, kembali ke halaman diskusi penutup.</li>
-          </ol>
+          {prereqDetails && (
+            <>
+              <div className={styles.preparationSummary}>
+                <span>
+                  Subtopik siap: {prereqDetails.summary.generatedSubtopics}/
+                  {prereqDetails.summary.expectedSubtopics}
+                </span>
+                <span>
+                  Kuis dijawab: {prereqDetails.summary.answeredQuizQuestions}/
+                  {prereqDetails.summary.totalQuizQuestions}
+                </span>
+              </div>
+              <ul className={styles.preparationStatusList}>
+                {prereqDetails.subtopics.map((item) => {
+                  const statusLabel = !item.generated
+                    ? 'Belum digenerate'
+                    : item.quizQuestionCount === 0
+                    ? 'Kuis belum tersedia'
+                    : item.quizCompleted
+                    ? 'Siap'
+                    : 'Kuis belum selesai';
+                  const statusClass =
+                    item.generated && item.quizCompleted
+                      ? styles.statusReady
+                      : styles.statusPending;
+                  return (
+                    <li key={item.key} className={styles.preparationStatusItem}>
+                      <div>
+                        <strong>{cleanTitle(item.title) || item.title}</strong>
+                        {!item.generated && (
+                          <p className={styles.preparationHint}>
+                            Buka subtopik ini dan jalankan generator materi melalui tombol{' '}
+                            <strong>Get Started</strong>.
+                          </p>
+                        )}
+                        {item.generated && !item.quizCompleted && (
+                          <p className={styles.preparationHint}>
+                            Kerjakan kuis pada akhir subtopik ini untuk menandai penyelesaian.
+                          </p>
+                        )}
+                      </div>
+                      <span className={`${styles.preparationStatusBadge} ${statusClass}`}>
+                        {statusLabel}
+                      </span>
+                    </li>
+                  );
+                })}
+              </ul>
+            </>
+          )}
+          {!prereqDetails && (
+            <ol className={styles.preparationList}>
+              <li>Buka setiap subtopik pada modul ini melalui menu di kiri.</li>
+              <li>Tekan tombol <strong>Get Started</strong> dan tunggu materi selesai digenerate.</li>
+              <li>Selesaikan kuis yang tersedia di bagian akhir setiap subtopik.</li>
+            </ol>
+          )}
           <button type="button" className={styles.preparationButton} onClick={handleGoToModule}>
             Pelajari Subtopik Modul
           </button>
