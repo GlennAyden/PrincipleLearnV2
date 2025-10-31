@@ -254,7 +254,7 @@ export default function CourseLayout({ children }: { children: ReactNode }) {
                       }
                       return `/course/${courseId}/discussion/${idx}?${params.toString()}`;
                     })()
-                  : `/course/${courseId}/subtopic/${idx}/${j}?module=${idx}&subIdx=${j}`;
+                  : `/course/${courseId}/subtopic/${idx}/0?module=${idx}&subIdx=${j}`;
 
                 return (
                   <li key={j}>
