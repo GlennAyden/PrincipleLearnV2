@@ -1,0 +1,24 @@
+version: '3.9'
+
+services:
+  postgres:
+    image: postgres:16
+    container_name: principlelearn-postgres
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: ${LOCAL_DATABASE_NAME:-principlelearn}
+      POSTGRES_USER: ${LOCAL_DATABASE_USER:-principlelearn}
+      POSTGRES_PASSWORD: ${LOCAL_DATABASE_PASSWORD:-principlelearn}
+      POSTGRES_HOST_AUTH_METHOD: ${LOCAL_DATABASE_HOST_AUTH_METHOD:-scram-sha-256}
+    ports:
+      - "${LOCAL_DATABASE_PORT:-5432}:5432"
+    volumes:
+      - postgres-data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U $$POSTGRES_USER -d $$POSTGRES_DB"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+volumes:
+  postgres-data:

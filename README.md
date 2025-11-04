@@ -29,6 +29,7 @@ A modern learning management system built with Next.js 15, Supabase, and deploye
 - Node.js 18+ 
 - npm or yarn
 - Supabase account
+- Docker Desktop (for running the local PostgreSQL replica)
 
 ### Installation
 
@@ -58,6 +59,13 @@ SUPABASE_SERVICE_ROLE_KEY=your-service-role-key-here
 # JWT Configuration
 JWT_SECRET=your-jwt-secret-key-here
 
+# Local PostgreSQL (Prisma)
+LOCAL_DATABASE_URL=postgresql://principlelearn:principlelearn@localhost:5432/principlelearn?schema=public
+LOCAL_DATABASE_USER=principlelearn
+LOCAL_DATABASE_PASSWORD=principlelearn
+LOCAL_DATABASE_NAME=principlelearn
+LOCAL_DATABASE_PORT=5432
+
 # Optional: OpenAI (for AI features)
 OPENAI_API_KEY=your-openai-api-key-here
 # Default model used by the app (optional)
@@ -69,7 +77,15 @@ OPENAI_MODEL=gpt-5-mini
    - Run the SQL script from `create-tables.sql` in the Supabase SQL Editor
    - Optionally run `node create-sample-data.js` to add sample data
 
-5. Run the development server:
+5. (Optional) Start the local PostgreSQL replica:
+   ```bash
+   docker compose up -d postgres
+   npm run prisma:generate
+   npm run prisma:migrate -- --name init-local-schema
+   ```
+   The Prisma schema mirrors the Supabase structure but runs entirely in Docker so you can develop without touching the remote database.
+
+6. Run the development server:
 ```bash
 npm run dev
 ```
@@ -83,10 +99,23 @@ The application uses the following main tables:
 - `courses` - Course information and metadata
 - `subtopics` - Course sections and content
 - `quiz` - Quiz questions and answers
+- `quiz_submissions` - User quiz history
+- `ask_question_history` - Q&A trail from AI interactions
 - `jurnal` - User learning journal entries
 - `transcript` - Course transcripts and notes
 - `user_progress` - Learning progress tracking
 - `feedback` - Course feedback and ratings
+- `discussion_templates`, `discussion_sessions`, `discussion_messages` - AI-assisted Socratic discussion engine
+- `challenge_responses` - Reflection and challenge data captured from learners
+- `api_logs`, `discussion_admin_actions` - Operational logging and admin audit trail
+- `subtopic_cache` - Cached AI subtopic outlines for faster regeneration
+
+### Local vs Supabase databases
+
+- Supabase remains the production-of-record store, including RLS policies and hosted auth.
+- Prisma + Docker adds a **local-only** PostgreSQL database so you can experiment safely.
+- Schema changes should be authored in `prisma/schema.prisma`. Run `npm run prisma:migrate` to update the container, then translate the generated SQL (in `prisma/migrations/*/migration.sql`) to Supabase if the change needs to go live.
+- Because the two databases are separate, you can reset the Docker container without affecting Supabase. Keep credentials aligned via the shared schema to minimise drift.
 
 ## API Endpoints
 
@@ -158,6 +187,9 @@ src/
 - `npm run build` - Build for production
 - `npm run start` - Start production server
 - `npm run lint` - Run ESLint
+- `npm run prisma:generate` - Generate Prisma client from the schema
+- `npm run prisma:migrate` - Apply schema changes to the local PostgreSQL container
+- `npm run prisma:studio` - Launch Prisma Studio for inspecting local data
 
 ### Testing
 

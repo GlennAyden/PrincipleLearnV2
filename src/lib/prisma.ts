@@ -1,16 +1,23 @@
-// Compatibility layer - redirecting Prisma calls to Supabase
-import { DatabaseService, adminDb } from './database';
+import { PrismaClient } from '@prisma/client';
 
-// Mock Prisma client structure for compatibility
-export const prisma = {
-  // Add your Prisma-to-Supabase mapping here
-  // Example:
-  // user: {
-  //   findMany: () => DatabaseService.getRecords('users'),
-  //   create: (data: any) => DatabaseService.insertRecord('users', data.data),
-  //   update: (options: any) => DatabaseService.updateRecord('users', options.where.id, options.data),
-  //   delete: (options: any) => DatabaseService.deleteRecord('users', options.where.id),
-  // }
-};
+declare global {
+  // eslint-disable-next-line no-var
+  var prisma: PrismaClient | undefined;
+}
 
-export default prisma;
+/**
+ * Reuse the Prisma client between hot reloads in development to avoid
+ * exhausting the connection pool of the local PostgreSQL instance.
+ */
+export const prisma =
+  global.prisma ||
+  new PrismaClient({
+    log:
+      process.env.NODE_ENV === 'development'
+        ? ['query', 'error', 'warn']
+        : ['error'],
+  });
+
+if (process.env.NODE_ENV !== 'production') {
+  global.prisma = prisma;
+}

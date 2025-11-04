@@ -9,6 +9,9 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 - `npm run build` - Build for production
 - `npm run start` - Start production server
 - `npm run lint` - Run ESLint
+- `npm run prisma:generate` - Generate Prisma client from the local schema
+- `npm run prisma:migrate` - Apply schema changes to the Dockerised PostgreSQL instance
+- `npm run prisma:studio` - Inspect local data via Prisma Studio
 
 ## Environment Setup
 
@@ -16,6 +19,7 @@ Required environment variables (copy from `env.example` to `.env.local`):
 - `NEXT_PUBLIC_SUPABASE_URL` - Supabase project URL
 - `NEXT_PUBLIC_SUPABASE_ANON_KEY` - Supabase anonymous key
 - `SUPABASE_SERVICE_ROLE_KEY` - Supabase service role key (for admin operations)
+- `LOCAL_DATABASE_URL` - Prisma connection string for the Dockerised PostgreSQL instance
 - `JWT_SECRET` - JWT secret for token signing
 - `OPENAI_API_KEY` - OpenAI API key (optional, for AI features)
 - `OPENAI_MODEL` - OpenAI model to use (optional, defaults to gpt-5-mini)
@@ -26,6 +30,7 @@ Required environment variables (copy from `env.example` to `.env.local`):
 - **Framework**: Next.js 15 with App Router
 - **Frontend**: React 19, TypeScript, Sass modules
 - **Database**: Supabase (PostgreSQL) with custom database service layer
+- **Local Development DB**: Prisma ORM targeting a Dockerised PostgreSQL mirror of the Supabase schema
 - **Authentication**: Custom JWT-based auth with CSRF protection
 - **Deployment**: Vercel
 - **AI Integration**: OpenAI API for course generation
@@ -43,6 +48,8 @@ Required environment variables (copy from `env.example` to `.env.local`):
 - **Dual Client Setup**:
   - Public client (`supabase`) for user operations
   - Service role client (`adminDb`) for admin operations that bypass RLS
+- **Local mirror**: Prisma schema (`prisma/schema.prisma`) keeps a 1:1 copy of the Supabase schema for isolated development. Start it with `docker compose up -d postgres` and `npm run prisma:migrate`.
+- **Local Prisma client**: `src/lib/prisma.ts` exports a singleton PrismaClient for scripts/tests that need the Docker database.
 - **Testing**: `/api/test-db` endpoint for connection validation
 - **Schema**: Core tables are `users`, `courses`, `subtopics`, `quiz`, `jurnal`, `transcript`, `user_progress`, `feedback`
 

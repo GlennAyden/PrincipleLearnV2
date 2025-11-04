@@ -1,0 +1,317 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("LOCAL_DATABASE_URL")
+}
+
+model User {
+  id          String    @id @default(uuid()) @db.Uuid
+  email       String    @unique
+  passwordHash String   @map("password_hash")
+  name        String?
+  role        String    @default("user")
+  createdAt   DateTime  @default(now()) @map("created_at")
+  updatedAt   DateTime  @updatedAt @map("updated_at")
+
+  courses     Course[]  @relation("CourseCreatedBy")
+  journals    Jurnal[]
+  transcripts Transcript[]
+  askQuestions AskQuestionHistory[]
+  progress    UserProgress[]
+  feedback    Feedback[]
+  quizSubmissions QuizSubmission[]
+  discussionSessions DiscussionSession[]
+
+  @@map("users")
+}
+
+model Course {
+  id                String      @id @default(uuid()) @db.Uuid
+  title             String
+  description       String?
+  subject           String?
+  difficultyLevel   String?     @map("difficulty_level")
+  estimatedDuration Int?        @map("estimated_duration")
+  createdById       String?     @map("created_by") @db.Uuid
+  createdAt         DateTime    @default(now()) @map("created_at")
+  updatedAt         DateTime    @updatedAt @map("updated_at")
+
+  createdBy         User?       @relation("CourseCreatedBy", fields: [createdById], references: [id])
+  subtopics         Subtopic[]
+  quizzes           Quiz[]
+  journals          Jurnal[]
+  transcripts       Transcript[]
+  askQuestions      AskQuestionHistory[]
+  progress          UserProgress[]
+  feedback          Feedback[]
+  discussionTemplates DiscussionTemplate[]
+  discussionSessions DiscussionSession[]
+
+  @@map("courses")
+}
+
+model Subtopic {
+  id         String     @id @default(uuid()) @db.Uuid
+  courseId   String?    @map("course_id") @db.Uuid
+  title      String
+  content    String?
+  orderIndex Int        @map("order_index")
+  createdAt  DateTime   @default(now()) @map("created_at")
+  updatedAt  DateTime   @updatedAt @map("updated_at")
+
+  course         Course?            @relation(fields: [courseId], references: [id])
+  quizzes        Quiz[]
+  transcripts    Transcript[]
+  progress       UserProgress[]
+  discussionTemplates DiscussionTemplate[]
+  discussionSessions DiscussionSession[]
+
+  @@map("subtopics")
+}
+
+model Quiz {
+  id            String      @id @default(uuid()) @db.Uuid
+  courseId      String?     @map("course_id") @db.Uuid
+  subtopicId    String?     @map("subtopic_id") @db.Uuid
+  question      String
+  options       Json?
+  correctAnswer String?     @map("correct_answer")
+  explanation   String?
+  createdAt     DateTime    @default(now()) @map("created_at")
+
+  course        Course?     @relation(fields: [courseId], references: [id])
+  subtopic      Subtopic?   @relation(fields: [subtopicId], references: [id])
+  submissions   QuizSubmission[]
+
+  @@map("quiz")
+}
+
+model QuizSubmission {
+  id          String    @id @default(uuid()) @db.Uuid
+  userId      String?   @map("user_id") @db.Uuid
+  quizId      String?   @map("quiz_id") @db.Uuid
+  answer      String?
+  isCorrect   Boolean?  @map("is_correct")
+  submittedAt DateTime  @default(now()) @map("submitted_at")
+
+  user        User?     @relation(fields: [userId], references: [id])
+  quiz        Quiz?     @relation(fields: [quizId], references: [id])
+
+  @@map("quiz_submissions")
+}
+
+model Jurnal {
+  id         String    @id @default(uuid()) @db.Uuid
+  userId     String?   @map("user_id") @db.Uuid
+  courseId   String?   @map("course_id") @db.Uuid
+  content    String
+  reflection String?
+  createdAt  DateTime  @default(now()) @map("created_at")
+  updatedAt  DateTime  @updatedAt @map("updated_at")
+
+  user   User?   @relation(fields: [userId], references: [id])
+  course Course? @relation(fields: [courseId], references: [id])
+
+  @@map("jurnal")
+}
+
+model Transcript {
+  id         String    @id @default(uuid()) @db.Uuid
+  userId     String?   @map("user_id") @db.Uuid
+  courseId   String?   @map("course_id") @db.Uuid
+  subtopicId String?   @map("subtopic_id") @db.Uuid
+  content    String
+  notes      String?
+  createdAt  DateTime  @default(now()) @map("created_at")
+  updatedAt  DateTime  @updatedAt @map("updated_at")
+
+  user     User?     @relation(fields: [userId], references: [id])
+  course   Course?   @relation(fields: [courseId], references: [id])
+  subtopic Subtopic? @relation(fields: [subtopicId], references: [id])
+
+  @@map("transcript")
+}
+
+model AskQuestionHistory {
+  id            String    @id @default(uuid()) @db.Uuid
+  userId        String?   @map("user_id") @db.Uuid
+  courseId      String?   @map("course_id") @db.Uuid
+  moduleIndex   Int?      @map("module_index")
+  subtopicIndex Int?      @map("subtopic_index")
+  pageNumber    Int?      @map("page_number")
+  subtopicLabel String?   @map("subtopic_label")
+  question      String
+  answer        String
+  createdAt     DateTime  @default(now()) @map("created_at")
+  updatedAt     DateTime  @updatedAt @map("updated_at")
+
+  user   User?   @relation(fields: [userId], references: [id])
+  course Course? @relation(fields: [courseId], references: [id])
+
+  @@map("ask_question_history")
+  @@index([userId], map: "idx_ask_question_history_user_id")
+  @@index([courseId], map: "idx_ask_question_history_course_id")
+  @@index([createdAt], map: "idx_ask_question_history_created_at")
+  @@index([userId, courseId], map: "idx_ask_question_history_user_course")
+}
+
+model UserProgress {
+  id             String    @id @default(uuid()) @db.Uuid
+  userId         String?   @map("user_id") @db.Uuid
+  courseId       String?   @map("course_id") @db.Uuid
+  subtopicId     String?   @map("subtopic_id") @db.Uuid
+  isCompleted    Boolean?  @default(false) @map("is_completed")
+  completionDate DateTime? @map("completion_date")
+  createdAt      DateTime  @default(now()) @map("created_at")
+  updatedAt      DateTime  @updatedAt @map("updated_at")
+
+  user     User?     @relation(fields: [userId], references: [id])
+  course   Course?   @relation(fields: [courseId], references: [id])
+  subtopic Subtopic? @relation(fields: [subtopicId], references: [id])
+
+  @@map("user_progress")
+  @@index([userId], map: "idx_user_progress_user_id")
+}
+
+model Feedback {
+  id        String    @id @default(uuid()) @db.Uuid
+  userId    String?   @map("user_id") @db.Uuid
+  courseId  String?   @map("course_id") @db.Uuid
+  rating    Int
+  comment   String?
+  createdAt DateTime  @default(now()) @map("created_at")
+
+  user   User?   @relation(fields: [userId], references: [id])
+  course Course? @relation(fields: [courseId], references: [id])
+
+  @@map("feedback")
+  @@index([userId], map: "idx_feedback_user_id")
+}
+
+model ApiLog {
+  id          String    @id @default(uuid()) @db.Uuid
+  method      String?
+  path        String?
+  query       String?
+  statusCode  Int?      @map("status_code")
+  durationMs  Int?      @map("duration_ms")
+  ipAddress   String?   @map("ip_address")
+  userAgent   String?   @map("user_agent")
+  userId      String?   @map("user_id")
+  userEmail   String?   @map("user_email")
+  userRole    String?   @map("user_role")
+  label       String?
+  metadata    Json? 
+  errorMessage String?  @map("error_message")
+  createdAt   DateTime  @default(now()) @map("created_at")
+
+  @@map("api_logs")
+  @@index([createdAt], map: "idx_api_logs_created_at")
+  @@index([path], map: "idx_api_logs_path")
+}
+
+model DiscussionTemplate {
+  id          String    @id @default(uuid()) @db.Uuid
+  courseId    String    @map("course_id") @db.Uuid
+  subtopicId  String    @map("subtopic_id") @db.Uuid
+  version     String
+  source      Json
+  template    Json
+  generatedBy String    @default("auto") @map("generated_by")
+  status      String    @default("ready")
+  createdAt   DateTime  @default(now()) @map("created_at")
+
+  course      Course    @relation(fields: [courseId], references: [id])
+  subtopic    Subtopic  @relation(fields: [subtopicId], references: [id])
+  sessions    DiscussionSession[]
+
+  @@map("discussion_templates")
+  @@unique([subtopicId, version], map: "discussion_templates_unique")
+}
+
+model DiscussionSession {
+  id            String    @id @default(uuid()) @db.Uuid
+  userId        String    @map("user_id") @db.Uuid
+  courseId      String    @map("course_id") @db.Uuid
+  subtopicId    String    @map("subtopic_id") @db.Uuid
+  templateId    String    @map("template_id") @db.Uuid
+  status        String
+  phase         String
+  learningGoals Json      @map("learning_goals")
+  createdAt     DateTime  @default(now()) @map("created_at")
+  updatedAt     DateTime  @updatedAt @map("updated_at")
+
+  user       User        @relation(fields: [userId], references: [id])
+  course     Course      @relation(fields: [courseId], references: [id])
+  subtopic   Subtopic    @relation(fields: [subtopicId], references: [id])
+  template   DiscussionTemplate @relation(fields: [templateId], references: [id])
+  messages   DiscussionMessage[]
+  adminActions DiscussionAdminAction[]
+
+  @@map("discussion_sessions")
+  @@unique([userId, subtopicId])
+}
+
+model DiscussionMessage {
+  id        String    @id @default(uuid()) @db.Uuid
+  sessionId String    @map("session_id") @db.Uuid
+  role      String
+  content   String
+  stepKey   String?   @map("step_key")
+  metadata  Json
+  createdAt DateTime  @default(now()) @map("created_at")
+
+  session   DiscussionSession @relation(fields: [sessionId], references: [id])
+
+  @@map("discussion_messages")
+  @@index([sessionId, createdAt], map: "discussion_messages_session_idx")
+}
+
+model DiscussionAdminAction {
+  id        String    @id @default(uuid()) @db.Uuid
+  sessionId String    @map("session_id") @db.Uuid
+  adminId   String?   @map("admin_id")
+  adminEmail String?  @map("admin_email")
+  action    String?
+  payload   Json?
+  createdAt DateTime  @default(now()) @map("created_at")
+
+  session   DiscussionSession @relation(fields: [sessionId], references: [id])
+
+  @@map("discussion_admin_actions")
+  @@index([sessionId], map: "idx_discussion_admin_actions_session")
+}
+
+model SubtopicCache {
+  id        String   @id @default(uuid()) @db.Uuid
+  cacheKey  String   @unique @map("cache_key")
+  content   Json
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  @@map("subtopic_cache")
+  @@index([createdAt], map: "idx_subtopic_cache_created")
+}
+
+model ChallengeResponse {
+  id            String   @id
+  userId        String   @map("user_id")
+  courseId      String   @map("course_id")
+  moduleIndex   Int?     @map("module_index")
+  subtopicIndex Int?     @map("subtopic_index")
+  pageNumber    Int?     @map("page_number")
+  question      String
+  answer        String
+  feedback      String?
+  createdAt     DateTime @default(now()) @map("created_at")
+  updatedAt     DateTime @updatedAt @map("updated_at")
+
+  @@map("challenge_responses")
+  @@index([userId], map: "idx_challenge_responses_user_id")
+  @@index([courseId], map: "idx_challenge_responses_course_id")
+  @@index([userId, courseId], map: "idx_challenge_responses_user_course")
+  @@index([createdAt], map: "idx_challenge_responses_created_at")
+}
