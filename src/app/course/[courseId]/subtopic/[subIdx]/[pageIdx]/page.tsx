@@ -136,7 +136,7 @@ export default function SubtopicPage() {
         
         if (result.success && result.course) {
           // Transform subtopics to outline format
-          const outline = result.course.subtopics?.map((subtopic: any) => {
+          const outline = result.course.subtopics?.map((subtopic: any, index: number) => {
             let content;
             try {
               content = JSON.parse(subtopic.content);
@@ -145,6 +145,8 @@ export default function SubtopicPage() {
             }
             
             return {
+              id: String(subtopic.id ?? `module-${index}`),
+              rawTitle: subtopic.title ?? undefined,
               module: content.module || subtopic.title || 'Module',
               subtopics: content.subtopics || []
             };
@@ -719,6 +721,11 @@ export default function SubtopicPage() {
           <Quiz 
             questions={data.quiz} 
             courseId={courseId}
+            moduleTitle={
+              typeof course.outline[moduleIndex]?.module === 'string'
+                ? course.outline[moduleIndex].module
+                : moduleInfo.module
+            }
             subtopic={`Module ${moduleIndex + 1}, Subtopic ${subtopicIndex + 1}`}
             subtopicTitle={typeof course.outline[moduleIndex]?.subtopics?.[subtopicIndex] === 'string' 
               ? course.outline[moduleIndex].subtopics[subtopicIndex] 
@@ -748,12 +755,17 @@ export default function SubtopicPage() {
             subtopicIndex={subtopicIndex}
             courseId={courseId}
           />
-          <NextSubtopics
-            items={course.outline[moduleIndex].subtopics}
+          <NextSubtopics 
+            items={course.outline[moduleIndex].subtopics} 
             moduleIndex={moduleIndex}
-            courseOutline={course.outline}
+            moduleId={course.outline[moduleIndex].id}
+            moduleTitle={
+              typeof course.outline[moduleIndex].module === 'string'
+                ? course.outline[moduleIndex].module
+                : undefined
+            }
           />
-        </div>
+          </div>
       )}
 
       {/* Navigation */}

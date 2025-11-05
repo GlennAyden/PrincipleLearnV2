@@ -1,5 +1,15 @@
+import type { SupabaseClient } from '@supabase/supabase-js';
 import { supabase, createServiceRoleClient } from './supabase';
 import type { Database } from '@/types/database';
+
+let cachedServiceRoleClient: SupabaseClient<Database> | null = null;
+
+function getServiceRoleClient(): SupabaseClient<Database> {
+  if (!cachedServiceRoleClient) {
+    cachedServiceRoleClient = createServiceRoleClient();
+  }
+  return cachedServiceRoleClient;
+}
 
 // Database utilities with error handling
 export class DatabaseError extends Error {
@@ -28,38 +38,53 @@ export async function testConnection(): Promise<boolean> {
 // Generic CRUD operations
 export class DatabaseService {
   // Get records from a table
+  private static getClient(useServiceRole: boolean): SupabaseClient<Database> {
+    return useServiceRole ? getServiceRoleClient() : supabase;
+  }
+
   static async getRecords<T>(
-    tableName: string, 
+    tableName: string,
     options?: {
       select?: string;
       filter?: Record<string, any>;
       orderBy?: { column: string; ascending?: boolean };
       limit?: number;
+      useServiceRole?: boolean;
     }
   ): Promise<T[]> {
     try {
-      let query = supabase.from(tableName).select(options?.select || '*');
-      
-      if (options?.filter) {
-        Object.entries(options.filter).forEach(([key, value]) => {
+      const {
+        select,
+        filter,
+        orderBy,
+        limit,
+        useServiceRole = true,
+      } = options ?? {};
+
+      const client = this.getClient(useServiceRole);
+
+      let query = client.from(tableName).select(select || '*');
+
+      if (filter) {
+        Object.entries(filter).forEach(([key, value]) => {
           query = query.eq(key, value);
         });
       }
-      
-      if (options?.orderBy) {
-        query = query.order(options.orderBy.column, { ascending: options.orderBy.ascending ?? true });
+
+      if (orderBy) {
+        query = query.order(orderBy.column, { ascending: orderBy.ascending ?? true });
       }
-      
-      if (options?.limit) {
-        query = query.limit(options.limit);
+
+      if (limit) {
+        query = query.limit(limit);
       }
-      
+
       const { data, error } = await query;
-      
+
       if (error) {
         throw new DatabaseError(`Failed to get records from ${tableName}`, error);
       }
-      
+
       return data as T[];
     } catch (error) {
       if (error instanceof DatabaseError) throw error;
@@ -68,18 +93,24 @@ export class DatabaseService {
   }
   
   // Insert a record
-  static async insertRecord<T>(tableName: string, data: Partial<T>): Promise<T> {
+  static async insertRecord<T>(
+    tableName: string,
+    data: Partial<T>,
+    options?: { useServiceRole?: boolean },
+  ): Promise<T> {
     try {
-      const { data: result, error } = await supabase
+      const client = this.getClient(options?.useServiceRole ?? true);
+
+      const { data: result, error } = await client
         .from(tableName)
         .insert(data)
         .select()
         .single();
-      
+
       if (error) {
         throw new DatabaseError(`Failed to insert record into ${tableName}`, error);
       }
-      
+
       return result as T;
     } catch (error) {
       if (error instanceof DatabaseError) throw error;
@@ -92,20 +123,23 @@ export class DatabaseService {
     tableName: string, 
     id: string | number, 
     data: Partial<T>,
-    idColumn: string = 'id'
+    idColumn: string = 'id',
+    options?: { useServiceRole?: boolean },
   ): Promise<T> {
     try {
-      const { data: result, error } = await supabase
+      const client = this.getClient(options?.useServiceRole ?? true);
+
+      const { data: result, error } = await client
         .from(tableName)
         .update(data)
         .eq(idColumn, id)
         .select()
         .single();
-      
+
       if (error) {
         throw new DatabaseError(`Failed to update record in ${tableName}`, error);
       }
-      
+
       return result as T;
     } catch (error) {
       if (error instanceof DatabaseError) throw error;
@@ -117,14 +151,17 @@ export class DatabaseService {
   static async deleteRecord(
     tableName: string, 
     id: string | number,
-    idColumn: string = 'id'
+    idColumn: string = 'id',
+    options?: { useServiceRole?: boolean },
   ): Promise<void> {
     try {
-      const { error } = await supabase
+      const client = this.getClient(options?.useServiceRole ?? true);
+
+      const { error } = await client
         .from(tableName)
         .delete()
         .eq(idColumn, id);
-      
+
       if (error) {
         throw new DatabaseError(`Failed to delete record from ${tableName}`, error);
       }
@@ -136,4 +173,4 @@ export class DatabaseService {
 }
 
 // Service role client for admin operations
-export const adminDb = createServiceRoleClient();
+export const adminDb = getServiceRoleClient();

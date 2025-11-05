@@ -191,7 +191,7 @@ export default function DiscussionModulePage() {
         }
 
         const outline: OutlineModule[] =
-          result.course.subtopics?.map((subtopic: any) => {
+          result.course.subtopics?.map((subtopic: any, index: number) => {
             let content;
             try {
               content = JSON.parse(subtopic.content);
@@ -199,6 +199,8 @@ export default function DiscussionModulePage() {
               content = { module: subtopic.title, subtopics: [] };
             }
             return {
+              id: String(subtopic.id ?? `module-${index}`),
+              rawTitle: subtopic.title ?? undefined,
               module: content?.module || subtopic.title || 'Module',
               subtopics: Array.isArray(content?.subtopics) ? content.subtopics : [],
             };
@@ -695,19 +697,19 @@ export default function DiscussionModulePage() {
           </div>
               <ul className={styles.preparationStatusList}>
                 {prereqDetails.subtopics.map((item) => {
-                const statusLabel = !item.generated
-                  ? 'Belum digenerate'
-                  : item.quizQuestionCount === 0
-                  ? 'Kuis belum tersedia'
-                  : item.quizQuestionCount < prereqDetails.summary.minQuestionsPerSubtopic
-                  ? 'Kuis belum lengkap'
-                  : item.quizCompleted
-                  ? 'Siap'
-                  : 'Kuis belum selesai';
-                  const statusClass =
-                    item.generated && item.quizCompleted
-                      ? styles.statusReady
-                      : styles.statusPending;
+                    const statusLabel = !item.generated
+                      ? 'Belum digenerate'
+                      : item.userHasCompletion || item.quizCompleted
+                      ? 'Siap'
+                      : item.quizQuestionCount === 0
+                      ? 'Kuis belum tersedia'
+                      : item.quizQuestionCount < prereqDetails.summary.minQuestionsPerSubtopic
+                      ? 'Kuis belum lengkap'
+                      : 'Kuis belum selesai';
+                    const statusClass =
+                      item.generated && (item.userHasCompletion || item.quizCompleted)
+                        ? styles.statusReady
+                        : styles.statusPending;
                   return (
                     <li key={item.key} className={styles.preparationStatusItem}>
                       <div>
@@ -724,12 +726,13 @@ export default function DiscussionModulePage() {
                             <strong>Get Started</strong>.
                           </p>
                         )}
-                        {item.generated && !item.quizCompleted && (
+                        {item.generated && !item.userHasCompletion && !item.quizCompleted && (
                           <p className={styles.preparationHint}>
                             Kerjakan kuis pada akhir subtopik ini untuk menandai penyelesaian.
                           </p>
                         )}
                         {item.generated &&
+                          !item.userHasCompletion &&
                           item.quizQuestionCount < prereqDetails.summary.minQuestionsPerSubtopic && (
                             <p className={styles.preparationHint}>
                               Kuis terbaru belum lengkap. Buka kembali subtopik ini dan jalankan{' '}

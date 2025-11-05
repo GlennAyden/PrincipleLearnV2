@@ -369,7 +369,7 @@ function buildSystemPrompt() {
   return [
     'You are an instructional designer creating Socratic discussion scripts.',
     'Your output must be valid JSON and follow the provided schema.',
-    'Language must match the learner materials; do not translate unless specified.',
+    'Language must match the learner materials; when in doubt default to Bahasa Indonesia with clear, natural academic tone.',
     'Phases must progress from diagnosis to synthesis and ensure coverage of the learning goals.',
     'Each step should encourage reflection, justification, or application rather than giving direct answers.',
     'Provide measurable rubrics for each learning goal to help facilitators evaluate responses.',
@@ -411,6 +411,7 @@ function buildPrompt({
     '- For each learning goal, provide a `rubric` object containing `success_summary`, a `checklist` of concrete indicators (2-4 items), and optional `failure_signals` describing common misconceptions.',
     '- Add a `closing_message` string that congratulates the learner and reinforces next steps when all goals are satisfied.',
     '- Encourage deeper thinking; avoid revealing final answers directly.',
+    '- Tulis seluruh konten (pertanyaan, opsi, umpan balik, rubric, closing message) dalam Bahasa Indonesia yang jelas dan sesuai konteks modul.',
     '',
     'Return only JSON that matches the schema.',
   ].join('\n');
@@ -472,6 +473,7 @@ function buildModulePrompt({
     '- Pastikan ada minimal satu pertanyaan MCQ dengan opsi, jawaban, dan umpan balik.',
     '- Pastikan rubric goal mengevaluasi pemahaman menyeluruh terhadap seluruh modul, bukan sekadar subtopik tunggal.',
     '- Tambahkan closing message yang mengajak peserta menerapkan pengetahuan modul secara terpadu.',
+    '- Gunakan Bahasa Indonesia yang formal namun mudah dipahami untuk seluruh elemen output.',
     '',
     'Return only JSON that matches the schema.',
   ].join('\n');

@@ -14,6 +14,8 @@ export interface QuizProps {
   questions?: QuizItem[];
   /** Course ID */
   courseId?: string;
+  /** Module title for cache tracking */
+  moduleTitle?: string;
   /** Subtopic name */
   subtopic?: string;
   /** Actual subtopic title from database */
@@ -24,7 +26,15 @@ export interface QuizProps {
   subtopicIndex?: number;
 }
 
-export default function Quiz({ questions = [], courseId = '', subtopic = '', subtopicTitle = '', moduleIndex = 0, subtopicIndex = 0 }: QuizProps) {
+export default function Quiz({
+  questions = [],
+  courseId = '',
+  moduleTitle = '',
+  subtopic = '',
+  subtopicTitle = '',
+  moduleIndex = 0,
+  subtopicIndex = 0,
+}: QuizProps) {
   // gunakan safeItems untuk mencegah undefined
   const safeItems = questions;
   // Get user from auth hook
@@ -91,6 +101,7 @@ export default function Quiz({ questions = [], courseId = '', subtopic = '', sub
         body: JSON.stringify({
           userId: user.email,
           courseId,
+          moduleTitle,
           subtopic,
           subtopicTitle,
           moduleIndex,

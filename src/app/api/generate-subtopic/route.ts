@@ -23,6 +23,8 @@ export async function POST(request: Request) {
       );
     }
 
+    let existingCacheContent: any = null;
+    let computedCacheKey: string | null = null;
     // Database caching for performance optimization
     if (courseId) {
       try {
@@ -41,9 +43,22 @@ export async function POST(request: Request) {
           .single();
 
         if (cached?.content) {
-          console.log('🚀 Returning cached subtopic data');
+          existingCacheContent = cached.content;
+          console.log('[GenerateSubtopic] Returning cached subtopic data');
+          try {
+            await syncQuizQuestions({
+              supabase,
+              courseId,
+              moduleTitle,
+              subtopicTitle: subtopic,
+              quizItems: cached.content?.quiz,
+            });
+          } catch (syncError) {
+            console.warn('[GenerateSubtopic] Quiz sync from cache failed', syncError);
+          }
           return NextResponse.json(cached.content);
         }
+
       } catch (cacheError) {
         // Continue with generation if cache fails
         console.warn('Cache read failed:', cacheError);
@@ -331,29 +346,16 @@ export async function POST(request: Request) {
             const subtopicId = subtopicData?.id;
             
             if (subtopicId) {
-              // Save each quiz question to database
-              const quizInserts = data.quiz.map((q: any, index: number) => ({
-                course_id: courseId,
-                subtopic_id: subtopicId,
-                question: q.question,
-                options: q.options, // JSONB array
-                correct_answer: q.options[q.correctIndex], // Store the actual correct answer text
-                explanation: `The correct answer is: ${q.options[q.correctIndex]}`,
-                created_at: new Date().toISOString()
-              }));
+              await syncQuizQuestions({
+                supabase,
+                courseId,
+                moduleTitle,
+                subtopicTitle: subtopic,
+                quizItems: data.quiz,
+                subtopicId,
+                subtopicData,
+              });
 
-              const { error: quizError } = await supabase
-                .from('quiz')
-                .upsert(quizInserts, { 
-                  onConflict: 'course_id,subtopic_id,question',
-                  ignoreDuplicates: false 
-                });
-
-              if (quizError) {
-                console.warn('Quiz save error:', quizError);
-              } else {
-                console.log(`📝 Saved ${data.quiz.length} quiz questions to database for subtopic: ${subtopicData.title} (${subtopicId})`);
-              }
               try {
                 const templateResult = await generateDiscussionTemplate({
                   courseId,
@@ -448,6 +450,158 @@ export async function POST(request: Request) {
       { error: err.message },
       { status: 500 }
     );
+  }
+}
+
+interface SyncQuizParams {
+  supabase: any;
+  courseId?: string;
+  moduleTitle?: string;
+  subtopicTitle?: string;
+  quizItems?: any[];
+  subtopicId?: string;
+  subtopicData?: { id?: string; title?: string; content?: string | null };
+}
+
+async function syncQuizQuestions({
+  supabase,
+  courseId,
+  moduleTitle,
+  subtopicTitle,
+  quizItems,
+  subtopicId,
+  subtopicData,
+}: SyncQuizParams) {
+  try {
+    if (!supabase || !courseId || !Array.isArray(quizItems) || quizItems.length === 0) {
+      return;
+    }
+
+    let resolvedSubtopic = subtopicData ?? null;
+
+    if (!resolvedSubtopic?.id) {
+      try {
+        const { data: allSubtopics, error: subtopicsError } = await supabase
+          .from('subtopics')
+          .select('id, title, content')
+          .eq('course_id', courseId);
+
+        if (subtopicsError) {
+          console.warn('[GenerateSubtopic] Failed to load subtopics for quiz sync', subtopicsError);
+        } else if (allSubtopics) {
+          for (const sub of allSubtopics) {
+            try {
+              const parsed = sub?.content ? JSON.parse(sub.content) : null;
+              if (parsed?.module && moduleTitle && parsed.module === moduleTitle) {
+                resolvedSubtopic = sub;
+                break;
+              }
+            } catch {
+              // Fall back to direct title comparison if JSON parse fails
+              if (moduleTitle && sub?.title === moduleTitle) {
+                resolvedSubtopic = sub;
+                break;
+              }
+            }
+          }
+        }
+
+        if (!resolvedSubtopic && subtopicTitle) {
+          const { data: fallbackSubtopic } = await supabase
+            .from('subtopics')
+            .select('id, title')
+            .eq('course_id', courseId)
+            .eq('title', subtopicTitle)
+            .maybeSingle();
+
+          if (fallbackSubtopic) {
+            resolvedSubtopic = fallbackSubtopic;
+          }
+        }
+      } catch (lookupError) {
+        console.warn('[GenerateSubtopic] Subtopic lookup for quiz sync failed', lookupError);
+      }
+    }
+
+    const resolvedSubtopicId = subtopicId ?? resolvedSubtopic?.id;
+    if (!resolvedSubtopicId) {
+      console.warn('[GenerateSubtopic] Unable to resolve subtopic for quiz persistence', {
+        courseId,
+        moduleTitle,
+        subtopicTitle,
+      });
+      return;
+    }
+
+    const quizInserts = quizItems
+      .map((q: any, index: number) => {
+        if (!q || typeof q !== 'object') return null;
+
+        const rawQuestion = typeof q.question === 'string' && q.question.trim().length > 0
+          ? q.question.trim()
+          : `Quiz ${index + 1}: Pertanyaan opsional`;
+
+        const optionsArray = Array.isArray(q.options)
+          ? q.options.map((opt: any) => (typeof opt === 'string' ? opt.trim() : `${opt}`)).filter(Boolean)
+          : [];
+
+        if (optionsArray.length < 4) {
+          while (optionsArray.length < 4) {
+            optionsArray.push(`Opsi ${optionsArray.length + 1}`);
+          }
+        } else if (optionsArray.length > 4) {
+          optionsArray.length = 4;
+        }
+
+        const candidateIndex = typeof q.correctIndex === 'number' ? q.correctIndex : 0;
+        const boundedIndex =
+          candidateIndex >= 0 && candidateIndex < optionsArray.length ? candidateIndex : 0;
+        const correctAnswer = optionsArray[boundedIndex] ?? optionsArray[0] ?? '';
+
+        return {
+          course_id: courseId,
+          subtopic_id: resolvedSubtopicId,
+          question: rawQuestion,
+          options: optionsArray,
+          correct_answer: correctAnswer,
+          explanation: correctAnswer ? `The correct answer is: ${correctAnswer}` : null,
+          created_at: new Date().toISOString(),
+        };
+      })
+      .filter(Boolean);
+
+    if (quizInserts.length === 0) {
+      console.warn('[GenerateSubtopic] Quiz sync skipped because sanitized quiz data is empty');
+      return;
+    }
+
+    try {
+      const { error: deleteError } = await supabase
+        .from('quiz')
+        .delete()
+        .eq('course_id', courseId)
+        .eq('subtopic_id', resolvedSubtopicId);
+
+      if (deleteError) {
+        console.warn('[GenerateSubtopic] Failed to clean existing quiz entries', deleteError);
+      }
+    } catch (cleanupError) {
+      console.warn('[GenerateSubtopic] Quiz cleanup threw unexpectedly', cleanupError);
+    }
+
+    const { error: insertError } = await supabase.from('quiz').insert(quizInserts);
+
+    if (insertError) {
+      console.warn('[GenerateSubtopic] Quiz insert failed', insertError);
+    } else {
+      console.log('[GenerateSubtopic] Quiz questions synced to database', {
+        courseId,
+        subtopicId: resolvedSubtopicId,
+        count: quizInserts.length,
+      });
+    }
+  } catch (quizSyncError) {
+    console.warn('[GenerateSubtopic] Sync quiz questions failed', quizSyncError);
   }
 }
 

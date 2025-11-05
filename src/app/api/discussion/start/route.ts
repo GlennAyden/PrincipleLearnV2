@@ -4,6 +4,10 @@ import { verifyToken } from '@/lib/jwt';
 import { adminDb } from '@/lib/database';
 import { withApiLogging } from '@/lib/api-logger';
 import { resolveDiscussionSubtopicId } from '@/lib/discussion/resolveSubtopic';
+import {
+  generateDiscussionTemplate,
+  generateModuleDiscussionTemplate,
+} from '@/services/discussion/generateDiscussionTemplate';
 
 type TemplateRecord = {
   id: string;
@@ -54,7 +58,20 @@ async function postHandler(request: NextRequest) {
       );
     }
 
-    const templateRow = await fetchLatestTemplate({ subtopicId, courseId, subtopicTitle, moduleTitle });
+    let templateRow = await fetchLatestTemplate({ subtopicId, courseId, subtopicTitle, moduleTitle });
+    if (!templateRow) {
+      const regenerated = await tryRegenerateTemplate({
+        courseId,
+        subtopicId,
+        subtopicTitle,
+        moduleTitle,
+      });
+
+      if (regenerated) {
+        templateRow = await fetchLatestTemplate({ subtopicId, courseId, subtopicTitle, moduleTitle });
+      }
+    }
+
     if (!templateRow) {
       return NextResponse.json(
         { error: 'Discussion template not found for this subtopic' },
@@ -219,6 +236,124 @@ async function fetchMessages(sessionId: string) {
   return data ?? [];
 }
 
+interface TryRegenerateParams {
+  courseId: string;
+  subtopicId: string;
+  subtopicTitle?: string | null;
+  moduleTitle?: string | null;
+}
+
+async function tryRegenerateTemplate({
+  courseId,
+  subtopicId,
+  subtopicTitle,
+  moduleTitle,
+}: TryRegenerateParams): Promise<boolean> {
+  try {
+    const normalizedModuleTitle = moduleTitle?.trim() || '';
+    const normalizedSubtopicTitle = subtopicTitle?.trim() || '';
+
+    const { data: subtopicRecord, error: subtopicError } = await adminDb
+      .from('subtopics')
+      .select('id, title, content')
+      .eq('id', subtopicId)
+      .maybeSingle();
+
+    if (subtopicError) {
+      console.warn('[DiscussionStart] Failed to load subtopic for regeneration', subtopicError);
+      return false;
+    }
+
+    if (!subtopicRecord) {
+      console.warn('[DiscussionStart] Subtopic not found for regeneration', {
+        courseId,
+        subtopicId,
+      });
+      return false;
+    }
+
+    const fallbackTitle = typeof subtopicRecord.title === 'string' ? subtopicRecord.title : '';
+    const moduleName = (normalizedModuleTitle || fallbackTitle || 'Modul').trim();
+    const focusTitle = (normalizedSubtopicTitle || fallbackTitle || moduleName).trim();
+
+    const isModuleScope =
+      normalizeIdentifier(focusTitle) === normalizeIdentifier(moduleName) ||
+      isDiscussionLabel(focusTitle);
+
+    if (isModuleScope) {
+      const context = await assembleModuleDiscussionContextFromDb({
+        courseId,
+        moduleTitle: moduleName,
+        moduleRecord: subtopicRecord,
+      });
+
+      if (!context) {
+        console.warn('[DiscussionStart] Unable to assemble module discussion context', {
+          courseId,
+          moduleTitle: moduleName,
+        });
+        return false;
+      }
+
+      const result = await generateModuleDiscussionTemplate({
+        courseId,
+        subtopicId: context.moduleId,
+        moduleTitle: moduleName,
+        summary: context.summary,
+        learningObjectives: context.learningObjectives,
+        keyTakeaways: context.keyTakeaways,
+        misconceptions: context.misconceptions,
+        subtopics: context.subtopics,
+      });
+
+      return Boolean(result);
+    }
+
+    const cacheKey = `${courseId}-${moduleName}-${focusTitle}`;
+    const { data: cacheRow, error: cacheError } = await adminDb
+      .from('subtopic_cache')
+      .select('content')
+      .eq('cache_key', cacheKey)
+      .maybeSingle();
+
+    if (cacheError) {
+      console.warn('[DiscussionStart] Failed to load cached subtopic content for regeneration', {
+        courseId,
+        cacheKey,
+        error: cacheError,
+      });
+      return false;
+    }
+
+    const cacheContent = cacheRow?.content ?? null;
+    if (!cacheContent) {
+      console.warn('[DiscussionStart] Cached content missing for regeneration', { cacheKey });
+      return false;
+    }
+
+    const learningObjectives = toStringArray(cacheContent?.objectives);
+    const keyTakeaways = toStringArray(cacheContent?.keyTakeaways);
+    const misconceptions = extractMisconceptions(cacheContent);
+    const summary = buildDiscussionSummary(cacheContent);
+
+    const result = await generateDiscussionTemplate({
+      courseId,
+      subtopicId,
+      moduleTitle: moduleName,
+      subtopicTitle: focusTitle,
+      learningObjectives,
+      summary,
+      keyTakeaways,
+      misconceptions,
+    });
+
+    return Boolean(result);
+  } catch (regenerateError) {
+    console.error('[DiscussionStart] Failed to regenerate discussion template', regenerateError);
+    return false;
+  }
+}
+
 function flattenTemplate(template: any) {
   const phases = Array.isArray(template?.phases) ? template.phases : [];
   const flattened: Array<{ phaseId: string; step: any }> = [];
@@ -333,4 +468,208 @@ async function ensureProgressRecord(userId: string, courseId: string, subtopicId
   } catch (progressError) {
     console.warn('[DiscussionStart] ensureProgressRecord error', progressError);
   }
+}
+
+function toStringArray(value: any): string[] {
+  if (!Array.isArray(value)) return [];
+  return value
+    .map((item) => (typeof item === 'string' ? item.trim() : ''))
+    .filter((item) => item.length > 0);
+}
+
+function buildDiscussionSummary(content: any): string {
+  const summaryParts: string[] = [];
+
+  if (content?.whatNext?.summary) {
+    summaryParts.push(String(content.whatNext.summary));
+  }
+
+  if (Array.isArray(content?.keyTakeaways) && content.keyTakeaways.length > 0) {
+    summaryParts.push(
+      'Poin penting:\n' + content.keyTakeaways.map((item: string) => `- ${item}`).join('\n')
+    );
+  }
+
+  if (Array.isArray(content?.objectives) && content.objectives.length > 0) {
+    summaryParts.push(
+      'Tujuan belajar:\n' + content.objectives.map((item: string) => `- ${item}`).join('\n')
+    );
+  }
+
+  if (Array.isArray(content?.pages) && content.pages.length > 0) {
+    const firstPage = content.pages[0];
+    if (Array.isArray(firstPage?.paragraphs) && firstPage.paragraphs.length > 0) {
+      summaryParts.push(firstPage.paragraphs[0]);
+    }
+  }
+
+  return summaryParts.join('\n\n');
+}
+
+function extractMisconceptions(content: any): string[] {
+  if (Array.isArray(content?.commonPitfalls) && content.commonPitfalls.length > 0) {
+    return toStringArray(content.commonPitfalls);
+  }
+
+  if (Array.isArray(content?.misconceptions) && content.misconceptions.length > 0) {
+    return toStringArray(content.misconceptions);
+  }
+
+  return [];
+}
+
+function normalizeIdentifier(value: string) {
+  return value.toLowerCase().replace(/\s+/g, ' ').trim();
+}
+
+function isDiscussionLabel(label: string): boolean {
+  const normalized = normalizeIdentifier(label);
+  return (
+    normalized.includes('diskusi penutup') ||
+    normalized.includes('closing discussion') ||
+    normalized.includes('ringkasan diskusi')
+  );
+}
+
+interface ModuleDiscussionContextParams {
+  courseId: string;
+  moduleTitle: string;
+  moduleRecord: { id: string; title?: string | null; content?: string | null };
+}
+
+interface ModuleDiscussionContextResult {
+  moduleId: string;
+  summary: string;
+  learningObjectives: string[];
+  keyTakeaways: string[];
+  misconceptions: string[];
+  subtopics: Array<{
+    title: string;
+    summary: string;
+    objectives: string[];
+    keyTakeaways: string[];
+    misconceptions: string[];
+  }>;
+}
+
+async function assembleModuleDiscussionContextFromDb({
+  courseId,
+  moduleTitle,
+  moduleRecord,
+}: ModuleDiscussionContextParams): Promise<ModuleDiscussionContextResult | null> {
+  let outline: any = null;
+  try {
+    outline = moduleRecord?.content ? JSON.parse(String(moduleRecord.content)) : null;
+  } catch (parseError) {
+    console.warn('[DiscussionStart] Failed to parse module content for aggregation', {
+      courseId,
+      moduleTitle,
+      error: parseError,
+    });
+  }
+
+  const moduleSubtopics = Array.isArray(outline?.subtopics) ? outline.subtopics : [];
+  const aggregated: ModuleDiscussionContextResult['subtopics'] = [];
+  const learningObjectives: string[] = [];
+  const keyTakeaways: string[] = [];
+  const misconceptions: string[] = [];
+
+  for (const sub of moduleSubtopics) {
+    const candidateTitle =
+      typeof sub === 'string'
+        ? sub
+        : typeof sub?.title === 'string'
+        ? sub.title
+        : '';
+
+    if (!candidateTitle || isDiscussionLabel(candidateTitle)) {
+      continue;
+    }
+
+    const cacheKey = `${courseId}-${moduleTitle}-${candidateTitle}`;
+    const { data: cacheRow, error: cacheError } = await adminDb
+      .from('subtopic_cache')
+      .select('content')
+      .eq('cache_key', cacheKey)
+      .maybeSingle();
+
+    if (cacheError) {
+      console.warn('[DiscussionStart] Failed to load cached content for module aggregation', {
+        courseId,
+        moduleTitle,
+        candidateTitle,
+        error: cacheError,
+      });
+    }
+
+    const cachedContent = cacheRow?.content ?? null;
+    const objectives = toStringArray(cachedContent?.objectives);
+    const takeaways = toStringArray(cachedContent?.keyTakeaways);
+    const subMisconceptions = extractMisconceptions(cachedContent);
+    const summaryText =
+      buildDiscussionSummary(cachedContent) ||
+      (typeof sub === 'object' && typeof sub?.overview === 'string' ? sub.overview : '') ||
+      objectives.join('; ');
+
+    aggregated.push({
+      title: candidateTitle,
+      summary: summaryText,
+      objectives,
+      keyTakeaways: takeaways,
+      misconceptions: subMisconceptions,
+    });
+
+    pushUniqueRange(learningObjectives, objectives);
+    pushUniqueRange(keyTakeaways, takeaways);
+    pushUniqueRange(misconceptions, subMisconceptions);
+  }
+
+  if (!aggregated.length) {
+    return null;
+  }
+
+  const summary = buildModuleSummary(moduleTitle, aggregated);
+
+  return {
+    moduleId: moduleRecord.id,
+    summary,
+    learningObjectives,
+    keyTakeaways,
+    misconceptions,
+    subtopics: aggregated,
+  };
+}
+
+function pushUniqueRange(target: string[], values: string[]) {
+  for (const value of values) {
+    if (value && !target.includes(value)) {
+      target.push(value);
+    }
+  }
+}
+
+function buildModuleSummary(
+  moduleTitle: string,
+  subtopics: ModuleDiscussionContextResult['subtopics']
+): string {
+  const sections = subtopics.map((item, index) => {
+    const lines: string[] = [`${index + 1}. ${item.title}`];
+    if (item.summary) {
+      lines.push(`Ringkasan: ${item.summary}`);
+    }
+    if (item.objectives.length) {
+      lines.push('Tujuan utama:');
+      lines.push(...item.objectives.map((goal) => `- ${goal}`));
+    }
+    if (item.keyTakeaways.length) {
+      lines.push('Poin penting:');
+      lines.push(...item.keyTakeaways.map((point) => `- ${point}`));
+    }
+    return lines.join('\n');
+  });
+
+  return [
+    `Modul "${moduleTitle}" mencakup ${subtopics.length} subtopik utama dengan fokus berikut:`,
+    ...sections,
+  ].join('\n\n');
 }

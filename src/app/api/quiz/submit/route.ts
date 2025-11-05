@@ -1,6 +1,6 @@
 import { NextResponse } from 'next/server';
 import type { NextRequest } from 'next/server';
-import { DatabaseService } from '@/lib/database';
+import { DatabaseService, adminDb } from '@/lib/database';
 
 interface QuizAnswer {
   question: string;
@@ -13,6 +13,7 @@ interface QuizAnswer {
 interface QuizSubmission {
   userId: string; // Ini adalah email user
   courseId: string;
+  moduleTitle?: string;
   subtopic: string;
   subtopicTitle?: string; // Actual subtopic title from database
   moduleIndex?: number;
@@ -199,6 +200,22 @@ export async function POST(req: NextRequest) {
     });
 
     const successfulMatches = matchingResults.filter(r => r.matched).length;
+
+    const { moduleTitle: resolvedModuleTitle, subtopicTitle: resolvedSubtopicTitle } =
+      await resolveModuleContext({
+        courseId: data.courseId,
+        moduleTitle: data.moduleTitle,
+        subtopicTitle: data.subtopicTitle,
+      });
+
+    if (resolvedModuleTitle && resolvedSubtopicTitle) {
+      await markSubtopicQuizCompletion({
+        courseId: data.courseId,
+        moduleTitle: resolvedModuleTitle,
+        subtopicTitle: resolvedSubtopicTitle,
+        userId: (user as any).id,
+      });
+    }
     
     return NextResponse.json({ 
       success: true, 
@@ -220,4 +237,160 @@ export async function POST(req: NextRequest) {
       { status: 500 }
     );
   }
-} 
+}
+
+function normalizeValue(value?: string | null) {
+  return (value ?? '').trim().toLowerCase();
+}
+
+interface ModuleContextParams {
+  courseId: string;
+  moduleTitle?: string | null;
+  subtopicTitle?: string | null;
+}
+
+interface ModuleContextResult {
+  moduleTitle: string;
+  subtopicTitle: string;
+}
+
+async function resolveModuleContext({
+  courseId,
+  moduleTitle,
+  subtopicTitle,
+}: ModuleContextParams): Promise<ModuleContextResult> {
+  const normalizedModule = normalizeValue(moduleTitle);
+  const normalizedSubtopic = normalizeValue(subtopicTitle);
+
+  if (normalizedModule && normalizedSubtopic) {
+    return {
+      moduleTitle: moduleTitle!.trim(),
+      subtopicTitle: subtopicTitle!.trim(),
+    };
+  }
+
+  try {
+    const modules = await DatabaseService.getRecords<any>('subtopics', {
+      filter: { course_id: courseId },
+      useServiceRole: true,
+    });
+
+    for (const row of modules) {
+      const parsedTitle = typeof row?.title === 'string' ? row.title : '';
+      let parsedContent: any = null;
+      try {
+        parsedContent = row?.content ? JSON.parse(row.content) : null;
+      } catch {
+        parsedContent = null;
+      }
+
+      const moduleName = parsedContent?.module || parsedTitle || '';
+      const normalizedRowModule = normalizeValue(moduleName);
+
+      if (normalizedModule && normalizedRowModule === normalizedModule) {
+        return {
+          moduleTitle: moduleName,
+          subtopicTitle: subtopicTitle?.trim() || '',
+        };
+      }
+
+      if (normalizedSubtopic && Array.isArray(parsedContent?.subtopics)) {
+        const match = parsedContent.subtopics.find((item: any) => {
+          const candidate = typeof item === 'string' ? item : item?.title;
+          return candidate && normalizeValue(candidate) === normalizedSubtopic;
+        });
+
+        if (match) {
+          return {
+            moduleTitle: moduleName,
+            subtopicTitle:
+              subtopicTitle?.trim() ||
+              (typeof match === 'string' ? match : match?.title) ||
+              '',
+          };
+        }
+      }
+    }
+  } catch (contextError) {
+    console.warn('[QuizSubmit] Failed to resolve module context', contextError);
+  }
+
+  return {
+    moduleTitle: moduleTitle?.trim() || '',
+    subtopicTitle: subtopicTitle?.trim() || '',
+  };
+}
+
+interface CompletionParams {
+  courseId: string;
+  moduleTitle: string;
+  subtopicTitle: string;
+  userId: string;
+}
+
+async function markSubtopicQuizCompletion({
+  courseId,
+  moduleTitle,
+  subtopicTitle,
+  userId,
+}: CompletionParams) {
+  if (!courseId || !moduleTitle || !subtopicTitle || !userId) {
+    return;
+  }
+
+  const cacheKey = `${courseId}-${moduleTitle}-${subtopicTitle}`;
+
+  try {
+    const { data: cacheRow, error } = await adminDb
+      .from('subtopic_cache')
+      .select('cache_key, content')
+      .eq('cache_key', cacheKey)
+      .maybeSingle();
+
+    if (error) {
+      console.warn('[QuizSubmit] Failed to load cache for completion tracking', error);
+      return;
+    }
+
+    if (!cacheRow) {
+      console.warn('[QuizSubmit] Cache entry not found for key', cacheKey);
+      return;
+    }
+
+    let content: any = cacheRow.content;
+    if (typeof content === 'string') {
+      try {
+        content = JSON.parse(content);
+      } catch {
+        content = {};
+      }
+    }
+
+    if (!content || typeof content !== 'object') {
+      content = {};
+    }
+
+    const existingUsers = Array.isArray(content.completed_users)
+      ? content.completed_users.map((value: any) => String(value))
+      : [];
+
+    if (!existingUsers.includes(userId)) {
+      content.completed_users = [...existingUsers, userId];
+      content.last_completed_at = new Date().toISOString();
+
+      const { error: updateError } = await adminDb
+        .from('subtopic_cache')
+        .update({
+          content,
+          updated_at: new Date().toISOString(),
+        })
+        .eq('cache_key', cacheKey);
+
+      if (updateError) {
+        console.warn('[QuizSubmit] Failed to update completion state', updateError);
+      }
+    }
+  } catch (completionError) {
+    console.warn('[QuizSubmit] Unable to mark completion', completionError);
+  }
+}

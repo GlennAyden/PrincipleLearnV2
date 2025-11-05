@@ -17,6 +17,8 @@ interface SubtopicStatus {
   answeredCount: number;
   quizCompleted: boolean;
   missingQuestions: string[];
+  completedUsers?: string[];
+  userHasCompletion?: boolean;
 }
 
 const QUIZ_MIN_QUESTIONS_PER_SUBTOPIC = 5;
@@ -226,13 +228,25 @@ async function getHandler(request: NextRequest) {
         });
       }
 
-      const answeredCount = questionBuckets.filter((bucket) =>
+      const completedUsers = Array.isArray(cacheContent?.completed_users)
+        ? cacheContent.completed_users.map((value: any) => String(value))
+        : [];
+      const userHasCompletion = completedUsers.includes(tokenPayload.userId);
+
+      let answeredCount = questionBuckets.filter((bucket) =>
         bucket.ids.some((id) => submissionSet.has(id))
       ).length;
-      const quizQuestionCount = questionBuckets.length;
+      let quizQuestionCount = questionBuckets.length;
+
+      if (userHasCompletion) {
+        answeredCount = Math.max(answeredCount, QUIZ_MIN_QUESTIONS_PER_SUBTOPIC);
+        quizQuestionCount = Math.max(quizQuestionCount, QUIZ_MIN_QUESTIONS_PER_SUBTOPIC);
+      }
+
       const quizCompleted =
-        quizQuestionCount >= QUIZ_MIN_QUESTIONS_PER_SUBTOPIC &&
-        answeredCount === quizQuestionCount;
+        userHasCompletion ||
+        (quizQuestionCount >= QUIZ_MIN_QUESTIONS_PER_SUBTOPIC &&
+          answeredCount >= quizQuestionCount);
 
       return {
         key: cacheKey,
@@ -242,6 +256,8 @@ async function getHandler(request: NextRequest) {
         answeredCount,
         quizCompleted,
         missingQuestions,
+        completedUsers,
+        userHasCompletion,
       };
     });
 
@@ -250,10 +266,7 @@ async function getHandler(request: NextRequest) {
     const answeredQuizQuestions = statuses.reduce((sum, item) => sum + item.answeredCount, 0);
 
     const ready = statuses.every(
-      (status) =>
-        status.generated &&
-        status.quizQuestionCount >= QUIZ_MIN_QUESTIONS_PER_SUBTOPIC &&
-        status.answeredCount === status.quizQuestionCount
+      (status) => status.generated && status.quizCompleted
     );
 
     const responseBody = {

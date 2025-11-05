@@ -10,17 +10,17 @@ export interface NextSubtopicsProps {
   items?: Array<string | { title: string }>;
   /** Index modul saat ini */
   moduleIndex: number;
-  /** Course outline untuk mendapatkan module berikutnya */
-  courseOutline?: Array<{
-    module: string;
-    subtopics: Array<string | { title: string; type?: string; isDiscussion?: boolean }>;
-  }>;
+  /** ID modul (subtopic record) untuk query params diskusi */
+  moduleId?: string;
+  /** Judul modul untuk konteks navigasi diskusi */
+  moduleTitle?: string;
 }
 
 export default function NextSubtopics({
   items = [],
   moduleIndex,
-  courseOutline = [],
+  moduleId,
+  moduleTitle,
 }: NextSubtopicsProps) {
   const router = useRouter();
   const { courseId } = useParams<{ courseId: string }>();
@@ -29,7 +29,7 @@ export default function NextSubtopics({
   const raw = searchParams.get('subIdx');
   const currentSubIdx = raw !== null && !isNaN(Number(raw)) ? Number(raw) : 0;
 
-  // Build next subtopics: remaining in current module + first few from next module
+  // Build next subtopics: remaining items in the current module only
   const nextItems: Array<{
     idx: number;
     moduleIdx: number;
@@ -37,7 +37,7 @@ export default function NextSubtopics({
     isDiscussion: boolean;
   }> = [];
 
-  // 1. Add remaining subtopics from current module
+  // Add remaining subtopics from current module
   if (items.length > 0) {
     for (let i = currentSubIdx + 1; i < items.length; i++) {
       const item = items[i];
@@ -55,33 +55,12 @@ export default function NextSubtopics({
     }
   }
 
-  // 2. Add first few subtopics from next module (if exists)
-  const nextModule = courseOutline[moduleIndex + 1];
-  if (nextModule && nextModule.subtopics.length > 0) {
-    // Add up to 3 subtopics from next module
-    const maxFromNextModule = Math.min(3, nextModule.subtopics.length);
-    for (let i = 0; i < maxFromNextModule; i++) {
-      const item = nextModule.subtopics[i];
-      const title = typeof item === 'string' ? item : item.title;
-      const isDiscussion =
-        typeof item === 'object' &&
-        (item?.type === 'discussion' || item?.isDiscussion === true || title?.toLowerCase().includes('diskusi penutup'));
-
-      nextItems.push({
-        idx: i,
-        moduleIdx: moduleIndex + 1,
-        title,
-        isDiscussion,
-      });
-    }
-  }
-
   if (!nextItems.length) {
     return (
       <div className={styles.wrapper}>
         <h3 className={styles.heading}>🎉 Selamat!</h3>
         <p className={styles.completionMessage}>
-          Anda telah menyelesaikan semua materi dalam kursus ini!
+          Anda telah menyelesaikan semua subtopik dalam modul ini!
         </p>
       </div>
     );
@@ -95,17 +74,27 @@ export default function NextSubtopics({
           <li key={`${moduleIdx}-${idx}`} className={styles.item}>
             <button
               className={styles.button}
-              onClick={() =>
-                // Arahkan ke halaman pertama (pageIdx=0) subtopic yang dipilih,
-                // sambil melewatkan moduleIndex dan subIdx sebagai query.
-                router.push(
-                  isDiscussion
-                    ? `/course/${courseId}/discussion/${moduleIdx}?module=${moduleIdx}&subIdx=${
-                        idx > 0 ? idx - 1 : 0
-                      }&title=${encodeURIComponent(title)}`
-                    : `/course/${courseId}/subtopic/${moduleIdx}/0?module=${moduleIdx}&subIdx=${idx}`
-                )
-              }
+              onClick={() => {
+                if (isDiscussion) {
+                  const params = new URLSearchParams({
+                    module: String(moduleIdx),
+                    subIdx: String(idx),
+                    scope: 'module',
+                  });
+                  if (moduleId) {
+                    params.set('moduleId', moduleId);
+                  }
+                  const label = moduleTitle || title;
+                  if (label) {
+                    params.set('title', label);
+                  }
+                  router.push(`/course/${courseId}/discussion/${moduleIdx}?${params.toString()}`);
+                } else {
+                  router.push(
+                    `/course/${courseId}/subtopic/${moduleIdx}/0?module=${moduleIdx}&subIdx=${idx}`
+                  );
+                }
+              }}
             >
               {moduleIdx !== moduleIndex && (
                 <span className={styles.moduleLabel}>
