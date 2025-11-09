@@ -88,6 +88,11 @@ export default function SubtopicPage() {
   })();
 
   const keyBase = `pl-${courseId}-${moduleIndex}-${subtopicIndex}-${pageNumber}`;
+  const [, setSubtopicProgress] = useLocalStorage<Record<string, boolean>>(
+    'pl_subtopic_generated',
+    {}
+  );
+  const subtopicProgressKey = `${courseId}:${moduleIndex}:${subtopicIndex}`;
 
   const [askData, setAskData] = useLocalStorage<{ question: string; answer: string }[]>(
     `${keyBase}-ask`,
@@ -186,6 +191,12 @@ export default function SubtopicPage() {
       (course as any).subtopicDetails?.[moduleIndex]?.[subtopicIndex] ?? null;
     if (cached) {
       setData(cached);
+      setSubtopicProgress((prev) => {
+        if (prev && prev[subtopicProgressKey]) {
+          return prev;
+        }
+        return { ...(prev ?? {}), [subtopicProgressKey]: true };
+      });
       return;
     }
 
@@ -218,6 +229,12 @@ export default function SubtopicPage() {
           },
         };
         setCourse(updated);
+        setSubtopicProgress((prev) => {
+          if (prev && prev[subtopicProgressKey]) {
+            return prev;
+          }
+          return { ...(prev ?? {}), [subtopicProgressKey]: true };
+        });
       } catch (e: any) {
         setError(e.message);
       } finally {
@@ -258,7 +275,7 @@ export default function SubtopicPage() {
     if (data) {
       preloadNextSubtopics();
     }
-  }, [course, moduleIndex, subtopicIndex, data, courseId]);
+  }, [course, moduleIndex, subtopicIndex, courseId, subtopicProgressKey]);
 
   // Initialize challenge question when opening the tab
   useEffect(() => {

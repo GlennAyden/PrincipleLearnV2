@@ -81,8 +81,6 @@ interface ModulePrerequisiteDetails {
   }>;
 }
 
-const PHASE_SEQUENCE = ['diagnosis', 'exploration', 'practice', 'synthesis'];
-
 const PHASE_LABELS: Record<string, string> = {
   diagnosis: 'Diagnosis',
   exploration: 'Penjelasan',
@@ -162,14 +160,41 @@ export default function DiscussionModulePage() {
   const [inputValue, setInputValue] = useState('');
   const [selectedOption, setSelectedOption] = useState<string | null>(null);
   const [submitting, setSubmitting] = useState(false);
+  const [showGoalPanel, setShowGoalPanel] = useState(false);
 
   const threadEndRef = useRef<HTMLDivElement | null>(null);
+  const goalToggleRef = useRef<HTMLButtonElement | null>(null);
+  const goalPanelRef = useRef<HTMLDivElement | null>(null);
 
   useEffect(() => {
     if (threadEndRef.current) {
       threadEndRef.current.scrollIntoView({ behavior: 'smooth' });
     }
   }, [messages.length]);
+
+  useEffect(() => {
+    if (!showGoalPanel) return;
+
+    function handleClickAway(event: MouseEvent) {
+      const target = event.target as Node;
+      if (
+        goalPanelRef.current?.contains(target) ||
+        goalToggleRef.current?.contains(target)
+      ) {
+        return;
+      }
+      setShowGoalPanel(false);
+    }
+
+    document.addEventListener('mousedown', handleClickAway);
+    return () => {
+      document.removeEventListener('mousedown', handleClickAway);
+    };
+  }, [showGoalPanel]);
+
+  useEffect(() => {
+    setShowGoalPanel(false);
+  }, [session?.id]);
 
   useEffect(() => {
     if (!courseId) return;
@@ -538,28 +563,89 @@ export default function DiscussionModulePage() {
     }
   };
 
-  const currentPhase = normalizePhase(session?.phase);
-  const currentPhaseIndex =
-    currentPhase === 'completed'
-      ? PHASE_SEQUENCE.length
-      : Math.max(0, PHASE_SEQUENCE.findIndex((item) => item === currentPhase));
-
-  const phaseItems = PHASE_SEQUENCE.map((phase, index) => {
-    let state: 'pending' | 'active' | 'done' = 'pending';
-    if (currentPhase === 'completed' || (currentPhaseIndex !== -1 && index < currentPhaseIndex)) {
-      state = 'done';
-    } else if (index === currentPhaseIndex) {
-      state = 'active';
-    }
-    return {
-      key: phase,
-      label: getPhaseLabel(phase),
-      state,
-    };
-  });
-
   const goals = session?.learningGoals ?? [];
   const completedGoals = goals.filter((goal) => goal.covered).length;
+  const totalGoals = goals.length;
+  const allGoalsCompleted = totalGoals > 0 && completedGoals === totalGoals;
+  const hasMessages = messages.length > 0;
+  const goalPanelId = session?.id ? `discussion-goal-panel-${session.id}` : 'discussion-goal-panel';
+  const isCurrentStepMcq =
+    (currentStep?.expected_type ?? '').toLowerCase() === 'mcq' &&
+    Array.isArray(currentStep?.options);
+  const mcqOptions = isCurrentStepMcq ? (currentStep?.options as string[]) : [];
+  const canSubmitResponse = currentStep
+    ? isCurrentStepMcq
+      ? Boolean(selectedOption)
+      : Boolean(inputValue.trim())
+    : false;
+
+  useEffect(() => {
+    if (showGoalPanel && totalGoals === 0) {
+      setShowGoalPanel(false);
+    }
+  }, [showGoalPanel, totalGoals]);
+
+  const shouldRenderComposer = session?.status !== 'completed' && Boolean(currentStep);
+
+  const renderComposer = () => {
+    if (!currentStep) return null;
+    const baseClass = [styles.composer, styles.composerStandalone];
+    return (
+      <form className={baseClass.join(' ')} onSubmit={handleSubmit}>
+        {isCurrentStepMcq ? (
+          <>
+            <div className={styles.optionList}>
+              {mcqOptions.map((option) => (
+                <label key={option} className={styles.optionItem}>
+                  <input
+                    type="radio"
+                    name="discussion-option"
+                    value={option}
+                    checked={selectedOption === option}
+                    onChange={() => setSelectedOption(option)}
+                    disabled={submitting}
+                  />
+                  <span>{option}</span>
+                </label>
+              ))}
+            </div>
+            <div className={styles.actions}>
+              <button
+                type="submit"
+                className={styles.mcqSubmit}
+                disabled={submitting || !canSubmitResponse}
+              >
+                {submitting ? 'Mengirim...' : 'Kirim Jawaban'}
+              </button>
+            </div>
+          </>
+        ) : (
+          <div className={styles.responseWrapper}>
+            <textarea
+              className={styles.textarea}
+              placeholder="Tuliskan pemikiran dan penjelasan Anda..."
+              value={inputValue}
+              onChange={(event) => setInputValue(event.target.value)}
+              disabled={submitting}
+              rows={3}
+            />
+            <button
+              type="submit"
+              className={styles.sendButton}
+              disabled={submitting || !canSubmitResponse}
+            >
+              <span className={styles.sendButtonText}>
+                {submitting ? 'Mengirim...' : 'Kirim Jawaban'}
+              </span>
+              <span className={styles.sendButtonIcon} aria-hidden="true">
+                ↑
+              </span>
+            </button>
+          </div>
+        )}
+      </form>
+    );
+  };
 
   const statusBadge =
     session?.status === 'completed'
@@ -768,52 +854,92 @@ export default function DiscussionModulePage() {
 
           <div className={styles.layout}>
             <section className={styles.threadSection}>
-              <div className={styles.phaseRow}>
-                {phaseItems.map((phase) => (
+              <div className={styles.discussionTop}>
+                <button
+                  type="button"
+                  ref={goalToggleRef}
+                  className={`${styles.goalToggle} ${
+                    showGoalPanel ? styles.goalToggleOpen : ''
+                  } ${allGoalsCompleted ? styles.goalToggleDone : ''}`}
+                  onClick={() => setShowGoalPanel((prev) => !prev)}
+                  disabled={totalGoals === 0}
+                  aria-expanded={showGoalPanel}
+                  aria-controls={totalGoals > 0 ? goalPanelId : undefined}
+                  aria-haspopup="listbox"
+                >
+                  <span className={styles.goalToggleLabel}>Goal Diskusi</span>
+                  <span className={styles.goalToggleSummary}>
+                    {totalGoals > 0 ? `${completedGoals}/${totalGoals} tercapai` : 'Belum ada goal'}
+                  </span>
+                  <span className={styles.goalToggleChevron} aria-hidden="true" />
+                </button>
+                {showGoalPanel && totalGoals > 0 && (
                   <div
-                    key={phase.key}
-                    className={`${styles.phaseChip} ${
-                      phase.state === 'done'
-                        ? styles.phaseChipDone
-                        : phase.state === 'active'
-                        ? styles.phaseChipActive
-                        : styles.phaseChipPending
-                    }`}
+                    id={goalPanelId}
+                    className={styles.goalDropdown}
+                    ref={goalPanelRef}
+                    role="listbox"
+                    aria-label="Daftar goal diskusi"
                   >
-                    {phase.label}
+                    <div className={styles.goalDropdownHeader}>
+                      <h3>Tujuan Diskusi</h3>
+                      <p>
+                        {completedGoals}/{totalGoals} tercapai
+                      </p>
+                      <span className={styles.goalDropdownPhase}>
+                        Fase aktif: {getPhaseLabel(session?.phase)}
+                      </span>
+                    </div>
+                    <ul className={styles.goalDropdownList}>
+                      {goals.map((goal) => (
+                        <li
+                          key={goal.id}
+                          className={styles.goalDropdownItem}
+                          role="option"
+                          aria-selected={goal.covered}
+                        >
+                          <span
+                            className={`${styles.goalCircle} ${
+                              goal.covered ? styles.goalCircleDone : ''
+                            }`}
+                            aria-hidden="true"
+                          />
+                          <p>{goal.description}</p>
+                        </li>
+                      ))}
+                    </ul>
                   </div>
-                ))}
+                )}
               </div>
 
-              <div className={styles.thread}>
-                {messages.length === 0 && (
-                  <div className={styles.emptyThread}>
-                    Mentor siap memulai diskusi. Berikan jawaban terbaik Anda untuk setiap
-                    pertanyaan.
+              <div className={`${styles.thread} ${!hasMessages ? styles.threadEmpty : ''}`}>
+                {!hasMessages && (
+                  <div className={styles.introCard}>
+                    <h2>Mari kita diskusi untuk memperkuat pemahamanmu. Kau siap?</h2>
+                    {currentStep?.prompt && (
+                      <p className={styles.introPrompt}>{currentStep.prompt}</p>
+                    )}
+                    <p className={styles.introHint}>
+                      Ketik jawabanmu lalu tekan tombol kirim untuk memulai diskusi.
+                    </p>
                   </div>
                 )}
                 {messages.map((message, index) => {
                   const isAgent = message.role === 'agent';
                   const meta = message.metadata ?? {};
-                  const phaseLabel = getPhaseLabel(meta.phase);
                   const timestamp = formatTimestamp(message.created_at);
                   return (
                     <div
-                      key={message.id ?? `${message.role}-${index}`}
-                      className={`${styles.message} ${
-                        isAgent ? styles.messageAgent : styles.messageStudent
-                      }`}
-                    >
-                      <div className={styles.messageHeader}>
-                        <span className={styles.messageAuthor}>
-                          {isAgent ? 'Mentor' : 'Anda'}
-                        </span>
-                        {meta.phase && (
-                          <span className={styles.messagePhase}>{phaseLabel}</span>
-                        )}
-                        {timestamp && (
-                          <span className={styles.messageTime}>{timestamp}</span>
-                        )}
+              key={message.id ?? `${message.role}-${index}`}
+              className={`${styles.message} ${
+                isAgent ? styles.messageAgent : styles.messageStudent
+              }`}
+            >
+              <div className={styles.messageHeader}>
+                <span className={styles.messageAuthor}>
+                  {isAgent ? 'Mentor' : 'Anda'}
+                </span>
+                        {timestamp && <span className={styles.messageTime}>{timestamp}</span>}
                       </div>
                       <div className={styles.messageBody}>{message.content}</div>
                       {Array.isArray(meta.assessments) && meta.assessments.length > 0 && (
@@ -826,114 +952,36 @@ export default function DiscussionModulePage() {
                     </div>
                   );
                 })}
+                {session?.status === 'completed' && (
+                  <div className={styles.completedPanel}>
+                    <p>
+                      Semua tujuan pembelajaran telah tercapai. Lanjutkan perjalanan belajar ke
+                      modul berikutnya.
+                    </p>
+                    <button
+                      className={styles.primaryButton}
+                      onClick={() => router.push(nextModuleHref)}
+                      type="button"
+                    >
+                      Lanjut Modul Berikutnya
+                    </button>
+                  </div>
+                )}
+                {!shouldRenderComposer && session?.status !== 'completed' && (
+                  <div className={styles.waitingPanel}>
+                    {loading
+                      ? 'Memuat instruksi berikutnya...'
+                      : 'Sesi diskusi ditutup. Tunggu arahan mentor berikutnya.'}
+                  </div>
+                )}
                 <div ref={threadEndRef} />
               </div>
+              {shouldRenderComposer && (
+                <div className={styles.composerDock}>{renderComposer()}</div>
+              )}
             </section>
 
-            <aside className={styles.sidebar}>
-              <div className={styles.sidebarCard}>
-                <h2 className={styles.sidebarTitle}>Tujuan Pembelajaran</h2>
-                <p className={styles.sidebarSubtitle}>
-                  {completedGoals}/{goals.length} tercapai
-                </p>
-                <ul className={styles.goalList}>
-                  {goals.map((goal) => (
-                    <li
-                      key={goal.id}
-                      className={`${styles.goalItem} ${
-                        goal.covered ? styles.goalItemDone : ''
-                      }`}
-                    >
-                      <span className={styles.goalStatus}>
-                        {goal.covered ? '✔' : '○'}
-                      </span>
-                      <span className={styles.goalText}>{goal.description}</span>
-                    </li>
-                  ))}
-                </ul>
-              </div>
-              <div className={styles.sidebarCard}>
-                <h2 className={styles.sidebarTitle}>Fase Aktif</h2>
-                <p className={styles.sidebarPhase}>{getPhaseLabel(session?.phase)}</p>
-                <p className={styles.sidebarHint}>
-                  Jawablah sesuai instruksi mentor. Umpan balik otomatis akan muncul setiap
-                  kali Anda mengirim respons.
-                </p>
-              </div>
-            </aside>
           </div>
-
-          <footer className={styles.inputContainer}>
-            {session?.status === 'completed' ? (
-              <div className={styles.completedPanel}>
-                <p>
-                  Semua tujuan pembelajaran telah tercapai. Lanjutkan perjalanan belajar ke
-                  modul berikutnya.
-                </p>
-                <button
-                  className={styles.primaryButton}
-                  onClick={() => router.push(nextModuleHref)}
-                >
-                  Lanjut Modul Berikutnya
-                </button>
-              </div>
-            ) : currentStep ? (
-              <form className={styles.inputForm} onSubmit={handleSubmit}>
-                <div className={styles.prompt}>
-                  <h3>Pertanyaan Mentor</h3>
-                  <p>{currentStep.prompt}</p>
-                </div>
-                {(currentStep.expected_type ?? '').toLowerCase() === 'mcq' &&
-                Array.isArray(currentStep.options) ? (
-                  <div className={styles.optionList}>
-                    {currentStep.options.map((option) => (
-                      <label key={option} className={styles.optionItem}>
-                        <input
-                          type="radio"
-                          name="discussion-option"
-                          value={option}
-                          checked={selectedOption === option}
-                          onChange={() => setSelectedOption(option)}
-                          disabled={submitting}
-                        />
-                        <span>{option}</span>
-                      </label>
-                    ))}
-                  </div>
-                ) : (
-                  <textarea
-                    className={styles.textarea}
-                    placeholder="Tuliskan pemikiran dan penjelasan Anda..."
-                    value={inputValue}
-                    onChange={(event) => setInputValue(event.target.value)}
-                    disabled={submitting}
-                    rows={4}
-                  />
-                )}
-                <div className={styles.actions}>
-                  <button
-                    type="submit"
-                    className={styles.primaryButton}
-                    disabled={
-                      submitting ||
-                      (!inputValue.trim() &&
-                        (currentStep.expected_type ?? '').toLowerCase() !== 'mcq') ||
-                      ((currentStep.expected_type ?? '').toLowerCase() === 'mcq' &&
-                        !selectedOption)
-                    }
-                  >
-                    {submitting ? 'Mengirim...' : 'Kirim Jawaban'}
-                  </button>
-                </div>
-              </form>
-            ) : (
-              <div className={styles.waitingPanel}>
-                {loading
-                  ? 'Memuat instruksi berikutnya…'
-                  : 'Sesi diskusi ditutup. Tunggu arahan mentor berikutnya.'}
-              </div>
-            )}
-          </footer>
         </>
       )}
     </div>

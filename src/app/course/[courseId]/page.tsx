@@ -123,6 +123,7 @@ function DiscussionCard({
         const params = new URLSearchParams({
           courseId,
         });
+        params.set('scope', scope);
         if (moduleId) {
           params.set('subtopicId', moduleId);
         }
@@ -131,6 +132,7 @@ function DiscussionCard({
         }
         const res = await fetch(`/api/discussion/history?${params.toString()}`, {
           credentials: 'include',
+          cache: 'no-store',
         });
         if (res.status === 404) {
           if (!cancelled) {
@@ -154,7 +156,9 @@ function DiscussionCard({
         }
       } catch (err: any) {
         if (!cancelled) {
-          setError(err?.message ?? 'Tidak dapat memuat status diskusi');
+          console.error('[DiscussionCard] unable to load session status:', err);
+          setSession(null);
+          setError(err?.message ?? '');
         }
       } finally {
         if (!cancelled) {
@@ -167,19 +171,13 @@ function DiscussionCard({
     return () => {
       cancelled = true;
     };
-  }, [courseId, moduleId, subtopicTitle]);
+  }, [courseId, moduleId, subtopicTitle, scope]);
 
   const status: 'idle' | 'in_progress' | 'completed' = session
     ? session.status
     : 'idle';
-  const badgeClass =
-    status === 'completed'
-      ? styles.discussionBadgeDone
-      : status === 'in_progress'
-      ? styles.discussionBadgeProgress
-      : styles.discussionBadgeIdle;
-  const badgeLabel =
-    status === 'completed' ? 'Done' : status === 'in_progress' ? 'In Progress' : 'Ready';
+  const showCompletionBadge = status === 'completed';
+  const badgeClass = showCompletionBadge ? styles.discussionBadgeDone : '';
 
   const learningGoals = session?.learningGoals ?? [];
   const completedGoals = learningGoals.filter((goal) => goal.covered).length;
@@ -209,7 +207,9 @@ function DiscussionCard({
       </div>
       <div className={styles.cardTitleRow}>
         <div className={styles.cardTitle}>Diskusi Penutup</div>
-        <span className={`${styles.discussionBadge} ${badgeClass}`}>{badgeLabel}</span>
+        {showCompletionBadge && (
+          <span className={`${styles.discussionBadge} ${badgeClass}`}>Selesai</span>
+        )}
       </div>
       <div className={styles.cardText}>
         <p>
@@ -244,7 +244,7 @@ function DiscussionCard({
         {status === 'idle'
           ? 'Mulai Diskusi'
           : status === 'completed'
-          ? 'Lihat Riwayat Diskusi'
+          ? 'Lihat Ringkasan Diskusi'
           : 'Lanjutkan Diskusi'}
       </button>
     </div>
@@ -265,6 +265,10 @@ export default function CourseOverviewPage() {
   const [course, setCourse] = useState<Course | null>(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
+  const [subtopicProgress] = useLocalStorage<Record<string, boolean>>(
+    'pl_subtopic_generated',
+    {}
+  );
 
   // Load course from database instead of localStorage
   useEffect(() => {
@@ -445,6 +449,9 @@ export default function CourseOverviewPage() {
             typeof sub === 'string'
               ? 'Ringkasan singkat subtopik akan segera tersedia.'
               : sub?.overview ?? 'Ringkasan singkat subtopik akan segera tersedia.';
+          const subtopicKey = `${courseId}:${activeModule}:${idx}`;
+          const hasGenerated = Boolean(subtopicProgress?.[subtopicKey]);
+          const buttonLabel = hasGenerated ? 'Lanjutkan Materi' : 'Mulai Materi';
 
           return (
             <div key={idx} className={styles.card}>
@@ -461,7 +468,7 @@ export default function CourseOverviewPage() {
                   )
                 }
               >
-                Get Started
+                {buttonLabel}
               </button>
             </div>
           );

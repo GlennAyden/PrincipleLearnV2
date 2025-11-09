@@ -3,10 +3,10 @@ import { DatabaseService } from '@/lib/database';
 
 export async function DELETE(
   request: Request,
-  { params }: { params: { id: string } }
+  { params }: { params: Promise<{ id: string }> }
 ) {
   try {
-    const courseId = params.id;
+    const { id: courseId } = await params;
     
     console.log(`[Delete Course] Deleting course with ID: ${courseId}`);
     
@@ -31,10 +31,10 @@ export async function DELETE(
 
 export async function GET(
   request: Request,
-  { params }: { params: { id: string } }
+  { params }: { params: Promise<{ id: string }> }
 ) {
   try {
-    const courseId = params.id;
+    const { id: courseId } = await params;
     
     console.log(`[Get Course] DEBUG: Starting fetch for course ID: ${courseId}`);
     console.log(`[Get Course] DEBUG: Course ID type:`, typeof courseId);
