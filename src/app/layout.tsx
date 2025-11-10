@@ -2,8 +2,15 @@
 import './globals.scss';
 import './font-styles.scss';
 import { ReactNode } from 'react';
+import { Poppins } from 'next/font/google';
 import { RequestCourseProvider } from '../context/RequestCourseContext';
 import { AuthProvider } from '@/hooks/useAuth';
+
+const poppins = Poppins({
+  subsets: ['latin'],
+  weight: ['300', '400', '500', '600', '700'],
+  display: 'swap',
+});
 
 // Metadata for the app
 export const metadata = {
@@ -20,15 +27,9 @@ export default function RootLayout({
   return (
     <html lang="en">
       <head>
-        <link rel="preconnect" href="https://fonts.googleapis.com" />
-        <link rel="preconnect" href="https://fonts.gstatic.com" crossOrigin="" />
-        <link
-          href="https://fonts.googleapis.com/css2?family=Poppins:wght@300;400;500;600;700&display=swap"
-          rel="stylesheet"
-        />
         <meta name="viewport" content="width=device-width, initial-scale=1" />
       </head>
-      <body>
+      <body className={poppins.className}>
         <AuthProvider>
           <RequestCourseProvider>
             {children}

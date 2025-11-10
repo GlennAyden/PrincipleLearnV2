@@ -175,6 +175,12 @@
   justify-content: space-between;
   font-size: 0.8rem;
   color: #64748b;
+  gap: 0.4rem;
+  flex-wrap: wrap;
+
+  span {
+    min-width: fit-content;
+  }
 }
 
 .sessionDetail {
@@ -209,6 +215,141 @@
   p {
     margin: 0.25rem 0 0;
     color: #64748b;
+  }
+}
+
+.headerBadges {
+  display: flex;
+  gap: 0.5rem;
+  align-items: center;
+}
+
+.phaseBadge {
+  padding: 0.35rem 0.8rem;
+  border-radius: 999px;
+  background: rgba(99, 102, 241, 0.12);
+  color: #3730a3;
+  font-weight: 600;
+  font-size: 0.85rem;
+}
+
+.detailHighlights {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+  gap: 1rem;
+}
+
+.highlightCard {
+  border: 1px solid #e2e8f0;
+  border-radius: 0.9rem;
+  padding: 1rem;
+  background: #f8fafc;
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+}
+
+.highlightLabel {
+  font-size: 0.9rem;
+  font-weight: 600;
+  color: #475569;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+}
+
+.highlightValue {
+  font-size: 1.35rem;
+  margin: 0;
+  color: #0f172a;
+}
+
+.highlightHint {
+  margin: 0;
+  color: #64748b;
+  font-size: 0.85rem;
+}
+
+.goalProgress {
+  display: flex;
+  flex-direction: column;
+  gap: 0.4rem;
+}
+
+.goalScore {
+  font-size: 1.25rem;
+  font-weight: 600;
+  color: #0f172a;
+}
+
+.progressBar {
+  height: 8px;
+  border-radius: 999px;
+  background: #e2e8f0;
+  overflow: hidden;
+}
+
+.progressFill {
+  height: 100%;
+  background: linear-gradient(135deg, #10b981, #14b8a6);
+  transition: width 0.3s ease;
+}
+
+.prereqBadge {
+  align-self: flex-start;
+  padding: 0.3rem 0.9rem;
+  border-radius: 999px;
+  font-weight: 600;
+  font-size: 0.85rem;
+}
+
+.prereqReady {
+  background: rgba(34, 197, 94, 0.15);
+  color: #15803d;
+}
+
+.prereqPending {
+  background: rgba(249, 115, 22, 0.15);
+  color: #c2410c;
+}
+
+.prereqStats {
+  display: flex;
+  gap: 1rem;
+  margin-top: 0.35rem;
+
+  div {
+    display: flex;
+    flex-direction: column;
+    gap: 0.15rem;
+
+    label {
+      font-size: 0.75rem;
+      color: #94a3b8;
+      text-transform: uppercase;
+      letter-spacing: 0.05em;
+    }
+
+    strong {
+      font-size: 1.1rem;
+      color: #0f172a;
+    }
+  }
+}
+
+.prereqList {
+  margin: 0.2rem 0 0;
+  padding-left: 1rem;
+  color: #475569;
+  font-size: 0.85rem;
+
+  li {
+    margin-bottom: 0.25rem;
+    list-style: disc;
+
+    small {
+      display: block;
+      color: #c2410c;
+    }
   }
 }
 

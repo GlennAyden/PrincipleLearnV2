@@ -48,11 +48,51 @@ type SessionDetail = {
   adminActions: AdminAction[];
 };
 
+type ModulePrerequisiteSummary = {
+  expectedSubtopics: number;
+  generatedSubtopics: number;
+  totalQuizQuestions: number;
+  answeredQuizQuestions: number;
+  minQuestionsPerSubtopic: number;
+};
+
+type ModulePrerequisiteItem = {
+  key: string;
+  title: string;
+  generated: boolean;
+  quizQuestionCount: number;
+  answeredCount: number;
+  quizCompleted: boolean;
+  missingQuestions: string[];
+};
+
+type ModulePrerequisiteDetails = {
+  ready: boolean;
+  summary: ModulePrerequisiteSummary;
+  subtopics: ModulePrerequisiteItem[];
+};
+
 const STATUS_OPTIONS = [
   { value: 'all', label: 'Semua Status' },
   { value: 'in_progress', label: 'Sedang Berlangsung' },
   { value: 'completed', label: 'Selesai' },
 ];
+
+const PHASE_LABELS: Record<string, string> = {
+  diagnosis: 'Diagnosis',
+  exploration: 'Penjelasan',
+  explanation: 'Penjelasan',
+  practice: 'Latihan',
+  synthesis: 'Konsolidasi',
+  consolidation: 'Konsolidasi',
+  completed: 'Selesai',
+};
+
+function getPhaseLabel(phase?: string) {
+  if (!phase) return 'Belum Mulai';
+  const normalized = phase.toLowerCase();
+  return PHASE_LABELS[normalized] ?? phase;
+}
 
 export default function AdminDiscussionsPage() {
   const router = useRouter();
@@ -68,6 +108,9 @@ export default function AdminDiscussionsPage() {
   const [detail, setDetail] = useState<SessionDetail | null>(null);
   const [loadingDetail, setLoadingDetail] = useState(false);
   const [detailError, setDetailError] = useState<string | null>(null);
+  const [prereqInfo, setPrereqInfo] = useState<ModulePrerequisiteDetails | null>(null);
+  const [prereqLoading, setPrereqLoading] = useState(false);
+  const [prereqError, setPrereqError] = useState<string | null>(null);
 
   const [noteText, setNoteText] = useState('');
   const [notePhase, setNotePhase] = useState<string | null>(null);
@@ -149,6 +192,55 @@ export default function AdminDiscussionsPage() {
     () => detail?.session?.learningGoals ?? [],
     [detail?.session?.learningGoals]
   );
+  const goalStats = useMemo(() => {
+    const total = selectedSessionGoals.length;
+    const covered = selectedSessionGoals.filter((goal) => goal.covered).length;
+    const percentage = total ? Math.round((covered / total) * 100) : 0;
+    return { total, covered, percentage };
+  }, [selectedSessionGoals]);
+
+  useEffect(() => {
+    const courseId = detail?.session?.course?.id;
+    const moduleId = detail?.session?.subtopic?.id;
+    if (!courseId || !moduleId) {
+      setPrereqInfo(null);
+      setPrereqError(null);
+      setPrereqLoading(false);
+      return;
+    }
+    let cancelled = false;
+    setPrereqLoading(true);
+    setPrereqError(null);
+    fetch(`/api/discussion/module-status?courseId=${courseId}&moduleId=${moduleId}`, {
+      credentials: 'include',
+    })
+      .then(async (res) => {
+        if (!res.ok) {
+          const payload = await res.json().catch(() => ({}));
+          throw new Error(payload.error || 'Gagal memuat prasyarat modul');
+        }
+        return res.json();
+      })
+      .then((data: ModulePrerequisiteDetails) => {
+        if (!cancelled) {
+          setPrereqInfo(data);
+        }
+      })
+      .catch((error) => {
+        if (!cancelled) {
+          setPrereqInfo(null);
+          setPrereqError(error?.message ?? 'Tidak dapat memuat prasyarat modul');
+        }
+      })
+      .finally(() => {
+        if (!cancelled) {
+          setPrereqLoading(false);
+        }
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [detail?.session?.course?.id, detail?.session?.subtopic?.id]);
 
   const handleSelectSession = (sessionId: string) => {
     setSelectedSessionId(sessionId);
@@ -316,6 +408,7 @@ export default function AdminDiscussionsPage() {
                       <span>
                         Goals: {coveredCount}/{session.learningGoals.length}
                       </span>
+                      <span>Fase: {getPhaseLabel(session.phase)}</span>
                     </div>
                   </li>
                 );
@@ -339,19 +432,107 @@ export default function AdminDiscussionsPage() {
                 <div>
                   <h2>{detail.session.subtopic.title ?? 'Subtopik'}</h2>
                   <p>
-                    {detail.session.course.title ?? 'Tanpa kursus'} •{' '}
+                    {detail.session.course.title ?? 'Tanpa kursus'} /{' '}
                     {detail.session.user.email ?? 'Anonim'}
                   </p>
                 </div>
-                <span
-                  className={`${styles.statusBadge} ${
-                    detail.session.status === 'completed'
-                      ? styles.statusBadgeDone
-                      : styles.statusBadgeProgress
-                  }`}
-                >
-                  {detail.session.status === 'completed' ? 'Selesai' : 'Berjalan'}
-                </span>
+                <div className={styles.headerBadges}>
+                  <span className={styles.phaseBadge}>
+                    {getPhaseLabel(detail.session.phase)}
+                  </span>
+                  <span
+                    className={`${styles.statusBadge} ${
+                      detail.session.status === 'completed'
+                        ? styles.statusBadgeDone
+                        : styles.statusBadgeProgress
+                    }`}
+                  >
+                    {detail.session.status === 'completed' ? 'Selesai' : 'Berjalan'}
+                  </span>
+                </div>
+              </div>
+
+              <div className={styles.detailHighlights}>
+                <div className={styles.highlightCard}>
+                  <span className={styles.highlightLabel}>Fase Diskusi</span>
+                  <strong className={styles.highlightValue}>
+                    {getPhaseLabel(detail.session.phase)}
+                  </strong>
+                  <p className={styles.highlightHint}>
+                    Terakhir diperbarui:{' '}
+                    {new Date(detail.session.updatedAt).toLocaleString('id-ID')}
+                  </p>
+                </div>
+                <div className={styles.highlightCard}>
+                  <span className={styles.highlightLabel}>Goal Completion</span>
+                  <div className={styles.goalProgress}>
+                    <div className={styles.goalScore}>
+                      {goalStats.covered}/{goalStats.total || '-'}
+                    </div>
+                    <div className={styles.progressBar}>
+                      <div
+                        className={styles.progressFill}
+                        style={{ width: `${goalStats.percentage}%` }}
+                      />
+                    </div>
+                    <small>{goalStats.percentage}% tujuan tercapai</small>
+                  </div>
+                </div>
+                <div className={styles.highlightCard}>
+                  <span className={styles.highlightLabel}>Kesiapan Modul</span>
+                  {prereqLoading ? (
+                    <p className={styles.highlightHint}>Memuat evaluasi prasyarat...</p>
+                  ) : prereqError ? (
+                    <p className={styles.highlightHint}>{prereqError}</p>
+                  ) : prereqInfo ? (
+                    <>
+                      <span
+                        className={`${styles.prereqBadge} ${
+                          prereqInfo.ready ? styles.prereqReady : styles.prereqPending
+                        }`}
+                      >
+                        {prereqInfo.ready ? 'Siap untuk diskusi' : 'Butuh persiapan'}
+                      </span>
+                      <div className={styles.prereqStats}>
+                        <div>
+                          <label>Subtopik</label>
+                          <strong>
+                            {prereqInfo.summary.generatedSubtopics}/
+                            {prereqInfo.summary.expectedSubtopics}
+                          </strong>
+                        </div>
+                        <div>
+                          <label>Kuis Terjawab</label>
+                          <strong>
+                            {prereqInfo.summary.answeredQuizQuestions}/
+                            {prereqInfo.summary.totalQuizQuestions}
+                          </strong>
+                        </div>
+                      </div>
+                      {prereqInfo.subtopics.some(
+                        (item) => !item.generated || !item.quizCompleted
+                      ) && (
+                        <ul className={styles.prereqList}>
+                          {prereqInfo.subtopics
+                            .filter((item) => !item.generated || !item.quizCompleted)
+                            .slice(0, 3)
+                            .map((item) => (
+                              <li key={item.key}>
+                                <span>{item.title}</span>
+                                <small>
+                                  {!item.generated
+                                    ? 'Materi belum digenerate'
+                                    : 'Kuis belum lengkap'}
+                                </small>
+                              </li>
+                            ))}
+                        </ul>
+                      )}
+                    </>
+                  ) : (
+                    <p className={styles.highlightHint}>Tidak ada data prasyarat.</p>
+                  )}
+                </div>
               </div>
 
               <div className={styles.detailGrid}>

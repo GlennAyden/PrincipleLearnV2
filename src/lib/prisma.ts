@@ -1,16 +1,11 @@
 import { PrismaClient } from '@prisma/client';
 
-declare global {
-  // eslint-disable-next-line no-var
-  var prisma: PrismaClient | undefined;
-}
+const globalForPrisma = globalThis as typeof globalThis & {
+  prisma?: PrismaClient;
+};
 
-/**
- * Reuse the Prisma client between hot reloads in development to avoid
- * exhausting the connection pool of the local PostgreSQL instance.
- */
 export const prisma =
-  global.prisma ||
+  globalForPrisma.prisma ||
   new PrismaClient({
     log:
       process.env.NODE_ENV === 'development'
@@ -19,5 +14,5 @@ export const prisma =
   });
 
 if (process.env.NODE_ENV !== 'production') {
-  global.prisma = prisma;
+  globalForPrisma.prisma = prisma;
 }

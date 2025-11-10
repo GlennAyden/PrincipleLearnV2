@@ -128,6 +128,17 @@ export default function SubtopicPage() {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string>('');
 
+  const activeModule = course?.outline?.[moduleIndex];
+  const activeSubtopic = activeModule?.subtopics?.[subtopicIndex];
+  const quizModuleTitle =
+    typeof activeModule?.module === 'string'
+      ? activeModule.module
+      : activeModule?.rawTitle ?? `Module ${moduleIndex + 1}`;
+  const quizSubtopicTitle =
+    typeof activeSubtopic === 'string'
+      ? activeSubtopic
+      : activeSubtopic?.title ?? `Subtopic ${subtopicIndex + 1}`;
+
   // Load course data from database API
   useEffect(() => {
     async function loadCourse() {
@@ -735,18 +746,12 @@ export default function SubtopicPage() {
               Uji pemahaman Anda tentang materi yang telah dipelajari
             </p>
           </div>
-          <Quiz 
-            questions={data.quiz} 
+          <Quiz
+            questions={data.quiz}
             courseId={courseId}
-            moduleTitle={
-              typeof course.outline[moduleIndex]?.module === 'string'
-                ? course.outline[moduleIndex].module
-                : moduleInfo.module
-            }
+            moduleTitle={quizModuleTitle}
             subtopic={`Module ${moduleIndex + 1}, Subtopic ${subtopicIndex + 1}`}
-            subtopicTitle={typeof course.outline[moduleIndex]?.subtopics?.[subtopicIndex] === 'string' 
-              ? course.outline[moduleIndex].subtopics[subtopicIndex] 
-              : course.outline[moduleIndex]?.subtopics?.[subtopicIndex]?.title}
+            subtopicTitle={quizSubtopicTitle}
             moduleIndex={moduleIndex}
             subtopicIndex={subtopicIndex}
           />

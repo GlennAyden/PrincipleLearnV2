@@ -7,7 +7,7 @@ import styles from './page.module.scss'
 import { 
   FiLogOut, FiHome, FiUsers, FiActivity, 
   FiFileText, FiMessageCircle, FiCheckSquare, FiBook,
-  FiEye, FiInfo 
+  FiEye, FiInfo, FiHelpCircle, FiTarget, FiStar, FiX 
 } from 'react-icons/fi'
 import { useRouter, usePathname } from 'next/navigation'
 import { useAdmin } from '@/hooks/useAdmin'
@@ -53,11 +53,60 @@ interface JournalLogItem {
   userId: string
 }
 
+interface AskLogItem {
+  id: string
+  timestamp: string
+  topic: string
+  question: string
+  answer: string
+  userEmail: string
+  userId: string
+  courseTitle: string
+  moduleIndex: number
+  subtopicIndex: number
+  pageNumber: number
+}
+
+interface ChallengeLogItem {
+  id: string
+  timestamp: string
+  topic: string
+  question: string
+  answer: string
+  feedback: string
+  userEmail: string
+  userId: string
+  courseTitle: string
+  moduleIndex: number
+  subtopicIndex: number
+  pageNumber: number
+}
+
+interface FeedbackLogItem {
+  id: string
+  timestamp: string
+  topic: string
+  comment: string
+  rating: number | null
+  userEmail: string
+  userId: string
+  courseTitle: string
+}
+
+type DetailView =
+  | { type: 'ask'; data: AskLogItem }
+  | { type: 'challenge'; data: ChallengeLogItem }
+  | { type: 'feedback'; data: FeedbackLogItem }
+  | null
+
 const TABS = [
   { id: 'generate',  label: 'Log Generate Course', icon: FiFileText },
   { id: 'transcript', label: 'Log Transkrip Q&A', icon: FiMessageCircle },
+  { id: 'ask', label: 'Riwayat Q&A Otomatis', icon: FiHelpCircle },
+  { id: 'challenge', label: 'Challenge Thinking', icon: FiTarget },
   { id: 'quiz',      label: 'Log Pengerjaan Quiz', icon: FiCheckSquare },
   { id: 'jurnal',    label: 'Jurnal Refleksi', icon: FiBook },
+  { id: 'feedback',  label: 'Feedback Belajar', icon: FiStar },
 ]
 
 export default function AdminActivityPage() {
@@ -84,6 +133,9 @@ export default function AdminActivityPage() {
   const [transcriptLogs, setTranscriptLogs] = useState<TranscriptLogItem[]>([])
   const [quizLogs,       setQuizLogs]       = useState<QuizLogItem[]>([])
   const [journalLogs,    setJournalLogs]    = useState<JournalLogItem[]>([])
+  const [askLogs,        setAskLogs]        = useState<AskLogItem[]>([])
+  const [challengeLogs,  setChallengeLogs]  = useState<ChallengeLogItem[]>([])
+  const [feedbackLogs,   setFeedbackLogs]   = useState<FeedbackLogItem[]>([])
 
   // modal state
   const [transcriptModalOpen, setTranscriptModalOpen] = useState(false)
@@ -94,6 +146,7 @@ export default function AdminActivityPage() {
   const [selectedJournal,     setSelectedJournal]     = useState<JournalLogItem | null>(null)
   const [parameterModalOpen,  setParameterModalOpen]  = useState(false)
   const [selectedParameter,   setSelectedParameter]   = useState<GenerateLogItem | null>(null)
+  const [detailView,          setDetailView]          = useState<DetailView>(null)
 
   // redirect if not admin
   useEffect(() => {
@@ -235,14 +288,19 @@ export default function AdminActivityPage() {
     loadCourseTopics();
   }, [selectedCourse])
 
+  const requiresCourseFilter = activeTab !== 'generate'
+  const requiresTopicFilter = ['transcript', 'quiz', 'jurnal', 'ask', 'challenge'].includes(activeTab)
+
   // common helper to build query params
   const buildParams = () => {
     const p = new URLSearchParams()
     if (selectedUser)   p.set('userId', selectedUser)
     if (selectedDate)   p.set('date', selectedDate)
-    if (activeTab !== 'generate') {
-      if (selectedCourse) p.set('course', selectedCourse)
-      if (selectedTopic)  p.set('topic', selectedTopic)
+    if (requiresCourseFilter && selectedCourse) {
+      p.set('course', selectedCourse)
+    }
+    if (requiresTopicFilter && selectedTopic)  {
+      p.set('topic', selectedTopic)
     }
     return p.toString()
   }
@@ -253,9 +311,16 @@ export default function AdminActivityPage() {
 
     // Fetch appropriate data based on the active tab
     const params = buildParams()
-    const fetchUrl = `/api/admin/activity/${activeTab === 'generate' ? 'generate-course' : 
-                                           activeTab === 'transcript' ? 'transcript' : 
-                                           activeTab === 'quiz' ? 'quiz' : 'jurnal'}?${params}`
+    const endpointMap: Record<string, string> = {
+      generate: 'generate-course',
+      transcript: 'transcript',
+      quiz: 'quiz',
+      jurnal: 'jurnal',
+      ask: 'ask-question',
+      challenge: 'challenge',
+      feedback: 'feedback',
+    }
+    const fetchUrl = `/api/admin/activity/${endpointMap[activeTab] ?? 'generate-course'}?${params}`
     
     // Debug: log the API URLs being called
     console.log(`Fetching activity data from: ${fetchUrl}`)
@@ -285,6 +350,15 @@ export default function AdminActivityPage() {
           case 'jurnal':
             setJournalLogs(data)
             break
+          case 'ask':
+            setAskLogs(data)
+            break
+          case 'challenge':
+            setChallengeLogs(data)
+            break
+          case 'feedback':
+            setFeedbackLogs(data)
+            break
         }
       })
       .catch(error => {
@@ -302,6 +376,15 @@ export default function AdminActivityPage() {
         break
       case 'jurnal':
             setJournalLogs([])
+        break
+      case 'ask':
+            setAskLogs([])
+        break
+      case 'challenge':
+            setChallengeLogs([])
+        break
+      case 'feedback':
+            setFeedbackLogs([])
         break
     }
       })
@@ -374,39 +457,39 @@ export default function AdminActivityPage() {
             <option value="2025-05-12">12/05/2025</option>
           </select>
 
-          {activeTab !== 'generate' && (
-            <>
-              <select
-                className={styles.select}
-                value={selectedCourse}
-                onChange={(e) => {
-                  setSelectedCourse(e.target.value)
-                  // Reset topic when course changes
-                  setSelectedTopic('')
-                }}
-              >
-                <option value="">Course</option>
-                {courses.map((course) => (
-                  <option key={course.id} value={course.id}>
-                    {course.title}
-                  </option>
-                ))}
-              </select>
+          {requiresCourseFilter && (
+            <select
+              className={styles.select}
+              value={selectedCourse}
+              onChange={(e) => {
+                setSelectedCourse(e.target.value)
+                // Reset topic when course changes
+                setSelectedTopic('')
+              }}
+            >
+              <option value="">Course</option>
+              {courses.map((course) => (
+                <option key={course.id} value={course.id}>
+                  {course.title}
+                </option>
+              ))}
+            </select>
+          )}
 
-              <select
-                className={styles.select}
-                value={selectedTopic}
-                onChange={(e) => setSelectedTopic(e.target.value)}
-                disabled={!selectedCourse}
-              >
-                <option value="">Topic/Subtopic</option>
-                {topics.map((topic) => (
-                  <option key={topic.id} value={topic.id}>
-                    {topic.title}
-                  </option>
-                ))}
-              </select>
-            </>
+          {requiresTopicFilter && (
+            <select
+              className={styles.select}
+              value={selectedTopic}
+              onChange={(e) => setSelectedTopic(e.target.value)}
+              disabled={!selectedCourse}
+            >
+              <option value="">Topic/Subtopic</option>
+              {topics.map((topic) => (
+                <option key={topic.id} value={topic.id}>
+                  {topic.title}
+                </option>
+              ))}
+            </select>
           )}
 
           <button className={styles.logout} onClick={() => router.push('/admin/login')}>
@@ -553,6 +636,103 @@ export default function AdminActivityPage() {
             </>
           )}
 
+          {/* Ask Question */}
+          {activeTab === 'ask' && (
+            <>
+              <table className={styles.table}>
+                <thead>
+                  <tr>
+                    <th>Timestamp</th>
+                    <th>User</th>
+                    <th>Subtopik</th>
+                    <th>Pertanyaan</th>
+                    <th>Jawaban</th>
+                    <th>Aksi</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {askLogs.length === 0 ? (
+                    <tr>
+                      <td colSpan={6} className={styles.noData}>Belum ada riwayat Q&A otomatis</td>
+                    </tr>
+                  ) : (
+                    askLogs.map((log) => {
+                      const answerSummary = log.answer.length > 60 ? `${log.answer.slice(0, 60)}...` : log.answer
+                      return (
+                        <tr key={log.id}>
+                          <td>{log.timestamp}</td>
+                          <td>{log.userEmail}</td>
+                          <td>{log.topic}</td>
+                          <td>{log.question}</td>
+                          <td>{answerSummary}</td>
+                          <td>
+                            <button
+                              className={styles.detailButton}
+                              onClick={() => setDetailView({ type: 'ask', data: log })}
+                            >
+                              <FiEye className={styles.buttonIcon} /> Detail
+                            </button>
+                          </td>
+                        </tr>
+                      )
+                    })
+                  )}
+                </tbody>
+              </table>
+            </>
+          )}
+
+          {/* Challenge Thinking */}
+          {activeTab === 'challenge' && (
+            <>
+              <table className={styles.table}>
+                <thead>
+                  <tr>
+                    <th>Timestamp</th>
+                    <th>User</th>
+                    <th>Subtopik</th>
+                    <th>Pertanyaan Tantangan</th>
+                    <th>Status</th>
+                    <th>Aksi</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {challengeLogs.length === 0 ? (
+                    <tr>
+                      <td colSpan={6} className={styles.noData}>Belum ada catatan challenge thinking</td>
+                    </tr>
+                  ) : (
+                    challengeLogs.map((log) => {
+                      const answerSummary = log.answer.length > 60 ? `${log.answer.slice(0, 60)}...` : log.answer
+                      const hasFeedback = Boolean(log.feedback)
+                      return (
+                        <tr key={log.id}>
+                          <td>{log.timestamp}</td>
+                          <td>{log.userEmail}</td>
+                          <td>{log.topic}</td>
+                          <td>{answerSummary}</td>
+                          <td>
+                            <span className={`${styles.pill} ${hasFeedback ? styles.pillSuccess : styles.pillMuted}`}>
+                              {hasFeedback ? 'Dinilai' : 'Belum Dinilai'}
+                            </span>
+                          </td>
+                          <td>
+                            <button
+                              className={styles.detailButton}
+                              onClick={() => setDetailView({ type: 'challenge', data: log })}
+                            >
+                              <FiEye className={styles.buttonIcon} /> Detail
+                            </button>
+                          </td>
+                        </tr>
+                      )
+                    })
+                  )}
+                </tbody>
+              </table>
+            </>
+          )}
+
           {/* Quiz */}
           {activeTab === 'quiz' && (
             <>
@@ -601,6 +781,51 @@ export default function AdminActivityPage() {
                   onClose={() => setQuizModalOpen(false)}
                 />
               )}
+            </>
+          )}
+
+          {/* Feedback */}
+          {activeTab === 'feedback' && (
+            <>
+              <table className={styles.table}>
+                <thead>
+                  <tr>
+                    <th>Timestamp</th>
+                    <th>User</th>
+                    <th>Course</th>
+                    <th>Rating</th>
+                    <th>Feedback</th>
+                    <th>Aksi</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {feedbackLogs.length === 0 ? (
+                    <tr>
+                      <td colSpan={6} className={styles.noData}>Belum ada feedback</td>
+                    </tr>
+                  ) : (
+                    feedbackLogs.map((log) => (
+                      <tr key={log.id}>
+                        <td>{log.timestamp}</td>
+                        <td>{log.userEmail}</td>
+                        <td>{log.courseTitle}</td>
+                        <td>{log.rating ?? '-'}</td>
+                        <td>
+                          {log.comment.length > 60 ? `${log.comment.slice(0, 60)}...` : log.comment || '-'}
+                        </td>
+                        <td>
+                          <button
+                            className={styles.detailButton}
+                            onClick={() => setDetailView({ type: 'feedback', data: log })}
+                          >
+                            <FiEye className={styles.buttonIcon} /> Detail
+                          </button>
+                        </td>
+                      </tr>
+                    ))
+                  )}
+                </tbody>
+              </table>
             </>
           )}
 
@@ -659,7 +884,111 @@ export default function AdminActivityPage() {
             </>
           )}
         </section>
+        {detailView && (
+          <DetailDrawer view={detailView} onClose={() => setDetailView(null)} />
+        )}
       </main>
+    </div>
+  )
+}
+
+type DrawerProps = {
+  view: Exclude<DetailView, null>
+  onClose: () => void
+}
+
+function DetailDrawer({ view, onClose }: DrawerProps) {
+  const { type } = view
+
+  const titleMap: Record<NonNullable<DetailView>['type'], string> = {
+    ask: 'Detail Q&A Otomatis',
+    challenge: 'Detail Challenge Thinking',
+    feedback: 'Detail Feedback Pembelajaran',
+  }
+  const meta = view.data as { userEmail: string; timestamp: string }
+
+  const renderContent = () => {
+    switch (type) {
+      case 'ask': {
+        const askData = view.data as AskLogItem
+        return (
+          <>
+            <div className={styles.detailRow}>
+              <span className={styles.detailLabel}>Subtopik</span>
+              <span className={styles.detailValue}>{askData.topic}</span>
+            </div>
+            <div className={styles.detailRow}>
+              <span className={styles.detailLabel}>Pertanyaan</span>
+              <p className={styles.detailValue}>{askData.question}</p>
+            </div>
+            <div className={styles.detailRow}>
+              <span className={styles.detailLabel}>Jawaban</span>
+              <p className={styles.detailValue}>{askData.answer}</p>
+            </div>
+          </>
+        )
+      }
+      case 'challenge': {
+        const challengeData = view.data as ChallengeLogItem
+        return (
+          <>
+            <div className={styles.detailRow}>
+              <span className={styles.detailLabel}>Subtopik</span>
+              <span className={styles.detailValue}>{challengeData.topic}</span>
+            </div>
+            <div className={styles.detailRow}>
+              <span className={styles.detailLabel}>Pertanyaan Tantangan</span>
+              <p className={styles.detailValue}>{challengeData.question}</p>
+            </div>
+            <div className={styles.detailRow}>
+              <span className={styles.detailLabel}>Jawaban Siswa</span>
+              <p className={styles.detailValue}>{challengeData.answer}</p>
+            </div>
+            <div className={styles.detailRow}>
+              <span className={styles.detailLabel}>Feedback Mentor</span>
+              <p className={styles.detailValue}>{challengeData.feedback || 'Belum ada feedback tambahan'}</p>
+            </div>
+          </>
+        )
+      }
+      case 'feedback': {
+        const feedbackData = view.data as FeedbackLogItem
+        return (
+          <>
+            <div className={styles.detailRow}>
+              <span className={styles.detailLabel}>Course</span>
+              <span className={styles.detailValue}>{feedbackData.courseTitle}</span>
+            </div>
+            <div className={styles.detailRow}>
+              <span className={styles.detailLabel}>Rating</span>
+              <span className={styles.detailValue}>{feedbackData.rating ?? '-'}</span>
+            </div>
+            <div className={styles.detailRow}>
+              <span className={styles.detailLabel}>Komentar</span>
+              <p className={styles.detailValue}>{feedbackData.comment || '-'}</p>
+            </div>
+          </>
+        )
+      }
+    }
+  }
+
+  return (
+    <div className={styles.detailDrawerOverlay} onClick={onClose}>
+      <div className={styles.detailDrawer} onClick={(e) => e.stopPropagation()}>
+        <header className={styles.detailHeader}>
+          <div>
+            <h3>{titleMap[type]}</h3>
+            <p className={styles.detailMeta}>
+              {meta.userEmail} • {meta.timestamp}
+            </p>
+          </div>
+          <button className={styles.closeButton} onClick={onClose}>
+            <FiX />
+          </button>
+        </header>
+        <div className={styles.detailBody}>{renderContent()}</div>
+      </div>
     </div>
   )
 }
