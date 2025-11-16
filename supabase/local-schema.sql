@@ -5,6 +5,7 @@ DROP TABLE IF EXISTS public.discussion_templates CASCADE;
 DROP TABLE IF EXISTS public.ask_question_history CASCADE;
 DROP TABLE IF EXISTS public.challenge_responses CASCADE;
 DROP TABLE IF EXISTS public.feedback CASCADE;
+DROP TABLE IF EXISTS public.admin_subtopic_delete_logs CASCADE;
 DROP TABLE IF EXISTS public.course_generation_activity CASCADE;
 DROP TABLE IF EXISTS public.jurnal CASCADE;
 DROP TABLE IF EXISTS public.quiz_submissions CASCADE;
@@ -169,6 +170,23 @@ CREATE TABLE public.course_generation_activity (
   CONSTRAINT course_generation_activity_pkey PRIMARY KEY (id),
   CONSTRAINT course_generation_activity_course_id_fkey FOREIGN KEY (course_id) REFERENCES public.courses(id),
   CONSTRAINT course_generation_activity_user_id_fkey FOREIGN KEY (user_id) REFERENCES public.users(id)
+);
+
+CREATE TABLE public.admin_subtopic_delete_logs (
+  id uuid NOT NULL DEFAULT gen_random_uuid(),
+  admin_id uuid,
+  admin_email text,
+  user_id uuid NOT NULL,
+  course_id uuid NOT NULL,
+  subtopic_id uuid,
+  subtopic_title text NOT NULL,
+  note text,
+  created_at timestamp with time zone DEFAULT now(),
+  CONSTRAINT admin_subtopic_delete_logs_pkey PRIMARY KEY (id),
+  CONSTRAINT admin_subtopic_delete_logs_admin_id_fkey FOREIGN KEY (admin_id) REFERENCES public.users(id),
+  CONSTRAINT admin_subtopic_delete_logs_course_id_fkey FOREIGN KEY (course_id) REFERENCES public.courses(id),
+  CONSTRAINT admin_subtopic_delete_logs_user_id_fkey FOREIGN KEY (user_id) REFERENCES public.users(id),
+  CONSTRAINT admin_subtopic_delete_logs_subtopic_id_fkey FOREIGN KEY (subtopic_id) REFERENCES public.subtopics(id)
 );
 
 CREATE TABLE public.jurnal (

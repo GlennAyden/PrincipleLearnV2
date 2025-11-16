@@ -48,6 +48,26 @@ interface ActivitySummary {
   }
 }
 
+interface CourseSubtopicSummary {
+  courseId: string
+  courseTitle: string
+  subtopics: Array<{
+    subtopicId: string
+    title: string
+    orderIndex: number
+  }>
+}
+
+interface DeleteLogEntry {
+  id: string
+  subtopicId: string | null
+  subtopicTitle: string
+  courseId: string
+  adminEmail: string | null
+  createdAt: string
+  note?: string | null
+}
+
 export default function AdminUsersPage() {
   const router = useRouter()
   const pathname = usePathname()
@@ -61,6 +81,10 @@ export default function AdminUsersPage() {
   const [activitySummary, setActivitySummary] = useState<ActivitySummary | null>(null)
   const [activityLoading, setActivityLoading] = useState(false)
   const [activityError, setActivityError] = useState<string | null>(null)
+  const [subtopicData, setSubtopicData] = useState<{ courses: CourseSubtopicSummary[]; deleteLogs: DeleteLogEntry[] } | null>(null)
+  const [subtopicLoading, setSubtopicLoading] = useState(false)
+  const [subtopicError, setSubtopicError] = useState<string | null>(null)
+  const [subtopicAction, setSubtopicAction] = useState<string | null>(null)
 
   // Fetch users data
   useEffect(() => {
@@ -133,6 +157,48 @@ export default function AdminUsersPage() {
     setSelectedUserId(id)
   }
 
+  const isSubtopicLogged = (subtopicId: string) => {
+    return subtopicData?.deleteLogs.some((log) => log.subtopicId === subtopicId) ?? false
+  }
+
+  const handleLogSubtopicDelete = async (courseId: string, subtopicId: string, title: string) => {
+    if (!selectedUserId) return
+    if (typeof window !== 'undefined') {
+      const confirm = window.confirm(`Log delete untuk subtopik "${title}"? Ini tidak akan menghapus data siswa.`)
+      if (!confirm) return
+    }
+
+    try {
+      setSubtopicAction(subtopicId)
+      const response = await fetch(`/api/admin/users/${selectedUserId}/subtopics`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        credentials: 'include',
+        body: JSON.stringify({ courseId, subtopicId }),
+      })
+      if (!response.ok) {
+        const error = await response.json().catch(() => ({ message: 'Failed to log delete' }))
+        throw new Error(error.message || 'Failed to log delete')
+      }
+      const data: DeleteLogEntry = await response.json()
+      setSubtopicData((prev) =>
+        prev
+          ? {
+              courses: prev.courses,
+              deleteLogs: [data, ...prev.deleteLogs],
+            }
+          : prev
+      )
+    } catch (error: any) {
+      console.error('Error logging delete action:', error)
+      if (typeof window !== 'undefined') {
+        window.alert(error.message || 'Gagal mencatat delete log')
+      }
+    } finally {
+      setSubtopicAction(null)
+    }
+  }
+
   const displayedUsers = useMemo(
     () =>
       filterUser
@@ -182,6 +248,32 @@ export default function AdminUsersPage() {
         setActivityError(err.message || 'Unable to load activity detail')
       })
       .finally(() => setActivityLoading(false))
+  }, [selectedUserId])
+
+  useEffect(() => {
+    if (!selectedUserId) {
+      setSubtopicData(null)
+      return
+    }
+    setSubtopicLoading(true)
+    setSubtopicError(null)
+
+    fetch(`/api/admin/users/${selectedUserId}/subtopics`, {
+      credentials: 'include',
+    })
+      .then(async (res) => {
+        if (!res.ok) {
+          const errorData = await res.json().catch(() => ({ message: 'Failed to load subtopics' }))
+          throw new Error(errorData.message || 'Failed to load subtopics')
+        }
+        return res.json()
+      })
+      .then((data) => setSubtopicData(data))
+      .catch((err) => {
+        console.error('Error loading subtopic list:', err)
+        setSubtopicError(err.message || 'Unable to load subtopic data')
+      })
+      .finally(() => setSubtopicLoading(false))
   }, [selectedUserId])
 
   if (authLoading) return <div className={styles.loading}>Loading...</div>;
@@ -330,75 +422,153 @@ export default function AdminUsersPage() {
               </section>
             )}
             {selectedUserId && (
-              <section className={styles.activityPanel}>
-                <header>
-                  <h3>Activity Snapshot</h3>
-                  <p>Data synced directly from the database tables the user interacts with.</p>
-                </header>
-                {activityLoading && <div className={styles.loading}>Loading activity details...</div>}
-                {activityError && (
-                  <div className={styles.error}>
-                    <FiAlertCircle /> {activityError}
-                  </div>
-                )}
-                {activitySummary && !activityLoading && !activityError && (
-                  <div className={styles.activityGrid}>
-                    <div className={styles.activityCard}>
-                      <h4>Discussion Sessions</h4>
-                      <p className={styles.activityValue}>{activitySummary.totals.discussions}</p>
-                      {activitySummary.recentDiscussion ? (
-                        <>
-                          <p className={styles.activityLabel}>
-                            Last session: {new Date(activitySummary.recentDiscussion.updatedAt).toLocaleString()}
-                          </p>
-                          <p className={styles.activityLabel}>
-                            Phase: {activitySummary.recentDiscussion.phase ?? '—'} · Goals {activitySummary.recentDiscussion.goalCount}
-                          </p>
-                        </>
-                      ) : (
-                        <p className={styles.activityLabel}>No discussion yet</p>
-                      )}
+              <>
+                <section className={styles.activityPanel}>
+                  <header>
+                    <h3>Activity Snapshot</h3>
+                    <p>Data synced directly from the database tables the user interacts with.</p>
+                  </header>
+                  {activityLoading && <div className={styles.loading}>Loading activity details...</div>}
+                  {activityError && (
+                    <div className={styles.error}>
+                      <FiAlertCircle /> {activityError}
                     </div>
-                    <div className={styles.activityCard}>
-                      <h4>Journals</h4>
-                      <p className={styles.activityValue}>{activitySummary.totals.journals}</p>
-                      {activitySummary.recentJournal ? (
-                        <>
-                          <p className={styles.activityLabel}>
-                            Last: {new Date(activitySummary.recentJournal.createdAt).toLocaleString()}
-                          </p>
-                          <p className={styles.activityLabel}>
-                            {activitySummary.recentJournal.title ?? 'Journal entry'}
-                          </p>
-                          {activitySummary.recentJournal.snippet && (
-                            <p className={styles.activityPreview}>
-                              {activitySummary.recentJournal.snippet}…
+                  )}
+                  {activitySummary && !activityLoading && !activityError && (
+                    <div className={styles.activityGrid}>
+                      <div className={styles.activityCard}>
+                        <h4>Discussion Sessions</h4>
+                        <p className={styles.activityValue}>{activitySummary.totals.discussions}</p>
+                        {activitySummary.recentDiscussion ? (
+                          <>
+                            <p className={styles.activityLabel}>
+                              Last session: {new Date(activitySummary.recentDiscussion.updatedAt).toLocaleString()}
                             </p>
-                          )}
-                        </>
-                      ) : (
-                        <p className={styles.activityLabel}>No journal entries</p>
-                      )}
+                            <p className={styles.activityLabel}>
+                              Phase: {activitySummary.recentDiscussion.phase ?? '—'} · Goals {activitySummary.recentDiscussion.goalCount}
+                            </p>
+                          </>
+                        ) : (
+                          <p className={styles.activityLabel}>No discussion yet</p>
+                        )}
+                      </div>
+                      <div className={styles.activityCard}>
+                        <h4>Journals</h4>
+                        <p className={styles.activityValue}>{activitySummary.totals.journals}</p>
+                        {activitySummary.recentJournal ? (
+                          <>
+                            <p className={styles.activityLabel}>
+                              Last: {new Date(activitySummary.recentJournal.createdAt).toLocaleString()}
+                            </p>
+                            <p className={styles.activityLabel}>
+                              {activitySummary.recentJournal.title ?? 'Journal entry'}
+                            </p>
+                            {activitySummary.recentJournal.snippet && (
+                              <p className={styles.activityPreview}>
+                                {activitySummary.recentJournal.snippet}…
+                              </p>
+                            )}
+                          </>
+                        ) : (
+                          <p className={styles.activityLabel}>No journal entries</p>
+                        )}
+                      </div>
+                      <div className={styles.activityCard}>
+                        <h4>Transcripts</h4>
+                        <p className={styles.activityValue}>{activitySummary.totals.transcripts}</p>
+                        {activitySummary.recentTranscript ? (
+                          <>
+                            <p className={styles.activityLabel}>
+                              Last: {new Date(activitySummary.recentTranscript.createdAt).toLocaleString()}
+                            </p>
+                            <p className={styles.activityLabel}>
+                              {activitySummary.recentTranscript.title ?? 'Transcript record'}
+                            </p>
+                          </>
+                        ) : (
+                          <p className={styles.activityLabel}>No transcripts</p>
+                        )}
+                      </div>
                     </div>
-                    <div className={styles.activityCard}>
-                      <h4>Transcripts</h4>
-                      <p className={styles.activityValue}>{activitySummary.totals.transcripts}</p>
-                      {activitySummary.recentTranscript ? (
-                        <>
-                          <p className={styles.activityLabel}>
-                            Last: {new Date(activitySummary.recentTranscript.createdAt).toLocaleString()}
-                          </p>
-                          <p className={styles.activityLabel}>
-                            {activitySummary.recentTranscript.title ?? 'Transcript record'}
-                          </p>
-                        </>
-                      ) : (
-                        <p className={styles.activityLabel}>No transcripts</p>
-                      )}
+                  )}
+                </section>
+
+                <section className={styles.subtopicPanel}>
+                  <header>
+                    <h3>Subtopic Admin Actions</h3>
+                    <p>Catat permintaan delete subtopic tanpa menghapus data siswa.</p>
+                  </header>
+                  {subtopicLoading && <div className={styles.loading}>Loading subtopics...</div>}
+                  {subtopicError && (
+                    <div className={styles.error}>
+                      <FiAlertCircle /> {subtopicError}
                     </div>
-                  </div>
-                )}
-              </section>
+                  )}
+                  {!subtopicLoading && !subtopicError && (
+                    <>
+                      {subtopicData && subtopicData.courses.length > 0 ? (
+                        <div className={styles.subtopicCourses}>
+                          {subtopicData.courses.map((course) => (
+                            <article key={course.courseId} className={styles.courseCard}>
+                              <div className={styles.courseHeader}>
+                                <div>
+                                  <h4>{course.courseTitle}</h4>
+                                  <span>{course.subtopics.length} subtopic</span>
+                                </div>
+                              </div>
+                              {course.subtopics.length === 0 ? (
+                                <p className={styles.noData}>Course belum memiliki subtopic</p>
+                              ) : (
+                                <ul className={styles.subtopicList}>
+                                  {course.subtopics.map((subtopic) => {
+                                    const logged = isSubtopicLogged(subtopic.subtopicId)
+                                    const isBusy = subtopicAction === subtopic.subtopicId
+                                    return (
+                                      <li key={subtopic.subtopicId} className={styles.subtopicItem}>
+                                        <div className={styles.subtopicMeta}>
+                                          <strong>{subtopic.title}</strong>
+                                          <span>Order #{subtopic.orderIndex + 1}</span>
+                                        </div>
+                                        <button
+                                          className={`${styles.subtopicActionBtn} ${logged ? styles.deleteLogged : ''}`}
+                                          disabled={logged || isBusy}
+                                          onClick={() =>
+                                            handleLogSubtopicDelete(course.courseId, subtopic.subtopicId, subtopic.title)
+                                          }
+                                        >
+                                          {logged ? 'Logged' : isBusy ? 'Saving…' : 'Log Delete'}
+                                        </button>
+                                      </li>
+                                    )
+                                  })}
+                                </ul>
+                              )}
+                            </article>
+                          ))}
+                        </div>
+                      ) : (
+                        <p className={styles.noData}>User ini belum memiliki course.</p>
+                      )}
+                      {subtopicData && subtopicData.deleteLogs.length > 0 && (
+                        <div className={styles.logList}>
+                          <h4>Riwayat Delete Terbaru</h4>
+                          <ul>
+                            {subtopicData.deleteLogs.slice(0, 6).map((log) => (
+                              <li key={log.id}>
+                                <div>
+                                  <strong>{log.subtopicTitle}</strong>
+                                  <span>{new Date(log.createdAt).toLocaleString()}</span>
+                                </div>
+                                <small>{log.adminEmail ?? 'Admin'}</small>
+                              </li>
+                            ))}
+                          </ul>
+                        </div>
+                      )}
+                    </>
+                  )}
+                </section>
+              </>
             )}
           </main>
         </div>

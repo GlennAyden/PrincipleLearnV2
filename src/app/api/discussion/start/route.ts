@@ -5,6 +5,10 @@ import { adminDb } from '@/lib/database';
 import { withApiLogging } from '@/lib/api-logger';
 import { resolveDiscussionSubtopicId } from '@/lib/discussion/resolveSubtopic';
 import {
+  ThinkingSkillMeta,
+  normalizeThinkingSkillMeta,
+} from '@/lib/discussion/thinkingSkills';
+import {
   generateDiscussionTemplate,
   generateModuleDiscussionTemplate,
 } from '@/services/discussion/generateDiscussionTemplate';
@@ -25,6 +29,14 @@ type SessionRecord = {
   course_id: string;
   subtopic_id: string;
 };
+
+interface DiscussionSessionGoal {
+  id: string;
+  description: string;
+  rubric?: any;
+  thinkingSkill?: ThinkingSkillMeta | null;
+  covered: boolean;
+}
 
 async function postHandler(request: NextRequest) {
   try {
@@ -196,7 +208,7 @@ async function createSession(params: {
   subtopicId: string;
   template: TemplateRecord;
   firstPhaseId: string;
-  goals: any[];
+  goals: DiscussionSessionGoal[];
 }): Promise<SessionRecord> {
   const { userId, courseId, subtopicId, template, firstPhaseId, goals } = params;
 
@@ -412,7 +424,7 @@ function getCurrentStep(template: any, messages: any[]) {
   };
 }
 
-function buildInitialGoals(goals: any) {
+function buildInitialGoals(goals: any): DiscussionSessionGoal[] {
   if (!Array.isArray(goals)) {
     return [];
   }
@@ -423,6 +435,7 @@ function buildInitialGoals(goals: any) {
       id: goal.id,
       description: goal.description ?? '',
       rubric: goal.rubric ?? null,
+      thinkingSkill: normalizeThinkingSkillMeta(goal.thinking_skill ?? goal.thinkingSkill),
       covered: false,
     }));
 }

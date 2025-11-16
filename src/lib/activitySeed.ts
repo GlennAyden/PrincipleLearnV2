@@ -60,6 +60,60 @@ async function ensureDemoEntities(): Promise<DemoEntities> {
   return { userId, userEmail, courseId, courseTitle };
 }
 
+async function ensureDemoSubtopics(courseId: string) {
+  const existing = await DatabaseService.getRecords('subtopics', {
+    filter: { course_id: courseId },
+    limit: 1,
+  });
+  if (existing.length > 0) {
+    return DatabaseService.getRecords('subtopics', {
+      filter: { course_id: courseId },
+      orderBy: { column: 'order_index', ascending: true },
+    });
+  }
+
+  const modules = [
+    {
+      module: 'Modul 1: Dasar-dasar Berpikir Kritis',
+      subtopics: [
+        {
+          title: '1.1 Mengenali Bias Umum',
+          overview: 'Memetakan tipe bias yang sering muncul pada keputusan sehari-hari.',
+        },
+        {
+          title: '1.2 Menyusun Pertanyaan Penjajakan',
+          overview: 'Latihan membuat pertanyaan terbuka untuk menggali asumsi awal.',
+        },
+      ],
+    },
+    {
+      module: 'Modul 2: Teknik Analisis',
+      subtopics: [
+        {
+          title: '2.1 Teknik SCQA',
+          overview: 'Menerapkan struktur Situation-Complication-Question-Answer.',
+        },
+        {
+          title: '2.2 Analisis Sebab Akibat',
+          overview: 'Menggunakan diagram causal loop untuk menelusuri akar masalah.',
+        },
+      ],
+    },
+  ];
+
+  const inserted = [];
+  for (let i = 0; i < modules.length; i++) {
+    const record = await DatabaseService.insertRecord('subtopics', {
+      course_id: courseId,
+      title: modules[i].module,
+      content: JSON.stringify(modules[i]),
+      order_index: i,
+    });
+    inserted.push(record);
+  }
+  return inserted;
+}
+
 export async function ensureAskQuestionHistorySeeded() {
   const existing = await DatabaseService.getRecords('ask_question_history', {
     limit: 1,
@@ -110,11 +164,172 @@ export async function ensureFeedbackSeeded() {
   if (existing.length > 0) return;
 
   const { userId, courseId } = await ensureDemoEntities();
+  const subtopics = await ensureDemoSubtopics(courseId);
   await DatabaseService.insertRecord('feedback', {
     user_id: userId,
     course_id: courseId,
+    subtopic_id: subtopics[0]?.id ?? null,
+    module_index: 0,
+    subtopic_index: 0,
+    subtopic_label: subtopics[0]?.title ?? 'Pendahuluan',
     rating: 5,
     comment:
       'Materi terstruktur dan diskusi socratic membantu saya mengevaluasi pemahaman. Mohon tambahkan lebih banyak studi kasus.',
+  });
+}
+
+export async function ensureCourseGenerationActivitySeeded() {
+  const existing = await DatabaseService.getRecords('course_generation_activity', {
+    limit: 1,
+  });
+  if (existing.length > 0) return;
+
+  const { userId, courseId } = await ensureDemoEntities();
+  const outlineModules = await ensureDemoSubtopics(courseId);
+  const outline = outlineModules.map((module, idx) => ({
+    module: module.title || `Modul ${idx + 1}`,
+    subtopics: (() => {
+      try {
+        const parsed = JSON.parse(module.content ?? '[]');
+        return Array.isArray(parsed.subtopics) ? parsed.subtopics : [];
+      } catch {
+        return [];
+      }
+    })(),
+  }));
+
+  await DatabaseService.insertRecord('course_generation_activity', {
+    user_id: userId,
+    course_id: courseId,
+    request_payload: {
+      step1: { topic: 'Berpikir Kritis', goal: 'Mengambil keputusan lebih jernih' },
+      step2: { level: 'Intermediate', extraTopics: 'Teknik SCQA, Root Cause Analysis' },
+      step3: {
+        problem: 'Tim sering melewatkan akar masalah dan langsung ke solusi.',
+        assumption: 'Berpikir kritis hanya soal logika',
+      },
+    },
+    outline,
+  });
+}
+
+export async function ensureQuizSeeded() {
+  const existing = await DatabaseService.getRecords('quiz_submissions', {
+    limit: 1,
+  });
+  if (existing.length > 0) return;
+
+  const { userId, courseId } = await ensureDemoEntities();
+  const subtopics = await ensureDemoSubtopics(courseId);
+  const targetSubtopic = subtopics[0];
+
+  const quiz = await DatabaseService.insertRecord('quiz', {
+    course_id: courseId,
+    subtopic_id: targetSubtopic?.id ?? null,
+    question: 'Langkah pertama yang tepat untuk menghindari bias konfirmasi adalah?',
+    options: ['Langsung mencari data pendukung', 'Mencari sudut pandang berlawanan', 'Mengikuti pendapat mayoritas', 'Menunda keputusan tanpa batas'],
+    correct_answer: 'B',
+    explanation: 'Bias konfirmasi dikurangi dengan sengaja mengecek bukti berlawanan.',
+  });
+
+  await DatabaseService.insertRecord('quiz_submissions', {
+    user_id: userId,
+    quiz_id: quiz.id,
+    answer: 'B',
+    is_correct: true,
+  });
+}
+
+export async function ensureDiscussionSessionSeeded() {
+  const existing = await DatabaseService.getRecords('discussion_sessions', {
+    limit: 1,
+  });
+  if (existing.length > 0) return;
+
+  const { userId, courseId } = await ensureDemoEntities();
+  const subtopics = await ensureDemoSubtopics(courseId);
+  const targetSubtopic = subtopics[0];
+
+  const templatePayload = {
+    learning_goals: [
+      {
+        id: 'goal-1',
+        description: 'Mahasiswa mampu mengidentifikasi asumsi tersembunyi.',
+        thinkingSkill: { domain: 'critical', indicator: 'Analysis' },
+      },
+      {
+        id: 'goal-2',
+        description: 'Mahasiswa mampu menyusun pertanyaan klarifikasi lanjutan.',
+        thinkingSkill: { domain: 'critical', indicator: 'Explanation' },
+      },
+    ],
+    phases: [
+      {
+        id: 'opening',
+        steps: [
+          {
+            key: 'opening-1',
+            prompt: 'Bagikan asumsi awalmu tentang situasi ini.',
+            expected_type: 'open',
+            goal_refs: ['goal-1'],
+          },
+        ],
+      },
+      {
+        id: 'reflection',
+        steps: [
+          {
+            key: 'reflection-1',
+            prompt: 'Pertanyaan klarifikasi apa yang akan kamu ajukan?',
+            expected_type: 'open',
+            goal_refs: ['goal-2'],
+          },
+        ],
+      },
+    ],
+  };
+
+  const template = await DatabaseService.insertRecord('discussion_templates', {
+    course_id: courseId,
+    subtopic_id: targetSubtopic?.id ?? null,
+    version: 'v1-demo',
+    source: { subtopicTitle: targetSubtopic?.title ?? 'Subtopik Demo' },
+    template: templatePayload,
+  });
+
+  const session = await DatabaseService.insertRecord('discussion_sessions', {
+    user_id: userId,
+    course_id: courseId,
+    subtopic_id: targetSubtopic?.id ?? null,
+    template_id: template.id,
+    status: 'completed',
+    phase: 'completed',
+    learning_goals: templatePayload.learning_goals,
+  });
+
+  await DatabaseService.insertRecord('discussion_messages', {
+    session_id: session.id,
+    role: 'agent',
+    content: 'Bagikan asumsi awalmu tentang situasi pengambilan keputusan terakhir.',
+    step_key: 'opening-1',
+    metadata: { phase: 'opening' },
+  });
+
+  await DatabaseService.insertRecord('discussion_messages', {
+    session_id: session.id,
+    role: 'student',
+    content: 'Saya berasumsi data market tahun lalu sudah cukup relevan.',
+    step_key: 'opening-1',
+    metadata: {
+      evaluation: { coveredGoals: ['goal-1'] },
+    },
+  });
+
+  await DatabaseService.insertRecord('discussion_messages', {
+    session_id: session.id,
+    role: 'agent',
+    content: 'Pertanyaan apa yang bisa memastikan asumsi tersebut valid?',
+    step_key: 'reflection-1',
+    metadata: { phase: 'reflection' },
   });
 }

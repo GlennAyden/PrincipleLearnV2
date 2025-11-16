@@ -4,6 +4,10 @@ import { verifyToken } from '@/lib/jwt';
 import { adminDb } from '@/lib/database';
 import { openai, defaultOpenAIModel } from '@/lib/openai';
 import { withApiLogging } from '@/lib/api-logger';
+import {
+  ThinkingSkillMeta,
+  normalizeThinkingSkillMeta,
+} from '@/lib/discussion/thinkingSkills';
 
 interface SessionRecord {
   id: string;
@@ -22,6 +26,14 @@ type TemplateRecord = {
   version: string;
   source?: any;
 };
+
+interface DiscussionGoalState {
+  id: string;
+  description: string;
+  rubric?: any;
+  covered: boolean;
+  thinkingSkill?: ThinkingSkillMeta | null;
+}
 
 async function postHandler(request: NextRequest) {
   try {
@@ -295,7 +307,7 @@ function flattenTemplate(template: any) {
   return flattened;
 }
 
-function normalizeGoals(goals: any): Array<{ id: string; description: string; covered: boolean; rubric?: any }> {
+function normalizeGoals(goals: any): DiscussionGoalState[] {
   if (!Array.isArray(goals)) {
     return [];
   }
@@ -305,11 +317,12 @@ function normalizeGoals(goals: any): Array<{ id: string; description: string; co
     description: goal?.description ?? '',
     covered: Boolean(goal?.covered),
     rubric: goal?.rubric ?? null,
+    thinkingSkill: normalizeThinkingSkillMeta(goal?.thinkingSkill ?? goal?.thinking_skill),
   }));
 }
 
 function mergeGoalDetails(
-  currentGoals: Array<{ id: string; description: string; covered: boolean; rubric?: any }>,
+  currentGoals: DiscussionGoalState[],
   templateGoals: any
 ) {
   const templateArray = Array.isArray(templateGoals) ? templateGoals : [];
@@ -325,6 +338,10 @@ function mergeGoalDetails(
       description: goal?.description ?? existing?.description ?? '',
       rubric: goal?.rubric ?? existing?.rubric ?? null,
       covered: existing?.covered ?? false,
+      thinkingSkill:
+        normalizeThinkingSkillMeta(goal?.thinking_skill ?? goal?.thinkingSkill) ??
+        existing?.thinkingSkill ??
+        null,
     };
   });
 
@@ -347,7 +364,7 @@ interface EvaluateStepParams {
   step?: any;
   templateGoals?: any[];
   templateSource?: any;
-  currentGoals: Array<{ id: string; description: string; covered: boolean; rubric?: any }>;
+  currentGoals: DiscussionGoalState[];
 }
 
 async function evaluateStepResponse({
@@ -569,9 +586,7 @@ async function evaluateStepResponse({
   }
 }
 
-function buildDefaultClosingMessage(
-  goals: Array<{ id: string; description: string; covered: boolean }>
-) {
+function buildDefaultClosingMessage(goals: DiscussionGoalState[]) {
   const accomplished = goals
     .filter((goal) => goal.covered)
     .map((goal) => `- ${goal.description}`)

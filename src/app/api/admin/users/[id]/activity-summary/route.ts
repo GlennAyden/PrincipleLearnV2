@@ -9,7 +9,7 @@ function unauthorized(message = 'Unauthorized access') {
 
 export async function GET(
   request: NextRequest,
-  { params }: { params: { id: string } }
+  context: { params: Promise<{ id: string }> }
 ) {
   try {
     const token = request.cookies.get('token')?.value;
@@ -18,7 +18,7 @@ export async function GET(
       return unauthorized();
     }
 
-    const userId = params.id;
+    const { id: userId } = await context.params;
     if (!userId) {
       return NextResponse.json({ message: 'user id is required' }, { status: 400 });
     }

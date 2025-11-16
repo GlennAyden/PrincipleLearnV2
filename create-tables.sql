@@ -131,6 +131,19 @@ CREATE TABLE IF NOT EXISTS course_generation_activity (
     created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
 );
 
+-- Admin subtopic delete logs (audit only)
+CREATE TABLE IF NOT EXISTS admin_subtopic_delete_logs (
+    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    admin_id UUID REFERENCES users(id) ON DELETE SET NULL,
+    admin_email TEXT,
+    user_id UUID REFERENCES users(id) ON DELETE CASCADE,
+    course_id UUID REFERENCES courses(id) ON DELETE CASCADE,
+    subtopic_id UUID REFERENCES subtopics(id) ON DELETE SET NULL,
+    subtopic_title TEXT NOT NULL,
+    note TEXT,
+    created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
+);
+
 -- API logs table for monitoring requests
 CREATE TABLE IF NOT EXISTS api_logs (
     id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
@@ -173,6 +186,7 @@ ALTER TABLE ask_question_history ENABLE ROW LEVEL SECURITY;
 ALTER TABLE user_progress ENABLE ROW LEVEL SECURITY;
 ALTER TABLE feedback ENABLE ROW LEVEL SECURITY;
 ALTER TABLE course_generation_activity ENABLE ROW LEVEL SECURITY;
+ALTER TABLE admin_subtopic_delete_logs ENABLE ROW LEVEL SECURITY;
 ALTER TABLE api_logs ENABLE ROW LEVEL SECURITY;
 ALTER TABLE discussion_admin_actions ENABLE ROW LEVEL SECURITY;
 
@@ -215,6 +229,8 @@ CREATE INDEX IF NOT EXISTS idx_feedback_user_id ON feedback(user_id);
 CREATE INDEX IF NOT EXISTS idx_feedback_subtopic_id ON feedback(subtopic_id);
 CREATE INDEX IF NOT EXISTS idx_course_generation_activity_user_id ON course_generation_activity(user_id);
 CREATE INDEX IF NOT EXISTS idx_course_generation_activity_created_at ON course_generation_activity(created_at);
+CREATE INDEX IF NOT EXISTS idx_admin_subtopic_delete_logs_user ON admin_subtopic_delete_logs(user_id);
+CREATE INDEX IF NOT EXISTS idx_admin_subtopic_delete_logs_subtopic ON admin_subtopic_delete_logs(subtopic_id);
 CREATE INDEX IF NOT EXISTS idx_api_logs_created_at ON api_logs(created_at);
 CREATE INDEX IF NOT EXISTS idx_api_logs_path ON api_logs(path);
 CREATE INDEX IF NOT EXISTS idx_discussion_admin_actions_session ON discussion_admin_actions(session_id);

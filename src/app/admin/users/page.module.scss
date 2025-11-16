@@ -300,3 +300,129 @@
   color: #1e293b;
   line-height: 1.4;
 }
+
+.subtopicPanel {
+  background: #fff;
+  margin: 0 1rem 2rem;
+  padding: 1.5rem;
+  border-radius: 12px;
+  box-shadow: 0 6px 18px rgba(15, 23, 42, 0.08);
+}
+
+.subtopicPanel header h3 {
+  margin: 0;
+  font-size: 1.25rem;
+}
+
+.subtopicPanel header p {
+  margin: 0.25rem 0 1rem;
+  color: #475569;
+}
+
+.subtopicCourses {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(320px, 1fr));
+  gap: 1rem;
+}
+
+.courseCard {
+  border: 1px solid #e0e7ff;
+  border-radius: 12px;
+  padding: 1rem;
+  background: #f8f9ff;
+}
+
+.courseHeader {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 0.75rem;
+}
+
+.courseHeader h4 {
+  margin: 0;
+  font-size: 1rem;
+}
+
+.subtopicList {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 0.75rem;
+}
+
+.subtopicItem {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  background: #fff;
+  border-radius: 10px;
+  padding: 0.75rem;
+  border: 1px solid #e4e7ec;
+}
+
+.subtopicMeta {
+  display: flex;
+  flex-direction: column;
+}
+
+.subtopicMeta span {
+  font-size: 0.8rem;
+  color: #94a3b8;
+}
+
+.subtopicActionBtn {
+  border: none;
+  background: #ef4444;
+  color: #fff;
+  padding: 0.55rem 0.9rem;
+  border-radius: 8px;
+  font-size: 0.85rem;
+  cursor: pointer;
+  font-weight: 600;
+}
+
+.subtopicActionBtn:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+}
+
+.deleteLogged {
+  background: #cbd5f5;
+  color: #1d3b8b;
+}
+
+.logList {
+  margin-top: 1.5rem;
+}
+
+.logList h4 {
+  margin-bottom: 0.75rem;
+}
+
+.logList ul {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+}
+
+.logList li {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  border: 1px solid #e2e8f0;
+  border-radius: 10px;
+  padding: 0.65rem 0.9rem;
+  background: #fff;
+}
+
+.logList li span {
+  display: block;
+  font-size: 0.8rem;
+  color: #94a3b8;
+}

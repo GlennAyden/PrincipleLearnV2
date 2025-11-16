@@ -1,5 +1,9 @@
 import { openai, defaultOpenAIModel } from '@/lib/openai';
 import { adminDb } from '@/lib/database';
+import {
+  ThinkingSkillMeta,
+  buildThinkingSkillGuidanceLines,
+} from '@/lib/discussion/thinkingSkills';
 
 interface TemplateStep {
   key: string;
@@ -23,6 +27,7 @@ interface TemplatePhase {
 interface TemplateGoal {
   id: string;
   description: string;
+  thinking_skill: ThinkingSkillMeta;
   rubric?: {
     success_summary?: string;
     checklist?: string[];
@@ -81,12 +86,24 @@ function isTemplatePhase(phase: any): phase is TemplatePhase {
   );
 }
 
+function isThinkingSkillMeta(meta: any): meta is ThinkingSkillMeta {
+  return (
+    meta &&
+    typeof meta === 'object' &&
+    (meta.domain === 'critical' || meta.domain === 'computational') &&
+    typeof meta.indicator === 'string' &&
+    meta.indicator.trim().length > 0 &&
+    (meta.indicator_description === undefined || typeof meta.indicator_description === 'string')
+  );
+}
+
 function isTemplateGoal(goal: any): goal is TemplateGoal {
   return (
     goal &&
     typeof goal === 'object' &&
     typeof goal.id === 'string' &&
     typeof goal.description === 'string' &&
+    isThinkingSkillMeta(goal.thinking_skill) &&
     (goal.rubric === undefined ||
       (typeof goal.rubric === 'object' &&
         (goal.rubric.success_summary === undefined || typeof goal.rubric.success_summary === 'string') &&
@@ -176,6 +193,18 @@ const responseFormat = {
             properties: {
               id: { type: 'string' },
               description: { type: 'string' },
+              thinking_skill: {
+                type: 'object',
+                required: ['domain', 'indicator'],
+                properties: {
+                  domain: {
+                    type: 'string',
+                    enum: ['critical', 'computational'],
+                  },
+                  indicator: { type: 'string' },
+                  indicator_description: { type: 'string' },
+                },
+              },
               rubric: {
                 type: 'object',
                 properties: {
@@ -385,6 +414,8 @@ function buildPrompt({
   keyTakeaways,
   misconceptions = [],
 }: DiscussionTemplateParams) {
+  const thinkingSkillLines = buildThinkingSkillGuidanceLines();
+
   return [
     `Module Title: ${moduleTitle}`,
     `Subtopic Title: ${subtopicTitle}`,
@@ -402,6 +433,9 @@ function buildPrompt({
     'Common Misconceptions or pitfalls:',
     ...(misconceptions.length ? misconceptions.map((item) => `- ${item}`) : ['- None provided']),
     '',
+    'Panduan indikator kemampuan berpikir:',
+    ...thinkingSkillLines,
+    '',
     'Requirements:',
     '- Create four phases: diagnosis, exploration, practice, synthesis.',
     '- Each phase must have at least one step with a unique `key`.',
@@ -409,6 +443,9 @@ function buildPrompt({
     '- Ensure every step lists relevant `goal_refs` referencing the learning goals you define.',
     '- Learning goals should be 3-5 statements derived from objectives and takeaways.',
     '- For each learning goal, provide a `rubric` object containing `success_summary`, a `checklist` of concrete indicators (2-4 items), and optional `failure_signals` describing common misconceptions.',
+    '- Every learning goal MUST include a `thinking_skill` object describing the related indicator (`domain`, `indicator`, and `indicator_description`).',
+    '- The set of learning goals must cover at least one Critical Thinking indicator and one Computational Thinking indicator (preferably balanced).',
+    '- Reference both thinking skill categories across the phases so that learners practice CT and CPT in tandem.',
     '- Add a `closing_message` string that congratulates the learner and reinforces next steps when all goals are satisfied.',
     '- Encourage deeper thinking; avoid revealing final answers directly.',
     '- Tulis seluruh konten (pertanyaan, opsi, umpan balik, rubric, closing message) dalam Bahasa Indonesia yang jelas dan sesuai konteks modul.',
@@ -425,6 +462,8 @@ function buildModulePrompt({
   misconceptions = [],
   subtopics,
 }: ModuleDiscussionTemplateParams) {
+  const thinkingSkillLines = buildThinkingSkillGuidanceLines();
+
   const subtopicSections = subtopics.map((item, index) => {
     const header = `${index + 1}. ${item.title}`;
     const summaryLine = item.summary ? `Ringkasan: ${item.summary}` : null;
@@ -465,6 +504,9 @@ function buildModulePrompt({
     'Detail setiap subtopik dalam modul:',
     ...subtopicSections,
     '',
+    'Panduan indikator kemampuan berpikir:',
+    ...thinkingSkillLines,
+    '',
     'Instruksi:',
     '- Rancang diskusi Socratic yang meninjau seluruh modul, pastikan setiap subtopik disentuh.',
     '- Gunakan fase diagnosis, eksplorasi, latihan, dan sintesis untuk mengaitkan konsep lintas subtopik.',
@@ -472,6 +514,8 @@ function buildModulePrompt({
     '- Dalam setiap langkah, kaitkan pertanyaan dengan learning goals relevan dan minta peserta menghubungkan antar topik.',
     '- Pastikan ada minimal satu pertanyaan MCQ dengan opsi, jawaban, dan umpan balik.',
     '- Pastikan rubric goal mengevaluasi pemahaman menyeluruh terhadap seluruh modul, bukan sekadar subtopik tunggal.',
+    '- Setiap learning goal wajib memiliki `thinking_skill` sesuai daftar indikator (lengkapi domain, indicator, indicator_description).',
+    '- Susun goal sehingga keduanya mencakup indikator Critical Thinking dan Computational Thinking, dan pastikan langkah diskusi memancing kedua jenis kemampuan tersebut.',
     '- Tambahkan closing message yang mengajak peserta menerapkan pengetahuan modul secara terpadu.',
     '- Gunakan Bahasa Indonesia yang formal namun mudah dipahami untuk seluruh elemen output.',
     '',

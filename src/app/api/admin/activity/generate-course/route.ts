@@ -3,6 +3,7 @@
 import { NextResponse } from 'next/server'
 import type { NextRequest } from 'next/server'
 import { DatabaseService } from '@/lib/database'
+import { ensureCourseGenerationActivitySeeded } from '@/lib/activitySeed'
 
 interface Course {
   id: string;
@@ -34,6 +35,7 @@ export async function GET(req: NextRequest) {
   console.log('[Activity API] Starting generate-course activity fetch');
   
   try {
+    await ensureCourseGenerationActivitySeeded();
     const { searchParams } = new URL(req.url)
     const userId = searchParams.get('userId')
     const date = searchParams.get('date')

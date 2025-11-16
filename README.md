@@ -85,6 +85,14 @@ OPENAI_MODEL=gpt-5-mini
    ```
    The Prisma schema mirrors the Supabase structure but runs entirely in Docker so you can develop without touching the remote database.
 
+### Running Supabase locally
+
+- Install the Supabase CLI if you haven't already (for example `npm install -g supabase` or follow the OS-specific guide at https://supabase.com/docs/guides/cli).
+- From the project root run `supabase start`. The CLI detects the bundled `supabase/config.toml` and spins up the local API, database, auth, realtime, storage, and Studio ports defined there.
+- You can stop the stack with `supabase stop` and check its health with `supabase status`.
+- Avoid `npx start supabase`, because `npx` will try to run a package literally called `start` and fails with "could not determine executable to run". Use `supabase start` (or `npx supabase start` if you prefer not to install the CLI globally) instead so the Supabase services come up correctly.
+- Windows reserves the 5432x range, so the project is already configured to use 54021 (API), 54022 (DB), 54023 (Studio), 54024 (Mailpit), 54029 (pooler) and 54020 (shadow DB) via `supabase/config.toml`; keep analytics disabled unless you separately expose Docker on `tcp://localhost:2375`. If you change those ports later, check `netsh interface ipv4 show excludedportrange protocol=tcp` so the CLI can bind cleanly.
+
 6. Run the development server:
 ```bash
 npm run dev

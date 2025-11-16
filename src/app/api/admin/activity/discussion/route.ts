@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { DatabaseService } from '@/lib/database'
+import { ensureDiscussionSessionSeeded } from '@/lib/activitySeed'
 
 type DiscussionSessionRow = {
   id: string
@@ -40,6 +41,7 @@ type SubtopicRow = { id: string; title: string | null }
 
 export async function GET(req: NextRequest) {
   try {
+    await ensureDiscussionSessionSeeded();
     const { searchParams } = new URL(req.url)
     const userId = searchParams.get('userId')
     const date = searchParams.get('date')
