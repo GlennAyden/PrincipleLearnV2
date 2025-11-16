@@ -8,6 +8,10 @@ interface FeedbackRow {
   id: string;
   user_id: string | null;
   course_id: string | null;
+  subtopic_id: string | null;
+  module_index: number | null;
+  subtopic_index: number | null;
+  subtopic_label: string | null;
   rating: number | null;
   comment: string | null;
   created_at: string;
@@ -19,6 +23,11 @@ interface User {
 }
 
 interface Course {
+  id: string;
+  title: string | null;
+}
+
+interface Subtopic {
   id: string;
   title: string | null;
 }
@@ -72,6 +81,7 @@ export async function GET(req: NextRequest) {
 
     const userCache = new Map<string, User | null>();
     const courseCache = new Map<string, Course | null>();
+    const subtopicCache = new Map<string, Subtopic | null>();
 
     async function getUser(userIdValue?: string | null) {
       if (!userIdValue) return null;
@@ -97,10 +107,23 @@ export async function GET(req: NextRequest) {
       return course;
     }
 
+    async function getSubtopic(subtopicIdValue?: string | null) {
+      if (!subtopicIdValue) return null;
+      if (subtopicCache.has(subtopicIdValue)) return subtopicCache.get(subtopicIdValue) ?? null;
+      const subtopics = await DatabaseService.getRecords<Subtopic>('subtopics', {
+        filter: { id: subtopicIdValue },
+        limit: 1,
+      });
+      const subtopic = subtopics[0] ?? null;
+      subtopicCache.set(subtopicIdValue, subtopic);
+      return subtopic;
+    }
+
     const payload = [];
     for (const row of feedbackRows) {
       const course = await getCourse(row.course_id);
-      const topicLabel = course?.title ?? 'Tanpa Kursus';
+      const subtopic = await getSubtopic(row.subtopic_id);
+      const topicLabel = row.subtopic_label ?? subtopic?.title ?? course?.title ?? 'Tanpa Kursus';
 
       if (topic && !topicLabel.toLowerCase().includes(topic.toLowerCase())) {
         continue;
@@ -114,7 +137,9 @@ export async function GET(req: NextRequest) {
         userEmail: user?.email ?? 'Unknown User',
         userId: row.user_id ?? 'unknown',
         topic: topicLabel,
-        courseTitle: topicLabel,
+        courseTitle: course?.title ?? topicLabel,
+        moduleIndex: row.module_index ?? null,
+        subtopicIndex: row.subtopic_index ?? null,
         rating: row.rating ?? null,
         comment: row.comment ?? '',
       });

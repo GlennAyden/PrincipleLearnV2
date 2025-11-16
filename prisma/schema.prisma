@@ -180,15 +180,21 @@ model Feedback {
   id        String    @id @default(uuid()) @db.Uuid
   userId    String?   @map("user_id") @db.Uuid
   courseId  String?   @map("course_id") @db.Uuid
+  subtopicId String?  @map("subtopic_id") @db.Uuid
+  moduleIndex Int?    @map("module_index")
+  subtopicIndex Int?  @map("subtopic_index")
+  subtopicLabel String? @map("subtopic_label")
   rating    Int
   comment   String?
   createdAt DateTime  @default(now()) @map("created_at")
 
   user   User?   @relation(fields: [userId], references: [id])
   course Course? @relation(fields: [courseId], references: [id])
+  subtopic Subtopic? @relation(fields: [subtopicId], references: [id])
 
   @@map("feedback")
   @@index([userId], map: "idx_feedback_user_id")
+  @@index([subtopicId], map: "idx_feedback_subtopic_id")
 }
 
 model ApiLog {
@@ -211,6 +217,22 @@ model ApiLog {
   @@map("api_logs")
   @@index([createdAt], map: "idx_api_logs_created_at")
   @@index([path], map: "idx_api_logs_path")
+}
+
+model CourseGenerationActivity {
+  id             String   @id @default(uuid()) @db.Uuid
+  userId         String?  @map("user_id") @db.Uuid
+  courseId       String?  @map("course_id") @db.Uuid
+  requestPayload Json     @map("request_payload")
+  outline        Json
+  createdAt      DateTime @default(now()) @map("created_at")
+
+  user   User?   @relation(fields: [userId], references: [id])
+  course Course? @relation(fields: [courseId], references: [id])
+
+  @@map("course_generation_activity")
+  @@index([userId], map: "idx_course_generation_activity_user_id")
+  @@index([createdAt], map: "idx_course_generation_activity_created_at")
 }
 
 model DiscussionTemplate {

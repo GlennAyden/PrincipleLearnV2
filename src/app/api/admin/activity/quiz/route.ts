@@ -19,7 +19,7 @@ interface Quiz {
   subtopic_id: string;
   question: string;
   options: any;
-  correct_answer: string;
+  correct_answer: string | null;
 }
 
 interface User {
@@ -35,7 +35,6 @@ interface Course {
 interface Subtopic {
   id: string;
   title: string;
-  content: string;
 }
 
 export async function GET(req: NextRequest) {
@@ -45,138 +44,106 @@ export async function GET(req: NextRequest) {
     const { searchParams } = new URL(req.url)
     const userId = searchParams.get('userId')
     const date = searchParams.get('date')
-    const course = searchParams.get('course')
-    const topic = searchParams.get('topic')
+    const courseId = searchParams.get('course')
+    const topicFilter = searchParams.get('topic')
   
-    console.log('[Activity API] Request params:', { userId, date, course, topic });
+    console.log('[Activity API] Request params:', { userId, date, courseId, topic: topicFilter });
 
-    // Get all quiz submissions from database
-    let quizSubmissions: QuizSubmission[] = [];
+    let quizSubmissions: QuizSubmission[] = []
     try {
       quizSubmissions = await DatabaseService.getRecords<QuizSubmission>('quiz_submissions', {
-        orderBy: { column: 'submitted_at', ascending: false }
-      });
+        orderBy: { column: 'submitted_at', ascending: false },
+      })
     } catch (dbError) {
-      console.error('[Activity API] Database error fetching quiz submissions:', dbError);
-      return NextResponse.json([], { status: 200 });
+      console.error('[Activity API] Database error fetching quiz submissions:', dbError)
+      return NextResponse.json([], { status: 200 })
     }
 
-    console.log(`[Activity API] Found ${quizSubmissions.length} total quiz submissions in database`);
-    
-    // Filter submissions based on parameters
-    let filteredSubmissions = quizSubmissions;
-    
-    // Filter by user if specified
     if (userId) {
-      filteredSubmissions = filteredSubmissions.filter(submission => submission.user_id === userId);
-      console.log(`[Activity API] Filtered by user ${userId}: ${filteredSubmissions.length} submissions`);
+      quizSubmissions = quizSubmissions.filter((submission) => submission.user_id === userId)
     }
-    
-    // Filter by date if specified
+
     if (date) {
-      const targetDate = new Date(date);
-      const startOfDay = new Date(targetDate);
-      startOfDay.setHours(0, 0, 0, 0);
-      const endOfDay = new Date(targetDate);
-      endOfDay.setHours(23, 59, 59, 999);
-      
-      filteredSubmissions = filteredSubmissions.filter(submission => {
-        const submissionDate = new Date(submission.submitted_at);
-        return submissionDate >= startOfDay && submissionDate <= endOfDay;
-      });
-      console.log(`[Activity API] Filtered by date ${date}: ${filteredSubmissions.length} submissions`);
+      const targetDate = new Date(date)
+      const startOfDay = new Date(targetDate)
+      startOfDay.setHours(0, 0, 0, 0)
+      const endOfDay = new Date(targetDate)
+      endOfDay.setHours(23, 59, 59, 999)
+      quizSubmissions = quizSubmissions.filter((submission) => {
+        const submittedAt = new Date(submission.submitted_at)
+        return submittedAt >= startOfDay && submittedAt <= endOfDay
+      })
     }
 
-    // Group submissions by user and calculate scores
-    const userScores = new Map();
-    const payload = [];
+    const userCache = new Map<string, User | null>()
+    const quizCache = new Map<string, Quiz | null>()
+    const subtopicCache = new Map<string, Subtopic | null>()
+    const courseCache = new Map<string, Course | null>()
 
-    for (const submission of filteredSubmissions) {
-      try {
-        // Get quiz info
-        const quizzes: Quiz[] = await DatabaseService.getRecords<Quiz>('quiz', {
-          filter: { id: submission.quiz_id },
-          limit: 1
-        });
-        
-        if (quizzes.length === 0) continue;
-        const quiz = quizzes[0];
-        
-        // Filter by course if specified
-        if (course && quiz.course_id !== course) continue;
-        
-        // Get user info
-        const users: User[] = await DatabaseService.getRecords<User>('users', {
-          filter: { id: submission.user_id },
-          limit: 1
-        });
-        
-        // Get subtopic info
-        const subtopics: Subtopic[] = await DatabaseService.getRecords<Subtopic>('subtopics', {
-          filter: { id: quiz.subtopic_id },
-          limit: 1
-        });
-        
-        const user = users.length > 0 ? users[0] : null;
-        const subtopic = subtopics.length > 0 ? subtopics[0] : null;
-        
-        // Parse subtopic content to get topic name
-        let topicName = 'Unknown Topic';
-        if (subtopic) {
-          try {
-            const subtopicContent = JSON.parse(subtopic.content);
-            topicName = subtopicContent.module || subtopic.title || 'Unknown Topic';
-          } catch (parseError) {
-            topicName = subtopic.title || 'Unknown Topic';
-          }
-        }
-        
-        // Filter by topic if specified
-        if (topic && !topicName.toLowerCase().includes(topic.toLowerCase())) {
-          continue;
-        }
-        
-        // Calculate or get existing score for this user-quiz combination
-        const scoreKey = `${submission.user_id}-${quiz.course_id}-${quiz.subtopic_id}`;
-        if (!userScores.has(scoreKey)) {
-          // Get all submissions for this user and subtopic to calculate score
-          const userSubmissionsForTopic = filteredSubmissions.filter(s => 
-            s.user_id === submission.user_id && 
-            quizzes.some(q => q.id === s.quiz_id && q.subtopic_id === quiz.subtopic_id)
-          );
-          
-          const correctAnswers = userSubmissionsForTopic.filter(s => s.is_correct).length;
-          const totalQuestions = userSubmissionsForTopic.length;
-          const score = totalQuestions > 0 ? Math.round((correctAnswers / totalQuestions) * 100) : 0;
-          
-          userScores.set(scoreKey, score);
-          
-          // Create activity log item
-          const logItem = {
-            id: `quiz-${scoreKey}`,
-            timestamp: new Date(submission.submitted_at).toLocaleDateString('id-ID'),
-            topic: topicName,
-            score: score,
-            userEmail: user?.email || 'Unknown User',
-            userId: submission.user_id
-          };
-          
-          payload.push(logItem);
-        }
-        
-      } catch (infoError) {
-        console.error(`[Activity API] Error getting info for quiz submission ${submission.id}:`, infoError);
+    const payload = []
+    for (const submission of quizSubmissions) {
+      const quiz = await fetchCached(quizCache, submission.quiz_id, 'quiz')
+      if (!quiz) continue
+
+      if (courseId && quiz.course_id !== courseId) {
+        continue
       }
+
+      const [subtopic, course, user] = await Promise.all([
+        fetchCached(subtopicCache, quiz.subtopic_id, 'subtopics'),
+        fetchCached(courseCache, quiz.course_id, 'courses'),
+        fetchCached(userCache, submission.user_id, 'users'),
+      ])
+
+      const topicName = subtopic?.title ?? 'Tanpa Subtopik'
+      if (topicFilter && !topicName.toLowerCase().includes(topicFilter.toLowerCase())) {
+        continue
+      }
+
+      payload.push({
+        id: submission.id,
+        timestamp: new Date(submission.submitted_at).toLocaleString('id-ID'),
+        userEmail: user?.email ?? 'Unknown User',
+        userId: submission.user_id,
+        topic: topicName,
+        courseTitle: course?.title ?? 'Tanpa Kursus',
+        question: quiz.question,
+        options: Array.isArray(quiz.options) ? quiz.options : [],
+        userAnswer: submission.answer,
+        correctAnswer: quiz.correct_answer ?? '',
+        isCorrect: submission.is_correct,
+      })
     }
     
-    console.log(`[Activity API] Returning ${payload.length} formatted quiz records`);
-    return NextResponse.json(payload);
+    console.log(`[Activity API] Returning ${payload.length} detailed quiz records`)
+    return NextResponse.json(payload)
     
   } catch (error) {
-    console.error('[Activity API] Error fetching quiz logs:', error);
+    console.error('[Activity API] Error fetching quiz logs:', error)
     return NextResponse.json(
       { error: 'Failed to fetch quiz logs' },
       { status: 500 }
-    );
+    )
+  }
+}
+
+async function fetchCached<T extends { id: string }>(
+  cache: Map<string, T | null>,
+  id: string | null,
+  table: string
+): Promise<T | null> {
+  if (!id) return null
+  if (cache.has(id)) return cache.get(id) ?? null
+  try {
+    const [record] = await DatabaseService.getRecords<T>(table, {
+      filter: { id },
+      limit: 1,
+    })
+    cache.set(id, record ?? null)
+    return record ?? null
+  } catch (error) {
+    console.error(`[Activity API] Failed to fetch ${table} record ${id}:`, error)
+    cache.set(id, null)
+    return null
   }
 }

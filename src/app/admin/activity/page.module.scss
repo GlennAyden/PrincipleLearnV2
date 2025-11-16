@@ -1,13 +1,11 @@
 /* src/app/admin/activity/page.module.scss */
 
-/* Page layout */
 .page {
   display: flex;
   height: 100vh;
   background: #f1f4f8;
 }
 
-/* Sidebar */
 .sidebar {
   width: 220px;
   background: #ffffff;
@@ -54,14 +52,12 @@
   font-weight: 500;
 }
 
-/* Main content area */
 .main {
   flex: 1;
   padding: 24px;
   overflow-y: auto;
 }
 
-/* 1. Filter bar */
 .filterBar {
   display: flex;
   gap: 12px;
@@ -70,7 +66,8 @@
   background: #fff;
   padding: 16px;
   border-radius: 8px;
-  box-shadow: 0 2px 6px rgba(0,0,0,0.05);
+  box-shadow: 0 2px 6px rgba(0, 0, 0, 0.05);
+  flex-wrap: wrap;
 }
 
 .select {
@@ -99,7 +96,6 @@
   font-weight: 500;
 }
 
-/* 2. Activity Type Cards */
 .activityCards {
   display: flex;
   gap: 16px;
@@ -113,7 +109,7 @@
   padding: 16px 20px;
   background: #fff;
   border-radius: 8px;
-  box-shadow: 0 2px 6px rgba(0,0,0,0.05);
+  box-shadow: 0 2px 6px rgba(0, 0, 0, 0.05);
   cursor: pointer;
   transition: all 0.2s;
   font-weight: 400;
@@ -127,145 +123,413 @@
   border-color: #e0e8f0;
 }
 
+.activeCard {
+  border-color: #007acc;
+  background: #e7f2ff;
+}
+
 .cardIcon {
+  margin-right: 12px;
+  font-size: 1.4rem;
+}
+
+.contentPanel {
+  background: #fff;
+  border-radius: 12px;
+  padding: 24px;
+  box-shadow: 0 2px 12px rgba(0, 0, 0, 0.08);
+}
+
+.noData {
+  text-align: center;
+  padding: 32px 0;
+  color: #666;
+}
+
+.generateGrid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(320px, 1fr));
+  gap: 16px;
+}
+
+.generateCard {
+  border: 1px solid #e1e6ef;
+  border-radius: 12px;
+  padding: 16px;
+  background: #fafbff;
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+
+.cardHeader {
   display: flex;
   align-items: center;
-  justify-content: center;
-  width: 36px;
-  height: 36px;
-  background: #e6f4ff;
-  border-radius: 6px;
-  margin-right: 12px;
-  color: #007acc;
+  justify-content: space-between;
+  gap: 16px;
+}
+
+.cardHeader h3 {
+  margin: 0;
   font-size: 1.2rem;
 }
 
-.activeCard {
-  background: #007acc;
-  color: white;
+.timestamp {
+  font-size: 0.85rem;
+  color: #666;
 }
 
-.activeCard .cardIcon {
-  background: rgba(255,255,255,0.2);
-  color: white;
+.stepGrid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+  gap: 12px;
 }
 
-/* 3. Table card */
-.tableWrapper {
+.stepCard {
   background: #fff;
   border-radius: 10px;
-  padding: 24px;
-  box-shadow: 0 4px 12px rgba(0,0,0,0.05);
-  overflow-x: auto;
+  border: 1px solid #dde3f0;
+  padding: 12px;
 }
 
-.table {
-  width: 100%;
-  border-collapse: collapse;
-  /* tingkatkan lebar minimum agar semua tabel muat dengan baik */
-  min-width: 900px;
+.stepCard h4 {
+  margin: 0 0 8px;
+  font-size: 0.95rem;
+  color: #1b263b;
 }
 
-.table th,
-.table td {
-  text-align: left;
-  padding: 14px 12px;
-  vertical-align: top;
+.stepCard dl {
+  margin: 0;
 }
 
-.table th {
-  border-bottom: 2px solid #ddd;
+.stepCard dl div {
+  display: flex;
+  justify-content: space-between;
+  margin-bottom: 6px;
+  gap: 12px;
+}
+
+.stepCard dt {
   font-weight: 600;
+  font-size: 0.85rem;
+  color: #4b5675;
 }
 
-.table td {
-  border-bottom: 1px solid #eee;
-  color: #333;
-  font-weight: 400;
+.stepCard dd {
+  margin: 0;
+  font-size: 0.85rem;
+  color: #111;
 }
 
-/* Tombol "Lihat Selengkapnya" di semua tabel Activity */
-.detailButton {
-  background: #007acc;
-  color: #fff;
-  border: none;
-  padding: 8px 16px;
-  font-size: 0.9rem;
-  border-radius: 6px;
-  cursor: pointer;
-  white-space: nowrap;
-  font-weight: 500;
-  transition: all 0.2s ease;
-  display: inline-flex;
-  align-items: center;
-  gap: 6px;
+.outlineBlock {
+  background: #fff;
+  border-radius: 10px;
+  border: 1px solid #dde3f0;
+  padding: 12px;
 }
 
-.buttonIcon {
+.outlineBlock h4 {
+  margin: 0 0 8px;
   font-size: 1rem;
 }
 
-.detailButton:hover {
-  background: #0062a3;
-  transform: translateY(-2px);
-  box-shadow: 0 2px 5px rgba(0, 0, 0, 0.2);
+.outlineBlock ol {
+  margin: 0;
+  padding-left: 18px;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
 }
 
-/* Loading state */
-.loading {
-  font-size: 1.25rem;
-  text-align: center;
-  margin-top: 100px;
-  font-weight: 500;
+.outlineBlock ul {
+  margin: 4px 0 0;
+  padding-left: 16px;
+  font-size: 0.85rem;
+  color: #444;
 }
 
-/* Transcript Question & Answer formatting */
-.questionContent, .answerSummary {
-  margin-bottom: 8px;
+.muted {
+  color: #777;
+  font-size: 0.9rem;
 }
 
-.questionLabel, .answerLabel {
-  font-weight: 600;
-  color: #111;
-  margin-right: 4px;
+.topicGrid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(320px, 1fr));
+  gap: 16px;
 }
 
-.answerLabel {
+.topicCard {
+  border: 1px solid #e3e7f1;
+  border-radius: 12px;
+  padding: 16px;
+  background: #fff;
+}
+
+.topicCard header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 12px;
+}
+
+.topicCard header h3 {
+  margin: 0;
+  font-size: 1.1rem;
+}
+
+.topicCard ul {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.topicCard li {
+  border: 1px solid #eceff6;
+  border-radius: 10px;
+  padding: 12px;
+  background: #fdfdff;
+}
+
+.promptLine,
+.answerLine {
+  display: flex;
+  gap: 8px;
+  font-size: 0.95rem;
+  margin-bottom: 6px;
+}
+
+.promptLine strong,
+.answerLine strong {
   color: #007acc;
 }
 
-.answerSummary {
-  font-style: italic;
-  color: #555;
+.feedbackBox {
+  background: #f2f7ff;
+  border-radius: 8px;
+  padding: 10px;
+  font-size: 0.9rem;
+  border: 1px dashed #b7cef2;
+}
+
+.topicCard footer {
+  display: flex;
+  justify-content: space-between;
+  font-size: 0.8rem;
+  color: #666;
+}
+
+.quizList {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
+  gap: 16px;
+}
+
+.quizCard {
+  border: 1px solid #e1e6ef;
+  border-radius: 12px;
+  padding: 16px;
+  background: #fff;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.questionBox {
+  background: #f6f8fd;
+  border-radius: 8px;
+  padding: 12px;
+  font-size: 0.95rem;
+}
+
+.answerCompare {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(140px, 1fr));
+  gap: 12px;
+}
+
+.answerCompare span {
+  font-size: 0.8rem;
+  color: #6b7280;
+}
+
+.quizCard footer {
+  display: flex;
+  justify-content: space-between;
+  font-size: 0.8rem;
+  color: #666;
+}
+
+.feedbackGrid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+  gap: 16px;
+}
+
+.feedbackCard {
+  border: 1px solid #e6e4f0;
+  border-radius: 12px;
+  padding: 16px;
+  background: #fff;
+}
+
+.feedbackCard header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
   margin-bottom: 10px;
-  display: block;
+}
+
+.ratingBadge {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 40px;
+  height: 40px;
+  border-radius: 8px;
+  background: #ffe8a3;
+  font-weight: 700;
+  color: #9a6e00;
+}
+
+.feedbackComment {
+  font-size: 0.95rem;
+  color: #333;
+  margin: 0 0 12px;
   line-height: 1.4;
 }
 
-/* Generate Course Parameter display */
-.parameterSummary {
-  font-family: monospace;
-  background: #f5f5f5;
-  padding: 8px;
-  border-radius: 4px;
-  margin-bottom: 8px;
+.feedbackCard footer {
+  display: flex;
+  justify-content: space-between;
+  font-size: 0.8rem;
+  color: #666;
+}
+
+.discussionGrid {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+
+.discussionCard {
+  border: 1px solid #dfe5f2;
+  border-radius: 12px;
+  padding: 16px;
+  background: #fff;
+}
+
+.badgeRow {
+  display: flex;
+  gap: 8px;
+}
+
+.badge {
+  background: #e6f7ef;
+  color: #0a7855;
+  padding: 4px 10px;
+  border-radius: 999px;
+  font-size: 0.8rem;
+  font-weight: 600;
+}
+
+.badgeMuted {
+  background: #f1f5f9;
+  color: #64748b;
+  padding: 4px 10px;
+  border-radius: 999px;
+  font-size: 0.8rem;
+}
+
+.goalList {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin: 12px 0;
+}
+
+.goalChip {
+  padding: 6px 10px;
+  border-radius: 999px;
+  border: 1px solid #cfe2ff;
   font-size: 0.85rem;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-  max-width: 400px;
-  color: #444;
-  border: 1px solid #e0e0e0;
+  color: #1d3a8a;
+  background: #f5f9ff;
 }
 
-/* Center the detail button in Parameter column */
-.table td:nth-child(4) {
-  text-align: center;
+.goalChip small {
+  display: block;
+  font-size: 0.7rem;
+  color: #4b5675;
 }
 
-/* Center the action buttons in all columns */
-.table td:last-child {
+.goalHit {
+  border-color: #b7f0cb;
+  background: #e6ffef;
+  color: #0a6c44;
+}
+
+.timeline {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.timelineItem {
+  border-left: 3px solid #d1d6e6;
+  padding-left: 12px;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.promptBubble,
+.responseBubble,
+.feedbackBubble {
+  border-radius: 8px;
+  padding: 10px;
+  font-size: 0.95rem;
+  line-height: 1.4;
+}
+
+.promptBubble {
+  background: #eef2ff;
+  color: #1e1b4b;
+}
+
+.responseBubble {
+  background: #fef9c3;
+  color: #4b5563;
+}
+
+.feedbackBubble {
+  background: #e0f2fe;
+  color: #0f4c81;
+}
+
+.skillBadges {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+.skillBadges span {
+  background: #fde68a;
+  color: #92400e;
+  padding: 4px 8px;
+  border-radius: 6px;
+  font-size: 0.75rem;
+  font-weight: 600;
+}
+
+.loading {
+  width: 100%;
   text-align: center;
+  padding: 48px 0;
+  font-size: 1.2rem;
 }
 
 .pill {
@@ -285,77 +549,4 @@
 .pillMuted {
   background: rgba(0, 0, 0, 0.08);
   color: #555;
-}
-
-.detailDrawerOverlay {
-  position: fixed;
-  inset: 0;
-  background: rgba(0, 0, 0, 0.35);
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  z-index: 20;
-}
-
-.detailDrawer {
-  background: #fff;
-  width: min(640px, 90vw);
-  border-radius: 12px;
-  box-shadow: 0 20px 50px rgba(0, 0, 0, 0.25);
-  padding: 24px;
-}
-
-.detailHeader {
-  display: flex;
-  align-items: flex-start;
-  justify-content: space-between;
-  margin-bottom: 16px;
-}
-
-.detailHeader h3 {
-  margin: 0;
-  font-size: 1.25rem;
-}
-
-.detailMeta {
-  color: #666;
-  font-size: 0.9rem;
-  margin-top: 4px;
-}
-
-.closeButton {
-  border: none;
-  background: transparent;
-  font-size: 1.25rem;
-  cursor: pointer;
-  color: #333;
-}
-
-.detailBody {
-  display: flex;
-  flex-direction: column;
-  gap: 16px;
-  max-height: 60vh;
-  overflow-y: auto;
-}
-
-.detailRow {
-  display: flex;
-  flex-direction: column;
-  gap: 6px;
-}
-
-.detailLabel {
-  font-size: 0.9rem;
-  font-weight: 600;
-  color: #666;
-  text-transform: uppercase;
-  letter-spacing: 0.05em;
-}
-
-.detailValue {
-  font-size: 1rem;
-  color: #222;
-  line-height: 1.5;
-  white-space: pre-line;
 }

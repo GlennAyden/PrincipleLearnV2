@@ -37,10 +37,34 @@ export async function POST(req: NextRequest) {
           if (courses.length === 0) {
             console.warn(`Course with ID ${courseId} not found in database`);
           } else {
+            let subtopicTitle: string | null = null;
+            if (subtopicId) {
+              try {
+                const subtopics = await DatabaseService.getRecords('subtopics', {
+                  filter: { id: subtopicId },
+                  limit: 1,
+                });
+                subtopicTitle = subtopics[0]?.title ?? null;
+              } catch (subtopicError) {
+                console.error('Error fetching subtopic for feedback context:', subtopicError);
+              }
+            }
+            const parseIndex = (value: any) => {
+              if (typeof value === 'number' && Number.isFinite(value)) return value
+              const numeric = Number(value)
+              return Number.isFinite(numeric) ? numeric : null
+            }
+            const normalizedModuleIndex = parseIndex(moduleIndex)
+            const normalizedSubtopicIndex = parseIndex(subtopicIndex)
+
             // Save as feedback in database
             const feedbackData = {
               user_id: user.id,
               course_id: courseId,
+              subtopic_id: subtopicId || null,
+              module_index: normalizedModuleIndex,
+              subtopic_index: normalizedSubtopicIndex,
+              subtopic_label: subtopicTitle,
               rating: 5, // Default rating since no rating provided
               comment: feedback
             };

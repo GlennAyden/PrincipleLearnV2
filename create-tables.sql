@@ -112,8 +112,22 @@ CREATE TABLE IF NOT EXISTS feedback (
     id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
     user_id UUID REFERENCES users(id) ON DELETE CASCADE,
     course_id UUID REFERENCES courses(id) ON DELETE CASCADE,
+    subtopic_id UUID REFERENCES subtopics(id) ON DELETE SET NULL,
+    module_index INTEGER,
+    subtopic_index INTEGER,
+    subtopic_label TEXT,
     rating INTEGER CHECK (rating >= 1 AND rating <= 5),
     comment TEXT,
+    created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
+);
+
+-- Course generation activity log
+CREATE TABLE IF NOT EXISTS course_generation_activity (
+    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    user_id UUID REFERENCES users(id) ON DELETE SET NULL,
+    course_id UUID REFERENCES courses(id) ON DELETE SET NULL,
+    request_payload JSONB NOT NULL,
+    outline JSONB NOT NULL,
     created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
 );
 
@@ -158,6 +172,7 @@ ALTER TABLE transcript ENABLE ROW LEVEL SECURITY;
 ALTER TABLE ask_question_history ENABLE ROW LEVEL SECURITY;
 ALTER TABLE user_progress ENABLE ROW LEVEL SECURITY;
 ALTER TABLE feedback ENABLE ROW LEVEL SECURITY;
+ALTER TABLE course_generation_activity ENABLE ROW LEVEL SECURITY;
 ALTER TABLE api_logs ENABLE ROW LEVEL SECURITY;
 ALTER TABLE discussion_admin_actions ENABLE ROW LEVEL SECURITY;
 
@@ -197,6 +212,9 @@ CREATE INDEX IF NOT EXISTS idx_ask_question_history_created_at ON ask_question_h
 CREATE INDEX IF NOT EXISTS idx_ask_question_history_user_course ON ask_question_history(user_id, course_id);
 CREATE INDEX IF NOT EXISTS idx_user_progress_user_id ON user_progress(user_id);
 CREATE INDEX IF NOT EXISTS idx_feedback_user_id ON feedback(user_id);
+CREATE INDEX IF NOT EXISTS idx_feedback_subtopic_id ON feedback(subtopic_id);
+CREATE INDEX IF NOT EXISTS idx_course_generation_activity_user_id ON course_generation_activity(user_id);
+CREATE INDEX IF NOT EXISTS idx_course_generation_activity_created_at ON course_generation_activity(created_at);
 CREATE INDEX IF NOT EXISTS idx_api_logs_created_at ON api_logs(created_at);
 CREATE INDEX IF NOT EXISTS idx_api_logs_path ON api_logs(path);
 CREATE INDEX IF NOT EXISTS idx_discussion_admin_actions_session ON discussion_admin_actions(session_id);

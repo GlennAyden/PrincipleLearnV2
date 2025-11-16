@@ -46,6 +46,11 @@ export async function POST(req: NextRequest) {
     }
       
     console.log(`[Generate Course] Received request for topic: "${topic}" from user: ${userId || 'anonymous'}`);
+    const requestPayload = {
+      step1: { topic, goal },
+      step2: { level, extraTopics },
+      step3: { problem, assumption },
+    };
 
     // 4. Prompt yang lebih komprehensif
     const systemMessage = {
@@ -184,10 +189,13 @@ Important: Write all titles and overviews in the same language as the user's inp
         console.log(`[Generate Course] DEBUG: Found ${users.length} users`);
         console.log(`[Generate Course] DEBUG: Users data:`, users);
         
+        let userRecord = null;
+        let createdCourse: any = null;
         if (users.length === 0) {
           console.warn(`[Generate Course] User with email ${userId} not found in database`);
         } else {
           const user = users[0];
+          userRecord = user;
           console.log(`[Generate Course] DEBUG: User found:`, { id: user.id, email: user.email });
           
           // Create course record
@@ -203,6 +211,7 @@ Important: Write all titles and overviews in the same language as the user's inp
           console.log(`[Generate Course] DEBUG: Course data to insert:`, courseData);
           
           const course = await DatabaseService.insertRecord('courses', courseData);
+          createdCourse = course;
           console.log(`[Generate Course] Course created with ID: ${course.id}`);
           console.log(`[Generate Course] DEBUG: Course created successfully:`, course);
           
@@ -223,6 +232,18 @@ Important: Write all titles and overviews in the same language as the user's inp
           }
           
           console.log(`[Generate Course] Created ${outline.length} subtopics for course`);
+        }
+
+        try {
+          await DatabaseService.insertRecord('course_generation_activity', {
+            user_id: userRecord?.id ?? null,
+            course_id: createdCourse?.id ?? null,
+            request_payload: requestPayload,
+            outline,
+          });
+          console.log('[Generate Course] Logged course generation payload for admin activity');
+        } catch (logError) {
+          console.error('[Generate Course] Failed to store course generation activity log:', logError);
         }
       } catch (error) {
         console.error('[Generate Course] Error saving to database:', error);

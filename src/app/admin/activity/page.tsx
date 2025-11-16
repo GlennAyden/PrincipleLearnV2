@@ -1,56 +1,45 @@
-// src/app/admin/activity/page.tsx
-
 'use client'
 
-import React, { useEffect, useState } from 'react'
+import React, { useEffect, useMemo, useState } from 'react'
 import styles from './page.module.scss'
-import { 
-  FiLogOut, FiHome, FiUsers, FiActivity, 
-  FiFileText, FiMessageCircle, FiCheckSquare, FiBook,
-  FiEye, FiInfo, FiHelpCircle, FiTarget, FiStar, FiX 
+import {
+  FiLogOut,
+  FiHome,
+  FiUsers,
+  FiActivity,
+  FiFileText,
+  FiHelpCircle,
+  FiTarget,
+  FiCheckSquare,
+  FiStar,
+  FiMessageCircle,
 } from 'react-icons/fi'
 import { useRouter, usePathname } from 'next/navigation'
-import { useAdmin } from '@/hooks/useAdmin'
-import TranscriptModal from '@/components/admin/TranscriptModal'
-import QuizResultModal from '@/components/admin/QuizResultModal'
-import JournalModal from '@/components/admin/JournalModal'
-import CourseParameterModal from '@/components/admin/CourseParameterModal'
-import { getUserSpecificKey } from '@/hooks/useLocalStorage'
+import { useAdmin } from "@/hooks/useAdmin"
+
+interface OutlineSubtopic {
+  title: string
+  overview: string
+}
+
+interface OutlineModule {
+  title: string
+  subtopics: OutlineSubtopic[]
+}
 
 interface GenerateLogItem {
   id: string
   timestamp: string
   courseName: string
-  parameter: string
   userEmail: string
   userId: string
-}
-
-interface TranscriptLogItem {
-  id: string
-  timestamp: string
-  topic: string
-  content: string
-  userEmail: string
-  userId: string
-}
-
-interface QuizLogItem {
-  id: string
-  timestamp: string
-  topic: string
-  score: number
-  userEmail: string
-  userId: string
-}
-
-interface JournalLogItem {
-  id: string
-  timestamp: string
-  topic: string
-  content: string
-  userEmail: string
-  userId: string
+  courseId: string | null
+  steps: {
+    step1?: { topic?: string; goal?: string }
+    step2?: { level?: string; extraTopics?: string }
+    step3?: { problem?: string; assumption?: string }
+  }
+  outline: OutlineModule[]
 }
 
 interface AskLogItem {
@@ -67,19 +56,22 @@ interface AskLogItem {
   pageNumber: number
 }
 
-interface ChallengeLogItem {
+interface ChallengeLogItem extends AskLogItem {
+  feedback: string
+}
+
+interface QuizLogItem {
   id: string
   timestamp: string
   topic: string
   question: string
-  answer: string
-  feedback: string
+  options: string[]
+  userAnswer: string
+  correctAnswer: string
+  isCorrect: boolean
   userEmail: string
   userId: string
   courseTitle: string
-  moduleIndex: number
-  subtopicIndex: number
-  pageNumber: number
 }
 
 interface FeedbackLogItem {
@@ -91,264 +83,156 @@ interface FeedbackLogItem {
   userEmail: string
   userId: string
   courseTitle: string
+  moduleIndex: number | null
+  subtopicIndex: number | null
 }
 
-type DetailView =
-  | { type: 'ask'; data: AskLogItem }
-  | { type: 'challenge'; data: ChallengeLogItem }
-  | { type: 'feedback'; data: FeedbackLogItem }
-  | null
+interface DiscussionGoal {
+  id: string
+  description: string
+  covered: boolean
+  thinkingSkill?: {
+    domain?: string
+    indicator?: string
+    indicatorDescription?: string
+  } | null
+}
+
+interface DiscussionExchange {
+  stepKey: string | null
+  prompt: string
+  response?: string
+  coachFeedback?: string
+  thinkingSkills: DiscussionGoal[]
+}
+
+interface DiscussionLogItem {
+  id: string
+  timestamp: string
+  status: string
+  phase: string
+  userEmail: string
+  userId: string
+  courseTitle: string
+  subtopicTitle: string
+  goals: DiscussionGoal[]
+  exchanges: DiscussionExchange[]
+}
 
 const TABS = [
-  { id: 'generate',  label: 'Log Generate Course', icon: FiFileText },
-  { id: 'transcript', label: 'Log Transkrip Q&A', icon: FiMessageCircle },
-  { id: 'ask', label: 'Riwayat Q&A Otomatis', icon: FiHelpCircle },
+  { id: 'generate', label: 'Generate Course', icon: FiFileText },
+  { id: 'ask', label: 'Ask Question', icon: FiHelpCircle },
   { id: 'challenge', label: 'Challenge Thinking', icon: FiTarget },
-  { id: 'quiz',      label: 'Log Pengerjaan Quiz', icon: FiCheckSquare },
-  { id: 'jurnal',    label: 'Jurnal Refleksi', icon: FiBook },
-  { id: 'feedback',  label: 'Feedback Belajar', icon: FiStar },
+  { id: 'quiz', label: 'Quiz', icon: FiCheckSquare },
+  { id: 'feedback', label: 'Feedback', icon: FiStar },
+  { id: 'discussion', label: 'Discussion', icon: FiMessageCircle },
 ]
 
+function groupByTopic<T extends { topic: string }>(entries: T[]) {
+  const map = new Map<string, T[]>()
+  entries.forEach((entry) => {
+    const key = entry.topic || 'Tanpa Topik'
+    map.set(key, [...(map.get(key) ?? []), entry])
+  })
+  return Array.from(map.entries()).map(([topic, items]) => ({ topic, items }))
+}
+
+const EmptyState = ({ message }: { message: string }) => (
+  <p className={styles.noData}>{message}</p>
+)
+
 export default function AdminActivityPage() {
-  const router     = useRouter()
-  const pathname   = usePathname()
+  const router = useRouter()
+  const pathname = usePathname()
   const { admin, loading: authLoading } = useAdmin()
 
-  // filter state
   const [users, setUsers] = useState<{ id: string; email: string }[]>([])
-  const [selectedUser,   setSelectedUser]   = useState('')
-  const [selectedDate,   setSelectedDate]   = useState('')
+  const [selectedUser, setSelectedUser] = useState('')
+  const [selectedDate, setSelectedDate] = useState('')
   const [selectedCourse, setSelectedCourse] = useState('')
-  const [selectedTopic,  setSelectedTopic]  = useState('')
-  
-  // course and topic/subtopic options for filtering
+  const [selectedTopic, setSelectedTopic] = useState('')
+
   const [courses, setCourses] = useState<{ id: string; title: string }[]>([])
   const [topics, setTopics] = useState<{ id: string; title: string }[]>([])
 
-  // tab state
   const [activeTab, setActiveTab] = useState('generate')
 
-  // logs state
-  const [generateLogs,   setGenerateLogs]   = useState<GenerateLogItem[]>([])
-  const [transcriptLogs, setTranscriptLogs] = useState<TranscriptLogItem[]>([])
-  const [quizLogs,       setQuizLogs]       = useState<QuizLogItem[]>([])
-  const [journalLogs,    setJournalLogs]    = useState<JournalLogItem[]>([])
-  const [askLogs,        setAskLogs]        = useState<AskLogItem[]>([])
-  const [challengeLogs,  setChallengeLogs]  = useState<ChallengeLogItem[]>([])
-  const [feedbackLogs,   setFeedbackLogs]   = useState<FeedbackLogItem[]>([])
+  const [generateLogs, setGenerateLogs] = useState<GenerateLogItem[]>([])
+  const [askLogs, setAskLogs] = useState<AskLogItem[]>([])
+  const [challengeLogs, setChallengeLogs] = useState<ChallengeLogItem[]>([])
+  const [quizLogs, setQuizLogs] = useState<QuizLogItem[]>([])
+  const [feedbackLogs, setFeedbackLogs] = useState<FeedbackLogItem[]>([])
+  const [discussionLogs, setDiscussionLogs] = useState<DiscussionLogItem[]>([])
 
-  // modal state
-  const [transcriptModalOpen, setTranscriptModalOpen] = useState(false)
-  const [selectedTranscript,  setSelectedTranscript]  = useState<TranscriptLogItem | null>(null)
-  const [quizModalOpen,       setQuizModalOpen]       = useState(false)
-  const [selectedQuizLog,     setSelectedQuizLog]     = useState<QuizLogItem | null>(null)
-  const [journalModalOpen,    setJournalModalOpen]    = useState(false)
-  const [selectedJournal,     setSelectedJournal]     = useState<JournalLogItem | null>(null)
-  const [parameterModalOpen,  setParameterModalOpen]  = useState(false)
-  const [selectedParameter,   setSelectedParameter]   = useState<GenerateLogItem | null>(null)
-  const [detailView,          setDetailView]          = useState<DetailView>(null)
+  const groupedAskLogs = useMemo(() => groupByTopic(askLogs), [askLogs])
+  const groupedChallengeLogs = useMemo(() => groupByTopic(challengeLogs), [challengeLogs])
 
-  // redirect if not admin
   useEffect(() => {
     if (!authLoading && !admin) router.push('/admin/login')
   }, [authLoading, admin, router])
 
-  // load users
   useEffect(() => {
     if (authLoading || !admin) return
     fetch('/api/admin/users', { credentials: 'include' })
       .then((res) => res.json())
       .then(setUsers)
   }, [authLoading, admin])
-  
-  // Load available courses for dropdown from database
+
   useEffect(() => {
     if (authLoading || !admin) return
-    
-    async function loadAllCourses() {
-      try {
-        // Fetch all users first to get their course data
-        const usersResponse = await fetch('/api/admin/users');
-        const usersResult = await usersResponse.json();
-        
-        if (usersResult.success && usersResult.users) {
-          const allCourses: any[] = [];
-          
-          // For each user, fetch their courses
-          for (const user of usersResult.users) {
-            try {
-              const coursesResponse = await fetch(`/api/courses?userId=${encodeURIComponent(user.email)}`);
-              const coursesResult = await coursesResponse.json();
-              
-              if (coursesResult.success && coursesResult.courses) {
-                allCourses.push(...coursesResult.courses);
-              }
-            } catch (error) {
-              console.error(`Error fetching courses for user ${user.email}:`, error);
-            }
-          }
-          
-          // Create a map to deduplicate courses by ID
-          const courseMap = new Map();
-          allCourses.forEach((course) => {
-            if (course && course.id) {
-              courseMap.set(course.id, course);
-            }
-          });
-          
-          // Map to format needed for dropdown
-          const courseOptions = Array.from(courseMap.values()).map((course: any) => ({
-            id: course.id,
-            title: course.title
-          }));
-          
-          setCourses(courseOptions);
-        }
-      } catch (error) {
-        console.error('Error loading courses:', error);
-      }
-    }
-    
-    loadAllCourses();
+    fetch('/api/admin/activity/courses', { credentials: 'include' })
+      .then((res) => res.json())
+      .then((data) => setCourses(Array.isArray(data.courses) ? data.courses : []))
+      .catch(() => setCourses([]))
   }, [authLoading, admin])
-  
-  // Load topics based on selected course from database
+
   useEffect(() => {
+    if (authLoading || !admin) return
     if (!selectedCourse) {
       setTopics([])
       return
     }
-    
-    async function loadCourseTopics() {
-      try {
-        // Fetch course details from database
-        const response = await fetch(`/api/courses/${selectedCourse}`);
-        const result = await response.json();
-        
-        if (result.success && result.course) {
-          const selectedCourseData = result.course;
-          
-          // Transform subtopics to outline format
-          const outline = selectedCourseData.subtopics?.map((subtopic: any) => {
-            let content;
-            try {
-              content = JSON.parse(subtopic.content);
-            } catch (parseError) {
-              content = { module: subtopic.title, subtopics: [] };
-            }
-            
-            return {
-              module: content.module || subtopic.title || 'Module',
-              subtopics: content.subtopics || []
-            };
-          }) || [];
-          
-          if (outline.length > 0) {
-            // Flatten all modules and subtopics into a single array of topics
-            const allTopics: { id: string; title: string }[] = []
-            
-            outline.forEach((module: any, moduleIndex: number) => {
-              // Add the module as a topic option
-              allTopics.push({
-                id: `Module ${moduleIndex + 1}`,
-                title: `Module ${moduleIndex + 1}: ${module.module}`
-              })
-              
-              // Add each subtopic
-              if (module.subtopics && module.subtopics.length > 0) {
-                module.subtopics.forEach((subtopic: any, subtopicIndex: number) => {
-                  const subtopicTitle = typeof subtopic === 'string' 
-                    ? subtopic 
-                    : subtopic.title
-                    
-                  // Clean up the title by removing redundant numbering
-                  const cleanTitle = subtopicTitle
-                    .replace(/^\d+\.\s*\d+\.?\s*/g, '')
-                    .replace(/^\d+\.\s*/g, '')
-                  
-                  allTopics.push({
-                    id: `Module ${moduleIndex + 1}, Subtopic ${subtopicIndex + 1}`,
-                    title: `${moduleIndex + 1}.${subtopicIndex + 1} ${cleanTitle}`
-                  })
-                })
-              }
-            })
-            
-            setTopics(allTopics)
-          } else {
-            setTopics([])
-          }
-        }
-      } catch (error) {
-        console.error('Error loading course topics:', error)
-        setTopics([])
-      }
-    }
-    
-    loadCourseTopics();
-  }, [selectedCourse])
+    fetch(`/api/admin/activity/topics?courseId=${selectedCourse}`, { credentials: 'include' })
+      .then((res) => res.json())
+      .then((data) => setTopics(Array.isArray(data.topics) ? data.topics : []))
+      .catch(() => setTopics([]))
+  }, [selectedCourse, authLoading, admin])
 
   const requiresCourseFilter = activeTab !== 'generate'
-  const requiresTopicFilter = ['transcript', 'quiz', 'jurnal', 'ask', 'challenge'].includes(activeTab)
+  const requiresTopicFilter = ['ask', 'challenge', 'quiz', 'feedback', 'discussion'].includes(activeTab)
 
-  // common helper to build query params
   const buildParams = () => {
-    const p = new URLSearchParams()
-    if (selectedUser)   p.set('userId', selectedUser)
-    if (selectedDate)   p.set('date', selectedDate)
-    if (requiresCourseFilter && selectedCourse) {
-      p.set('course', selectedCourse)
-    }
-    if (requiresTopicFilter && selectedTopic)  {
-      p.set('topic', selectedTopic)
-    }
-    return p.toString()
+    const params = new URLSearchParams()
+    if (selectedUser) params.set('userId', selectedUser)
+    if (selectedDate) params.set('date', selectedDate)
+    if (requiresCourseFilter && selectedCourse) params.set('course', selectedCourse)
+    if (requiresTopicFilter && selectedTopic) params.set('topic', selectedTopic)
+    return params.toString()
   }
 
-  // fetch logs on tab change or filters
   useEffect(() => {
     if (authLoading || !admin) return
-
-    // Fetch appropriate data based on the active tab
     const params = buildParams()
     const endpointMap: Record<string, string> = {
       generate: 'generate-course',
-      transcript: 'transcript',
-      quiz: 'quiz',
-      jurnal: 'jurnal',
       ask: 'ask-question',
       challenge: 'challenge',
+      quiz: 'quiz',
       feedback: 'feedback',
+      discussion: 'discussion',
     }
-    const fetchUrl = `/api/admin/activity/${endpointMap[activeTab] ?? 'generate-course'}?${params}`
-    
-    // Debug: log the API URLs being called
-    console.log(`Fetching activity data from: ${fetchUrl}`)
-    
-    fetch(fetchUrl, { credentials: 'include' })
-      .then(response => {
-        if (!response.ok) {
-          throw new Error(`API request failed with status ${response.status}`)
-        }
-        return response.json()
+    const endpoint = endpointMap[activeTab]
+    if (!endpoint) return
+    const url = `/api/admin/activity/${endpoint}?${params}`
+    fetch(url, { credentials: 'include' })
+      .then((res) => {
+        if (!res.ok) throw new Error('Failed to fetch logs')
+        return res.json()
       })
-      .then(data => {
-        // Debug: log the data received
-        console.log(`Received ${data.length} records for ${activeTab}`)
-        
-        // Update the appropriate state based on active tab
+      .then((data) => {
         switch (activeTab) {
           case 'generate':
             setGenerateLogs(data)
-            break
-          case 'transcript':
-            setTranscriptLogs(data)
-            break
-          case 'quiz':
-            setQuizLogs(data)
-            break
-          case 'jurnal':
-            setJournalLogs(data)
             break
           case 'ask':
             setAskLogs(data)
@@ -356,83 +240,73 @@ export default function AdminActivityPage() {
           case 'challenge':
             setChallengeLogs(data)
             break
+          case 'quiz':
+            setQuizLogs(data)
+            break
           case 'feedback':
             setFeedbackLogs(data)
             break
+          case 'discussion':
+            setDiscussionLogs(data)
+            break
         }
       })
-      .catch(error => {
-        console.error(`Error fetching ${activeTab} logs:`, error)
-        // Reset the state to empty array on error
-    switch (activeTab) {
-      case 'generate':
+      .catch(() => {
+        switch (activeTab) {
+          case 'generate':
             setGenerateLogs([])
-        break
-      case 'transcript':
-            setTranscriptLogs([])
-        break
-      case 'quiz':
-            setQuizLogs([])
-        break
-      case 'jurnal':
-            setJournalLogs([])
-        break
-      case 'ask':
+            break
+          case 'ask':
             setAskLogs([])
-        break
-      case 'challenge':
+            break
+          case 'challenge':
             setChallengeLogs([])
-        break
-      case 'feedback':
+            break
+          case 'quiz':
+            setQuizLogs([])
+            break
+          case 'feedback':
             setFeedbackLogs([])
-        break
-    }
+            break
+          case 'discussion':
+            setDiscussionLogs([])
+            break
+        }
       })
-  }, [
-    activeTab,
-    selectedUser,
-    selectedDate,
-    selectedCourse,
-    selectedTopic,
-    authLoading,
-    admin,
-  ])
+  }, [activeTab, selectedUser, selectedDate, selectedCourse, selectedTopic, authLoading, admin])
 
   if (authLoading) return <div className={styles.loading}>Loading...</div>
   if (!admin) return null
 
   return (
     <div className={styles.page}>
-      {/* Sidebar */}
       <aside className={styles.sidebar}>
         <div className={styles.logo}>Principle Learn</div>
         <nav>
           <ul className={styles.navList}>
             <li
-            className={`${styles.navItem} ${pathname === '/admin/dashboard' ? styles.active : ''}`}
-            onClick={() => router.push('/admin/dashboard')}
-          >
+              className={`${styles.navItem} ${pathname === '/admin/dashboard' ? styles.active : ''}`}
+              onClick={() => router.push('/admin/dashboard')}
+            >
               <FiHome className={styles.navIcon} /> Dashboard
             </li>
             <li
-            className={`${styles.navItem} ${pathname === '/admin/users' ? styles.active : ''}`}
-            onClick={() => router.push('/admin/users')}
-          >
+              className={`${styles.navItem} ${pathname === '/admin/users' ? styles.active : ''}`}
+              onClick={() => router.push('/admin/users')}
+            >
               <FiUsers className={styles.navIcon} /> Users
             </li>
             <li
-            className={`${styles.navItem} ${pathname === '/admin/activity' ? styles.active : ''}`}
-            onClick={() => router.push('/admin/activity')}
-          >
+              className={`${styles.navItem} ${pathname === '/admin/activity' ? styles.active : ''}`}
+              onClick={() => router.push('/admin/activity')}
+            >
               <FiActivity className={styles.navIcon} /> Activity
             </li>
           </ul>
         </nav>
       </aside>
 
-      {/* Main */}
       <main className={styles.main}>
-        {/* Filter bar */}
         <div className={styles.filterBar}>
           <select
             className={styles.select}
@@ -447,15 +321,13 @@ export default function AdminActivityPage() {
             ))}
           </select>
 
-          <select
+          <input
+            type="date"
             className={styles.select}
             value={selectedDate}
             onChange={(e) => setSelectedDate(e.target.value)}
-          >
-            <option value="">Tanggal</option>
-            <option value="2025-04-25">25/04/2025</option>
-            <option value="2025-05-12">12/05/2025</option>
-          </select>
+            aria-label="Filter tanggal aktivitas"
+          />
 
           {requiresCourseFilter && (
             <select
@@ -463,7 +335,6 @@ export default function AdminActivityPage() {
               value={selectedCourse}
               onChange={(e) => {
                 setSelectedCourse(e.target.value)
-                // Reset topic when course changes
                 setSelectedTopic('')
               }}
             >
@@ -485,7 +356,7 @@ export default function AdminActivityPage() {
             >
               <option value="">Topic/Subtopic</option>
               {topics.map((topic) => (
-                <option key={topic.id} value={topic.id}>
+                <option key={topic.id} value={topic.title}>
                   {topic.title}
                 </option>
               ))}
@@ -497,7 +368,6 @@ export default function AdminActivityPage() {
           </button>
         </div>
 
-        {/* Activity Type Cards */}
         <div className={styles.activityCards}>
           {TABS.map((tab) => (
             <div
@@ -513,482 +383,310 @@ export default function AdminActivityPage() {
           ))}
         </div>
 
-        {/* Table card */}
-        <section className={styles.tableWrapper}>
-          {/* Generate */}
+        <section className={styles.contentPanel}>
           {activeTab === 'generate' && (
-            <>
-              <table className={styles.table}>
-                <thead>
-                  <tr>
-                    <th>Timestamp</th>
-                    <th>User</th>
-                    <th>Course Name</th>
-                    <th>Parameter</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {generateLogs.length === 0 ? (
-                    <tr>
-                      <td colSpan={4} className={styles.noData}>No course generation logs found</td>
-                    </tr>
-                  ) : (
-                    generateLogs.map((log) => (
-                      <tr key={log.id}>
-                        <td>{log.timestamp}</td>
-                        <td>{log.userEmail}</td>
-                        <td>{log.courseName}</td>
-                        <td>
-                          <button
-                            className={styles.detailButton}
-                            onClick={() => {
-                              setSelectedParameter(log)
-                              setParameterModalOpen(true)
-                            }}
-                          >
-                            <FiInfo className={styles.buttonIcon} /> Lihat Selengkapnya
-                          </button>
-                        </td>
-                      </tr>
-                    ))
-                  )}
-                </tbody>
-              </table>
-              {selectedParameter && (
-                <CourseParameterModal
-                  isOpen={parameterModalOpen}
-                  parameterData={selectedParameter.parameter}
-                  courseName={selectedParameter.courseName}
-                  timestamp={selectedParameter.timestamp}
-                  onClose={() => setParameterModalOpen(false)}
-                />
+            <div className={styles.generateGrid}>
+              {generateLogs.length === 0 ? (
+                <EmptyState message="Belum ada log generate course" />
+              ) : (
+                generateLogs.map((log) => {
+                  const step1 = log.steps.step1 ?? {}
+                  const step2 = log.steps.step2 ?? {}
+                  const step3 = log.steps.step3 ?? {}
+                  return (
+                    <article key={log.id} className={styles.generateCard}>
+                      <header className={styles.cardHeader}>
+                        <div>
+                          <h3>{log.courseName}</h3>
+                          <p>{log.userEmail}</p>
+                        </div>
+                        <span className={styles.timestamp}>{log.timestamp}</span>
+                      </header>
+                      <div className={styles.stepGrid}>
+                        <div className={styles.stepCard}>
+                          <h4>Step 1 - Need</h4>
+                          <dl>
+                            <div>
+                              <dt>Topic</dt>
+                              <dd>{step1.topic || '-'}</dd>
+                            </div>
+                            <div>
+                              <dt>Goal</dt>
+                              <dd>{step1.goal || '-'}</dd>
+                            </div>
+                          </dl>
+                        </div>
+                        <div className={styles.stepCard}>
+                          <h4>Step 2 - Level</h4>
+                          <dl>
+                            <div>
+                              <dt>Level</dt>
+                              <dd>{step2.level || '-'}</dd>
+                            </div>
+                            <div>
+                              <dt>Extra Topics</dt>
+                              <dd>{step2.extraTopics || '-'}</dd>
+                            </div>
+                          </dl>
+                        </div>
+                        <div className={styles.stepCard}>
+                          <h4>Step 3 - Context</h4>
+                          <dl>
+                            <div>
+                              <dt>Problem</dt>
+                              <dd>{step3.problem || '-'}</dd>
+                            </div>
+                            <div>
+                              <dt>Assumption</dt>
+                              <dd>{step3.assumption || '-'}</dd>
+                            </div>
+                          </dl>
+                        </div>
+                      </div>
+                      <div className={styles.outlineBlock}>
+                        <h4>Outline dari OpenAI</h4>
+                        {log.outline.length === 0 ? (
+                          <p className={styles.muted}>Belum ada outline untuk request ini</p>
+                        ) : (
+                          <ol>
+                            {log.outline.map((module) => (
+                              <li key={module.title}>
+                                <strong>{module.title}</strong>
+                                <ul>
+                                  {module.subtopics.map((subtopic) => (
+                                    <li key={subtopic.title}>
+                                      <span>{subtopic.title}</span>
+                                      <small>{subtopic.overview}</small>
+                                    </li>
+                                  ))}
+                                </ul>
+                              </li>
+                            ))}
+                          </ol>
+                        )}
+                      </div>
+                    </article>
+                  )
+                })
               )}
-            </>
+            </div>
           )}
 
-          {/* Transcript */}
-          {activeTab === 'transcript' && (
-            <>
-              <table className={styles.table}>
-                <thead>
-                  <tr>
-                    <th>Timestamp</th>
-                    <th>User</th>
-                    <th>Topic/Subtopic</th>
-                    <th>Pertanyaan</th>
-                    <th>Jawaban</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {transcriptLogs.length === 0 ? (
-                    <tr>
-                      <td colSpan={5} className={styles.noData}>No transcript logs found</td>
-                    </tr>
-                  ) : (
-                    transcriptLogs.map((log) => {
-                      // Extract question and answer from content
-                      const contentParts = log.content.split('\nA: ');
-                      const question = contentParts[0].replace('Q: ', '');
-                      const answer = contentParts[1] || '';
-                      
-                      // Create a summary of the answer (first 60 characters)
-                      const answerSummary = answer.length > 60
-                        ? `${answer.slice(0, 60)}...`
-                        : answer;
-                      
-                      return (
-                        <tr key={log.id}>
-                          <td>{log.timestamp}</td>
-                          <td>{log.userEmail}</td>
-                          <td>{log.topic}</td>
-                          <td>
-                            <div className={styles.questionContent}>
-                              <span className={styles.questionLabel}>Q:</span> {question}
-                            </div>
-                          </td>
-                          <td>
-                            <div className={styles.answerSummary}>
-                              <span className={styles.answerLabel}>A:</span> {answerSummary}
-                            </div>
-                            <button
-                              className={styles.detailButton}
-                              onClick={() => {
-                                setSelectedTranscript(log)
-                                setTranscriptModalOpen(true)
-                              }}
-                            >
-                              <FiEye className={styles.buttonIcon} /> Lihat Selengkapnya
-                            </button>
-                          </td>
-                        </tr>
-                      );
-                    })
-                  )}
-                </tbody>
-              </table>
-              {selectedTranscript && (
-                <TranscriptModal
-                  isOpen={transcriptModalOpen}
-                  transcript={selectedTranscript}
-                  onClose={() => setTranscriptModalOpen(false)}
-                />
-              )}
-            </>
-          )}
-
-          {/* Ask Question */}
           {activeTab === 'ask' && (
-            <>
-              <table className={styles.table}>
-                <thead>
-                  <tr>
-                    <th>Timestamp</th>
-                    <th>User</th>
-                    <th>Subtopik</th>
-                    <th>Pertanyaan</th>
-                    <th>Jawaban</th>
-                    <th>Aksi</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {askLogs.length === 0 ? (
-                    <tr>
-                      <td colSpan={6} className={styles.noData}>Belum ada riwayat Q&A otomatis</td>
-                    </tr>
-                  ) : (
-                    askLogs.map((log) => {
-                      const answerSummary = log.answer.length > 60 ? `${log.answer.slice(0, 60)}...` : log.answer
-                      return (
-                        <tr key={log.id}>
-                          <td>{log.timestamp}</td>
-                          <td>{log.userEmail}</td>
-                          <td>{log.topic}</td>
-                          <td>{log.question}</td>
-                          <td>{answerSummary}</td>
-                          <td>
-                            <button
-                              className={styles.detailButton}
-                              onClick={() => setDetailView({ type: 'ask', data: log })}
-                            >
-                              <FiEye className={styles.buttonIcon} /> Detail
-                            </button>
-                          </td>
-                        </tr>
-                      )
-                    })
-                  )}
-                </tbody>
-              </table>
-            </>
+            <div className={styles.topicGrid}>
+              {groupedAskLogs.length === 0 ? (
+                <EmptyState message="Belum ada riwayat pertanyaan otomatis" />
+              ) : (
+                groupedAskLogs.map(({ topic, items }) => (
+                  <article key={topic} className={styles.topicCard}>
+                    <header>
+                      <h3>{topic}</h3>
+                      <span>{items.length} percakapan</span>
+                    </header>
+                    <ul>
+                      {items.map((log) => (
+                        <li key={log.id}>
+                          <div className={styles.promptLine}>
+                            <strong>Q:</strong>
+                            <p>{log.question}</p>
+                          </div>
+                          <div className={styles.answerLine}>
+                            <strong>A:</strong>
+                            <p>{log.answer}</p>
+                          </div>
+                          <footer>
+                            <span>{log.userEmail}</span>
+                            <span>{log.timestamp}</span>
+                          </footer>
+                        </li>
+                      ))}
+                    </ul>
+                  </article>
+                ))
+              )}
+            </div>
           )}
 
-          {/* Challenge Thinking */}
           {activeTab === 'challenge' && (
-            <>
-              <table className={styles.table}>
-                <thead>
-                  <tr>
-                    <th>Timestamp</th>
-                    <th>User</th>
-                    <th>Subtopik</th>
-                    <th>Pertanyaan Tantangan</th>
-                    <th>Status</th>
-                    <th>Aksi</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {challengeLogs.length === 0 ? (
-                    <tr>
-                      <td colSpan={6} className={styles.noData}>Belum ada catatan challenge thinking</td>
-                    </tr>
-                  ) : (
-                    challengeLogs.map((log) => {
-                      const answerSummary = log.answer.length > 60 ? `${log.answer.slice(0, 60)}...` : log.answer
-                      const hasFeedback = Boolean(log.feedback)
-                      return (
-                        <tr key={log.id}>
-                          <td>{log.timestamp}</td>
-                          <td>{log.userEmail}</td>
-                          <td>{log.topic}</td>
-                          <td>{answerSummary}</td>
-                          <td>
-                            <span className={`${styles.pill} ${hasFeedback ? styles.pillSuccess : styles.pillMuted}`}>
-                              {hasFeedback ? 'Dinilai' : 'Belum Dinilai'}
-                            </span>
-                          </td>
-                          <td>
-                            <button
-                              className={styles.detailButton}
-                              onClick={() => setDetailView({ type: 'challenge', data: log })}
-                            >
-                              <FiEye className={styles.buttonIcon} /> Detail
-                            </button>
-                          </td>
-                        </tr>
-                      )
-                    })
-                  )}
-                </tbody>
-              </table>
-            </>
+            <div className={styles.topicGrid}>
+              {groupedChallengeLogs.length === 0 ? (
+                <EmptyState message="Belum ada aktivitas challenge thinking" />
+              ) : (
+                groupedChallengeLogs.map(({ topic, items }) => (
+                  <article key={topic} className={styles.topicCard}>
+                    <header>
+                      <h3>{topic}</h3>
+                      <span>{items.length} tantangan</span>
+                    </header>
+                    <ul>
+                      {items.map((log) => (
+                        <li key={log.id}>
+                          <div className={styles.promptLine}>
+                            <strong>Tantangan:</strong>
+                            <p>{log.question}</p>
+                          </div>
+                          <div className={styles.answerLine}>
+                            <strong>Jawaban Siswa:</strong>
+                            <p>{log.answer}</p>
+                          </div>
+                          <div className={styles.feedbackBox}>
+                            <strong>Feedback AI:</strong>
+                            <p>{log.feedback || 'Belum ada feedback'}</p>
+                          </div>
+                          <footer>
+                            <span>{log.userEmail}</span>
+                            <span>{log.timestamp}</span>
+                          </footer>
+                        </li>
+                      ))}
+                    </ul>
+                  </article>
+                ))
+              )}
+            </div>
           )}
 
-          {/* Quiz */}
           {activeTab === 'quiz' && (
-            <>
-              <table className={styles.table}>
-                <thead>
-                  <tr>
-                    <th>Timestamp</th>
-                    <th>User</th>
-                    <th>Topic/Subtopic</th>
-                    <th>Skor</th>
-                    <th>Quiz Result</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {quizLogs.length === 0 ? (
-                    <tr>
-                      <td colSpan={5} className={styles.noData}>No quiz logs found</td>
-                    </tr>
-                  ) : (
-                    quizLogs.map((log) => (
-                      <tr key={log.id}>
-                        <td>{log.timestamp}</td>
-                        <td>{log.userEmail}</td>
-                        <td>{log.topic}</td>
-                        <td>{log.score}</td>
-                        <td>
-                          <button
-                            className={styles.detailButton}
-                            onClick={() => {
-                              setSelectedQuizLog(log)
-                              setQuizModalOpen(true)
-                            }}
-                          >
-                            <FiEye className={styles.buttonIcon} /> Lihat Selengkapnya
-                          </button>
-                        </td>
-                      </tr>
-                    ))
-                  )}
-                </tbody>
-              </table>
-              {selectedQuizLog && (
-                <QuizResultModal
-                  isOpen={quizModalOpen}
-                  quizLog={selectedQuizLog}
-                  onClose={() => setQuizModalOpen(false)}
-                />
+            <div className={styles.quizList}>
+              {quizLogs.length === 0 ? (
+                <EmptyState message="Belum ada pengerjaan kuis" />
+              ) : (
+                quizLogs.map((log) => (
+                  <article key={log.id} className={styles.quizCard}>
+                    <header>
+                      <div>
+                        <h3>{log.topic}</h3>
+                        <p>{log.courseTitle}</p>
+                      </div>
+                      <div className={log.isCorrect ? styles.pillSuccess : styles.pillMuted}>
+                        {log.isCorrect ? 'Benar' : 'Belum tepat'}
+                      </div>
+                    </header>
+                    <div className={styles.questionBox}>
+                      <strong>Pertanyaan</strong>
+                      <p>{log.question}</p>
+                    </div>
+                    <div className={styles.answerCompare}>
+                      <div>
+                        <span>Jawaban User</span>
+                        <p>{log.userAnswer || '-'}</p>
+                      </div>
+                      <div>
+                        <span>Kunci</span>
+                        <p>{log.correctAnswer || '-'}</p>
+                      </div>
+                    </div>
+                    <footer>
+                      <span>{log.userEmail}</span>
+                      <span>{log.timestamp}</span>
+                    </footer>
+                  </article>
+                ))
               )}
-            </>
+            </div>
           )}
 
-          {/* Feedback */}
           {activeTab === 'feedback' && (
-            <>
-              <table className={styles.table}>
-                <thead>
-                  <tr>
-                    <th>Timestamp</th>
-                    <th>User</th>
-                    <th>Course</th>
-                    <th>Rating</th>
-                    <th>Feedback</th>
-                    <th>Aksi</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {feedbackLogs.length === 0 ? (
-                    <tr>
-                      <td colSpan={6} className={styles.noData}>Belum ada feedback</td>
-                    </tr>
-                  ) : (
-                    feedbackLogs.map((log) => (
-                      <tr key={log.id}>
-                        <td>{log.timestamp}</td>
-                        <td>{log.userEmail}</td>
-                        <td>{log.courseTitle}</td>
-                        <td>{log.rating ?? '-'}</td>
-                        <td>
-                          {log.comment.length > 60 ? `${log.comment.slice(0, 60)}...` : log.comment || '-'}
-                        </td>
-                        <td>
-                          <button
-                            className={styles.detailButton}
-                            onClick={() => setDetailView({ type: 'feedback', data: log })}
-                          >
-                            <FiEye className={styles.buttonIcon} /> Detail
-                          </button>
-                        </td>
-                      </tr>
-                    ))
-                  )}
-                </tbody>
-              </table>
-            </>
+            <div className={styles.feedbackGrid}>
+              {feedbackLogs.length === 0 ? (
+                <EmptyState message="Belum ada feedback" />
+              ) : (
+                feedbackLogs.map((log) => (
+                  <article key={log.id} className={styles.feedbackCard}>
+                    <header>
+                      <div>
+                        <h3>{log.topic}</h3>
+                        <p>{log.courseTitle}</p>
+                      </div>
+                      <span className={styles.ratingBadge}>{log.rating ?? '-'}</span>
+                    </header>
+                    <p className={styles.feedbackComment}>{log.comment || 'Tidak ada komentar'}</p>
+                    <footer>
+                      <div>
+                        <small>User</small>
+                        <span>{log.userEmail}</span>
+                      </div>
+                      <div>
+                        <small>Waktu</small>
+                        <span>{log.timestamp}</span>
+                      </div>
+                    </footer>
+                  </article>
+                ))
+              )}
+            </div>
           )}
 
-          {/* Jurnal */}
-          {activeTab === 'jurnal' && (
-            <>
-              <table className={styles.table}>
-                <thead>
-                  <tr>
-                    <th>Timestamp</th>
-                    <th>User</th>
-                    <th>Topic/Subtopic</th>
-                    <th>Ringkasan</th>
-                    <th>Aksi</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {journalLogs.length === 0 ? (
-                    <tr>
-                      <td colSpan={5} className={styles.noData}>No journal logs found</td>
-                    </tr>
-                  ) : (
-                    journalLogs.map((log) => (
-                      <tr key={log.id}>
-                        <td>{log.timestamp}</td>
-                        <td>{log.userEmail}</td>
-                        <td>{log.topic}</td>
-                        <td>
-                          {log.content.length > 60
-                            ? `${log.content.slice(0, 60)}…`
-                            : log.content}
-                        </td>
-                        <td>
-                          <button
-                            className={styles.detailButton}
-                            onClick={() => {
-                              setSelectedJournal(log)
-                              setJournalModalOpen(true)
-                            }}
+          {activeTab === 'discussion' && (
+            <div className={styles.discussionGrid}>
+              {discussionLogs.length === 0 ? (
+                <EmptyState message="Belum ada diskusi" />
+              ) : (
+                discussionLogs.map((log, index) => (
+                  <article key={log.id} className={styles.discussionCard}>
+                    <header>
+                      <div>
+                        <h3>{log.subtopicTitle}</h3>
+                        <p>{log.userEmail}</p>
+                      </div>
+                      <div className={styles.badgeRow}>
+                        <span className={styles.badge}>{log.status}</span>
+                        <span className={styles.badgeMuted}>{log.timestamp}</span>
+                      </div>
+                    </header>
+                    <div className={styles.goalList}>
+                      {log.goals.length === 0 ? (
+                        <p className={styles.muted}>Belum ada goal yang tercatat</p>
+                      ) : (
+                        log.goals.map((goal) => (
+                          <div
+                            key={goal.id || `${log.id}-${goal.description}`}
+                            className={`${styles.goalChip} ${goal.covered ? styles.goalHit : ''}`}
                           >
-                            <FiEye className={styles.buttonIcon} /> Lihat Selengkapnya
-                          </button>
-                        </td>
-                      </tr>
-                    ))
-                  )}
-                </tbody>
-              </table>
-              {selectedJournal && (
-                <JournalModal
-                  isOpen={journalModalOpen}
-                  journal={selectedJournal}
-                  onClose={() => setJournalModalOpen(false)}
-                />
+                            <span>{goal.description}</span>
+                            {goal.thinkingSkill?.indicator && (
+                              <small>{goal.thinkingSkill.indicator}</small>
+                            )}
+                          </div>
+                        ))
+                      )}
+                    </div>
+                    <div className={styles.timeline}>
+                      {log.exchanges.length === 0 ? (
+                        <p className={styles.muted}>Belum ada percakapan</p>
+                      ) : (
+                        log.exchanges.map((exchange, stepIndex) => (
+                          <div
+                            key={exchange.stepKey ?? `${log.id}-${index}-${stepIndex}`}
+                            className={styles.timelineItem}
+                          >
+                            <div className={styles.promptBubble}>{exchange.prompt}</div>
+                            {exchange.response && (
+                              <div className={styles.responseBubble}>{exchange.response}</div>
+                            )}
+                            {exchange.coachFeedback && (
+                              <div className={styles.feedbackBubble}>{exchange.coachFeedback}</div>
+                            )}
+                            {exchange.thinkingSkills.length > 0 && (
+                              <div className={styles.skillBadges}>
+                                {exchange.thinkingSkills.map((skill) => (
+                                  <span key={`${exchange.stepKey}-${skill.id}`}>
+                                    {skill.thinkingSkill?.indicator ?? 'Goal tercapai'}
+                                  </span>
+                                ))}
+                              </div>
+                            )}
+                          </div>
+                        ))
+                      )}
+                    </div>
+                  </article>
+                ))
               )}
-            </>
+            </div>
           )}
         </section>
-        {detailView && (
-          <DetailDrawer view={detailView} onClose={() => setDetailView(null)} />
-        )}
       </main>
-    </div>
-  )
-}
-
-type DrawerProps = {
-  view: Exclude<DetailView, null>
-  onClose: () => void
-}
-
-function DetailDrawer({ view, onClose }: DrawerProps) {
-  const { type } = view
-
-  const titleMap: Record<NonNullable<DetailView>['type'], string> = {
-    ask: 'Detail Q&A Otomatis',
-    challenge: 'Detail Challenge Thinking',
-    feedback: 'Detail Feedback Pembelajaran',
-  }
-  const meta = view.data as { userEmail: string; timestamp: string }
-
-  const renderContent = () => {
-    switch (type) {
-      case 'ask': {
-        const askData = view.data as AskLogItem
-        return (
-          <>
-            <div className={styles.detailRow}>
-              <span className={styles.detailLabel}>Subtopik</span>
-              <span className={styles.detailValue}>{askData.topic}</span>
-            </div>
-            <div className={styles.detailRow}>
-              <span className={styles.detailLabel}>Pertanyaan</span>
-              <p className={styles.detailValue}>{askData.question}</p>
-            </div>
-            <div className={styles.detailRow}>
-              <span className={styles.detailLabel}>Jawaban</span>
-              <p className={styles.detailValue}>{askData.answer}</p>
-            </div>
-          </>
-        )
-      }
-      case 'challenge': {
-        const challengeData = view.data as ChallengeLogItem
-        return (
-          <>
-            <div className={styles.detailRow}>
-              <span className={styles.detailLabel}>Subtopik</span>
-              <span className={styles.detailValue}>{challengeData.topic}</span>
-            </div>
-            <div className={styles.detailRow}>
-              <span className={styles.detailLabel}>Pertanyaan Tantangan</span>
-              <p className={styles.detailValue}>{challengeData.question}</p>
-            </div>
-            <div className={styles.detailRow}>
-              <span className={styles.detailLabel}>Jawaban Siswa</span>
-              <p className={styles.detailValue}>{challengeData.answer}</p>
-            </div>
-            <div className={styles.detailRow}>
-              <span className={styles.detailLabel}>Feedback Mentor</span>
-              <p className={styles.detailValue}>{challengeData.feedback || 'Belum ada feedback tambahan'}</p>
-            </div>
-          </>
-        )
-      }
-      case 'feedback': {
-        const feedbackData = view.data as FeedbackLogItem
-        return (
-          <>
-            <div className={styles.detailRow}>
-              <span className={styles.detailLabel}>Course</span>
-              <span className={styles.detailValue}>{feedbackData.courseTitle}</span>
-            </div>
-            <div className={styles.detailRow}>
-              <span className={styles.detailLabel}>Rating</span>
-              <span className={styles.detailValue}>{feedbackData.rating ?? '-'}</span>
-            </div>
-            <div className={styles.detailRow}>
-              <span className={styles.detailLabel}>Komentar</span>
-              <p className={styles.detailValue}>{feedbackData.comment || '-'}</p>
-            </div>
-          </>
-        )
-      }
-    }
-  }
-
-  return (
-    <div className={styles.detailDrawerOverlay} onClick={onClose}>
-      <div className={styles.detailDrawer} onClick={(e) => e.stopPropagation()}>
-        <header className={styles.detailHeader}>
-          <div>
-            <h3>{titleMap[type]}</h3>
-            <p className={styles.detailMeta}>
-              {meta.userEmail} • {meta.timestamp}
-            </p>
-          </div>
-          <button className={styles.closeButton} onClick={onClose}>
-            <FiX />
-          </button>
-        </header>
-        <div className={styles.detailBody}>{renderContent()}</div>
-      </div>
     </div>
   )
 }
