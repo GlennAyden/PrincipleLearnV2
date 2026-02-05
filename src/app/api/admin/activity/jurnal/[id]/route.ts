@@ -1,6 +1,6 @@
 import { NextResponse } from 'next/server'
 import type { NextRequest } from 'next/server'
-import prisma from '@/lib/prisma'
+import { adminDb, DatabaseService } from '@/lib/database'
 
 export async function GET(req: NextRequest) {
   try {
@@ -8,38 +8,61 @@ export async function GET(req: NextRequest) {
     const url = new URL(req.url)
     const id = url.pathname.split('/').pop()
 
-    // Fetch journal entry by ID
-    const journal = await prisma.jurnalRefleksi.findUnique({
-      where: { id },
-      select: {
-        id: true,
-        content: true,
-        courseId: true,
-        subtopic: true,
-        createdAt: true,
-        user: {
-          select: {
-            email: true
-          }
-        }
-      }
-    })
+    if (!id) {
+      return NextResponse.json(
+        { error: 'Journal ID is required' },
+        { status: 400 }
+      )
+    }
 
-    if (!journal) {
+    // Fetch journal entry by ID using adminDb
+    const { data: journals, error } = await adminDb
+      .from('jurnal')
+      .select('*')
+      .eq('id', id)
+      .limit(1)
+
+    if (error) {
+      console.error('Error fetching journal:', error)
+      return NextResponse.json(
+        { error: 'Failed to fetch journal entry' },
+        { status: 500 }
+      )
+    }
+
+    if (!journals || journals.length === 0) {
       return NextResponse.json(
         { error: 'Journal entry not found' },
         { status: 404 }
       )
     }
 
+    const journal = journals[0] as {
+      id: string;
+      content: string;
+      course_id: string;
+      subtopic: string;
+      created_at: string;
+      user_id: string;
+    }
+
+    // Fetch user email
+    const { data: users } = await adminDb
+      .from('users')
+      .select('email')
+      .eq('id', journal.user_id)
+      .limit(1)
+
+    const userEmail = users && users.length > 0 ? (users[0] as { email: string }).email : 'Unknown'
+
     // Format the response
     const response = {
       id: journal.id,
       content: journal.content,
-      courseId: journal.courseId,
+      courseId: journal.course_id,
       subtopic: journal.subtopic,
-      createdAt: journal.createdAt.toISOString(),
-      userEmail: journal.user.email
+      createdAt: journal.created_at,
+      userEmail
     }
 
     return NextResponse.json(response)
@@ -50,4 +73,4 @@ export async function GET(req: NextRequest) {
       { status: 500 }
     );
   }
-} 
+}

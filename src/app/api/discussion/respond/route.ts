@@ -86,7 +86,7 @@ async function postHandler(request: NextRequest) {
 
     const messages = await fetchMessages(session.id);
     const agentMessages = messages.filter(
-      (msg) =>
+      (msg: { role: string; metadata?: { type?: string } }) =>
         msg.role === 'agent' &&
         (!msg.metadata ||
           (msg.metadata.type !== 'coach_feedback' && msg.metadata.type !== 'closing'))
@@ -164,23 +164,23 @@ async function postHandler(request: NextRequest) {
 
       await adminDb
         .from('discussion_sessions')
+        .eq('id', session.id)
         .update({
           phase: nextStep.phaseId,
           learning_goals: learningGoals,
-        })
-        .eq('id', session.id);
+        });
     } else {
       const closingMessage =
         templateRow.template?.closing_message || buildDefaultClosingMessage(learningGoals);
 
       await adminDb
         .from('discussion_sessions')
+        .eq('id', session.id)
         .update({
           phase: 'completed',
           status: 'completed',
           learning_goals: learningGoals,
-        })
-        .eq('id', session.id);
+        });
 
       await adminDb.from('discussion_messages').insert({
         session_id: session.id,
@@ -209,12 +209,12 @@ async function postHandler(request: NextRequest) {
       messages: updatedMessages,
       nextStep: nextStep
         ? {
-            key: nextStep.step.key,
-            prompt: nextStep.step.prompt,
-            expected_type: nextStep.step.expected_type ?? 'open',
-            options: nextStep.step.options ?? [],
-            phase: nextStep.phaseId,
-          }
+          key: nextStep.step.key,
+          prompt: nextStep.step.prompt,
+          expected_type: nextStep.step.expected_type ?? 'open',
+          options: nextStep.step.options ?? [],
+          phase: nextStep.phaseId,
+        }
         : null,
     });
   } catch (error) {
@@ -427,9 +427,9 @@ async function evaluateStepResponse({
     const coveredGoals = isCorrect ? goalRefs : [];
     const feedback = isCorrect
       ? step.feedback?.correct ??
-        'Tepat! Jawabanmu menunjukkan pemahaman yang kuat terhadap konsep ini.'
+      'Tepat! Jawabanmu menunjukkan pemahaman yang kuat terhadap konsep ini.'
       : step.feedback?.incorrect ??
-        'Belum tepat. Coba telaah kembali poin utama sebelum melanjutkan.';
+      'Belum tepat. Coba telaah kembali poin utama sebelum melanjutkan.';
 
     return {
       coveredGoals,
@@ -464,13 +464,13 @@ async function evaluateStepResponse({
     if (Array.isArray(templateSource?.keyTakeaways) && templateSource.keyTakeaways.length > 0) {
       contextParts.push(
         'Poin Penting:\n' +
-          templateSource.keyTakeaways.map((item: string) => `- ${item}`).join('\n')
+        templateSource.keyTakeaways.map((item: string) => `- ${item}`).join('\n')
       );
     }
     if (Array.isArray(templateSource?.learningObjectives) && templateSource.learningObjectives.length > 0) {
       contextParts.push(
         'Learning Objectives:\n' +
-          templateSource.learningObjectives.map((item: string) => `- ${item}`).join('\n')
+        templateSource.learningObjectives.map((item: string) => `- ${item}`).join('\n')
       );
     }
 
@@ -524,7 +524,7 @@ async function evaluateStepResponse({
     const completion = await openai.chat.completions.create({
       model: defaultOpenAIModel,
       response_format: evaluationSchema,
-      max_tokens: 700,
+      max_completion_tokens: 700,
       messages: [
         {
           role: 'system',
@@ -552,17 +552,17 @@ async function evaluateStepResponse({
     const parsed = JSON.parse(raw.trim() || '{}');
     const goalAssessments = Array.isArray(parsed.goalAssessments)
       ? parsed.goalAssessments
-          .filter((assessment: any) => goalRefs.includes(assessment?.goalId))
-          .map((assessment: any) => ({
-            goalId: assessment.goalId,
-            satisfied: Boolean(assessment.satisfied),
-            notes: assessment.notes,
-          }))
+        .filter((assessment: any) => goalRefs.includes(assessment?.goalId))
+        .map((assessment: any) => ({
+          goalId: assessment.goalId,
+          satisfied: Boolean(assessment.satisfied),
+          notes: assessment.notes,
+        }))
       : [];
 
     const coveredGoals = goalAssessments
-      .filter((assessment) => assessment.satisfied)
-      .map((assessment) => assessment.goalId);
+      .filter((assessment: { goalId: string; satisfied: boolean; notes?: string }) => assessment.satisfied)
+      .map((assessment: { goalId: string; satisfied: boolean; notes?: string }) => assessment.goalId);
 
     return {
       coveredGoals,
@@ -682,11 +682,11 @@ async function markProgressCompleted(userId: string, courseId: string, subtopicI
     } else {
       const { error: updateError } = await adminDb
         .from('user_progress')
+        .eq('id', data[0].id)
         .update({
           is_completed: true,
           completion_date: now,
-        })
-        .eq('id', data[0].id);
+        });
 
       if (updateError) {
         console.warn('[DiscussionRespond] Failed to update progress completion', updateError);

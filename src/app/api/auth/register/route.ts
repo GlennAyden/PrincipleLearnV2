@@ -8,7 +8,7 @@ export async function POST(req: Request) {
   try {
     // Get client IP for rate limiting
     const ip = req.headers.get('x-forwarded-for') || 'unknown';
-    
+
     // Check rate limiting
     if (!registerRateLimiter.isAllowed(ip)) {
       return NextResponse.json(
@@ -16,7 +16,7 @@ export async function POST(req: Request) {
         { status: 429 }
       );
     }
-    
+
     const { email, password } = await req.json();
 
     // Validate email format
@@ -27,7 +27,7 @@ export async function POST(req: Request) {
         { status: 400 }
       );
     }
-    
+
     // Validate password strength
     const passwordValidation = validatePassword(password);
     if (!passwordValidation.valid) {
@@ -44,9 +44,9 @@ export async function POST(req: Request) {
         filter: { email },
         limit: 1
       });
-      
+
       console.log('Debug: Existing users query result:', existingUsers);
-      
+
       if (existingUsers.length > 0) {
         console.log('Debug: User already exists');
         return NextResponse.json(
@@ -54,7 +54,7 @@ export async function POST(req: Request) {
           { status: 409 }
         );
       }
-      
+
       console.log('Debug: No existing user found, proceeding with registration');
     } catch (error) {
       console.error('Debug: Error checking existing user:', error);
@@ -66,7 +66,7 @@ export async function POST(req: Request) {
     const salt = await bcrypt.genSalt(10);
     const passwordHash = await bcrypt.hash(password, salt);
 
-    // Create user in Supabase database
+    // Create user in Notion database
     const userData = {
       email,
       password_hash: passwordHash,
@@ -74,8 +74,8 @@ export async function POST(req: Request) {
     };
 
     console.log('Debug: Attempting to create user with data:', userData);
-    
-    let newUser;
+
+    let newUser: any;
     try {
       newUser = await DatabaseService.insertRecord('users', userData);
       console.log('Debug: User successfully created:', newUser);

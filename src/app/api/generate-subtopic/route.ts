@@ -3,6 +3,7 @@
 import { NextResponse } from 'next/server';
 import { openai, defaultOpenAIModel } from '@/lib/openai';
 import { generateDiscussionTemplate, generateModuleDiscussionTemplate } from '@/services/discussion/generateDiscussionTemplate';
+import type { ChatCompletionMessageParam } from 'openai/resources/chat/completions';
 
 // OpenAI client and model are centralized in src/lib/openai
 
@@ -28,15 +29,12 @@ export async function POST(request: Request) {
     // Database caching for performance optimization
     if (courseId) {
       try {
-        const { createClient } = await import('@supabase/supabase-js');
-        const supabase = createClient(
-          process.env.NEXT_PUBLIC_SUPABASE_URL!,
-          process.env.SUPABASE_SERVICE_ROLE_KEY!
-        );
+        // Use adminDb (Notion-backed) instead of direct Supabase
+        const { adminDb } = await import('@/lib/database');
 
         // Check cache first
         const cacheKey = `${courseId}-${moduleTitle}-${subtopic}`;
-        const { data: cached } = await supabase
+        const { data: cached } = await adminDb
           .from('subtopic_cache')
           .select('content')
           .eq('cache_key', cacheKey)
@@ -47,7 +45,7 @@ export async function POST(request: Request) {
           console.log('[GenerateSubtopic] Returning cached subtopic data');
           try {
             await syncQuizQuestions({
-              supabase,
+              adminDb,
               courseId,
               moduleTitle,
               subtopicTitle: subtopic,
@@ -66,7 +64,7 @@ export async function POST(request: Request) {
     }
 
     // System prompt: content generation with dynamic language policy
-    const systemMessage = {
+    const systemMessage: ChatCompletionMessageParam = {
       role: 'system',
       content: [
         'You are an expert educational content creator that generates structured, comprehensive learning content in JSON format.',
@@ -85,7 +83,7 @@ export async function POST(request: Request) {
     };
 
     // User prompt: request content for a specific subtopic
-    const userMessage = {
+    const userMessage: ChatCompletionMessageParam = {
       role: 'user',
       content: [
         `Generate content for subtopic "${subtopic}" in module "${moduleTitle}":`,
@@ -105,7 +103,7 @@ export async function POST(request: Request) {
     const resp = await openai.chat.completions.create({
       model: defaultOpenAIModel,
       messages: [systemMessage, userMessage],
-      max_tokens: 4000,
+      max_completion_tokens: 4000,
     });
 
     const raw = resp.choices?.[0]?.message?.content ?? '';
@@ -121,13 +119,13 @@ export async function POST(request: Request) {
     let data;
     try {
       data = JSON.parse(sanitized);
-      
+
       // Validate that each page has 3-5 paragraphs
       let hasIssues = false;
       if (data.pages && Array.isArray(data.pages)) {
         for (let i = 0; i < data.pages.length; i++) {
           const page = data.pages[i];
-          
+
           // Check if paragraphs array exists and has valid length
           if (!page.paragraphs || !Array.isArray(page.paragraphs)) {
             console.warn(`Page ${i + 1} has invalid paragraphs structure`);
@@ -135,12 +133,12 @@ export async function POST(request: Request) {
             // Create empty paragraphs array if missing
             page.paragraphs = [];
           }
-          
+
           // Handle too few paragraphs (less than 3)
           if (page.paragraphs.length < 3) {
             console.warn(`Page ${i + 1} has only ${page.paragraphs.length} paragraphs, minimum is 3`);
             hasIssues = true;
-            
+
             // If we have at least one paragraph, duplicate the last one to reach minimum
             if (page.paragraphs.length > 0) {
               const lastParagraph = page.paragraphs[page.paragraphs.length - 1];
@@ -156,7 +154,7 @@ export async function POST(request: Request) {
               ];
             }
           }
-          
+
           // Handle too many paragraphs (more than 5)
           if (page.paragraphs.length > 5) {
             console.warn(`Page ${i + 1} has ${page.paragraphs.length} paragraphs, maximum is 5`);
@@ -176,7 +174,7 @@ export async function POST(request: Request) {
             question: "Apa yang telah Anda pelajari dari materi ini?",
             options: [
               "Konsep dasar yang dijelaskan dalam materi",
-              "Penerapan praktis dari teori yang dipelajari", 
+              "Penerapan praktis dari teori yang dipelajari",
               "Hubungan antara konsep dengan implementasi",
               "Semua jawaban di atas benar"
             ],
@@ -226,7 +224,7 @@ export async function POST(request: Request) {
       } else if (data.quiz.length !== 5) {
         console.warn(`Expected 5 quiz questions, got ${data.quiz.length}, fixing...`);
         hasIssues = true;
-        
+
         // If we have some questions, pad with fallback
         while (data.quiz.length < 5) {
           data.quiz.push({
@@ -240,7 +238,7 @@ export async function POST(request: Request) {
             correctIndex: 3
           });
         }
-        
+
         // If too many questions, trim to 5
         if (data.quiz.length > 5) {
           data.quiz = data.quiz.slice(0, 5);
@@ -249,15 +247,15 @@ export async function POST(request: Request) {
         // Validate each quiz question
         for (let i = 0; i < data.quiz.length; i++) {
           const quiz = data.quiz[i];
-          if (!quiz.question || !Array.isArray(quiz.options) || quiz.options.length !== 4 || 
-              typeof quiz.correctIndex !== 'number' || quiz.correctIndex < 0 || quiz.correctIndex > 3) {
+          if (!quiz.question || !Array.isArray(quiz.options) || quiz.options.length !== 4 ||
+            typeof quiz.correctIndex !== 'number' || quiz.correctIndex < 0 || quiz.correctIndex > 3) {
             console.warn(`Quiz question ${i + 1} has invalid structure, fixing...`);
             hasIssues = true;
             data.quiz[i] = {
               question: `Pertanyaan ${i + 1}: Apa yang dapat Anda pelajari dari bagian ini?`,
               options: [
                 "Konsep teoritis",
-                "Penerapan praktis", 
+                "Penerapan praktis",
                 "Pemahaman mendalam",
                 "Semua aspek di atas"
               ],
@@ -266,11 +264,11 @@ export async function POST(request: Request) {
           }
         }
       }
-      
+
       if (hasIssues) {
         console.warn('Generated content had issues that were automatically fixed');
       }
-      
+
     } catch (parseErr) {
       console.error('Failed to parse JSON from AI:', { cleaned, sanitized, parseErr });
       return NextResponse.json(
@@ -282,14 +280,11 @@ export async function POST(request: Request) {
     // Save to cache for next time
     if (courseId && data) {
       try {
-        const { createClient } = await import('@supabase/supabase-js');
-        const supabase = createClient(
-          process.env.NEXT_PUBLIC_SUPABASE_URL!,
-          process.env.SUPABASE_SERVICE_ROLE_KEY!
-        );
+        // Use adminDb (Notion-backed) instead of direct Supabase
+        const { adminDb } = await import('@/lib/database');
 
         const cacheKey = `${courseId}-${moduleTitle}-${subtopic}`;
-        await supabase
+        await adminDb
           .from('subtopic_cache')
           .upsert({
             cache_key: cacheKey,
@@ -297,20 +292,20 @@ export async function POST(request: Request) {
             created_at: new Date().toISOString(),
             updated_at: new Date().toISOString()
           });
-        
+
         console.log('💾 Subtopic data cached successfully');
 
         // Also save quiz questions to database for proper data structure
         if (data.quiz && Array.isArray(data.quiz) && data.quiz.length > 0) {
           try {
             // Find subtopic record by matching the module content, not the individual subtopic name
-            const { data: allSubtopics } = await supabase
+            const { data: allSubtopics } = await adminDb
               .from('subtopics')
               .select('id, title, content')
               .eq('course_id', courseId);
 
             let subtopicData = null;
-            
+
             // Find the subtopic that contains this module in its content
             if (allSubtopics) {
               for (const sub of allSubtopics) {
@@ -334,20 +329,20 @@ export async function POST(request: Request) {
 
             // Fallback: try direct lookup by subtopic parameter
             if (!subtopicData) {
-              const { data: fallbackData } = await supabase
+              const { data: fallbackData } = await adminDb
                 .from('subtopics')
                 .select('id, title')
                 .eq('course_id', courseId)
                 .eq('title', subtopic)
                 .single();
-              subtopicData = fallbackData;
+              subtopicData = fallbackData ?? undefined;
             }
 
             const subtopicId = subtopicData?.id;
-            
+
             if (subtopicId) {
               await syncQuizQuestions({
-                supabase,
+                adminDb,
                 courseId,
                 moduleTitle,
                 subtopicTitle: subtopic,
@@ -368,69 +363,69 @@ export async function POST(request: Request) {
                   misconceptions: extractMisconceptions(data),
                 });
 
-              if (templateResult) {
-                console.log('[GenerateSubtopic] Discussion template stored', {
-                  subtopicId,
-                  templateId: templateResult.templateId,
-                  version: templateResult.templateVersion,
-                });
-              } else {
-                console.warn('[GenerateSubtopic] Discussion template generation skipped');
-              }
-
-              if (
-                moduleRecord?.id &&
-                courseId &&
-                isDiscussionLabel(subtopic)
-              ) {
-                try {
-                  const moduleContext = await assembleModuleDiscussionContext({
-                    supabase,
-                    courseId,
-                    moduleTitle,
-                    moduleRecord,
+                if (templateResult) {
+                  console.log('[GenerateSubtopic] Discussion template stored', {
+                    subtopicId,
+                    templateId: templateResult.templateId,
+                    version: templateResult.templateVersion,
                   });
-
-                  if (moduleContext) {
-                    const moduleTemplateResult = await generateModuleDiscussionTemplate({
-                      courseId,
-                      subtopicId: moduleContext.moduleId,
-                      moduleTitle,
-                      summary: moduleContext.summary,
-                      learningObjectives: moduleContext.learningObjectives,
-                      keyTakeaways: moduleContext.keyTakeaways,
-                      misconceptions: moduleContext.misconceptions,
-                      subtopics: moduleContext.subtopics,
-                    });
-
-                    if (moduleTemplateResult) {
-                      console.log('[GenerateSubtopic] Module-level discussion template stored', {
-                        moduleId: moduleContext.moduleId,
-                        templateId: moduleTemplateResult.templateId,
-                        version: moduleTemplateResult.templateVersion,
-                      });
-                    } else {
-                      console.warn('[GenerateSubtopic] Module-level discussion template generation skipped');
-                    }
-                  } else {
-                    console.warn('[GenerateSubtopic] Module discussion context incomplete, skipping generation', {
-                      courseId,
-                      moduleTitle,
-                    });
-                  }
-                } catch (moduleTemplateError) {
-                  console.error('[GenerateSubtopic] Failed to generate module-level discussion template', moduleTemplateError);
+                } else {
+                  console.warn('[GenerateSubtopic] Discussion template generation skipped');
                 }
+
+                if (
+                  moduleRecord?.id &&
+                  courseId &&
+                  isDiscussionLabel(subtopic)
+                ) {
+                  try {
+                    const moduleContext = await assembleModuleDiscussionContext({
+                      adminDb,
+                      courseId,
+                      moduleTitle,
+                      moduleRecord,
+                    });
+
+                    if (moduleContext) {
+                      const moduleTemplateResult = await generateModuleDiscussionTemplate({
+                        courseId,
+                        subtopicId: moduleContext.moduleId,
+                        moduleTitle,
+                        summary: moduleContext.summary,
+                        learningObjectives: moduleContext.learningObjectives,
+                        keyTakeaways: moduleContext.keyTakeaways,
+                        misconceptions: moduleContext.misconceptions,
+                        subtopics: moduleContext.subtopics,
+                      });
+
+                      if (moduleTemplateResult) {
+                        console.log('[GenerateSubtopic] Module-level discussion template stored', {
+                          moduleId: moduleContext.moduleId,
+                          templateId: moduleTemplateResult.templateId,
+                          version: moduleTemplateResult.templateVersion,
+                        });
+                      } else {
+                        console.warn('[GenerateSubtopic] Module-level discussion template generation skipped');
+                      }
+                    } else {
+                      console.warn('[GenerateSubtopic] Module discussion context incomplete, skipping generation', {
+                        courseId,
+                        moduleTitle,
+                      });
+                    }
+                  } catch (moduleTemplateError) {
+                    console.error('[GenerateSubtopic] Failed to generate module-level discussion template', moduleTemplateError);
+                  }
+                }
+              } catch (discussionError) {
+                console.error('[GenerateSubtopic] Failed to generate discussion template', discussionError);
               }
-            } catch (discussionError) {
-              console.error('[GenerateSubtopic] Failed to generate discussion template', discussionError);
-            }
-          } else {
-            console.warn('Subtopic not found for quiz saving:', { 
-                courseId, 
-                moduleTitle, 
-                subtopic, 
-                availableSubtopics: allSubtopics?.map(s => ({ id: s.id, title: s.title })) 
+            } else {
+              console.warn('Subtopic not found for quiz saving:', {
+                courseId,
+                moduleTitle,
+                subtopic,
+                availableSubtopics: allSubtopics?.map((s: { id: string; title: string }) => ({ id: s.id, title: s.title }))
               });
             }
           } catch (quizSaveError) {
@@ -454,7 +449,7 @@ export async function POST(request: Request) {
 }
 
 interface SyncQuizParams {
-  supabase: any;
+  adminDb: any;
   courseId?: string;
   moduleTitle?: string;
   subtopicTitle?: string;
@@ -464,7 +459,7 @@ interface SyncQuizParams {
 }
 
 async function syncQuizQuestions({
-  supabase,
+  adminDb,
   courseId,
   moduleTitle,
   subtopicTitle,
@@ -473,7 +468,7 @@ async function syncQuizQuestions({
   subtopicData,
 }: SyncQuizParams) {
   try {
-    if (!supabase || !courseId || !Array.isArray(quizItems) || quizItems.length === 0) {
+    if (!adminDb || !courseId || !Array.isArray(quizItems) || quizItems.length === 0) {
       return;
     }
 
@@ -481,7 +476,7 @@ async function syncQuizQuestions({
 
     if (!resolvedSubtopic?.id) {
       try {
-        const { data: allSubtopics, error: subtopicsError } = await supabase
+        const { data: allSubtopics, error: subtopicsError } = await adminDb
           .from('subtopics')
           .select('id, title, content')
           .eq('course_id', courseId);
@@ -507,12 +502,12 @@ async function syncQuizQuestions({
         }
 
         if (!resolvedSubtopic && subtopicTitle) {
-          const { data: fallbackSubtopic } = await supabase
+          const { data: fallbackSubtopic } = await adminDb
             .from('subtopics')
             .select('id, title')
             .eq('course_id', courseId)
             .eq('title', subtopicTitle)
-            .maybeSingle();
+            .single();
 
           if (fallbackSubtopic) {
             resolvedSubtopic = fallbackSubtopic;
@@ -576,7 +571,7 @@ async function syncQuizQuestions({
     }
 
     try {
-      const { error: deleteError } = await supabase
+      const { error: deleteError } = await adminDb
         .from('quiz')
         .delete()
         .eq('course_id', courseId)
@@ -589,7 +584,7 @@ async function syncQuizQuestions({
       console.warn('[GenerateSubtopic] Quiz cleanup threw unexpectedly', cleanupError);
     }
 
-    const { error: insertError } = await supabase.from('quiz').insert(quizInserts);
+    const { error: insertError } = await adminDb.from('quiz').insert(quizInserts);
 
     if (insertError) {
       console.warn('[GenerateSubtopic] Quiz insert failed', insertError);
@@ -649,7 +644,7 @@ function isDiscussionLabel(label: string): boolean {
 }
 
 interface ModuleDiscussionContextParams {
-  supabase: any;
+  adminDb: any;
   courseId: string;
   moduleTitle: string;
   moduleRecord: { id?: string; title?: string; content?: string | null };
@@ -671,7 +666,7 @@ interface ModuleDiscussionContextResult {
 }
 
 async function assembleModuleDiscussionContext({
-  supabase,
+  adminDb,
   courseId,
   moduleTitle,
   moduleRecord,
@@ -709,8 +704,8 @@ async function assembleModuleDiscussionContext({
       typeof sub === 'string'
         ? sub
         : typeof sub?.title === 'string'
-        ? sub.title
-        : '';
+          ? sub.title
+          : '';
 
     if (!subtopicTitle) {
       continue;
@@ -720,7 +715,7 @@ async function assembleModuleDiscussionContext({
     let cachedContent: any = null;
 
     try {
-      const { data: cacheRow } = await supabase
+      const { data: cacheRow } = await adminDb
         .from('subtopic_cache')
         .select('content')
         .eq('cache_key', cacheKey)

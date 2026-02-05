@@ -2,6 +2,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { openai, defaultOpenAIModel } from '@/lib/openai';
 import { DatabaseService } from '@/lib/database';
+import type { ChatCompletionMessageParam } from 'openai/resources/chat/completions';
 
 // Add CORS headers for API
 const corsHeaders = {
@@ -19,7 +20,7 @@ export async function OPTIONS() {
 
 export async function POST(req: NextRequest) {
   console.log('[Generate Course] Starting course generation process');
-  
+
   try {
     // Check if request body is valid
     let requestBody;
@@ -35,7 +36,7 @@ export async function POST(req: NextRequest) {
 
     // 3. Terima payload
     const { topic, goal, level, extraTopics, problem, assumption, userId } = requestBody;
-    
+
     // Validate required fields
     if (!topic || !goal || !level) {
       console.error('[Generate Course] Missing required fields:', { topic, goal, level });
@@ -44,7 +45,7 @@ export async function POST(req: NextRequest) {
         { status: 400 }
       );
     }
-      
+
     console.log(`[Generate Course] Received request for topic: "${topic}" from user: ${userId || 'anonymous'}`);
     const requestPayload = {
       step1: { topic, goal },
@@ -53,7 +54,7 @@ export async function POST(req: NextRequest) {
     };
 
     // 4. Prompt yang lebih komprehensif
-    const systemMessage = {
+    const systemMessage: ChatCompletionMessageParam = {
       role: 'system',
       content: `You are an expert educational content developer specialized in creating detailed, comprehensive, and structured learning plans.
 Your expertise lies in breaking down complex topics into logical modules with clear, informative subtopics that build upon each other.
@@ -65,8 +66,8 @@ Language policy:
 - If inputs are mixed, choose the dominant language; if ambiguous, mirror the language of the "topic" field.
 - Do not translate the user's inputs; preserve technical terms in the chosen language.`
     };
-    
-    const userMessage = {
+
+    const userMessage: ChatCompletionMessageParam = {
       role: 'user',
       content: `
 Create a comprehensive learning outline for the topic "${topic}" with the learning goal "${goal}".
@@ -109,48 +110,61 @@ Important: Write all titles and overviews in the same language as the user's inp
     };
 
     console.log('[Generate Course] Calling OpenAI API');
-    
+
     // 5. Panggil OpenAI dengan retry logic + timeout
     let response;
     let attempt = 0;
     const maxAttempts = 3;
-    
+
     while (attempt < maxAttempts) {
       try {
         attempt++;
         console.log(`[Generate Course] Attempt ${attempt}/${maxAttempts}`);
-        
+
         response = await Promise.race([
           openai.chat.completions.create({
             model: defaultOpenAIModel,
             messages: [systemMessage, userMessage],
-            max_tokens: 1500, // Reduced for faster response
+            max_completion_tokens: 1500, // Reduced for faster response
           }),
-          new Promise((_, reject) => 
+          new Promise((_, reject) =>
             setTimeout(() => reject(new Error('OpenAI API timeout after 60 seconds')), 60000)
           )
         ]) as any;
-        
+
         break; // Success, exit retry loop
-        
+
       } catch (error: any) {
         console.error(`[Generate Course] Attempt ${attempt} failed:`, error.message);
-        
+
         if (attempt === maxAttempts) {
           // Last attempt failed, throw error
           throw new Error(`OpenAI API failed after ${maxAttempts} attempts: ${error.message}`);
         }
-        
+
         // Wait 2 seconds before retry with exponential backoff
         await new Promise(resolve => setTimeout(resolve, 2000 * attempt));
       }
     }
 
     console.log('[Generate Course] Received response from OpenAI');
-    
+    console.log('[Generate Course] Response structure:', JSON.stringify({
+      choices: response.choices?.map((c: any) => ({
+        finish_reason: c.finish_reason,
+        message: {
+          role: c.message?.role,
+          content: c.message?.content ? `[${c.message.content.length} chars]` : null,
+          refusal: c.message?.refusal,
+        }
+      })),
+      model: response.model,
+      usage: response.usage
+    }, null, 2));
+
     // 6. Ambil dan bersihkan output
     const textRaw = response.choices?.[0]?.message?.content;
     if (!textRaw || !textRaw.trim()) {
+      console.error('[Generate Course] Empty content! Full message:', JSON.stringify(response.choices?.[0]?.message));
       throw new Error('Empty response from model');
     }
     const cleaned = textRaw
@@ -170,14 +184,14 @@ Important: Write all titles and overviews in the same language as the user's inp
 
     // 7.1 Tambahkan node diskusi penutup untuk setiap subtopik
     outline = appendDiscussionNodes(outline);
-    
+
     // 8. Save course to database
     console.log(`[Generate Course] DEBUG: userId = ${userId}`);
     console.log(`[Generate Course] DEBUG: outline length = ${outline?.length}`);
-    
+
     if (userId) {
       console.log(`[Generate Course] Saving course to database for user: ${userId}`);
-      
+
       try {
         // Validate user exists
         console.log(`[Generate Course] DEBUG: Looking up user with email: ${userId}`);
@@ -185,19 +199,19 @@ Important: Write all titles and overviews in the same language as the user's inp
           filter: { email: userId },
           limit: 1
         });
-        
+
         console.log(`[Generate Course] DEBUG: Found ${users.length} users`);
         console.log(`[Generate Course] DEBUG: Users data:`, users);
-        
+
         let userRecord = null;
         let createdCourse: any = null;
         if (users.length === 0) {
           console.warn(`[Generate Course] User with email ${userId} not found in database`);
         } else {
-          const user = users[0];
+          const user = users[0] as { id: string; email: string };
           userRecord = user;
           console.log(`[Generate Course] DEBUG: User found:`, { id: user.id, email: user.email });
-          
+
           // Create course record
           const courseData = {
             title: topic,
@@ -207,14 +221,14 @@ Important: Write all titles and overviews in the same language as the user's inp
             estimated_duration: outline.length * 15, // 15 minutes per module estimate
             created_by: user.id
           };
-          
+
           console.log(`[Generate Course] DEBUG: Course data to insert:`, courseData);
-          
-          const course = await DatabaseService.insertRecord('courses', courseData);
+
+          const course = await DatabaseService.insertRecord('courses', courseData) as unknown as { id: string };
           createdCourse = course;
           console.log(`[Generate Course] Course created with ID: ${course.id}`);
           console.log(`[Generate Course] DEBUG: Course created successfully:`, course);
-          
+
           // Create subtopics for each module
           console.log(`[Generate Course] DEBUG: Creating ${outline.length} subtopics`);
           for (let i = 0; i < outline.length; i++) {
@@ -225,12 +239,12 @@ Important: Write all titles and overviews in the same language as the user's inp
               content: JSON.stringify(outlineModule),
               order_index: i
             };
-            
+
             console.log(`[Generate Course] DEBUG: Creating subtopic ${i + 1}:`, subtopicData);
             const subtopic = await DatabaseService.insertRecord('subtopics', subtopicData);
             console.log(`[Generate Course] DEBUG: Subtopic created:`, subtopic);
           }
-          
+
           console.log(`[Generate Course] Created ${outline.length} subtopics for course`);
         }
 

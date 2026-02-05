@@ -9,17 +9,11 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 - `npm run build` - Build for production
 - `npm run start` - Start production server
 - `npm run lint` - Run ESLint
-- `npm run prisma:generate` - Generate Prisma client from the local schema
-- `npm run prisma:migrate` - Apply schema changes to the Dockerised PostgreSQL instance
-- `npm run prisma:studio` - Inspect local data via Prisma Studio
 
 ## Environment Setup
 
-Required environment variables (copy from `env.example` to `.env.local`):
-- `NEXT_PUBLIC_SUPABASE_URL` - Supabase project URL
-- `NEXT_PUBLIC_SUPABASE_ANON_KEY` - Supabase anonymous key
-- `SUPABASE_SERVICE_ROLE_KEY` - Supabase service role key (for admin operations)
-- `LOCAL_DATABASE_URL` - Prisma connection string for the Dockerised PostgreSQL instance
+Required environment variables (copy `.env.example` to `.env.local`):
+- `NOTION_TOKEN_1`, `NOTION_TOKEN_2`, `NOTION_TOKEN_3` - Notion API integration tokens (multi-token for rate limiting)
 - `JWT_SECRET` - JWT secret for token signing
 - `OPENAI_API_KEY` - OpenAI API key (optional, for AI features)
 - `OPENAI_MODEL` - OpenAI model to use (optional, defaults to gpt-5-mini)
@@ -29,8 +23,7 @@ Required environment variables (copy from `env.example` to `.env.local`):
 ### Core Technologies
 - **Framework**: Next.js 15 with App Router
 - **Frontend**: React 19, TypeScript, Sass modules
-- **Database**: Supabase (PostgreSQL) with custom database service layer
-- **Local Development DB**: Prisma ORM targeting a Dockerised PostgreSQL mirror of the Supabase schema
+- **Database**: Notion API with custom DatabaseService layer
 - **Authentication**: Custom JWT-based auth with CSRF protection
 - **Deployment**: Vercel
 - **AI Integration**: OpenAI API for course generation
@@ -43,15 +36,12 @@ Required environment variables (copy from `env.example` to `.env.local`):
 - **Middleware Protection**: `middleware.ts` enforces authentication on protected routes and role-based access for admin routes
 
 ### Database Architecture
-- **Primary Interface**: `DatabaseService` class in `src/lib/database.ts` provides generic CRUD operations
-- **Error Handling**: Custom `DatabaseError` class for consistent error management across the application
-- **Dual Client Setup**:
-  - Public client (`supabase`) for user operations
-  - Service role client (`adminDb`) for admin operations that bypass RLS
-- **Local mirror**: Prisma schema (`prisma/schema.prisma`) keeps a 1:1 copy of the Supabase schema for isolated development. Start it with `docker compose up -d postgres` and `npm run prisma:migrate`.
-- **Local Prisma client**: `src/lib/prisma.ts` exports a singleton PrismaClient for scripts/tests that need the Docker database.
+- **Primary Interface**: `DatabaseService` class in `src/lib/database.ts` provides generic CRUD operations via Notion API
+- **Query Builder**: `NotionQueryBuilder` provides Supabase-like chaining syntax for Notion queries
+- **Multi-Token Strategy**: Rotates between multiple Notion tokens to handle rate limits
+- **Error Handling**: Custom `DatabaseError` class for consistent error management
 - **Testing**: `/api/test-db` endpoint for connection validation
-- **Schema**: Core tables are `users`, `courses`, `subtopics`, `quiz`, `jurnal`, `transcript`, `user_progress`, `feedback`
+- **Schema**: Core tables (Notion databases) are `users`, `courses`, `subtopics`, `quiz`, `jurnal`, `transcript`, `user_progress`, `feedback`
 
 ### Key Directory Structure
 ```
@@ -60,7 +50,7 @@ src/
 │   ├── api/               # Backend API routes
 │   │   ├── auth/          # User authentication (login, logout, refresh, me)
 │   │   ├── admin/         # Admin operations (users, dashboard, activity)
-│   │   ├── debug/         # Development utilities (table setup, testing)
+│   │   ├── debug/         # Development utilities
 │   │   ├── courses/       # Course CRUD operations
 │   │   └── **/            # Feature-specific endpoints (quiz, jurnal, transcript, etc.)
 │   ├── admin/             # Admin dashboard pages
@@ -73,11 +63,10 @@ src/
 │   ├── Examples/          # Example generation and display
 │   ├── ChallengeThinking/ # Challenge feedback system
 │   ├── AskQuestion/       # Q&A components
-│   └── **/                # Other feature components (FeedbackForm, KeyTakeaways, NextSubtopics, WhatNext)
+│   └── **/                # Other feature components
 ├── hooks/                 # Custom React hooks (useAuth)
 ├── lib/                   # Core utilities and services
-│   ├── database.ts        # DatabaseService class and adminDb export
-│   ├── supabase.ts        # Supabase client configuration
+│   ├── database.ts        # DatabaseService class and adminDb export (Notion)
 │   ├── jwt.ts             # JWT utilities
 │   └── csrf.ts            # CSRF protection
 ├── context/               # React Context providers
@@ -96,7 +85,6 @@ src/
 - **Authentication**: Separate `/api/auth` and `/api/admin/login` endpoints with different permissions
 - **Admin Routes**: All `/api/admin/*` routes require ADMIN role verification
 - **Error Handling**: Consistent error responses using `DatabaseError` class
-- **Debug Endpoints**: `/api/debug/*` for database setup, table checking, and testing
 - **Activity Tracking**: Admin endpoints for viewing quiz submissions, journal entries, transcripts, and course generation logs
 - **AI Features**: `/api/generate-course`, `/api/generate-examples`, `/api/generate-subtopic`, `/api/ask-question`, `/api/challenge-thinking`, `/api/challenge-feedback`
 

@@ -1,6 +1,7 @@
 // src/app/api/challenge-thinking/route.ts
 import { NextResponse } from 'next/server';
 import { openai, defaultOpenAIModel } from '@/lib/openai';
+import type { ChatCompletionMessageParam } from 'openai/resources/chat/completions';
 
 // OpenAI client and model are centralized in src/lib/openai
 
@@ -40,7 +41,7 @@ export async function POST(req: Request) {
 
     const difficulty = getDifficultyByLevel(level);
 
-    const systemMessage = {
+    const systemMessage: ChatCompletionMessageParam = {
       role: 'system',
       content: `You are an expert educational assistant that generates clear, engaging questions based on learning content.
 Your goal is to create questions that help learners think more deeply about the material while matching their skill level.
@@ -61,7 +62,7 @@ The question should:
 Example format for this level: "${difficulty.example}"`
     };
 
-    const userMessage = {
+    const userMessage: ChatCompletionMessageParam = {
       role: 'user',
       content: `Here is the learning content:\n\n${context}\n\nBased on this content, generate one thoughtful question that challenges the user's understanding at a "${level}" level. Use the same language as the content above.`
     };
@@ -69,7 +70,7 @@ Example format for this level: "${difficulty.example}"`
     const response = await openai.chat.completions.create({
       model: defaultOpenAIModel,
       messages: [systemMessage, userMessage],
-      max_tokens: 800,
+      max_completion_tokens: 800,
     });
 
     const question = response.choices?.[0]?.message?.content?.trim() || '';

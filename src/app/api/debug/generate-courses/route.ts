@@ -1,9 +1,9 @@
 import { NextResponse } from 'next/server';
-// import prisma from '@/lib/prisma'; // Removed for mock implementation
+
 
 export async function GET() {
   console.log('[Debug API] Checking mock generate-course records');
-  
+
   try {
     // Mock generate course records
     const mockRecords = [
@@ -29,10 +29,10 @@ export async function GET() {
         userEmail: 'test@example.com'
       }
     ];
-    
+
     const totalCount = mockRecords.length;
     console.log(`[Debug API] Found ${totalCount} mock generate-course records`);
-    
+
     // Return detailed information
     return NextResponse.json({
       totalCount,
@@ -44,7 +44,7 @@ export async function GET() {
       console.error('[Debug API] Error details:', error.message);
       console.error('[Debug API] Error stack:', error.stack);
     }
-    
+
     return NextResponse.json(
       { error: 'Failed to retrieve generate-course records' },
       { status: 500 }

@@ -1,49 +1,72 @@
 import { NextResponse } from 'next/server'
 import type { NextRequest } from 'next/server'
-import prisma from '@/lib/prisma'
+import { adminDb } from '@/lib/database'
 
 export async function GET(
   req: NextRequest,
-  context: { params: any }
+  context: { params: { id: string } }
 ) {
   try {
-    // Ensure params is awaited before accessing its properties
     const id = context.params.id
 
-    // Fetch transcript by ID
-    const transcript = await prisma.transcriptQna.findUnique({
-      where: { id },
-      select: {
-        id: true,
-        question: true,
-        answer: true,
-        courseId: true,
-        subtopic: true,
-        createdAt: true,
-        user: {
-          select: {
-            email: true
-          }
-        }
-      }
-    })
+    if (!id) {
+      return NextResponse.json(
+        { error: 'Transcript ID is required' },
+        { status: 400 }
+      )
+    }
 
-    if (!transcript) {
+    // Fetch transcript by ID using adminDb
+    // Note: 'transcript' table might be named differently in Notion
+    const { data: transcripts, error } = await adminDb
+      .from('transcript')
+      .select('*')
+      .eq('id', id)
+      .limit(1)
+
+    if (error) {
+      console.error('Error fetching transcript:', error)
+      return NextResponse.json(
+        { error: 'Failed to fetch transcript' },
+        { status: 500 }
+      )
+    }
+
+    if (!transcripts || transcripts.length === 0) {
       return NextResponse.json(
         { error: 'Transcript not found' },
         { status: 404 }
       )
     }
 
+    const transcript = transcripts[0] as {
+      id: string;
+      question: string;
+      answer: string;
+      course_id: string;
+      subtopic: string;
+      created_at: string;
+      user_id: string;
+    }
+
+    // Fetch user email
+    const { data: users } = await adminDb
+      .from('users')
+      .select('email')
+      .eq('id', transcript.user_id)
+      .limit(1)
+
+    const userEmail = users && users.length > 0 ? (users[0] as { email: string }).email : 'Unknown'
+
     // Format the response
     const response = {
       id: transcript.id,
       question: transcript.question,
       answer: transcript.answer,
-      courseId: transcript.courseId,
+      courseId: transcript.course_id,
       subtopic: transcript.subtopic,
-      createdAt: transcript.createdAt.toISOString(),
-      userEmail: transcript.user.email
+      createdAt: transcript.created_at,
+      userEmail
     }
 
     return NextResponse.json(response)
@@ -54,4 +77,4 @@ export async function GET(
       { status: 500 }
     );
   }
-} 
+}

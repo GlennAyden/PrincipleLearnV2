@@ -7,14 +7,9 @@
     "dev:no-lint": "cross-env FAST_REFRESH=false next dev --no-lint",
     "build": "next build",
     "start": "next start",
-    "lint": "next lint",
-    "prisma:generate": "prisma generate",
-    "prisma:migrate": "prisma migrate dev",
-    "prisma:studio": "prisma studio"
+    "lint": "next lint"
   },
   "dependencies": {
-    "@prisma/client": "^5.18.0",
-    "@supabase/supabase-js": "^2.52.0",
     "@types/bcryptjs": "^2.4.6",
     "bcrypt": "^5.1.1",
     "bcryptjs": "^3.0.2",
@@ -38,7 +33,6 @@
     "cross-env": "^7.0.3",
     "eslint": "^9",
     "eslint-config-next": "15.3.1",
-    "prisma": "^5.18.0",
     "typescript": "^5"
   }
 }

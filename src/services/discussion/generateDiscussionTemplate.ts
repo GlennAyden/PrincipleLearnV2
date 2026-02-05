@@ -69,8 +69,8 @@ function isTemplateStep(step: any): step is TemplateStep {
     typeof step.prompt === 'string' &&
     (step.expected_type === undefined ||
       ['open', 'mcq', 'scale', 'reflection'].includes(String(step.expected_type))) &&
-    (step.options === undefined || (Array.isArray(step.options) && step.options.every((opt) => typeof opt === 'string'))) &&
-    (step.goal_refs === undefined || (Array.isArray(step.goal_refs) && step.goal_refs.every((ref) => typeof ref === 'string')))
+    (step.options === undefined || (Array.isArray(step.options) && step.options.every((opt: unknown) => typeof opt === 'string'))) &&
+    (step.goal_refs === undefined || (Array.isArray(step.goal_refs) && step.goal_refs.every((ref: unknown) => typeof ref === 'string')))
   );
 }
 
@@ -263,7 +263,7 @@ export async function generateDiscussionTemplate(
         },
       ],
       response_format: responseFormat,
-      max_tokens: 1400,
+      max_completion_tokens: 1400,
     });
 
     const raw = completion.choices?.[0]?.message?.content;
@@ -297,9 +297,7 @@ export async function generateDiscussionTemplate(
         },
         template: normalized,
         generated_by: 'auto',
-      })
-      .select('id')
-      .single();
+      });
 
     if (error) {
       console.error('[DiscussionTemplate] Failed to save template', error);
@@ -307,7 +305,7 @@ export async function generateDiscussionTemplate(
     }
 
     return {
-      templateId: data.id as string,
+      templateId: (data as { id: string }).id,
       templateVersion: version,
     };
   } catch (error) {
@@ -329,7 +327,7 @@ export async function generateModuleDiscussionTemplate(
       model: defaultOpenAIModel,
       temperature: 0.2,
       response_format: responseFormat,
-      max_tokens: 1600,
+      max_completion_tokens: 1600,
       messages: [
         {
           role: 'system',
@@ -375,9 +373,7 @@ export async function generateModuleDiscussionTemplate(
         },
         template: normalized,
         generated_by: 'auto-module',
-      })
-      .select('id')
-      .single();
+      });
 
     if (error) {
       console.error('[DiscussionTemplate] Failed to save module template', error);
@@ -385,7 +381,7 @@ export async function generateModuleDiscussionTemplate(
     }
 
     return {
-      templateId: data.id as string,
+      templateId: (data as { id: string }).id,
       templateVersion: version,
     };
   } catch (error) {

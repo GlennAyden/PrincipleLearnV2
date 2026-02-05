@@ -95,12 +95,12 @@ Please answer in the same language as the question above. Base your answer stric
     const res = await openai.chat.completions.create({
       model: defaultOpenAIModel,
       messages,
-      max_tokens: 2000,
+      max_completion_tokens: 2000,
     });
 
     const answer = res.choices?.[0]?.message?.content || '';
     const normalizedQuestion = question.trim();
-    
+
     // Save QnA transcript to database
     if (courseId) {
       try {
@@ -141,7 +141,7 @@ Please answer in the same language as the question above. Base your answer stric
         // Continue execution even if database save fails
       }
     }
-    
+
     return NextResponse.json({ answer });
   } catch (error: any) {
     console.error('Error generating answer:', error);
