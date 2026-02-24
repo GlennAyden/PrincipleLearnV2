@@ -109,7 +109,7 @@ function queueRequest<T>(fn: () => Promise<T>): Promise<T> {
 }
 
 // Notion API helper
-async function notionFetch(endpoint: string, options: RequestInit = {}): Promise<Response> {
+async function notionFetch(endpoint: string, options: globalThis.RequestInit = {}): Promise<Response> {
   const NOTION_API_KEY = process.env.NOTION_API_KEY;
 
   if (!NOTION_API_KEY) {

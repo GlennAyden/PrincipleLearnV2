@@ -207,7 +207,7 @@ function queueRequest<T>(fn: () => Promise<T>): Promise<T> {
 }
 
 // Notion API helper with multi-token load balancing
-async function notionFetch(endpoint: string, options: RequestInit = {}, retries = 3): Promise<Response> {
+async function notionFetch(endpoint: string, options: globalThis.RequestInit = {}, retries = 3): Promise<Response> {
   const token = getNextToken();
 
   const response = await fetch(`https://api.notion.com/v1${endpoint}`, {
