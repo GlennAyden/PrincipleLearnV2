@@ -1,128 +1,113 @@
 /* src/components/ChallengeThinking/FeedbackList.module.scss */
+
+$primary-50: #eff6ff;
+$primary-100: #dbeafe;
+$primary-500: #3b82f6;
+$primary-600: #2563eb;
+$green-50: #f0fdf4;
+$green-500: #22c55e;
+$green-600: #16a34a;
+$red-50: #fef2f2;
+$red-500: #ef4444;
+$red-600: #dc2626;
+$gray-50: #f9fafb;
+$gray-200: #e5e7eb;
+$gray-500: #6b7280;
+$gray-600: #4b5563;
+$gray-700: #374151;
+$gray-800: #1f2937;
+$radius-md: 10px;
+
 .feedbackList {
   width: 100%;
-  border-radius: 8px;
-  padding: 1.25rem;
-  margin-top: 1.5rem;
-  background-color: #f8f9fa;
-  border-left: 4px solid #6c757d;
-  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.08);
+  border-radius: $radius-md;
+  padding: 1rem 1.25rem;
+  margin-top: 0.75rem;
+  background: $gray-50;
+  border-left: 3px solid $gray-500;
 }
 
-/* Feedback types */
 .positive {
-  border-left-color: #28a745;
-  background-color: #f0fff4;
+  border-left-color: $green-500;
+  background: $green-50;
 }
 
 .negative {
-  border-left-color: #dc3545;
-  background-color: #fff5f5;
+  border-left-color: $red-500;
+  background: $red-50;
 }
 
 .neutral {
-  border-left-color: #0077c8;
-  background-color: #f0f8ff;
+  border-left-color: $primary-500;
+  background: $primary-50;
 }
 
 .feedbackLabel {
   display: flex;
   align-items: center;
-  margin-bottom: 0.75rem;
+  margin-bottom: 0.5rem;
   font-weight: 600;
-  font-size: 1.1rem;
-  color: #333;
+  font-size: 0.88rem;
+  color: $gray-700;
 }
 
 .feedbackIcon {
-  margin-right: 0.5rem;
+  margin-right: 0.4rem;
   display: flex;
   align-items: center;
-  color: #0077c8;
+  color: $primary-600;
 }
 
-.positive .feedbackIcon {
-  color: #28a745;
-}
+.positive .feedbackIcon { color: $green-600; }
+.negative .feedbackIcon { color: $red-600; }
 
-.negative .feedbackIcon {
-  color: #dc3545;
-}
-
-.feedbackContent {
-  margin-left: 1.75rem;
-}
+.feedbackContent { margin-left: 1.25rem; }
 
 .feedbackParagraph {
-  margin: 0 0 0.75rem 0;
-  line-height: 1.5;
-  color: #444;
+  margin: 0 0 0.5rem;
+  line-height: 1.6;
+  color: $gray-600;
+  font-size: 0.9rem;
 }
 
 .feedbackHeader {
-  margin: 1rem 0 0.5rem 0;
-  font-size: 1.05rem;
+  margin: 0.75rem 0 0.35rem;
+  font-size: 0.9rem;
   font-weight: 600;
-  color: #333;
-  border-bottom: 1px solid #eee;
-  padding-bottom: 0.25rem;
+  color: $gray-700;
+  border-bottom: 1px solid $gray-200;
+  padding-bottom: 0.2rem;
 }
 
 .numberedItem,
 .bulletItem {
   display: flex;
-  margin: 0.5rem 0;
+  margin: 0.35rem 0;
   align-items: flex-start;
 }
 
 .itemNumber,
 .bulletPoint {
-  margin-right: 0.5rem;
+  margin-right: 0.4rem;
   font-weight: 600;
-  min-width: 1.25rem;
+  min-width: 1rem;
 }
 
-.positive .itemNumber,
-.positive .bulletPoint {
-  color: #28a745;
-}
-
-.negative .itemNumber,
-.negative .bulletPoint {
-  color: #dc3545;
-}
-
-.neutral .itemNumber,
-.neutral .bulletPoint {
-  color: #0077c8;
-}
+.positive .itemNumber, .positive .bulletPoint { color: $green-600; }
+.negative .itemNumber, .negative .bulletPoint { color: $red-600; }
+.neutral .itemNumber, .neutral .bulletPoint { color: $primary-600; }
 
 .itemContent {
   flex: 1;
-  line-height: 1.5;
+  line-height: 1.6;
+  font-size: 0.9rem;
 }
 
-.feedbackParagraph strong {
-  font-weight: 600;
-  color: #0077c8;
-}
+.feedbackParagraph strong { font-weight: 600; color: $primary-600; }
+.positive .feedbackParagraph strong { color: $green-600; }
+.negative .feedbackParagraph strong { color: $red-600; }
 
-.positive .feedbackParagraph strong {
-  color: #28a745;
-}
-
-.negative .feedbackParagraph strong {
-  color: #dc3545;
-}
-
-/* Responsive adjustments */
 @media (max-width: 640px) {
-  .feedbackList {
-    padding: 1rem;
-  }
-  
-  .feedbackContent {
-    margin-left: 0.5rem;
-  }
+  .feedbackList { padding: 0.85rem; }
+  .feedbackContent { margin-left: 0.35rem; }
 }
-  

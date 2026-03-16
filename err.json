@@ -1,0 +1,40 @@
+{
+  "kpi": {
+    "activeStudents": 0,
+    "totalCourses": 1,
+    "quizAccuracy": 0,
+    "totalDiscussions": 0,
+    "completedDiscussions": 0,
+    "totalJournals": 0,
+    "totalChallenges": 0,
+    "totalAskQuestions": 0,
+    "totalFeedbacks": 0,
+    "avgRating": 0,
+    "ctCoverageRate": 0
+  },
+  "rm2": {
+    "stages": {
+      "SCP": 1,
+      "SRP": 0,
+      "MQP": 0,
+      "Reflektif": 0
+    },
+    "totalPrompts": 1
+  },
+  "rm3": {
+    "totalGoals": 0,
+    "coveredGoals": 0,
+    "ctCoverageRate": 0,
+    "quizAccuracy": 0,
+    "totalChallenges": 0
+  },
+  "studentSummary": [],
+  "recentActivity": [
+    {
+      "type": "course",
+      "email": "Unknown",
+      "detail": "Machine Learning",
+      "timestamp": "2026-03-15T05:05:32.724012+00:00"
+    }
+  ]
+}

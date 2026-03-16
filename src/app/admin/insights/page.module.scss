@@ -1,0 +1,258 @@
+/* src/app/admin/insights/page.module.scss */
+
+.page {
+  padding: 24px 28px;
+  max-width: 1400px;
+  margin: 0 auto;
+  width: 100%;
+}
+
+.header {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  margin-bottom: 1.25rem;
+
+  h2 {
+    font-size: 1.3rem;
+    font-weight: 800;
+    color: #1e293b;
+    margin: 0;
+  }
+}
+
+.headerSub {
+  font-size: 0.82rem;
+  color: #64748b;
+  margin-top: 0.15rem;
+}
+
+.logout {
+  display: flex;
+  align-items: center;
+  gap: 0.3rem;
+  padding: 0.5rem 0.85rem;
+  background: #fee2e2;
+  color: #dc2626;
+  border: none;
+  border-radius: 8px;
+  font-size: 0.82rem;
+  font-weight: 600;
+  cursor: pointer;
+
+  &:hover { background: #fca5a5; }
+}
+
+.loading {
+  text-align: center;
+  padding: 3rem;
+  color: #94a3b8;
+  font-size: 0.9rem;
+}
+
+.errorCard {
+  background: #fef2f2;
+  border: 1px solid #fca5a5;
+  border-radius: 10px;
+  padding: 0.75rem 1rem;
+  color: #dc2626;
+  font-size: 0.85rem;
+  margin-bottom: 1rem;
+}
+
+/* ── Filters ── */
+.filters {
+  display: flex;
+  gap: 1rem;
+  margin-bottom: 1.25rem;
+  flex-wrap: wrap;
+}
+
+.filterGroup {
+  display: flex;
+  flex-direction: column;
+  gap: 0.25rem;
+
+  label {
+    font-size: 0.72rem;
+    font-weight: 700;
+    color: #64748b;
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+  }
+
+  select {
+    padding: 0.5rem 0.75rem;
+    border: 1px solid #e2e8f0;
+    border-radius: 8px;
+    font-size: 0.82rem;
+    color: #1e293b;
+    background: #fff;
+    min-width: 200px;
+
+    &:focus {
+      outline: none;
+      border-color: #6366f1;
+      box-shadow: 0 0 0 3px rgba(99, 102, 241, 0.1);
+    }
+  }
+}
+
+/* ── Cards Grid ── */
+.cardsGrid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(210px, 1fr));
+  gap: 0.85rem;
+  margin-bottom: 1.5rem;
+}
+
+.card {
+  background: #fff;
+  border: 1px solid #e2e8f0;
+  border-radius: 14px;
+  padding: 1rem 1.1rem;
+  display: flex;
+  flex-direction: column;
+  gap: 0.3rem;
+  position: relative;
+  overflow: hidden;
+  transition: box-shadow 0.2s;
+
+  &:hover {
+    box-shadow: 0 4px 16px rgba(0,0,0,0.06);
+  }
+}
+
+.cardIcon {
+  font-size: 1.5rem;
+  opacity: 0.2;
+  position: absolute;
+  top: 0.75rem;
+  right: 0.75rem;
+}
+
+.cardBlue { border-left: 3px solid #6366f1; .cardIcon { color: #6366f1; } }
+.cardGreen { border-left: 3px solid #22c55e; .cardIcon { color: #22c55e; } }
+.cardPurple { border-left: 3px solid #8b5cf6; .cardIcon { color: #8b5cf6; } }
+.cardAmber { border-left: 3px solid #f59e0b; .cardIcon { color: #f59e0b; } }
+
+.cardBody {
+  display: flex;
+  flex-direction: column;
+}
+
+.cardValue {
+  font-size: 1.6rem;
+  font-weight: 800;
+  color: #1e293b;
+  line-height: 1.1;
+}
+
+.cardLabel {
+  font-size: 0.78rem;
+  font-weight: 600;
+  color: #64748b;
+  margin-top: 0.1rem;
+}
+
+.cardMeta {
+  font-size: 0.7rem;
+  color: #94a3b8;
+  margin-top: 0.2rem;
+}
+
+/* ── Charts ── */
+.chartSection {
+  background: #fff;
+  border: 1px solid #e2e8f0;
+  border-radius: 14px;
+  padding: 1.25rem;
+  margin-bottom: 1.5rem;
+}
+
+.chartTitle {
+  font-size: 1rem;
+  font-weight: 700;
+  color: #1e293b;
+  margin-bottom: 0.15rem;
+}
+
+.chartDesc {
+  font-size: 0.78rem;
+  color: #94a3b8;
+  margin-bottom: 1rem;
+}
+
+/* ── Table ── */
+.tableSection {
+  background: #fff;
+  border: 1px solid #e2e8f0;
+  border-radius: 14px;
+  padding: 1.25rem;
+  margin-bottom: 1.5rem;
+}
+
+.tableTitle {
+  font-size: 1rem;
+  font-weight: 700;
+  color: #1e293b;
+  margin-bottom: 0.85rem;
+}
+
+.tableWrap {
+  overflow-x: auto;
+}
+
+.table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 0.82rem;
+
+  th {
+    text-align: left;
+    padding: 0.6rem 0.8rem;
+    background: #f8fafc;
+    color: #64748b;
+    font-weight: 700;
+    font-size: 0.75rem;
+    text-transform: uppercase;
+    letter-spacing: 0.04em;
+    border-bottom: 2px solid #e2e8f0;
+  }
+
+  td {
+    padding: 0.55rem 0.8rem;
+    border-bottom: 1px solid #f1f5f9;
+    color: #334155;
+  }
+}
+
+.clickableRow {
+  cursor: pointer;
+  transition: background 0.15s;
+
+  &:hover {
+    background: #f0f9ff;
+  }
+}
+
+.emailCell {
+  font-weight: 600;
+  color: #1e293b;
+  max-width: 200px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.accuracyBadge {
+  display: inline-block;
+  padding: 0.15rem 0.45rem;
+  border-radius: 6px;
+  font-size: 0.75rem;
+  font-weight: 700;
+
+  &.good { background: #dcfce7; color: #15803d; }
+  &.medium { background: #fef3c7; color: #92400e; }
+  &.low { background: #fee2e2; color: #dc2626; }
+}

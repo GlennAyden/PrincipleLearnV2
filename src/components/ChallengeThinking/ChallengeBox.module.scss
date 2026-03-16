@@ -1,65 +1,61 @@
 /* src/components/ChallengeThinking/ChallengeBox.module.scss */
+
+$primary-50: #eff6ff;
+$primary-100: #dbeafe;
+$primary-200: #bfdbfe;
+$primary-600: #2563eb;
+$gray-600: #4b5563;
+$gray-700: #374151;
+$gray-800: #1f2937;
+$radius-md: 10px;
+$transition: 0.25s cubic-bezier(0.4, 0, 0.2, 1);
+
 .challengeBoxContainer {
-    width: 100%;
-    padding: 1.5rem;
-    border: 2px solid #0077c8;
-    border-radius: 8px;
-    background-color: #f0f8ff;
-    margin-bottom: 1.5rem;
-    display: flex;
-    align-items: flex-start;
-    box-shadow: 0 2px 8px rgba(0, 119, 200, 0.15);
-    transition: all 0.3s ease;
-  }
-  
-  .challengeBoxContainer:hover {
-    box-shadow: 0 4px 12px rgba(0, 119, 200, 0.2);
-  }
-  
-  .questionIcon {
-    flex-shrink: 0;
-    margin-right: 1rem;
-    color: #0077c8;
-    width: 24px;
-    height: 24px;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-  }
-  
-  .questionContent {
-    flex: 1;
-  }
-  
-  .title {
-    font-weight: 600;
-    font-size: 1.1rem;
-    margin: 0 0 0.5rem 0;
-    color: #0077c8;
-  }
-  
-  .challengeQuestion {
-    margin: 0;
-    font-size: 1.1rem;
-    line-height: 1.5;
-    color: #333;
-    font-weight: 500;
-  }
-  
-  /* Media query for small screens */
-  @media (max-width: 640px) {
-    .challengeBoxContainer {
-      padding: 1.25rem;
-      flex-direction: column;
-    }
-  
-    .questionIcon {
-      margin: 0 0 0.75rem 0;
-      align-self: center;
-    }
-  
-    .questionContent {
-      width: 100%;
-    }
-  }
-  
+  width: 100%;
+  padding: 1.25rem;
+  border: 1px solid $primary-200;
+  border-radius: $radius-md;
+  background: $primary-50;
+  margin-bottom: 1rem;
+  display: flex;
+  align-items: flex-start;
+  gap: 0.75rem;
+  transition: box-shadow $transition;
+
+  &:hover { box-shadow: 0 2px 12px rgba(37, 99, 235, 0.08); }
+}
+
+.questionIcon {
+  flex-shrink: 0;
+  color: $primary-600;
+  width: 22px;
+  height: 22px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  margin-top: 0.1rem;
+}
+
+.questionContent { flex: 1; }
+
+.title {
+  font-weight: 600;
+  font-size: 0.82rem;
+  margin: 0 0 0.35rem;
+  color: $primary-600;
+  text-transform: uppercase;
+  letter-spacing: 0.3px;
+}
+
+.challengeQuestion {
+  margin: 0;
+  font-size: 0.95rem;
+  line-height: 1.6;
+  color: $gray-700;
+  font-weight: 500;
+}
+
+@media (max-width: 640px) {
+  .challengeBoxContainer { flex-direction: column; padding: 1rem; }
+  .questionIcon { align-self: flex-start; }
+}

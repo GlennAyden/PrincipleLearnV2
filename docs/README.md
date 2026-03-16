@@ -6,19 +6,44 @@
 
 ## 📋 Daftar Dokumentasi
 
+### 🎯 Pengenalan & Teknis
+
 | Dokumentasi | Deskripsi |
 |-------------|-----------|
 | [Getting Started](./GETTING_STARTED.md) | Panduan instalasi dan setup awal |
+| [Application Overview](./APPLICATION_OVERVIEW.md) | Gambaran besar fitur dan konsep aplikasi |
 | [Architecture](./ARCHITECTURE.md) | Arsitektur sistem dan diagram |
 | [Database Schema](./DATABASE_SCHEMA.md) | Dokumentasi database dan ERD |
 | [API Reference](./API_REFERENCE.md) | Dokumentasi lengkap API endpoints |
+
+### 📚 Pedagogis & Pembelajaran
+
+| Dokumentasi | Deskripsi |
+|-------------|-----------|
+| [Learning Theory](./LEARNING_THEORY.md) | Landasan teori pembelajaran (Konstruktivisme, Bloom, CT, CPT, Sokratik) |
+| [Pedagogy Design](./PEDAGOGY_DESIGN.md) | Desain instruksional (ADDIE, strategi per fitur, ARCS) |
+| [Thinking Skill](./THINKING_SKILL.md) | Indikator CT & CPT dan pemetaan ke fitur |
+| [Question Framework](./QUESTION_FRAMEWORK.md) | Framework pertanyaan dan dialog Sokratik |
+| [User Journey](./USER_JOURNEY.md) | Alur pengalaman belajar dari onboarding hingga refleksi |
+| [Assessment Rubric](./ASSESSMENT_RUBRIC.md) | Rubrik penilaian CT & CPT (skala 4-level) |
+
+### 👥 User & Navigasi
+
+| Dokumentasi | Deskripsi |
+|-------------|-----------|
 | [User Roles](./USER_ROLES.md) | Sistem roles dan permissions |
 | [Page Catalog](./PAGE_CATALOG.md) | Katalog halaman dan fitur |
 | [Page Flow](./PAGE_FLOW.md) | Diagram alur navigasi user |
+
+### 🔧 Operasional
+
+| Dokumentasi | Deskripsi |
+|-------------|-----------|
 | [Development Guide](./DEVELOPMENT_GUIDE.md) | Panduan pengembangan dan coding standards |
 | [Git Workflow](./GIT_WORKFLOW.md) | Konvensi Git dan workflow |
 | [Deployment](./DEPLOYMENT.md) | Panduan deployment ke production |
 | [Troubleshooting](./TROUBLESHOOTING.md) | Solusi masalah umum |
+| [Milestone](./MILESTONE.md) | Progress dan roadmap pengembangan |
 
 ---
 

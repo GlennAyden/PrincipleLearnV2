@@ -125,10 +125,10 @@ Important: Write all titles and overviews in the same language as the user's inp
           openai.chat.completions.create({
             model: defaultOpenAIModel,
             messages: [systemMessage, userMessage],
-            max_completion_tokens: 1500, // Reduced for faster response
+            max_completion_tokens: 8192, // GPT-5-mini needs higher limit due to thinking tokens
           }),
           new Promise((_, reject) =>
-            setTimeout(() => reject(new Error('OpenAI API timeout after 60 seconds')), 60000)
+            setTimeout(() => reject(new Error('OpenAI API timeout after 90 seconds')), 90000)
           )
         ]) as any;
 

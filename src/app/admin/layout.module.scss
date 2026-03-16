@@ -1,15 +1,141 @@
-/* src/app/admin/layout.module.scss */
+/* src/app/admin/layout.module.scss — Shared Admin Layout */
 
-.container {
+.adminLayout {
   display: flex;
-  /* Izinkan konten mengisi tinggi viewport dan melebar */
   min-height: 100vh;
+  background: #f0f2f5;
 }
 
-.card {
-  /* Biarkan konten mengambil sisa ruang */
-  flex: 1;
-  /* Pastikan layout halaman (header + main) tetap vertikal */
+/* ── Sidebar ── */
+.sidebar {
+  width: 240px;
+  min-width: 240px;
+  background: linear-gradient(180deg, #1a1d2e 0%, #141625 100%);
+  color: #e2e8f0;
   display: flex;
   flex-direction: column;
+  position: sticky;
+  top: 0;
+  height: 100vh;
+  overflow-y: auto;
+  z-index: 100;
+}
+
+.sidebarHeader {
+  padding: 24px 20px 16px;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.06);
+}
+
+.logo {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.logoIcon {
+  font-size: 1.4rem;
+}
+
+.logoText {
+  font-size: 1.15rem;
+  font-weight: 700;
+  letter-spacing: -0.02em;
+  background: linear-gradient(135deg, #818cf8 0%, #a78bfa 100%);
+  -webkit-background-clip: text;
+  background-clip: text;
+  -webkit-text-fill-color: transparent;
+}
+
+.logoSub {
+  display: block;
+  font-size: 0.7rem;
+  color: #64748b;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  margin-top: 4px;
+  padding-left: 2px;
+}
+
+/* ── Navigation ── */
+.nav {
+  flex: 1;
+  padding: 12px 10px;
+}
+
+.navList {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.navItem {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 11px 14px;
+  border-radius: 10px;
+  font-size: 0.88rem;
+  font-weight: 500;
+  color: #94a3b8;
+  cursor: pointer;
+  transition: all 0.18s ease;
+  user-select: none;
+
+  &:hover {
+    background: rgba(255, 255, 255, 0.06);
+    color: #e2e8f0;
+  }
+}
+
+.navItemActive {
+  background: rgba(99, 102, 241, 0.15) !important;
+  color: #a5b4fc !important;
+
+  .navIcon {
+    color: #818cf8;
+  }
+}
+
+.navIcon {
+  font-size: 1.1rem;
+  flex-shrink: 0;
+  transition: color 0.18s ease;
+}
+
+/* ── Footer ── */
+.sidebarFooter {
+  padding: 16px 10px;
+  border-top: 1px solid rgba(255, 255, 255, 0.06);
+}
+
+.logoutBtn {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  width: 100%;
+  padding: 10px 14px;
+  border: none;
+  border-radius: 10px;
+  background: rgba(239, 68, 68, 0.08);
+  color: #f87171;
+  font-size: 0.85rem;
+  font-weight: 500;
+  cursor: pointer;
+  transition: all 0.18s ease;
+
+  &:hover {
+    background: rgba(239, 68, 68, 0.18);
+    color: #fca5a5;
+  }
+}
+
+/* ── Main Content ── */
+.mainContent {
+  flex: 1;
+  min-width: 0;
+  overflow-y: auto;
+  max-height: 100vh;
 }

@@ -1,61 +1,10 @@
 /* src/app/admin/users/page.module.scss */
 
 .page {
-  display: flex;
-  min-height: 100vh;
-  background: #f1f4f8;
-}
-
-.sidebar {
-  width: 220px;
-  background: #ffffff;
-  padding: 2rem 1rem;
-  box-shadow: 2px 0 8px rgba(0, 0, 0, 0.05);
-}
-
-.logo {
-  font-size: 1.5rem;
-  font-weight: 700;
-  margin-bottom: 2rem;
-}
-
-.navList {
-  list-style: none;
-  padding: 0;
-  margin: 0;
-}
-
-.navItem {
-  display: flex;
-  align-items: center;
-  padding: 0.75rem 1rem;
-  margin-bottom: 0.5rem;
-  font-size: 1.1rem;
-  cursor: pointer;
-  color: #111;
-  border-radius: 8px;
-  transition: background 0.2s;
-  font-weight: 400;
-}
-
-.navItem:hover {
-  background: #f0f5ff;
-}
-
-.active {
-  background: #007acc;
-  color: #ffffff;
-  font-weight: 500;
-}
-
-.navIcon {
-  margin-right: 0.75rem;
-}
-
-.main {
-  flex: 1;
-  display: flex;
-  flex-direction: column;
+  padding: 24px 28px;
+  max-width: 1400px;
+  margin: 0 auto;
+  width: 100%;
 }
 
 .header {
@@ -63,16 +12,17 @@
   justify-content: space-between;
   align-items: center;
   background: #fff;
-  padding: 1rem;
-  margin: 1rem;
+  padding: 1rem 1.25rem;
   border-radius: 12px;
-  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.05);
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.04);
+  margin-bottom: 1rem;
 }
 
 .pageTitle {
-  font-size: 1.5rem;
-  font-weight: 600;
+  font-size: 1.4rem;
+  font-weight: 700;
   margin: 0;
+  color: #1e293b;
 }
 
 .filters {
@@ -81,32 +31,22 @@
 
 .select {
   padding: 0.5rem 0.75rem;
-  border: 1px solid #ccc;
-  border-radius: 6px;
-  background: #fff;
-  cursor: pointer;
-  font-weight: 400;
-}
-
-.logout {
-  display: flex;
-  align-items: center;
-  background: #111;
-  color: #fff;
-  border: none;
-  padding: 0.5rem 1rem;
-  border-radius: 6px;
+  border: 1px solid #e2e8f0;
+  border-radius: 8px;
+  background: #f8fafc;
   cursor: pointer;
   font-weight: 500;
+  font-size: 0.85rem;
+  color: #334155;
 }
 
 .tableWrapper {
   background: #fff;
-  margin: 1rem;
   border-radius: 12px;
-  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.05);
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.04);
   padding: 1rem;
   overflow-x: auto;
+  margin-bottom: 1rem;
 }
 
 .table {
@@ -119,15 +59,21 @@
 .table td {
   padding: 0.75rem;
   text-align: left;
-  border-bottom: 1px solid #eee;
+  border-bottom: 1px solid #f1f5f9;
 }
 
 .table th {
   font-weight: 600;
+  font-size: 0.78rem;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  color: #64748b;
 }
 
 .table td {
   font-weight: 400;
+  font-size: 0.88rem;
+  color: #334155;
 }
 
 .iconHeader {
@@ -220,9 +166,9 @@
   background: #ffebee;
   color: #d32f2f;
   padding: 1rem;
-  margin: 1rem;
   border-radius: 8px;
   font-weight: 500;
+  margin-bottom: 1rem;
 }
 
 .noData {
@@ -246,15 +192,15 @@
 
 .activityPanel {
   background: #fff;
-  margin: 0 1rem 1.5rem;
   padding: 1.5rem;
   border-radius: 12px;
-  box-shadow: 0 6px 18px rgba(0, 0, 0, 0.08);
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.04);
+  margin-bottom: 1rem;
 }
 
 .activityPanel header h3 {
   margin: 0;
-  font-size: 1.25rem;
+  font-size: 1.15rem;
   font-weight: 600;
 }
 
@@ -270,10 +216,10 @@
 }
 
 .activityCard {
-  background: #f6f8ff;
+  background: #f8fafc;
   border-radius: 12px;
   padding: 1rem;
-  border: 1px solid #dbe4ff;
+  border: 1px solid #e2e8f0;
 }
 
 .activityCard h4 {
@@ -303,10 +249,10 @@
 
 .subtopicPanel {
   background: #fff;
-  margin: 0 1rem 2rem;
   padding: 1.5rem;
   border-radius: 12px;
-  box-shadow: 0 6px 18px rgba(15, 23, 42, 0.08);
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.04);
+  margin-bottom: 1rem;
 }
 
 .subtopicPanel header h3 {
@@ -326,10 +272,10 @@
 }
 
 .courseCard {
-  border: 1px solid #e0e7ff;
+  border: 1px solid #e2e8f0;
   border-radius: 12px;
   padding: 1rem;
-  background: #f8f9ff;
+  background: #f8fafc;
 }
 
 .courseHeader {

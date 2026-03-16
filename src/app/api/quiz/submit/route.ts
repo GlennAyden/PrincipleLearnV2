@@ -8,6 +8,7 @@ interface QuizAnswer {
   userAnswer: string;
   isCorrect: boolean;
   questionIndex: number;
+  reasoningNote?: string;
 }
 
 interface QuizSubmission {
@@ -20,6 +21,7 @@ interface QuizSubmission {
   subtopicIndex?: number;
   score: number;
   answers: QuizAnswer[];
+  reasoningNotes?: string[];
 }
 
 export async function POST(req: NextRequest) {
@@ -35,7 +37,7 @@ export async function POST(req: NextRequest) {
     }
 
     // Find user in database
-    const users = await DatabaseService.getRecords('users', {
+    const users = await DatabaseService.getRecords<{ id: string }>('users', {
       filter: { email: data.userId },
       limit: 1
     });
@@ -65,7 +67,7 @@ export async function POST(req: NextRequest) {
     // First, try to find the specific subtopic ID if we have subtopicTitle
     let subtopicId = null;
     if (data.subtopicTitle) {
-      const subtopics = await DatabaseService.getRecords('subtopics', {
+      const subtopics = await DatabaseService.getRecords<{ id: string }>('subtopics', {
         filter: { 
           course_id: data.courseId,
           title: data.subtopicTitle
@@ -110,12 +112,12 @@ export async function POST(req: NextRequest) {
     }
 
     // Save each quiz answer to database with improved matching
-    const submissionIds = [];
-    const matchingResults = [];
+    const submissionIds: string[] = [];
+    const matchingResults: Array<{ questionIndex: number; matched: boolean; method: string; quizId?: string; question: string }> = [];
     
     for (let i = 0; i < data.answers.length; i++) {
       const answer = data.answers[i];
-      let matchingQuiz = null;
+      let matchingQuiz: any = null;
       let matchMethod = '';
       
       // Strategy 1: Exact question text match
@@ -145,11 +147,11 @@ export async function POST(req: NextRequest) {
       
       // Strategy 4: Match by question content similarity (contains similar words)
       if (!matchingQuiz) {
-        const answerWords = answer.question.toLowerCase().split(/\s+/).filter(w => w.length > 3);
+        const answerWords = answer.question.toLowerCase().split(/\s+/).filter((w: string) => w.length > 3);
         if (answerWords.length > 0) {
-          matchingQuiz = quizQuestions.find(q => {
-            const quizWords = q.question.toLowerCase().split(/\s+/).filter(w => w.length > 3);
-            const commonWords = answerWords.filter(word => quizWords.includes(word));
+          matchingQuiz = quizQuestions.find((q: any) => {
+            const quizWords = q.question.toLowerCase().split(/\s+/).filter((w: string) => w.length > 3);
+            const commonWords = answerWords.filter((word: string) => quizWords.includes(word));
             return commonWords.length >= Math.min(2, answerWords.length * 0.5);
           });
           if (matchingQuiz) {
@@ -160,13 +162,14 @@ export async function POST(req: NextRequest) {
       
       if (matchingQuiz) {
         const submissionData = {
-          user_id: (user as any).id,
+          user_id: user.id,
           quiz_id: matchingQuiz.id,
           answer: answer.userAnswer,
-          is_correct: answer.isCorrect
+          is_correct: answer.isCorrect,
+          reasoning_note: answer.reasoningNote || (data.reasoningNotes?.[i] ?? null),
         };
 
-        const submission = await DatabaseService.insertRecord('quiz_submissions', submissionData);
+        const submission = await DatabaseService.insertRecord<any>('quiz_submissions', submissionData);
         submissionIds.push(submission.id);
         
         matchingResults.push({
@@ -199,7 +202,7 @@ export async function POST(req: NextRequest) {
       matchingResults: matchingResults
     });
 
-    const successfulMatches = matchingResults.filter(r => r.matched).length;
+    const successfulMatches = matchingResults.filter((r) => r.matched).length;
 
     const { moduleTitle: resolvedModuleTitle, subtopicTitle: resolvedSubtopicTitle } =
       await resolveModuleContext({
@@ -213,7 +216,7 @@ export async function POST(req: NextRequest) {
         courseId: data.courseId,
         moduleTitle: resolvedModuleTitle,
         subtopicTitle: resolvedSubtopicTitle,
-        userId: (user as any).id,
+        userId: user.id,
       });
     }
     
@@ -380,11 +383,11 @@ async function markSubtopicQuizCompletion({
 
       const { error: updateError } = await adminDb
         .from('subtopic_cache')
+        .eq('cache_key', cacheKey)
         .update({
           content,
           updated_at: new Date().toISOString(),
-        })
-        .eq('cache_key', cacheKey);
+        });
 
       if (updateError) {
         console.warn('[QuizSubmit] Failed to update completion state', updateError);

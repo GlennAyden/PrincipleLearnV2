@@ -1,31 +1,12 @@
 // Path: src/app/request-course/step3/page.tsx
 'use client';
 
-import { useState, useEffect, useRef } from 'react';
+import { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
-import { useRequestCourse } from '../../../context/RequestCourseContext';
+import Link from 'next/link';
+import { useRequestCourse } from '@/context/RequestCourseContext';
 import { useAuth } from '@/hooks/useAuth';
 import styles from './page.module.scss';
-import { Level } from '@/context/RequestCourseContext';
-
-interface ModuleOutline {
-  module: string;
-  subtopics: string[];
-}
-interface Course {
-  id: string;
-  title: string;
-  level: Level;
-  outline: ModuleOutline[];
-}
-
-const LOADING_PHRASES = [
-  'Thinking through the perfect plan...',
-  'Crunching the learning modules...',
-  'Tailoring to your needs...',
-  'Polishing the details...',
-  'Almost there...',
-];
 
 export default function RequestCourseStep3() {
   const router = useRouter();
@@ -35,188 +16,122 @@ export default function RequestCourseStep3() {
   const [problem, setProblem] = useState(answers.problem);
   const [assumption, setAssumption] = useState(answers.assumption);
   const [error, setError] = useState('');
-  const [loading, setLoading] = useState(false);
-  const [percent, setPercent] = useState(0);
-  const [phraseIdx, setPhraseIdx] = useState(0);
 
-  const percentRef = useRef(0);
-  const phraseRef = useRef(0);
-
-  // Redirect to login if not authenticated
   useEffect(() => {
     if (!authLoading && !isAuthenticated) {
       router.replace('/login');
     }
   }, [authLoading, isAuthenticated, router]);
 
-  useEffect(() => {
-    let progInterval: number;
-    let phraseInterval: number;
-
-    if (loading && typeof window !== 'undefined') {
-      progInterval = window.setInterval(() => {
-        percentRef.current = Math.min(99, percentRef.current + Math.random() * 10);
-        setPercent(Math.floor(percentRef.current));
-      }, 500);
-
-      phraseInterval = window.setInterval(() => {
-        phraseRef.current = (phraseRef.current + 1) % LOADING_PHRASES.length;
-        setPhraseIdx(phraseRef.current);
-      }, 3000);
-    }
-
-    return () => {
-      clearInterval(progInterval);
-      clearInterval(phraseInterval);
-    };
-  }, [loading]);
-
-  const handleGenerate = async () => {
+  const handleGenerate = () => {
     if (!problem.trim() || !assumption.trim()) {
       setError('Please fill both fields');
       return;
     }
-    
     if (!user || !user.email) {
       setError('You must be logged in to generate a course');
       return;
     }
-    
-    setError('');
     setPartial({ problem, assumption });
-    setLoading(true);
-    setPercent(0);
-    percentRef.current = 0;
-    phraseRef.current = 0;
-    setPhraseIdx(0);
-
-    try {
-      console.log('Generating course with user:', user.email);
-      
-      const res = await fetch('/api/generate-course', {
-        method: 'POST',
-        headers: { 
-          'Content-Type': 'application/json',
-          'Accept': 'application/json',
-        },
-        body: JSON.stringify({ 
-          ...answers, 
-          problem, 
-          assumption,
-          userId: user.email // Add the user's email as userId
-        }),
-      });
-      
-      console.log('API Response Status:', res.status);
-      console.log('API Response Headers:', res.headers.get('content-type'));
-      
-      // Check if response is actually JSON
-      const contentType = res.headers.get('content-type');
-      if (!contentType || !contentType.includes('application/json')) {
-        const textResponse = await res.text();
-        console.error('Non-JSON response received:', textResponse);
-        
-        // Handle specific error cases
-        if (res.status === 504) {
-          throw new Error('Course generation timed out. Please try again with a simpler topic or goal.');
-        } else if (res.status === 500) {
-          throw new Error('Server error occurred. Please try again in a moment.');
-        } else {
-          throw new Error(`Server returned non-JSON response. Status: ${res.status}. Please try again.`);
-        }
-      }
-      
-      const data = await res.json();
-      if (!res.ok) throw new Error(data.error || `API Error: ${res.status}`);
-
-      // Course is automatically saved to database by the API
-      // No need to save to localStorage anymore
-      console.log('Course generated successfully:', data.course);
-
-      // Log the successful course generation
-      try {
-        const logRes = await fetch('/api/generate-course/log', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({
-            userId: user.email,
-            courseName: answers.topic,
-            parameter: JSON.stringify({
-              topic: answers.topic,
-              goal: answers.goal,
-              level: answers.level,
-              extraTopics: answers.extraTopics,
-              problem,
-              assumption
-            })
-          })
-        });
-        
-        if (!logRes.ok) {
-          console.error('Failed to log course generation:', await logRes.json());
-        } else {
-          console.log('Course generation logged successfully');
-        }
-      } catch (logErr) {
-        console.error('Error logging course generation:', logErr);
-      }
-
-      setPercent(100);
-      setTimeout(() => router.push('/dashboard'), 300);
-    } catch (err: any) {
-      setError(err.message);
-      setLoading(false);
-    }
+    router.push('/request-course/generating');
   };
 
   if (authLoading) {
-    return <div className={styles.loading}>Loading...</div>;
-  }
-
-  if (!isAuthenticated) {
-    return null;
-  }
-
-  if (loading) {
     return (
-      <div className={styles.wrapper}>
-        <div className={styles.loadingCard}>
-          <div className={styles.progressBar}>
-            <div className={styles.progressFill} style={{ width: `${percent}%` }} />
-          </div>
-          <p className={styles.percentText}>{percent}%</p>
-          <p className={styles.phrase}>{LOADING_PHRASES[phraseIdx]}</p>
-        </div>
+      <div className={styles.loadingPage}>
+        <div className={styles.loadingSpinner} />
+        <p>Loading...</p>
       </div>
     );
   }
 
+  if (!isAuthenticated) return null;
+
   return (
-    <div className={styles.wrapper}>
+    <div className={styles.page}>
+      <div className={styles.bgOrb1} />
+      <div className={styles.bgOrb2} />
+
+      <Link href="/request-course/step2" className={styles.backLink}>
+        <svg width="16" height="16" viewBox="0 0 16 16" fill="none">
+          <path d="M10 12L6 8L10 4" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" />
+        </svg>
+        Back
+      </Link>
+
       <div className={styles.card}>
-        <h1>Request a course</h1>
+        {/* Step indicator */}
+        <div className={styles.stepIndicator}>
+          <div className={styles.stepDot} data-done="true">✓</div>
+          <div className={styles.stepLine} data-done="true" />
+          <div className={styles.stepDot} data-done="true">✓</div>
+          <div className={styles.stepLine} data-done="true" />
+          <div className={styles.stepDot} data-active="true">3</div>
+        </div>
 
-        <label className={styles.textareaLabel}>
-          Name one real-world problem you want to solve by studying this.
-          <textarea
-            placeholder="..."
-            value={problem}
-            onChange={(e) => setProblem(e.currentTarget.value)}
-          />
-        </label>
+        <div className={styles.cardHeader}>
+          <div className={styles.headerIcon}>
+            <svg width="28" height="28" viewBox="0 0 28 28" fill="none">
+              <circle cx="14" cy="14" r="10" stroke="currentColor" strokeWidth="1.5" />
+              <path d="M14 10V15" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" />
+              <path d="M11 13L14 15L17 13" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" />
+              <circle cx="14" cy="8" r="1" fill="currentColor" />
+            </svg>
+          </div>
+          <h1 className={styles.title}>Context & Assumptions</h1>
+          <p className={styles.subtitle}>Help AI understand your real-world needs</p>
+        </div>
 
-        <label className={styles.textareaLabel}>
-          What was your initial assumption about this material before you started learning?
-          <textarea
-            placeholder="..."
-            value={assumption}
-            onChange={(e) => setAssumption(e.currentTarget.value)}
-          />
-        </label>
+        {error && (
+          <div className={styles.error}>
+            <svg width="16" height="16" viewBox="0 0 16 16" fill="none">
+              <circle cx="8" cy="8" r="7" stroke="currentColor" strokeWidth="1.5" />
+              <path d="M8 5V9" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" />
+              <circle cx="8" cy="11.5" r="0.75" fill="currentColor" />
+            </svg>
+            {error}
+          </div>
+        )}
 
-        {error && <p className={styles.error}>{error}</p>}
+        <div className={styles.form}>
+          <div className={styles.field}>
+            <label className={styles.label}>
+              <svg width="16" height="16" viewBox="0 0 16 16" fill="none">
+                <path d="M2 12.5L6 8.5L9 11.5L14 5.5" stroke="currentColor" strokeWidth="1.3" strokeLinecap="round" strokeLinejoin="round" />
+                <path d="M10 5.5H14V9.5" stroke="currentColor" strokeWidth="1.3" strokeLinecap="round" strokeLinejoin="round" />
+              </svg>
+              Real-world problem
+            </label>
+            <textarea
+              className={styles.textarea}
+              placeholder="Name one real-world problem you want to solve by studying this..."
+              value={problem}
+              onChange={(e) => setProblem(e.currentTarget.value)}
+            />
+          </div>
 
-        <button onClick={handleGenerate}>Generate</button>
+          <div className={styles.field}>
+            <label className={styles.label}>
+              <svg width="16" height="16" viewBox="0 0 16 16" fill="none">
+                <path d="M8 2L10 6H14L11 9L12 13L8 10.5L4 13L5 9L2 6H6L8 2Z" stroke="currentColor" strokeWidth="1.3" strokeLinejoin="round" />
+              </svg>
+              Initial assumption
+            </label>
+            <textarea
+              className={styles.textarea}
+              placeholder="What was your initial assumption about this material before you started learning?"
+              value={assumption}
+              onChange={(e) => setAssumption(e.currentTarget.value)}
+            />
+          </div>
+
+          <button className={styles.submitBtn} onClick={handleGenerate}>
+            <svg width="18" height="18" viewBox="0 0 18 18" fill="none">
+              <path d="M9 2L11 7H16L12 10L13.5 15L9 12L4.5 15L6 10L2 7H7L9 2Z" stroke="currentColor" strokeWidth="1.3" fill="currentColor" fillOpacity="0.15" strokeLinejoin="round" />
+            </svg>
+            Generate Course
+          </button>
+        </div>
       </div>
     </div>
   );

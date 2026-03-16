@@ -3,10 +3,6 @@
 import React, { useEffect, useMemo, useState } from 'react'
 import styles from './page.module.scss'
 import {
-  FiLogOut,
-  FiHome,
-  FiUsers,
-  FiActivity,
   FiFileText,
   FiHelpCircle,
   FiTarget,
@@ -14,7 +10,7 @@ import {
   FiStar,
   FiMessageCircle,
 } from 'react-icons/fi'
-import { useRouter, usePathname } from 'next/navigation'
+import { useRouter } from 'next/navigation'
 import { useAdmin } from "@/hooks/useAdmin"
 
 interface OutlineSubtopic {
@@ -143,7 +139,6 @@ const EmptyState = ({ message }: { message: string }) => (
 
 export default function AdminActivityPage() {
   const router = useRouter()
-  const pathname = usePathname()
   const { admin, loading: authLoading } = useAdmin()
 
   const [users, setUsers] = useState<{ id: string; email: string }[]>([])
@@ -280,93 +275,62 @@ export default function AdminActivityPage() {
 
   return (
     <div className={styles.page}>
-      <aside className={styles.sidebar}>
-        <div className={styles.logo}>Principle Learn</div>
-        <nav>
-          <ul className={styles.navList}>
-            <li
-              className={`${styles.navItem} ${pathname === '/admin/dashboard' ? styles.active : ''}`}
-              onClick={() => router.push('/admin/dashboard')}
-            >
-              <FiHome className={styles.navIcon} /> Dashboard
-            </li>
-            <li
-              className={`${styles.navItem} ${pathname === '/admin/users' ? styles.active : ''}`}
-              onClick={() => router.push('/admin/users')}
-            >
-              <FiUsers className={styles.navIcon} /> Users
-            </li>
-            <li
-              className={`${styles.navItem} ${pathname === '/admin/activity' ? styles.active : ''}`}
-              onClick={() => router.push('/admin/activity')}
-            >
-              <FiActivity className={styles.navIcon} /> Activity
-            </li>
-          </ul>
-        </nav>
-      </aside>
+      <div className={styles.filterBar}>
+        <select
+          className={styles.select}
+          value={selectedUser}
+          onChange={(e) => setSelectedUser(e.target.value)}
+        >
+          <option value="">Name</option>
+          {users.map((u) => (
+            <option key={u.id} value={u.id}>
+              {u.email}
+            </option>
+          ))}
+        </select>
 
-      <main className={styles.main}>
-        <div className={styles.filterBar}>
+        <input
+          type="date"
+          className={styles.select}
+          value={selectedDate}
+          onChange={(e) => setSelectedDate(e.target.value)}
+          aria-label="Filter tanggal aktivitas"
+        />
+
+        {requiresCourseFilter && (
           <select
             className={styles.select}
-            value={selectedUser}
-            onChange={(e) => setSelectedUser(e.target.value)}
+            value={selectedCourse}
+            onChange={(e) => {
+              setSelectedCourse(e.target.value)
+              setSelectedTopic('')
+            }}
           >
-            <option value="">Name</option>
-            {users.map((u) => (
-              <option key={u.id} value={u.id}>
-                {u.email}
+            <option value="">Course</option>
+            {courses.map((course) => (
+              <option key={course.id} value={course.id}>
+                {course.title}
               </option>
             ))}
           </select>
+        )}
 
-          <input
-            type="date"
+        {requiresTopicFilter && (
+          <select
             className={styles.select}
-            value={selectedDate}
-            onChange={(e) => setSelectedDate(e.target.value)}
-            aria-label="Filter tanggal aktivitas"
-          />
-
-          {requiresCourseFilter && (
-            <select
-              className={styles.select}
-              value={selectedCourse}
-              onChange={(e) => {
-                setSelectedCourse(e.target.value)
-                setSelectedTopic('')
-              }}
-            >
-              <option value="">Course</option>
-              {courses.map((course) => (
-                <option key={course.id} value={course.id}>
-                  {course.title}
-                </option>
-              ))}
-            </select>
-          )}
-
-          {requiresTopicFilter && (
-            <select
-              className={styles.select}
-              value={selectedTopic}
-              onChange={(e) => setSelectedTopic(e.target.value)}
-              disabled={!selectedCourse}
-            >
-              <option value="">Topic/Subtopic</option>
-              {topics.map((topic) => (
-                <option key={topic.id} value={topic.title}>
-                  {topic.title}
-                </option>
-              ))}
-            </select>
-          )}
-
-          <button className={styles.logout} onClick={() => router.push('/admin/login')}>
-            <FiLogOut /> Log out
-          </button>
-        </div>
+            value={selectedTopic}
+            onChange={(e) => setSelectedTopic(e.target.value)}
+            disabled={!selectedCourse}
+          >
+            <option value="">Topic/Subtopic</option>
+            {topics.map((topic) => (
+              <option key={topic.id} value={topic.title}>
+                {topic.title}
+              </option>
+            ))}
+          </select>
+        )}
+      </div>
 
         <div className={styles.activityCards}>
           {TABS.map((tab) => (
@@ -686,7 +650,6 @@ export default function AdminActivityPage() {
             </div>
           )}
         </section>
-      </main>
     </div>
   )
 }

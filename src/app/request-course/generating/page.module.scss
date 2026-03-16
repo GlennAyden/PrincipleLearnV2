@@ -1,0 +1,370 @@
+/* Path: src/app/request-course/generating/page.module.scss */
+
+/* ========================================
+   DESIGN TOKENS
+   ======================================== */
+$primary-50: #eff6ff;
+$primary-100: #dbeafe;
+$primary-200: #bfdbfe;
+$primary-300: #93c5fd;
+$primary-400: #60a5fa;
+$primary-500: #3b82f6;
+$primary-600: #2563eb;
+$primary-700: #1d4ed8;
+
+$gray-50: #f8fafc;
+$gray-100: #f1f5f9;
+$gray-200: #e2e8f0;
+$gray-300: #cbd5e1;
+$gray-400: #94a3b8;
+$gray-500: #64748b;
+$gray-600: #475569;
+$gray-700: #334155;
+$gray-800: #1e293b;
+$gray-900: #0f172a;
+
+$green-500: #22c55e;
+$green-600: #16a34a;
+$purple-500: #8b5cf6;
+$red-500: #ef4444;
+
+$radius-sm: 8px;
+$radius-md: 12px;
+$radius-lg: 16px;
+$radius-full: 9999px;
+
+/* ========================================
+   KEYFRAMES
+   ======================================== */
+@keyframes fadeInUp {
+  from { opacity: 0; transform: translateY(20px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+
+@keyframes float {
+  0%, 100% { transform: translate(0, 0) scale(1); }
+  33% { transform: translate(30px, -20px) scale(1.05); }
+  66% { transform: translate(-20px, 15px) scale(0.95); }
+}
+
+@keyframes spin {
+  to { transform: rotate(360deg); }
+}
+
+@keyframes pulse {
+  0%, 100% { transform: scale(1); opacity: 0.4; }
+  50% { transform: scale(1.5); opacity: 0; }
+}
+
+@keyframes shimmer {
+  0% { background-position: -200% 0; }
+  100% { background-position: 200% 0; }
+}
+
+@keyframes checkBounce {
+  0% { transform: scale(0); }
+  60% { transform: scale(1.15); }
+  100% { transform: scale(1); }
+}
+
+/* ========================================
+   PAGE
+   ======================================== */
+.page {
+  position: relative;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 100vh;
+  padding: 2rem 1rem;
+  background: linear-gradient(160deg, $gray-50 0%, #ffffff 40%, $primary-100 80%, $gray-50 100%);
+  overflow: hidden;
+}
+
+.bgOrb1, .bgOrb2, .bgOrb3 {
+  position: absolute;
+  border-radius: 50%;
+  filter: blur(100px);
+  opacity: 0.25;
+  pointer-events: none;
+  animation: float 20s ease-in-out infinite;
+}
+
+.bgOrb1 {
+  width: 500px; height: 500px;
+  background: radial-gradient(circle, $primary-200 0%, transparent 70%);
+  top: -200px; right: -150px;
+}
+
+.bgOrb2 {
+  width: 400px; height: 400px;
+  background: radial-gradient(circle, rgba($purple-500, 0.15) 0%, transparent 70%);
+  bottom: -150px; left: -100px;
+  animation-delay: -7s;
+}
+
+.bgOrb3 {
+  width: 300px; height: 300px;
+  background: radial-gradient(circle, rgba($green-500, 0.1) 0%, transparent 70%);
+  top: 50%;  left: 50%;
+  transform: translate(-50%, -50%);
+  animation-delay: -14s;
+}
+
+/* ========================================
+   CONTAINER
+   ======================================== */
+.container {
+  position: relative;
+  z-index: 5;
+  width: 100%;
+  max-width: 480px;
+  text-align: center;
+  animation: fadeInUp 0.6s ease-out;
+}
+
+/* ========================================
+   ICON
+   ======================================== */
+.iconWrap {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  margin-bottom: 2rem;
+  color: $primary-500;
+  transition: color 0.4s ease;
+
+  &[data-stage="complete"] {
+    color: $green-500;
+    animation: checkBounce 0.5s ease-out;
+  }
+
+  &[data-stage="error"] {
+    color: $red-500;
+  }
+}
+
+.pulseRing {
+  position: relative;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+
+  &::before {
+    content: '';
+    position: absolute;
+    width: 64px; height: 64px;
+    border-radius: 50%;
+    border: 2px solid $primary-400;
+    animation: pulse 2s ease-in-out infinite;
+  }
+
+  &::after {
+    content: '';
+    position: absolute;
+    width: 80px; height: 80px;
+    border-radius: 50%;
+    border: 1px solid $primary-300;
+    animation: pulse 2s ease-in-out infinite 0.5s;
+  }
+}
+
+/* ========================================
+   PROGRESS BAR
+   ======================================== */
+.progressBar {
+  width: 100%;
+  height: 6px;
+  background: $gray-200;
+  border-radius: $radius-full;
+  overflow: hidden;
+  margin-bottom: 1rem;
+}
+
+.progressFill {
+  height: 100%;
+  border-radius: $radius-full;
+  background: linear-gradient(90deg, $primary-500, $primary-600);
+  transition: width 0.4s ease;
+
+  &[data-stage="ai-generating"] {
+    background: linear-gradient(90deg, $primary-400, $primary-600, $primary-400);
+    background-size: 200% 100%;
+    animation: shimmer 2s linear infinite;
+  }
+
+  &[data-stage="complete"] {
+    background: linear-gradient(90deg, $green-500, $green-600);
+  }
+
+  &[data-stage="error"] {
+    background: $red-500;
+  }
+}
+
+/* ========================================
+   TEXT
+   ======================================== */
+.percentText {
+  font-size: 2rem;
+  font-weight: 700;
+  color: $gray-900;
+  letter-spacing: -0.02em;
+  margin-bottom: 0.25rem;
+}
+
+.stageLabel {
+  font-size: 1.15rem;
+  font-weight: 600;
+  color: $gray-800;
+  margin-bottom: 0.35rem;
+}
+
+.stageDesc {
+  font-size: 0.9rem;
+  color: $gray-400;
+  font-weight: 400;
+  min-height: 1.4em;
+  transition: opacity 0.3s ease;
+}
+
+/* ========================================
+   TIMELINE
+   ======================================== */
+.timeline {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: center;
+  gap: 0.75rem;
+  margin-top: 2.5rem;
+  padding-top: 1.5rem;
+  border-top: 1px solid $gray-100;
+}
+
+.timelineItem {
+  display: flex;
+  align-items: center;
+  gap: 0.35rem;
+
+  &[data-done="true"] {
+    .timelineDot {
+      background: $green-500;
+      color: #fff;
+      border-color: transparent;
+      font-size: 0.6rem;
+    }
+    .timelineLabel { color: $gray-500; }
+  }
+
+  &[data-current="true"] {
+    .timelineDot {
+      background: $primary-500;
+      color: #fff;
+      border-color: transparent;
+      box-shadow: 0 0 0 3px rgba($primary-500, 0.2);
+    }
+    .timelineLabel {
+      color: $primary-600;
+      font-weight: 600;
+    }
+  }
+}
+
+.timelineDot {
+  width: 22px; height: 22px;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 0.65rem;
+  font-weight: 600;
+  background: $gray-100;
+  color: $gray-400;
+  border: 1.5px solid $gray-200;
+  flex-shrink: 0;
+  transition: all 0.3s ease;
+}
+
+.timelineLabel {
+  font-size: 0.72rem;
+  color: $gray-400;
+  font-weight: 400;
+  white-space: nowrap;
+  transition: all 0.3s ease;
+}
+
+/* ========================================
+   ERROR / RETRY
+   ======================================== */
+.retryBtn {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.5rem;
+  margin-top: 1.5rem;
+  padding: 0.75rem 1.5rem;
+  background: linear-gradient(135deg, $primary-500, $primary-700);
+  color: #fff;
+  border: none;
+  border-radius: $radius-md;
+  font-size: 0.95rem;
+  font-weight: 600;
+  cursor: pointer;
+  box-shadow: 0 4px 14px rgba($primary-600, 0.3);
+  transition: all 0.3s ease;
+
+  &:hover {
+    transform: translateY(-2px);
+    box-shadow: 0 6px 20px rgba($primary-600, 0.4);
+  }
+}
+
+/* ========================================
+   COURSE SUMMARY
+   ======================================== */
+.courseSummary {
+  display: flex;
+  justify-content: center;
+  gap: 2rem;
+  margin-top: 2rem;
+  padding: 1rem;
+  background: rgba(255, 255, 255, 0.7);
+  border: 1px solid $gray-100;
+  border-radius: $radius-md;
+  backdrop-filter: blur(8px);
+}
+
+.summaryItem {
+  display: flex;
+  flex-direction: column;
+  gap: 0.15rem;
+  text-align: left;
+}
+
+.summaryLabel {
+  font-size: 0.7rem;
+  font-weight: 500;
+  color: $gray-400;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+}
+
+.summaryValue {
+  font-size: 0.85rem;
+  font-weight: 600;
+  color: $gray-700;
+  max-width: 160px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+/* ========================================
+   LOADING SPINNER (auth)
+   ======================================== */
+.loadingSpinner {
+  width: 28px; height: 28px;
+  border: 3px solid $gray-200;
+  border-top-color: $primary-500;
+  border-radius: 50%;
+  animation: spin 0.7s linear infinite;
+}

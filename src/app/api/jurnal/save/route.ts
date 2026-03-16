@@ -7,6 +7,7 @@ interface JurnalSubmission {
   courseId: string;
   subtopic: string;
   content: string;
+  type?: string; // 'free_text' | 'structured_reflection'
 }
 
 export async function POST(req: NextRequest) {
@@ -51,9 +52,10 @@ export async function POST(req: NextRequest) {
 
     // Save journal to database
     const jurnalData = {
-      user_id: user.id,
+      user_id: (user as any).id,
       course_id: data.courseId,
       content: data.content,
+      type: data.type || 'free_text',
       reflection: `Subtopic: ${data.subtopic}` // Store subtopic in reflection field
     };
 

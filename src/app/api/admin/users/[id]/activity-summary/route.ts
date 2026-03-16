@@ -36,7 +36,7 @@ export async function GET(
       );
     }
 
-    const [discussionResult, journalResult, transcriptResult] = await Promise.all([
+    const [discussionResult, journalResult] = await Promise.all([
       adminDb
         .from('discussion_sessions')
         .select('id, status, phase, updated_at, learning_goals')
@@ -49,32 +49,22 @@ export async function GET(
         .eq('user_id', userId)
         .order('created_at', { ascending: false })
         .limit(1),
-      adminDb
-        .from('transcript')
-        .select('id, title, created_at')
-        .eq('user_id', userId)
-        .order('created_at', { ascending: false })
-        .limit(1),
     ]);
 
-    const [discussionCounts, journalCounts, transcriptCounts] = await Promise.all([
+    const [discussionCounts, journalCounts] = await Promise.all([
       adminDb
         .from('discussion_sessions')
-        .select('id', { count: 'exact', head: true })
+        .select('id')
         .eq('user_id', userId),
       adminDb
         .from('jurnal')
-        .select('id', { count: 'exact', head: true })
-        .eq('user_id', userId),
-      adminDb
-        .from('transcript')
-        .select('id', { count: 'exact', head: true })
+        .select('id')
         .eq('user_id', userId),
     ]);
 
-    const recentDiscussion = discussionResult.data?.[0] ?? null;
-    const recentJournal = journalResult.data?.[0] ?? null;
-    const recentTranscript = transcriptResult.data?.[0] ?? null;
+    const recentDiscussion: any = discussionResult.data?.[0] ?? null;
+    const recentJournal: any = journalResult.data?.[0] ?? null;
+    const recentTranscript: any = null;
 
     const response = {
       userId: userRecord.id,
@@ -109,9 +99,9 @@ export async function GET(
           }
         : null,
       totals: {
-        discussions: discussionCounts.count ?? 0,
-        journals: journalCounts.count ?? 0,
-        transcripts: transcriptCounts.count ?? 0,
+        discussions: discussionCounts.data?.length ?? 0,
+        journals: journalCounts.data?.length ?? 0,
+        transcripts: 0,
       },
     };
 

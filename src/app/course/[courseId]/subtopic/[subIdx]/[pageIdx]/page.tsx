@@ -13,8 +13,9 @@ import ExampleList from '@/components/Examples/ExampleList';
 import KeyTakeaways from '@/components/KeyTakeaways/KeyTakeaways';
 import Quiz from '@/components/Quiz/Quiz';
 import WhatNext from '@/components/WhatNext/WhatNext';
-import FeedbackForm from '@/components/FeedbackForm/FeedbackForm';
 import NextSubtopics from '@/components/NextSubtopics/NextSubtopics';
+import StructuredReflection from '@/components/StructuredReflection/StructuredReflection';
+import PromptTimeline from '@/components/PromptTimeline/PromptTimeline';
 import styles from './page.module.scss';
 
 interface SubtopicResponse {
@@ -594,6 +595,10 @@ export default function SubtopicPage() {
                       subtopicIndex={subtopicIndex}
                       pageNumber={pageNumber}
                     />
+                    {/* Prompt Journey Timeline - show after asking questions */}
+                    {user?.id && askData.length > 0 && (
+                      <PromptTimeline userId={user.id} courseId={courseId} />
+                    )}
                   </>
                 )}
                 {activeTab === 'challenge' && (
@@ -771,11 +776,12 @@ export default function SubtopicPage() {
             summary={data.whatNext.summary}
             encouragement={data.whatNext.encouragement}
           />
-          <FeedbackForm
-            subtopicId={courseId}
+          {/* Structured Reflection + Content Feedback (merged) */}
+          <StructuredReflection
+            courseId={courseId}
+            subtopic={`Module ${moduleIndex + 1}, Subtopic ${subtopicIndex + 1}`}
             moduleIndex={moduleIndex}
             subtopicIndex={subtopicIndex}
-            courseId={courseId}
           />
           <NextSubtopics 
             items={course.outline[moduleIndex].subtopics} 

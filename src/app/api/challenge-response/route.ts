@@ -5,7 +5,7 @@ import { verifyToken } from '@/lib/jwt';
 export async function POST(req: NextRequest) {
   try {
     const body = await req.json();
-    const { userId, courseId, moduleIndex, subtopicIndex, pageNumber, question, answer, feedback } = body;
+    const { userId, courseId, moduleIndex, subtopicIndex, pageNumber, question, answer, feedback, reasoningNote } = body;
 
     if (!userId || !courseId || !question || !answer) {
       return NextResponse.json(
@@ -47,6 +47,7 @@ export async function POST(req: NextRequest) {
         question,
         answer,
         feedback: feedback || null,
+        reasoning_note: reasoningNote || null,
         created_at: timestamp,
         updated_at: timestamp
       };

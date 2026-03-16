@@ -13,6 +13,7 @@ interface User {
 }
 
 interface UserWithActivity extends User {
+  created_at: string;
   totalGenerate: number;
   totalTranscripts: number;
   totalQuizzes: number;
@@ -42,11 +43,6 @@ export async function GET() {
           filter: { created_by: user.id }
         });
         
-        // Get user's transcripts
-        const transcripts = await DatabaseService.getRecords('transcript', {
-          filter: { user_id: user.id }
-        });
-        
         // Get user's quiz submissions
         const quizSubmissions = await DatabaseService.getRecords('quiz_submissions', {
           filter: { user_id: user.id }
@@ -59,10 +55,9 @@ export async function GET() {
         
         // Calculate last activity
         const activities = [
-          ...courses.map(c => new Date(c.created_at)),
-          ...transcripts.map(t => new Date(t.created_at)),
-          ...quizSubmissions.map(q => new Date(q.submitted_at)),
-          ...journals.map(j => new Date(j.created_at))
+          ...courses.map((c: any) => new Date(c.created_at)),
+          ...quizSubmissions.map((q: any) => new Date(q.submitted_at)),
+          ...journals.map((j: any) => new Date(j.created_at))
         ];
         
         const lastActivityDate = activities.length > 0 
@@ -74,9 +69,10 @@ export async function GET() {
           email: user.email,
           name: user.name || 'Unknown',
           role: user.role.toUpperCase(),
-          createdAt: user.created_at,
+          created_at: user.created_at,
+          updated_at: user.updated_at,
           totalGenerate: courses.length,
-          totalTranscripts: transcripts.length,
+          totalTranscripts: 0,
           totalQuizzes: quizSubmissions.length,
           totalJournals: journals.length,
           totalSoalOtomatis: quizSubmissions.length, // Same as quizzes for now
@@ -94,7 +90,8 @@ export async function GET() {
           email: user.email,
           name: user.name || 'Unknown',
           role: user.role.toUpperCase(),
-          createdAt: user.created_at,
+          created_at: user.created_at,
+          updated_at: user.updated_at,
           totalGenerate: 0,
           totalTranscripts: 0,
           totalQuizzes: 0,

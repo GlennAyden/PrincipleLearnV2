@@ -2,6 +2,7 @@
 import React, { useState } from 'react';
 import styles from './QuestionBox.module.scss';
 import { useAuth } from '@/hooks/useAuth';
+import PromptBuilder, { PromptComponents } from '@/components/PromptBuilder/PromptBuilder';
 
 interface QuestionBoxProps {
   context: string;
@@ -22,17 +23,14 @@ export default function QuestionBox({
   subtopicIndex = 0,
   pageNumber = 0,
 }: QuestionBoxProps) {
-  const [question, setQuestion] = useState('');
   const [loading, setLoading] = useState(false);
   const { user } = useAuth();
 
-  const handleSubmit = async (e: React.FormEvent) => {
-    e.preventDefault();
-    const trimmed = question.trim();
-    if (!trimmed) return;
+  const handleSubmit = async (fullPrompt: string, components: PromptComponents) => {
+    if (!fullPrompt.trim()) return;
     if (!user?.id) {
       console.warn('AskQuestion submission blocked: user not authenticated');
-      onAnswer(trimmed, 'You must be logged in to ask a question.');
+      onAnswer(fullPrompt, 'You must be logged in to ask a question.');
       return;
     }
 
@@ -42,7 +40,7 @@ export default function QuestionBox({
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          question: trimmed,
+          question: fullPrompt,
           context,
           userId: user.id,
           courseId,
@@ -50,15 +48,16 @@ export default function QuestionBox({
           moduleIndex,
           subtopicIndex,
           pageNumber,
+          promptComponents: components,
+          reasoningNote: components.reasoning || '',
         }),
       });
       const data = await res.json();
       if (!res.ok) throw new Error(data.error || 'Failed to fetch answer');
-      onAnswer(trimmed, data.answer);
-      setQuestion('');
+      onAnswer(fullPrompt, data.answer);
     } catch (err: any) {
       console.error('AskQuestion error:', err);
-      onAnswer(trimmed, `Error: ${err.message}`);
+      onAnswer(fullPrompt, `Error: ${err.message}`);
     } finally {
       setLoading(false);
     }
@@ -66,25 +65,11 @@ export default function QuestionBox({
 
   return (
     <div className={styles.questionBoxContainer}>
-      <form className={styles.questionForm} onSubmit={handleSubmit}>
-        <div className={styles.inputContainer}>
-          <input
-            type="text"
-            className={styles.inputField}
-            value={question}
-            onChange={(e) => setQuestion(e.target.value)}
-            placeholder="Ask anything you want"
-            disabled={loading}
-          />
-          <button
-            type="submit"
-            className={styles.enterButton}
-            disabled={loading || !question.trim()}
-          >
-            Enter
-          </button>
-        </div>
-      </form>
+      <PromptBuilder
+        onSubmit={handleSubmit}
+        loading={loading}
+        courseContext={context}
+      />
     </div>
   );
 }

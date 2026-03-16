@@ -1,7 +1,8 @@
 // src/components/Quiz/Quiz.tsx
-import React, { useState, useEffect } from 'react';
+import React, { useState } from 'react';
 import styles from './Quiz.module.scss';
 import { useAuth } from '@/hooks/useAuth';
+import ReasoningNote from '@/components/ReasoningNote/ReasoningNote';
 
 export interface QuizItem {
   question: string;
@@ -35,23 +36,19 @@ export default function Quiz({
   moduleIndex = 0,
   subtopicIndex = 0,
 }: QuizProps) {
-  // gunakan safeItems untuk mencegah undefined
   const safeItems = questions;
-  // Get user from auth hook
   const { user } = useAuth();
   
-  // state untuk jawaban yang dipilih per soal (null = belum menjawab)
   const [selectedAnswers, setSelectedAnswers] = useState<(number | null)[]>(
     safeItems.map(() => null)
   );
-  // apakah hasil sudah dicek?
+  const [reasoningNotes, setReasoningNotes] = useState<string[]>(
+    safeItems.map(() => '')
+  );
   const [showResults, setShowResults] = useState(false);
-  // flag jika hasil sudah disimpan ke server
   const [submitted, setSubmitted] = useState(false);
-  // loading state
   const [loading, setLoading] = useState(false);
 
-  // handle pilihan user
   const handleSelect = (qIndex: number, optIndex: number) => {
     if (showResults) return;
     const updated = [...selectedAnswers];
@@ -59,11 +56,15 @@ export default function Quiz({
     setSelectedAnswers(updated);
   };
 
-  // setelah klik Check Result
+  const handleReasoningChange = (qIndex: number, value: string) => {
+    const updated = [...reasoningNotes];
+    updated[qIndex] = value;
+    setReasoningNotes(updated);
+  };
+
   const handleCheck = async () => {
     setShowResults(true);
     
-    // Hitung score
     let correctCount = 0;
     const answers = safeItems.map((q, index) => {
       const userAnswerIndex = selectedAnswers[index] ?? -1;
@@ -75,19 +76,18 @@ export default function Quiz({
         options: q.options,
         userAnswer: userAnswerIndex >= 0 ? q.options[userAnswerIndex] : '',
         isCorrect,
-        questionIndex: index
+        questionIndex: index,
+        reasoningNote: reasoningNotes[index] || '',
       };
     });
     
     const score = Math.round((correctCount / safeItems.length) * 100);
     
-    // Jika user, courseId, dan subtopic tersedia, simpan ke database
     if (user?.email && courseId) {
       await submitQuizToServer(answers, score);
     }
   };
   
-  // Submit quiz hasil ke server
   const submitQuizToServer = async (answers: any[], score: number) => {
     if (submitted || !user?.email) return;
     
@@ -107,7 +107,8 @@ export default function Quiz({
           moduleIndex,
           subtopicIndex,
           score,
-          answers
+          answers,
+          reasoningNotes: reasoningNotes.filter(r => r.trim()),
         }),
       });
       
@@ -115,7 +116,6 @@ export default function Quiz({
         const result = await response.json();
         setSubmitted(true);
         console.log('Quiz attempt saved successfully:', result.message);
-        console.log('Matching details:', result.details);
       } else {
         const errorResult = await response.json();
         console.error('Failed to save quiz attempt:', errorResult);
@@ -127,7 +127,6 @@ export default function Quiz({
     }
   };
 
-  // jika tidak ada soal, tampilkan pesan loading atau fallback
   if (!safeItems.length) {
     return (
       <section className={styles.quizSection}>
@@ -177,6 +176,15 @@ export default function Quiz({
               );
             })}
           </ul>
+          {/* Reasoning Note — muncul setelah siswa memilih jawaban */}
+          {selectedAnswers[qIdx] !== null && !showResults && (
+            <ReasoningNote
+              value={reasoningNotes[qIdx]}
+              onChange={(val) => handleReasoningChange(qIdx, val)}
+              label="Kenapa memilih jawaban ini?"
+              placeholder="Jelaskan alasan Anda memilih jawaban tersebut..."
+            />
+          )}
         </div>
       ))}
       <button

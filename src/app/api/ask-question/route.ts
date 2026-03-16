@@ -18,6 +18,10 @@ export async function POST(request: NextRequest) {
       moduleIndex,
       subtopicIndex,
       pageNumber,
+      promptComponents,
+      reasoningNote,
+      promptVersion,
+      sessionNumber,
     } = await request.json();
 
     const normalizeIndex = (value: unknown) => {
@@ -114,6 +118,10 @@ Please answer in the same language as the question above. Base your answer stric
           subtopic_label: subtopic || null,
           question: normalizedQuestion,
           answer,
+          reasoning_note: reasoningNote || null,
+          prompt_components: promptComponents || null,
+          prompt_version: promptVersion || 1,
+          session_number: sessionNumber || 1,
           created_at: timestamp,
           updated_at: timestamp
         };

@@ -573,9 +573,9 @@ async function syncQuizQuestions({
     try {
       const { error: deleteError } = await adminDb
         .from('quiz')
-        .delete()
         .eq('course_id', courseId)
-        .eq('subtopic_id', resolvedSubtopicId);
+        .eq('subtopic_id', resolvedSubtopicId)
+        .delete();
 
       if (deleteError) {
         console.warn('[GenerateSubtopic] Failed to clean existing quiz entries', deleteError);

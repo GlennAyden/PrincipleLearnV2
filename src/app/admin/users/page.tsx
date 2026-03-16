@@ -3,8 +3,8 @@
 
 import React, { useEffect, useMemo, useState } from 'react'
 import styles from './page.module.scss'
-import { useRouter, usePathname } from 'next/navigation'
-import { FiTrash2, FiLogOut, FiHome, FiUsers, FiActivity, FiAlertCircle, FiBookOpen, FiCheckSquare, FiMessageCircle, FiFileText } from 'react-icons/fi'
+import { useRouter } from 'next/navigation'
+import { FiTrash2, FiAlertCircle, FiBookOpen, FiCheckSquare, FiMessageCircle, FiFileText } from 'react-icons/fi'
 import { useAdmin } from '@/hooks/useAdmin'
 
 interface UserRow {
@@ -70,7 +70,6 @@ interface DeleteLogEntry {
 
 export default function AdminUsersPage() {
   const router = useRouter()
-  const pathname = usePathname()
   const { admin, loading: authLoading } = useAdmin()
   const [users, setUsers] = useState<UserRow[]>([])
   const [filterUser, setFilterUser] = useState('')
@@ -281,59 +280,23 @@ export default function AdminUsersPage() {
 
   return (
     <div className={styles.page}>
-      <aside className={styles.sidebar}>
-        <div className={styles.logo}>Principle Learn</div>
-        <nav>
-          <ul className={styles.navList}>
-            <li
-              className={`${styles.navItem} ${
-                pathname === '/admin/dashboard' ? styles.active : ''
-              }`}
-              onClick={() => router.push('/admin/dashboard')}
-            >
-              <FiHome className={styles.navIcon} /> Dashboard
-            </li>
-            <li
-              className={`${styles.navItem} ${
-                pathname === '/admin/users' ? styles.active : ''
-              }`}
-              onClick={() => router.push('/admin/users')}
-            >
-              <FiUsers className={styles.navIcon} /> Users
-            </li>
-            <li
-              className={`${styles.navItem} ${
-                pathname === '/admin/activity' ? styles.active : ''
-              }`}
-              onClick={() => router.push('/admin/activity')}
-            >
-              <FiActivity className={styles.navIcon} /> Activity
-            </li>
-          </ul>
-        </nav>
-      </aside>
-
-      <main className={styles.main}>
-        <header className={styles.header}>
-          <h1 className={styles.pageTitle}>User Management</h1>
-          <div className={styles.filters}>
-            <select
-              className={styles.select}
-              value={filterUser}
-              onChange={(e) => setFilterUser(e.target.value)}
-            >
-              <option value="">All Users</option>
-              {users.map((u) => (
-                <option key={u.id} value={u.id}>
-                  {u.email}
-                </option>
-              ))}
-            </select>
-          </div>
-          <button className={styles.logout} onClick={() => router.push('/admin/login')}>
-            <FiLogOut /> Log out
-          </button>
-        </header>
+      <header className={styles.header}>
+        <h1 className={styles.pageTitle}>Student Management</h1>
+        <div className={styles.filters}>
+          <select
+            className={styles.select}
+            value={filterUser}
+            onChange={(e) => setFilterUser(e.target.value)}
+          >
+            <option value="">All Students</option>
+            {users.map((u) => (
+              <option key={u.id} value={u.id}>
+                {u.email}
+              </option>
+            ))}
+          </select>
+        </div>
+      </header>
 
         {isLoading ? (
           <div className={styles.loading}>Loading users...</div>
@@ -570,7 +533,6 @@ export default function AdminUsersPage() {
                 </section>
               </>
             )}
-          </main>
         </div>
       )
     }

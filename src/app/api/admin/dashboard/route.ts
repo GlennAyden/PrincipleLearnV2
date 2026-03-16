@@ -1,168 +1,239 @@
-// principle-learn/src/app/api/admin/dashboard/route.ts
+// src/app/api/admin/dashboard/route.ts
+// Redesigned dashboard API — RM2/RM3 aligned metrics
 
 import { NextResponse } from 'next/server'
 import type { NextRequest } from 'next/server'
 import { DatabaseService } from '@/lib/database'
 
 export async function GET(request: NextRequest) {
-  console.log('[Admin Dashboard] Starting dashboard data fetch');
-  
   try {
-    // Get date range from query parameters
-    const { searchParams } = new URL(request.url);
-    let startDate = searchParams.get('startDate');
-    let endDate = searchParams.get('endDate');
-    
-    // Default to last 7 days if no dates provided
-    const today = new Date();
-    const defaultStartDate = new Date();
-    defaultStartDate.setDate(today.getDate() - 6);
-    
-    // Parse dates or use defaults
-    const parsedStartDate = startDate ? new Date(startDate) : defaultStartDate;
-    const parsedEndDate = endDate ? new Date(endDate) : today;
-    
-    // Make sure the parsedEndDate includes the full day
-    parsedEndDate.setHours(23, 59, 59, 999);
-    
-    // Ensure start date is earlier than end date
-    if (parsedStartDate > parsedEndDate) {
-      return NextResponse.json(
-        { message: 'Start date must be earlier than end date' },
-        { status: 400 }
-      );
-    }
-    
-    // Limit date range to 31 days (1 month)
-    const maxRange = new Date(parsedStartDate);
-    maxRange.setDate(parsedStartDate.getDate() + 31);
-    
-    if (parsedEndDate > maxRange) {
-      return NextResponse.json(
-        { message: 'Date range cannot exceed 31 days' },
-        { status: 400 }
-      );
-    }
-    
-    console.log('[Admin Dashboard] Date range:', {
-      start: parsedStartDate.toISOString().slice(0, 10),
-      end: parsedEndDate.toISOString().slice(0, 10)
-    });
-    
-    // 1. Get real metrics from database
-    console.log('[Admin Dashboard] Fetching real activity metrics from database');
-    
-    let totalGenerateCourse = 0;
-    let transcriptQnA = 0;
-    let soalOtomatis = 0;
-    let jurnalRefleksi = 0;
-    
-    try {
-      // Count courses created in date range
-      const courses = await DatabaseService.getRecords('courses', {
-        // Note: We can't filter by date range easily with current DatabaseService
-        // For now, get all and filter in memory
-      });
-      
-      totalGenerateCourse = courses.filter(course => {
-        const createdAt = new Date(course.created_at);
-        return createdAt >= parsedStartDate && createdAt <= parsedEndDate;
-      }).length;
-      
-      // Count transcripts (QnA entries)
-      const transcripts = await DatabaseService.getRecords('transcript', {});
-      transcriptQnA = transcripts.filter(transcript => {
-        const createdAt = new Date(transcript.created_at);
-        return createdAt >= parsedStartDate && createdAt <= parsedEndDate;
-      }).length;
-      
-      // Count quiz submissions (soal otomatis)
-      const quizSubmissions = await DatabaseService.getRecords('quiz_submissions', {});
-      soalOtomatis = quizSubmissions.filter(submission => {
-        const submittedAt = new Date(submission.submitted_at);
-        return submittedAt >= parsedStartDate && submittedAt <= parsedEndDate;
-      }).length;
-      
-      // Count journal entries (jurnal refleksi)
-      const journalEntries = await DatabaseService.getRecords('jurnal', {});
-      jurnalRefleksi = journalEntries.filter(entry => {
-        const createdAt = new Date(entry.created_at);
-        return createdAt >= parsedStartDate && createdAt <= parsedEndDate;
-      }).length;
-      
-    } catch (dbError) {
-      console.error('[Admin Dashboard] Database error:', dbError);
-      // Use fallback values if database fails
-      totalGenerateCourse = Math.floor(Math.random() * 10) + 1;
-      transcriptQnA = Math.floor(Math.random() * 15) + 5;
-      soalOtomatis = Math.floor(Math.random() * 12) + 3;
-      jurnalRefleksi = Math.floor(Math.random() * 8) + 2;
-    }
-    
-    console.log('[Admin Dashboard] Activity counts:', {
-      totalGenerateCourse,
-      transcriptQnA,
-      soalOtomatis,
-      jurnalRefleksi,
-    });
+    // ── 1. Active Students ──
+    const users = await DatabaseService.getRecords<any>('users', {
+      filter: { role: 'USER' },
+    })
+    const activeStudents = users.length
 
-    // 2. Generate date range for chart
-    console.log('[Admin Dashboard] Generating date range for chart');
-    const diffTime = Math.abs(parsedEndDate.getTime() - parsedStartDate.getTime());
-    const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24)) + 1;
-    
-    const dates: Date[] = Array.from({ length: diffDays }).map((_, i) => {
-      const d = new Date(parsedStartDate);
-      d.setDate(parsedStartDate.getDate() + i);
-      d.setHours(0, 0, 0, 0);
-      return d;
-    });
+    // ── 2. Total Sessions / Courses ──
+    const courses = await DatabaseService.getRecords<any>('courses', {})
+    const totalCourses = courses.length
 
-    // 3. Generate daily data for chart
-    // For now, we'll distribute the totals across the date range
-    console.log('[Admin Dashboard] Generating daily activity distribution');
-    const chart = dates.map((d, index) => {
-      const dateStr = d.toISOString().slice(0, 10);
-      
-      // Simple distribution - could be enhanced with real daily queries
-      const dayRatio = dates.length > 1 ? index / (dates.length - 1) : 0;
-      const g = Math.max(0, Math.floor(totalGenerateCourse * (0.1 + dayRatio * 0.3)));
-      const t = Math.max(0, Math.floor(transcriptQnA * (0.1 + dayRatio * 0.3)));
-      const s = Math.max(0, Math.floor(soalOtomatis * (0.1 + dayRatio * 0.3)));
-      const j = Math.max(0, Math.floor(jurnalRefleksi * (0.1 + dayRatio * 0.3)));
-      
-      return {
-        date: dateStr,
-        totalGenerateCourse: g,
-        transcriptQnA: t,
-        soalOtomatis: s,
-        jurnalRefleksi: j,
+    // ── 3. Quiz Accuracy (RM3 indicator) ──
+    const quizSubmissions = await DatabaseService.getRecords<any>('quiz_submissions', {})
+    const totalQuizzes = quizSubmissions.length
+    const correctQuizzes = quizSubmissions.filter((q: any) => q.is_correct === true).length
+    const quizAccuracy = totalQuizzes > 0
+      ? Math.round((correctQuizzes / totalQuizzes) * 100)
+      : 0
+
+    // ── 4. Discussion Sessions (RM3 — CT through Socratic) ──
+    const discussions = await DatabaseService.getRecords<any>('discussion_sessions', {})
+    const totalDiscussions = discussions.length
+    const completedDiscussions = discussions.filter((d: any) => d.status === 'completed').length
+
+    // ── 5. Journals (Reflective thinking) ──
+    const journals = await DatabaseService.getRecords<any>('jurnal', {})
+    const totalJournals = journals.length
+
+    // ── 6. Challenge Thinking (CT indicator) ──
+    const challenges = await DatabaseService.getRecords<any>('challenge_responses', {})
+    const totalChallenges = challenges.length
+
+    // ── 7. Ask Question History ──
+    const askHistory = await DatabaseService.getRecords<any>('ask_question_history', {})
+    const totalAskQuestions = askHistory.length
+
+    // ── 8. Feedback ──
+    const feedbacks = await DatabaseService.getRecords<any>('feedback', {})
+    const totalFeedbacks = feedbacks.length
+    const avgRating = feedbacks.length > 0
+      ? Math.round(
+          (feedbacks.reduce((sum: number, f: any) => sum + (f.rating || 0), 0) / feedbacks.filter((f: any) => f.rating).length) * 10
+        ) / 10
+      : 0
+
+    // ── 9. RM2 — Prompt Stage Distribution ──
+    // Classify prompts by quality stage based on generate_course_logs step data
+    const generateLogs = await DatabaseService.getRecords<any>('course_generation_activity', {})
+
+    let stageDistribution = { SCP: 0, SRP: 0, MQP: 0, Reflektif: 0 }
+
+    generateLogs.forEach((log: any) => {
+      const steps = log.steps || {}
+      const step1 = steps.step1 || {}
+      const step2 = steps.step2 || {}
+      const step3 = steps.step3 || {}
+
+      // Count filled components
+      let componentCount = 0
+      if (step1.topic && step1.topic.trim()) componentCount++
+      if (step1.goal && step1.goal.trim()) componentCount++
+      if (step2.level && step2.level.trim()) componentCount++
+      if (step2.extraTopics && step2.extraTopics.trim()) componentCount++
+      if (step3.problem && step3.problem.trim()) componentCount++
+      if (step3.assumption && step3.assumption.trim()) componentCount++
+
+      // Classify into stages (simplified heuristic)
+      // SCP: 0-1 components (simple copy-paste style)
+      // SRP: 2-3 components (structured with some detail)
+      // MQP: 4-5 components (multi-quality prompt)
+      // Reflektif: 6 components (full reflective prompt)
+      if (componentCount <= 1) {
+        stageDistribution.SCP++
+      } else if (componentCount <= 3) {
+        stageDistribution.SRP++
+      } else if (componentCount <= 5) {
+        stageDistribution.MQP++
+      } else {
+        stageDistribution.Reflektif++
       }
-    });
+    })
 
-    // 4. Return response
-    console.log('[Admin Dashboard] Sending response with real metrics from database');
-    return NextResponse.json(
-      {
-        metrics: {
-          totalGenerateCourse,
-          transcriptQnA,
-          soalOtomatis,
-          jurnalRefleksi,
-        },
-        chart,
+    const totalPrompts = generateLogs.length
+
+    // ── 10. RM3 — CT Indicators from discussions ──
+    // Count goals covered (CT demonstrated) across all discussions
+    let totalGoals = 0
+    let coveredGoals = 0
+
+    discussions.forEach((d: any) => {
+      const goals = d.learning_goals || []
+      totalGoals += goals.length
+      coveredGoals += goals.filter((g: any) => g.covered).length
+    })
+
+    const ctCoverageRate = totalGoals > 0
+      ? Math.round((coveredGoals / totalGoals) * 100)
+      : 0
+
+    // ── 11. Per-student summary ──
+    const studentSummary = users.map((user: any) => {
+      const userCourses = courses.filter((c: any) => c.user_id === user.id).length
+      const userQuizzes = quizSubmissions.filter((q: any) => q.user_id === user.id)
+      const userQuizAccuracy = userQuizzes.length > 0
+        ? Math.round(
+            (userQuizzes.filter((q: any) => q.is_correct).length / userQuizzes.length) * 100
+          )
+        : 0
+      const userJournals = journals.filter((j: any) => j.user_id === user.id).length
+      const userChallenges = challenges.filter((c: any) => c.user_id === user.id).length
+      const userDiscussions = discussions.filter((d: any) => d.user_id === user.id).length
+
+      // Find prompt stage for this user
+      const userLogs = generateLogs.filter((l: any) => l.user_id === user.id)
+      let userStage = 'N/A'
+      if (userLogs.length > 0) {
+        const lastLog = userLogs[userLogs.length - 1]
+        const steps = lastLog.steps || {}
+        let count = 0
+        const s1 = steps.step1 || {}
+        const s2 = steps.step2 || {}
+        const s3 = steps.step3 || {}
+        if (s1.topic?.trim()) count++
+        if (s1.goal?.trim()) count++
+        if (s2.level?.trim()) count++
+        if (s2.extraTopics?.trim()) count++
+        if (s3.problem?.trim()) count++
+        if (s3.assumption?.trim()) count++
+        if (count <= 1) userStage = 'SCP'
+        else if (count <= 3) userStage = 'SRP'
+        else if (count <= 5) userStage = 'MQP'
+        else userStage = 'Reflektif'
+      }
+
+      return {
+        id: user.id,
+        email: user.email,
+        courses: userCourses,
+        quizzes: userQuizzes.length,
+        quizAccuracy: userQuizAccuracy,
+        journals: userJournals,
+        challenges: userChallenges,
+        discussions: userDiscussions,
+        promptStage: userStage,
+      }
+    })
+
+    // ── 12. Recent Activity Feed (latest 10 across all tables) ──
+    type ActivityItem = { type: string; email: string; detail: string; timestamp: string }
+    const recentItems: ActivityItem[] = []
+
+    // Map user IDs to emails
+    const userMap = new Map(users.map((u: any) => [u.id, u.email]))
+
+    courses.forEach((c: any) => {
+      recentItems.push({
+        type: 'course',
+        email: (userMap.get(c.user_id) as string) || 'Unknown',
+        detail: c.title || 'New course generated',
+        timestamp: c.created_at,
+      })
+    })
+
+    askHistory.slice(-5).forEach((a: any) => {
+      recentItems.push({
+        type: 'ask',
+        email: (userMap.get(a.user_id) as string) || 'Unknown',
+        detail: (a.question || '').substring(0, 80),
+        timestamp: a.created_at,
+      })
+    })
+
+    challenges.slice(-5).forEach((c: any) => {
+      recentItems.push({
+        type: 'challenge',
+        email: (userMap.get(c.user_id) as string) || 'Unknown',
+        detail: (c.question || '').substring(0, 80),
+        timestamp: c.created_at,
+      })
+    })
+
+    quizSubmissions.slice(-5).forEach((q: any) => {
+      recentItems.push({
+        type: 'quiz',
+        email: (userMap.get(q.user_id) as string) || 'Unknown',
+        detail: q.is_correct ? 'Jawaban benar' : 'Jawaban salah',
+        timestamp: q.submitted_at || q.created_at,
+      })
+    })
+
+    // Sort by timestamp descending, take latest 10
+    recentItems.sort((a, b) => new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime())
+    const recentActivity = recentItems.slice(0, 10)
+
+    // ── Response ──
+    return NextResponse.json({
+      kpi: {
+        activeStudents,
+        totalCourses,
+        quizAccuracy,
+        totalDiscussions,
+        completedDiscussions,
+        totalJournals,
+        totalChallenges,
+        totalAskQuestions,
+        totalFeedbacks,
+        avgRating,
+        ctCoverageRate,
       },
-      { status: 200 }
-    );
-  } catch (err) {
-    console.error('[Admin Dashboard] Error in API:', err);
-    if (err instanceof Error) {
-      console.error('[Admin Dashboard] Error details:', err.message);
-      console.error('[Admin Dashboard] Error stack:', err.stack);
-    }
+      rm2: {
+        stages: stageDistribution,
+        totalPrompts,
+      },
+      rm3: {
+        totalGoals,
+        coveredGoals,
+        ctCoverageRate,
+        quizAccuracy,
+        totalChallenges,
+      },
+      studentSummary,
+      recentActivity,
+    })
+  } catch (err: any) {
+    console.error('[Admin Dashboard] Error:', err)
     return NextResponse.json(
-      { message: 'Internal Server Error' },
+      { message: 'Internal Server Error', error: err.message, stack: err.stack },
       { status: 500 }
-    );
+    )
   }
 }
