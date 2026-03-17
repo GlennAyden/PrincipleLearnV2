@@ -9,9 +9,22 @@ interface QuizSubmission {
   id: string;
   user_id: string;
   quiz_id: string;
+  course_id?: string | null;
+  subtopic_id?: string | null;
+  module_index?: number | null;
+  subtopic_index?: number | null;
   answer: string;
   is_correct: boolean;
-  submitted_at: string;
+  reasoning_note?: string | null;
+  submitted_at?: string;
+  created_at?: string;
+}
+
+function resolveSubmissionTimestamp(submission: QuizSubmission): Date | null {
+  const rawValue = submission.submitted_at ?? submission.created_at ?? null
+  if (!rawValue) return null
+  const parsed = new Date(rawValue)
+  return Number.isNaN(parsed.getTime()) ? null : parsed
 }
 
 interface Quiz {
@@ -54,7 +67,7 @@ export async function GET(req: NextRequest) {
     let quizSubmissions: QuizSubmission[] = []
     try {
       quizSubmissions = await DatabaseService.getRecords<QuizSubmission>('quiz_submissions', {
-        orderBy: { column: 'submitted_at', ascending: false },
+        orderBy: { column: 'created_at', ascending: false },
       })
     } catch (dbError) {
       console.error('[Activity API] Database error fetching quiz submissions:', dbError)
@@ -72,7 +85,8 @@ export async function GET(req: NextRequest) {
       const endOfDay = new Date(targetDate)
       endOfDay.setHours(23, 59, 59, 999)
       quizSubmissions = quizSubmissions.filter((submission) => {
-        const submittedAt = new Date(submission.submitted_at)
+        const submittedAt = resolveSubmissionTimestamp(submission)
+        if (!submittedAt) return false
         return submittedAt >= startOfDay && submittedAt <= endOfDay
       })
     }
@@ -87,13 +101,14 @@ export async function GET(req: NextRequest) {
       const quiz = await fetchCached(quizCache, submission.quiz_id, 'quiz')
       if (!quiz) continue
 
-      if (courseId && quiz.course_id !== courseId) {
+      const resolvedCourseId = submission.course_id ?? quiz.course_id;
+      if (courseId && resolvedCourseId !== courseId) {
         continue
       }
 
       const [subtopic, course, user] = await Promise.all([
-        fetchCached(subtopicCache, quiz.subtopic_id, 'subtopics'),
-        fetchCached(courseCache, quiz.course_id, 'courses'),
+        fetchCached(subtopicCache, submission.subtopic_id ?? quiz.subtopic_id, 'subtopics'),
+        fetchCached(courseCache, resolvedCourseId, 'courses'),
         fetchCached(userCache, submission.user_id, 'users'),
       ])
 
@@ -102,9 +117,13 @@ export async function GET(req: NextRequest) {
         continue
       }
 
+      const submissionTimestamp = resolveSubmissionTimestamp(submission)
+
       payload.push({
         id: submission.id,
-        timestamp: new Date(submission.submitted_at).toLocaleString('id-ID'),
+        timestamp: submissionTimestamp
+          ? submissionTimestamp.toLocaleString('id-ID')
+          : 'Unknown time',
         userEmail: user?.email ?? 'Unknown User',
         userId: submission.user_id,
         topic: topicName,
@@ -114,6 +133,9 @@ export async function GET(req: NextRequest) {
         userAnswer: submission.answer,
         correctAnswer: quiz.correct_answer ?? '',
         isCorrect: submission.is_correct,
+        reasoningNote: submission.reasoning_note ?? '',
+        moduleIndex: submission.module_index ?? null,
+        subtopicIndex: submission.subtopic_index ?? null,
       })
     }
     

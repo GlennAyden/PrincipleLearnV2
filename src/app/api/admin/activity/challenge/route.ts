@@ -14,6 +14,7 @@ interface ChallengeResponseRow {
   question: string;
   answer: string;
   feedback: string | null;
+  reasoning_note: string | null;
   created_at: string;
 }
 
@@ -121,6 +122,7 @@ export async function GET(req: NextRequest) {
         question: row.question,
         answer: row.answer,
         feedback: row.feedback ?? '',
+        reasoningNote: row.reasoning_note ?? '',
         moduleIndex: row.module_index ?? 0,
         subtopicIndex: row.subtopic_index ?? 0,
         pageNumber: row.page_number ?? 0,

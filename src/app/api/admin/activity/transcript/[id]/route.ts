@@ -18,11 +18,22 @@ export async function GET(
 
     // Fetch transcript by ID using adminDb
     // Note: 'transcript' table might be named differently in Notion
-    const { data: transcripts, error } = await adminDb
+    let transcript: any = null;
+    let error: any = null;
+
+    ({ data: transcript, error } = await adminDb
       .from('transcript')
       .select('*')
       .eq('id', id)
-      .limit(1)
+      .single());
+
+    if (error && String(error?.message || '').includes("public.transcript")) {
+      ({ data: transcript, error } = await adminDb
+        .from('transcripts')
+        .select('*')
+        .eq('id', id)
+        .single());
+    }
 
     if (error) {
       console.error('Error fetching transcript:', error)

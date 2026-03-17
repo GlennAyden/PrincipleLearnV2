@@ -15,10 +15,10 @@ export async function GET(
       );
     }
 
-    // Fetch quiz submission by ID using adminDb
+    // Fetch one quiz submission row (current schema stores one row per answered question)
     const { data: submissions, error } = await adminDb
       .from('quiz_submissions')
-      .select('*')
+      .select('id, quiz_id, answer, is_correct, reasoning_note')
       .eq('id', id)
       .limit(1);
 
@@ -39,28 +39,40 @@ export async function GET(
 
     const attempt = submissions[0] as {
       id: string;
-      answers: Array<{
-        question: string;
-        options: string[];
-        userAnswer: string;
-        isCorrect: boolean;
-        questionIndex?: number;
-      }>;
+      quiz_id: string;
+      answer: string;
+      is_correct: boolean;
+      reasoning_note?: string | null;
     };
 
-    // Sort answers by questionIndex if available
-    const sortedAnswers = Array.isArray(attempt.answers)
-      ? [...attempt.answers].sort((a, b) => (a.questionIndex || 0) - (b.questionIndex || 0))
-      : [];
+    const { data: quizzes, error: quizError } = await adminDb
+      .from('quiz')
+      .select('question, options')
+      .eq('id', attempt.quiz_id)
+      .limit(1);
 
-    // Transform to the shape expected by QuizResultModal
-    const result = sortedAnswers.map((ans, idx) => ({
-      no: idx + 1,
-      question: ans.question,
-      options: ans.options,
-      userAnswer: ans.userAnswer,
-      status: ans.isCorrect ? 'Benar' : 'Salah',
-    }));
+    if (quizError) {
+      console.error('Error fetching quiz question:', quizError);
+      return NextResponse.json(
+        { error: 'Failed to fetch quiz question details' },
+        { status: 500 }
+      );
+    }
+
+    const quiz = (quizzes && quizzes.length > 0 ? quizzes[0] : null) as
+      | { question?: string; options?: string[] }
+      | null;
+
+    const result = [
+      {
+        no: 1,
+        question: quiz?.question || '-',
+        options: Array.isArray(quiz?.options) ? quiz!.options : [],
+        userAnswer: attempt.answer,
+        status: attempt.is_correct ? 'Benar' : 'Salah',
+        reasoningNote: attempt.reasoning_note || '',
+      },
+    ];
 
     return NextResponse.json({ id, result });
   } catch (error) {

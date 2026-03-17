@@ -132,6 +132,7 @@ async function buildActivityPayload({
       userId: row.user_id ?? 'unknown',
       courseId: row.course_id ?? null,
       courseName: course?.title ?? requestPayload?.step1?.topic ?? 'Permintaan Kursus',
+      requestPayload,
       steps: {
         step1: requestPayload?.step1 ?? {},
         step2: requestPayload?.step2 ?? {},

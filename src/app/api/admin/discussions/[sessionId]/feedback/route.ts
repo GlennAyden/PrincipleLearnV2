@@ -4,6 +4,20 @@ import { verifyToken } from '@/lib/jwt';
 import { adminDb } from '@/lib/database';
 import { withApiLogging } from '@/lib/api-logger';
 
+let hasDiscussionAdminActionsTable: boolean | null = null;
+
+function isMissingTableError(error: any, tableName: string): boolean {
+  return (
+    error?.code === 'PGRST205' &&
+    typeof error?.message === 'string' &&
+    error.message.includes(`'public.${tableName}'`)
+  );
+}
+
+function markDiscussionAdminActionsTableUnavailable() {
+  hasDiscussionAdminActionsTable = false;
+}
+
 interface MentorFeedbackPayload {
   summary: string;
   goals?: { id?: string; note: string }[];
@@ -11,16 +25,16 @@ interface MentorFeedbackPayload {
 
 async function postHandler(
   request: NextRequest,
-  { params }: { params: { sessionId: string } }
+  context: { params: Promise<{ sessionId: string }> }
 ) {
   try {
-    const token = request.cookies.get('access_token')?.value;
+    const token = request.cookies.get('access_token')?.value ?? request.cookies.get('token')?.value;
     const payload = token ? verifyToken(token) : null;
-    if (!payload || payload.role !== 'ADMIN') {
+    if (!payload || (payload.role ?? '').toLowerCase() !== 'admin') {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 403 });
     }
 
-    const sessionId = params.sessionId;
+    const { sessionId } = await context.params;
     if (!sessionId) {
       return NextResponse.json({ error: 'sessionId is required' }, { status: 400 });
     }
@@ -45,13 +59,31 @@ async function postHandler(
         : undefined,
     };
 
-    await adminDb.from('discussion_admin_actions').insert({
-      session_id: sessionId,
-      admin_id: payload.userId,
-      admin_email: payload.email,
-      action: 'mentor_feedback',
-      payload: payloadRecord,
-    });
+    if (hasDiscussionAdminActionsTable !== false) {
+      const { error: actionLogError } = await adminDb.from('discussion_admin_actions').insert({
+        session_id: sessionId,
+        admin_id: payload.userId,
+        admin_email: payload.email,
+        action: 'mentor_feedback',
+        payload: payloadRecord,
+      });
+
+      if (actionLogError) {
+        if (isMissingTableError(actionLogError, 'discussion_admin_actions')) {
+          markDiscussionAdminActionsTableUnavailable();
+          console.warn(
+            '[AdminDiscussions/Feedback] discussion_admin_actions table not found, skipping action log insert'
+          );
+        } else {
+          return NextResponse.json(
+            { error: 'Failed to store mentor feedback' },
+            { status: 500 }
+          );
+        }
+      } else {
+        hasDiscussionAdminActionsTable = true;
+      }
+    }
 
     return NextResponse.json({ success: true });
   } catch (error) {

@@ -3,6 +3,23 @@ import { NextRequest, NextResponse } from 'next/server';
 import { openai, defaultOpenAIModel } from '@/lib/openai';
 import { DatabaseService } from '@/lib/database';
 import type { ChatCompletionMessageParam } from 'openai/resources/chat/completions';
+import { withApiLogging } from '@/lib/api-logger';
+
+interface GenerateCourseRequestBody {
+  topic: string;
+  goal: string;
+  level: string;
+  extraTopics?: string;
+  problem?: string;
+  assumption?: string;
+  userId?: string;
+  userEmail?: string;
+}
+
+interface UserRecord {
+  id: string;
+  email: string;
+}
 
 // Add CORS headers for API
 const corsHeaders = {
@@ -16,9 +33,28 @@ export async function OPTIONS() {
   return new NextResponse(null, { status: 200, headers: corsHeaders });
 }
 
+async function resolveUserByIdentifier(identifier?: string | null): Promise<UserRecord | null> {
+  const trimmed = identifier?.trim();
+  if (!trimmed) return null;
+
+  const byId = await DatabaseService.getRecords<UserRecord>('users', {
+    filter: { id: trimmed },
+    limit: 1,
+  });
+  if (byId.length > 0) return byId[0];
+
+  const byEmail = await DatabaseService.getRecords<UserRecord>('users', {
+    filter: { email: trimmed },
+    limit: 1,
+  });
+  if (byEmail.length > 0) return byEmail[0];
+
+  return null;
+}
+
 // OpenAI client and model are centralized in src/lib/openai
 
-export async function POST(req: NextRequest) {
+async function postHandler(req: NextRequest) {
   console.log('[Generate Course] Starting course generation process');
 
   try {
@@ -35,7 +71,20 @@ export async function POST(req: NextRequest) {
     }
 
     // 3. Terima payload
-    const { topic, goal, level, extraTopics, problem, assumption, userId } = requestBody;
+    const {
+      topic,
+      goal,
+      level,
+      extraTopics,
+      problem,
+      assumption,
+      userId,
+      userEmail,
+    } = requestBody as GenerateCourseRequestBody;
+
+    const headerUserId = req.headers.get('x-user-id');
+    const headerUserEmail = req.headers.get('x-user-email');
+    const actorIdentifier = userId || userEmail || headerUserId || headerUserEmail || null;
 
     // Validate required fields
     if (!topic || !goal || !level) {
@@ -46,7 +95,7 @@ export async function POST(req: NextRequest) {
       );
     }
 
-    console.log(`[Generate Course] Received request for topic: "${topic}" from user: ${userId || 'anonymous'}`);
+    console.log(`[Generate Course] Received request for topic: "${topic}" from user: ${actorIdentifier || 'anonymous'}`);
     const requestPayload = {
       step1: { topic, goal },
       step2: { level, extraTopics },
@@ -189,81 +238,79 @@ Important: Write all titles and overviews in the same language as the user's inp
     console.log(`[Generate Course] DEBUG: userId = ${userId}`);
     console.log(`[Generate Course] DEBUG: outline length = ${outline?.length}`);
 
-    if (userId) {
-      console.log(`[Generate Course] Saving course to database for user: ${userId}`);
+    if (actorIdentifier) {
+      console.log(`[Generate Course] Saving course to database for user: ${actorIdentifier}`);
 
       try {
-        // Validate user exists
-        console.log(`[Generate Course] DEBUG: Looking up user with email: ${userId}`);
-        const users = await DatabaseService.getRecords('users', {
-          filter: { email: userId },
-          limit: 1
-        });
+        const userRecord =
+          (await resolveUserByIdentifier(userId)) ||
+          (await resolveUserByIdentifier(userEmail)) ||
+          (await resolveUserByIdentifier(headerUserId)) ||
+          (await resolveUserByIdentifier(headerUserEmail));
 
-        console.log(`[Generate Course] DEBUG: Found ${users.length} users`);
-        console.log(`[Generate Course] DEBUG: Users data:`, users);
+        if (!userRecord) {
+          throw new Error('Authenticated user could not be resolved from identifier');
+        }
 
-        let userRecord = null;
         let createdCourse: any = null;
-        if (users.length === 0) {
-          console.warn(`[Generate Course] User with email ${userId} not found in database`);
-        } else {
-          const user = users[0] as { id: string; email: string };
-          userRecord = user;
-          console.log(`[Generate Course] DEBUG: User found:`, { id: user.id, email: user.email });
+        console.log(`[Generate Course] DEBUG: User found:`, { id: userRecord.id, email: userRecord.email });
 
-          // Create course record
-          const courseData = {
-            title: topic,
-            description: goal,
-            subject: topic,
-            difficulty_level: level,
-            estimated_duration: outline.length * 15, // 15 minutes per module estimate
-            created_by: user.id
+        // Create course record
+        const courseData = {
+          title: topic,
+          description: goal,
+          subject: topic,
+          difficulty_level: level,
+          estimated_duration: outline.length * 15, // 15 minutes per module estimate
+          created_by: userRecord.id
+        };
+
+        console.log(`[Generate Course] DEBUG: Course data to insert:`, courseData);
+
+        const course = await DatabaseService.insertRecord('courses', courseData) as unknown as { id: string };
+        createdCourse = course;
+        console.log(`[Generate Course] Course created with ID: ${course.id}`);
+        console.log(`[Generate Course] DEBUG: Course created successfully:`, course);
+
+        // Create subtopics for each module
+        console.log(`[Generate Course] DEBUG: Creating ${outline.length} subtopics`);
+        for (let i = 0; i < outline.length; i++) {
+          const outlineModule = outline[i];
+          const subtopicData = {
+            course_id: course.id,
+            title: outlineModule.module || `Module ${i + 1}`,
+            content: JSON.stringify(outlineModule),
+            order_index: i
           };
 
-          console.log(`[Generate Course] DEBUG: Course data to insert:`, courseData);
+          console.log(`[Generate Course] DEBUG: Creating subtopic ${i + 1}:`, subtopicData);
+          const subtopic = await DatabaseService.insertRecord('subtopics', subtopicData);
+          console.log(`[Generate Course] DEBUG: Subtopic created:`, subtopic);
+        }
 
-          const course = await DatabaseService.insertRecord('courses', courseData) as unknown as { id: string };
-          createdCourse = course;
-          console.log(`[Generate Course] Course created with ID: ${course.id}`);
-          console.log(`[Generate Course] DEBUG: Course created successfully:`, course);
+        console.log(`[Generate Course] Created ${outline.length} subtopics for course`);
 
-          // Create subtopics for each module
-          console.log(`[Generate Course] DEBUG: Creating ${outline.length} subtopics`);
-          for (let i = 0; i < outline.length; i++) {
-            const outlineModule = outline[i];
-            const subtopicData = {
-              course_id: course.id,
-              title: outlineModule.module || `Module ${i + 1}`,
-              content: JSON.stringify(outlineModule),
-              order_index: i
-            };
-
-            console.log(`[Generate Course] DEBUG: Creating subtopic ${i + 1}:`, subtopicData);
-            const subtopic = await DatabaseService.insertRecord('subtopics', subtopicData);
-            console.log(`[Generate Course] DEBUG: Subtopic created:`, subtopic);
-          }
-
-          console.log(`[Generate Course] Created ${outline.length} subtopics for course`);
+        if (!createdCourse?.id) {
+          throw new Error('Course creation failed before activity logging');
         }
 
         try {
           await DatabaseService.insertRecord('course_generation_activity', {
-            user_id: userRecord?.id ?? null,
-            course_id: createdCourse?.id ?? null,
+            user_id: userRecord.id,
+            course_id: createdCourse.id,
             request_payload: requestPayload,
             outline,
           });
           console.log('[Generate Course] Logged course generation payload for admin activity');
         } catch (logError) {
           console.error('[Generate Course] Failed to store course generation activity log:', logError);
+          throw logError;
         }
       } catch (error) {
         console.error('[Generate Course] Error saving to database:', error);
         console.error('[Generate Course] Error details:', error instanceof Error ? error.message : error);
         console.error('[Generate Course] Error stack:', error instanceof Error ? error.stack : 'No stack');
-        // Continue execution even if database save fails
+        throw error;
       }
     } else {
       console.warn('[Generate Course] No userId provided, course not saved');
@@ -282,6 +329,10 @@ Important: Write all titles and overviews in the same language as the user's inp
     );
   }
 }
+
+export const POST = withApiLogging(postHandler, {
+  label: 'generate-course',
+});
 
 function appendDiscussionNodes(modules: any[]): any[] {
   if (!Array.isArray(modules)) return [];

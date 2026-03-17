@@ -6,13 +6,66 @@ Dokumentasi lengkap database PrincipleLearn V3 dengan Entity Relationship Diagra
 
 ## 🗄️ Database Overview
 
-PrincipleLearn V3 menggunakan **Notion API** sebagai database backend:
+PrincipleLearn V3 saat ini menggunakan **Supabase PostgreSQL** sebagai database backend:
 
 | Database | Purpose | Client |
 |----------|---------|--------|
-| **Notion Databases** | Production & Development | `@/lib/database.ts` via REST API |
+| **Supabase PostgreSQL** | Production & Development | `@/lib/database.ts` via `@supabase/supabase-js` |
 
-> **Note**: Project ini sebelumnya menggunakan Supabase/PostgreSQL, namun sudah sepenuhnya dimigrasikan ke Notion pada Februari 2026.
+> **Status update (Maret 2026)**: sumber kebenaran operasional adalah query pada route API dan endpoint admin activity. Dokumen ini mengikuti implementasi aktif tersebut.
+
+---
+
+## ✅ Operational Evidence Schema (Source of Truth)
+
+Bagian ini adalah ringkasan tabel input user yang dipakai checklist implementasi, diselaraskan dengan route simpan + endpoint admin saat ini.
+
+### `course_generation_activity`
+- Writer: `src/app/api/generate-course/route.ts`
+- Reader Admin: `src/app/api/admin/activity/generate-course/route.ts`
+- Field inti: `id`, `user_id`, `course_id`, `request_payload (jsonb)`, `outline (jsonb)`, `created_at`
+
+### `ask_question_history`
+- Writer: `src/app/api/ask-question/route.ts`
+- Reader Admin: `src/app/api/admin/activity/ask-question/route.ts`
+- Field inti: `id`, `user_id`, `course_id`, `module_index`, `subtopic_index`, `page_number`, `subtopic_label`, `question`, `answer`, `reasoning_note`, `prompt_components (jsonb)`, `prompt_version`, `session_number`, `created_at`, `updated_at`
+
+### `challenge_responses`
+- Writer: `src/app/api/challenge-response/route.ts`
+- Reader Admin: `src/app/api/admin/activity/challenge/route.ts`
+- Field inti: `id`, `user_id`, `course_id`, `module_index`, `subtopic_index`, `page_number`, `question`, `answer`, `feedback`, `reasoning_note`, `created_at`, `updated_at`
+
+### `quiz_submissions`
+- Writer: `src/app/api/quiz/submit/route.ts`
+- Reader Admin: `src/app/api/admin/activity/quiz/route.ts`, `src/app/api/admin/activity/quiz/[id]/route.ts`
+- Field inti: `id`, `user_id`, `quiz_id`, `course_id`, `subtopic_id`, `module_index`, `subtopic_index`, `answer`, `is_correct`, `reasoning_note`, `created_at` (opsional kompatibilitas: `submitted_at`)
+- Migrasi terkait: `docs/sql/add_quiz_submission_context_columns.sql`
+
+### `feedback`
+- Writer: `src/app/api/feedback/route.ts`
+- Reader Admin: `src/app/api/admin/activity/feedback/route.ts`, fallback agregat `src/app/api/admin/evidence/route.ts`
+- Field inti: `id`, `user_id`, `course_id`, `subtopic_id`, `module_index`, `subtopic_index`, `subtopic_label`, `rating`, `comment`, `created_at`
+
+### `jurnal`
+- Writer: `src/app/api/jurnal/save/route.ts`
+- Reader Admin: `src/app/api/admin/activity/jurnal/route.ts`
+- Field inti: `id`, `user_id`, `course_id`, `content`, `type`, `reflection`, `created_at`, `updated_at`
+
+### `transcript`
+- Writer: `src/app/api/transcript/save/route.ts`
+- Reader Admin: `src/app/api/admin/activity/transcript/route.ts`
+- Field inti: `id`, `user_id`, `course_id`, `subtopic_id`, `content`, `notes`, `created_at`, `updated_at`
+
+### `discussion_sessions` + `discussion_messages`
+- Writer: `src/app/api/discussion/start/route.ts`, `src/app/api/discussion/respond/route.ts`
+- Reader Admin: `src/app/api/admin/discussions/route.ts`, `src/app/api/admin/discussions/[sessionId]/route.ts`, `src/app/api/admin/activity/discussion/route.ts`
+- `discussion_sessions` field inti: `id`, `user_id`, `course_id`, `subtopic_id`, `status`, `phase`, `learning_goals (jsonb)`, `created_at`, `updated_at`
+- `discussion_messages` field inti: `id`, `session_id`, `role`, `content`, `step_key`, `metadata (jsonb)`, `created_at`
+
+### `learning_profiles`
+- Writer: `src/app/api/learning-profile/route.ts`
+- Reader Admin: `src/app/api/admin/activity/learning-profile/route.ts`
+- Field inti: `id`, `user_id`, `display_name`, `programming_experience`, `learning_style`, `learning_goals`, `challenges`, `created_at`, `updated_at`
 
 ---
 

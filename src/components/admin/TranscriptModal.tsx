@@ -15,7 +15,7 @@ export interface TranscriptLogItem {
 
 export interface TranscriptModalProps {
   isOpen: boolean
-  transcript: TranscriptLogItem
+  transcript: TranscriptLogItem | null
   onClose: () => void
 }
 
@@ -26,10 +26,10 @@ export default function TranscriptModal({
 }: TranscriptModalProps) {
   if (!isOpen || !transcript) return null
 
-  // Parse question & answer from content
-  const contentParts = transcript.content.split('\nA: ');
-  const question = contentParts[0].replace('Q: ', '');
-  const answer = contentParts[1] || '';
+  // Parse question & answer from content (supports both "Q: ...\nA: ..." and "Q: ...\n\nA: ...")
+  const qaMatch = transcript.content.match(/^Q:\s*([\s\S]*?)\n+\s*A:\s*([\s\S]*)$/);
+  const question = qaMatch?.[1]?.trim() || transcript.content;
+  const answer = qaMatch?.[2]?.trim() || '';
 
   return (
     <div className={styles.modalOverlay} onClick={onClose}>

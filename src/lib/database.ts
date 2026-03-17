@@ -7,22 +7,43 @@
 
 import { createClient, SupabaseClient } from '@supabase/supabase-js';
 
-// ─── Supabase Client Initialization ───────────────────────────────────────────
+const OPTIONAL_SUPABASE_TABLES = new Set(['discussion_admin_actions']);
 
-const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL!;
-const supabaseServiceRoleKey = process.env.SUPABASE_SERVICE_ROLE_KEY!;
+function isOptionalMissingTableError(error: any): boolean {
+  if (error?.code !== 'PGRST205' || typeof error?.message !== 'string') {
+    return false;
+  }
 
-if (!supabaseUrl || !supabaseServiceRoleKey) {
-  console.error('[Database] Missing SUPABASE_URL or SUPABASE_SERVICE_ROLE_KEY');
+  return Array.from(OPTIONAL_SUPABASE_TABLES).some((tableName) =>
+    error.message.includes(`'public.${tableName}'`)
+  );
 }
 
-// Service-role client bypasses RLS — used for all server-side operations
-const supabase: SupabaseClient = createClient(supabaseUrl, supabaseServiceRoleKey, {
-  auth: {
-    autoRefreshToken: false,
-    persistSession: false,
-  },
-});
+// ─── Supabase Client Initialization (lazy) ───────────────────────────────────
+
+let _supabase: SupabaseClient | null = null;
+
+function getSupabaseClient(): SupabaseClient {
+  if (_supabase) return _supabase;
+
+  const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
+  const supabaseServiceRoleKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
+
+  if (!supabaseUrl || !supabaseServiceRoleKey) {
+    throw new DatabaseError(
+      'Missing NEXT_PUBLIC_SUPABASE_URL or SUPABASE_SERVICE_ROLE_KEY environment variables'
+    );
+  }
+
+  _supabase = createClient(supabaseUrl, supabaseServiceRoleKey, {
+    auth: {
+      autoRefreshToken: false,
+      persistSession: false,
+    },
+  });
+
+  return _supabase;
+}
 
 // ─── Database Error ───────────────────────────────────────────────────────────
 
@@ -37,7 +58,7 @@ export class DatabaseError extends Error {
 
 export async function testConnection(): Promise<boolean> {
   try {
-    const { error } = await supabase.from('users').select('id').limit(1);
+    const { error } = await getSupabaseClient().from('users').select('id').limit(1);
     return !error;
   } catch (error) {
     console.error('Database connection test failed:', error);
@@ -69,7 +90,7 @@ export class DatabaseService {
     }
   ): Promise<T[]> {
     try {
-      let query = supabase
+      let query = getSupabaseClient()
         .from(tableName)
         .select(options?.select || '*');
 
@@ -117,7 +138,7 @@ export class DatabaseService {
       // Stringify any nested objects/arrays for non-JSONB text columns
       const sanitized = sanitizeForInsert(tableName, data as Record<string, any>);
 
-      const { data: result, error } = await supabase
+      const { data: result, error } = await getSupabaseClient()
         .from(tableName)
         .insert(sanitized)
         .select()
@@ -147,7 +168,7 @@ export class DatabaseService {
     try {
       const sanitized = sanitizeForInsert(tableName, data as Record<string, any>);
 
-      const { data: result, error } = await supabase
+      const { data: result, error } = await getSupabaseClient()
         .from(tableName)
         .update({ ...sanitized, updated_at: new Date().toISOString() })
         .eq(idColumn, id)
@@ -175,7 +196,7 @@ export class DatabaseService {
     options?: { useServiceRole?: boolean },
   ): Promise<void> {
     try {
-      const { error } = await supabase
+      const { error } = await getSupabaseClient()
         .from(tableName)
         .delete()
         .eq(idColumn, id);
@@ -422,14 +443,22 @@ class SupabaseQueryBuilder {
       const { data, error } = await query;
 
       if (error) {
-        console.error(`[SupabaseQueryBuilder] Query error:`, error);
+        if (isOptionalMissingTableError(error)) {
+          console.warn(`[SupabaseQueryBuilder] Optional table is missing:`, error);
+        } else {
+          console.error(`[SupabaseQueryBuilder] Query error:`, error);
+        }
         if (reject) return reject(error);
         return resolve({ data: null, error });
       }
 
       return resolve({ data, error: null });
     } catch (error) {
-      console.error(`[SupabaseQueryBuilder] Query error:`, error);
+      if (isOptionalMissingTableError(error)) {
+        console.warn(`[SupabaseQueryBuilder] Optional table is missing:`, error);
+      } else {
+        console.error(`[SupabaseQueryBuilder] Query error:`, error);
+      }
       if (reject) return reject(error);
       return resolve({ data: null, error });
     }
@@ -440,7 +469,7 @@ class SupabaseQueryBuilder {
 
 export const adminDb = {
   from(tableName: string) {
-    return new SupabaseQueryBuilder(tableName, supabase);
+    return new SupabaseQueryBuilder(tableName, getSupabaseClient());
   },
 };
 

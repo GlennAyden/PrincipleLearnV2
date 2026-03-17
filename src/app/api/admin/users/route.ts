@@ -22,6 +22,21 @@ interface UserWithActivity extends User {
   lastActivity: string;
 }
 
+function parseValidDate(value: unknown): Date | null {
+  if (!value) return null;
+  if (value instanceof Date) {
+    return Number.isNaN(value.getTime()) ? null : value;
+  }
+  if (typeof value !== 'string') return null;
+  const parsed = new Date(value);
+  return Number.isNaN(parsed.getTime()) ? null : parsed;
+}
+
+function toIsoDateOnly(value: unknown): string {
+  const parsed = parseValidDate(value) ?? new Date();
+  return parsed.toISOString().split('T')[0];
+}
+
 export async function GET() {
   try {
     console.log('[Admin Users] Fetching users from database...');
@@ -55,14 +70,14 @@ export async function GET() {
         
         // Calculate last activity
         const activities = [
-          ...courses.map((c: any) => new Date(c.created_at)),
-          ...quizSubmissions.map((q: any) => new Date(q.submitted_at)),
-          ...journals.map((j: any) => new Date(j.created_at))
-        ];
-        
-        const lastActivityDate = activities.length > 0 
-          ? new Date(Math.max(...activities.map(d => d.getTime())))
-          : new Date(user.created_at);
+          ...courses.map((c: any) => parseValidDate(c.created_at)),
+          ...quizSubmissions.map((q: any) => parseValidDate(q.submitted_at ?? q.created_at)),
+          ...journals.map((j: any) => parseValidDate(j.created_at))
+        ].filter((d): d is Date => d !== null);
+
+        const lastActivityDate = activities.length > 0
+          ? new Date(Math.max(...activities.map((d) => d.getTime())))
+          : parseValidDate(user.created_at) ?? new Date();
         
         const userWithActivity: UserWithActivity = {
           id: user.id,
@@ -76,7 +91,7 @@ export async function GET() {
           totalQuizzes: quizSubmissions.length,
           totalJournals: journals.length,
           totalSoalOtomatis: quizSubmissions.length, // Same as quizzes for now
-          lastActivity: lastActivityDate.toISOString().split('T')[0]
+          lastActivity: toIsoDateOnly(lastActivityDate)
         };
         
         usersWithActivity.push(userWithActivity);
@@ -97,7 +112,7 @@ export async function GET() {
           totalQuizzes: 0,
           totalJournals: 0,
           totalSoalOtomatis: 0,
-          lastActivity: new Date(user.created_at).toISOString().split('T')[0]
+          lastActivity: toIsoDateOnly(user.created_at)
         };
         
         usersWithActivity.push(userWithActivity);

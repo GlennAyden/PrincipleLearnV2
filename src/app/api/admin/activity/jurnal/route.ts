@@ -10,6 +10,7 @@ interface Journal {
   course_id: string;
   content: string;
   reflection?: string;
+  type?: string | null;
   created_at: string;
   updated_at: string;
 }
@@ -22,6 +23,34 @@ interface User {
 interface Course {
   id: string;
   title: string;
+}
+
+function parseReflectionContext(reflection?: string) {
+  if (!reflection) return null;
+
+  try {
+    const parsed = JSON.parse(reflection);
+    return parsed && typeof parsed === 'object' ? parsed : null;
+  } catch {
+    const legacyMatch = reflection.match(/^Subtopic:\s*(.+)$/i);
+    if (!legacyMatch) return null;
+    return {
+      subtopic: legacyMatch[1]?.trim() || null,
+      moduleIndex: null,
+      subtopicIndex: null,
+      fields: null,
+    };
+  }
+}
+
+function parseStructuredContent(content?: string) {
+  if (!content) return null;
+  try {
+    const parsed = JSON.parse(content);
+    return parsed && typeof parsed === 'object' ? parsed : null;
+  } catch {
+    return null;
+  }
 }
 
 export async function GET(req: NextRequest) {
@@ -98,8 +127,12 @@ export async function GET(req: NextRequest) {
         const user = users.length > 0 ? users[0] : null;
         const courseData = courses.length > 0 ? courses[0] : null;
         
-        // Use course title as topic (since journal is course-level)
-        const topicName = courseData?.title || 'Unknown Course';
+        const reflectionContext = parseReflectionContext(journal.reflection);
+        const structuredContent = parseStructuredContent(journal.content);
+        const topicName =
+          (typeof reflectionContext?.subtopic === 'string' && reflectionContext.subtopic.trim()) ||
+          courseData?.title ||
+          'Unknown Course';
         
         // Filter by topic if specified (match against course title)
         if (topic && !topicName.toLowerCase().includes(topic.toLowerCase())) {
@@ -112,6 +145,28 @@ export async function GET(req: NextRequest) {
           timestamp: new Date(journal.created_at).toLocaleDateString('id-ID'),
           topic: topicName,
           content: journal.content || 'No content available',
+          type: journal.type || 'free_text',
+          moduleIndex:
+            typeof reflectionContext?.moduleIndex === 'number'
+              ? reflectionContext.moduleIndex
+              : null,
+          subtopicIndex:
+            typeof reflectionContext?.subtopicIndex === 'number'
+              ? reflectionContext.subtopicIndex
+              : null,
+          understood: structuredContent?.understood || reflectionContext?.fields?.understood || '',
+          confused: structuredContent?.confused || reflectionContext?.fields?.confused || '',
+          strategy: structuredContent?.strategy || reflectionContext?.fields?.strategy || '',
+          promptEvolution:
+            structuredContent?.promptEvolution || reflectionContext?.fields?.promptEvolution || '',
+          contentRating:
+            typeof structuredContent?.contentRating === 'number'
+              ? structuredContent.contentRating
+              : typeof reflectionContext?.fields?.contentRating === 'number'
+                ? reflectionContext.fields.contentRating
+                : null,
+          contentFeedback:
+            structuredContent?.contentFeedback || reflectionContext?.fields?.contentFeedback || '',
           userEmail: user?.email || 'Unknown User',
           userId: journal.user_id
         };
@@ -127,6 +182,15 @@ export async function GET(req: NextRequest) {
           timestamp: new Date(journal.created_at).toLocaleDateString('id-ID'),
           topic: 'Unknown Topic',
           content: journal.content || 'No content available',
+          type: journal.type || 'free_text',
+          moduleIndex: null,
+          subtopicIndex: null,
+          understood: '',
+          confused: '',
+          strategy: '',
+          promptEvolution: '',
+          contentRating: null,
+          contentFeedback: '',
           userEmail: 'Unknown User',
           userId: journal.user_id
         };

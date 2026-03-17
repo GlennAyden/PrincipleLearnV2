@@ -3,10 +3,11 @@ import { NextResponse, NextRequest } from 'next/server';
 import { openai, defaultOpenAIModel } from '@/lib/openai';
 import { adminDb, DatabaseError } from '@/lib/database';
 import { verifyToken } from '@/lib/jwt';
+import { withApiLogging } from '@/lib/api-logger';
 
 // OpenAI client and model are centralized in src/lib/openai
 
-export async function POST(request: NextRequest) {
+async function postHandler(request: NextRequest) {
   try {
     // Parse request body for question and context
     const {
@@ -31,6 +32,15 @@ export async function POST(request: NextRequest) {
         if (!Number.isNaN(parsed)) return parsed;
       }
       return 0;
+    };
+
+    const normalizePositiveInt = (value: unknown, fallback: number) => {
+      if (typeof value === 'number' && Number.isFinite(value) && value > 0) return Math.floor(value);
+      if (typeof value === 'string') {
+        const parsed = parseInt(value, 10);
+        if (!Number.isNaN(parsed) && parsed > 0) return parsed;
+      }
+      return fallback;
     };
 
     if (!question || !question.trim() || !context) {
@@ -105,50 +115,44 @@ Please answer in the same language as the question above. Base your answer stric
     const answer = res.choices?.[0]?.message?.content || '';
     const normalizedQuestion = question.trim();
 
-    // Save QnA transcript to database
-    if (courseId) {
-      try {
-        const timestamp = new Date().toISOString();
-        const transcriptData = {
-          user_id: userId,
-          course_id: courseId,
-          module_index: normalizeIndex(moduleIndex),
-          subtopic_index: normalizeIndex(subtopicIndex),
-          page_number: normalizeIndex(pageNumber),
-          subtopic_label: subtopic || null,
-          question: normalizedQuestion,
-          answer,
-          reasoning_note: reasoningNote || null,
-          prompt_components: promptComponents || null,
-          prompt_version: promptVersion || 1,
-          session_number: sessionNumber || 1,
-          created_at: timestamp,
-          updated_at: timestamp
-        };
+    // Save QnA transcript to database (strict: no silent failure)
+    const timestamp = new Date().toISOString();
+    const transcriptData = {
+      user_id: userId,
+      course_id: courseId,
+      module_index: normalizeIndex(moduleIndex),
+      subtopic_index: normalizeIndex(subtopicIndex),
+      page_number: normalizeIndex(pageNumber),
+      subtopic_label: subtopic || null,
+      question: normalizedQuestion,
+      answer,
+      reasoning_note: (typeof reasoningNote === 'string' ? reasoningNote.trim() : '') || null,
+      prompt_components:
+        promptComponents && typeof promptComponents === 'object' ? promptComponents : null,
+      prompt_version: normalizePositiveInt(promptVersion, 1),
+      session_number: normalizePositiveInt(sessionNumber, 1),
+      created_at: timestamp,
+      updated_at: timestamp
+    };
 
-        const { error: insertError } = await adminDb
-          .from('ask_question_history')
-          .insert(transcriptData);
+    const { error: insertError } = await adminDb
+      .from('ask_question_history')
+      .insert(transcriptData);
 
-        if (insertError) {
-          throw new DatabaseError('Failed to insert transcript record', insertError);
-        }
-
-        console.log('QnA transcript saved to database:', {
-          user: userId,
-          course: courseId,
-          subtopic,
-          moduleIndex: transcriptData.module_index,
-          subtopicIndex: transcriptData.subtopic_index,
-          pageNumber: transcriptData.page_number
-        });
-      } catch (error) {
-        const message =
-          error instanceof DatabaseError ? error.message : 'Unexpected database error';
-        console.error('Error saving QnA transcript to database:', message, error);
-        // Continue execution even if database save fails
-      }
+    if (insertError) {
+      throw new DatabaseError('Failed to insert transcript record', insertError);
     }
+
+    console.log('QnA transcript saved to database:', {
+      user: userId,
+      course: courseId,
+      subtopic,
+      moduleIndex: transcriptData.module_index,
+      subtopicIndex: transcriptData.subtopic_index,
+      pageNumber: transcriptData.page_number,
+      promptVersion: transcriptData.prompt_version,
+      sessionNumber: transcriptData.session_number,
+    });
 
     return NextResponse.json({ answer });
   } catch (error: any) {
@@ -156,3 +160,7 @@ Please answer in the same language as the question above. Base your answer stric
     return NextResponse.json({ error: error.message }, { status: 500 });
   }
 }
+
+export const POST = withApiLogging(postHandler, {
+  label: 'ask-question',
+});

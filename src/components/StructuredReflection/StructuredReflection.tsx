@@ -123,11 +123,12 @@ export default function StructuredReflection({
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({
-              subtopicId: courseId,
+              subtopic: subtopic || null,
               moduleIndex,
               subtopicIndex,
-              feedback: `Rating: ${rating}/5${feedbackText.trim() ? ` | ${feedbackText.trim()}` : ''}`,
-              userId: user.email || user.id,
+              comment: feedbackText.trim() || `Rating pembelajaran: ${rating}/5`,
+              rating: rating > 0 ? rating : null,
+              userId: user.id,
               courseId,
             }),
           });

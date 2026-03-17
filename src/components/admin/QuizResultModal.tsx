@@ -11,6 +11,7 @@ interface QuizAnswer {
   options: string[]
   userAnswer: string
   status: string
+  reasoningNote?: string
 }
 
 interface QuizResultResponse {
@@ -76,6 +77,7 @@ export default function QuizResultModal({ isOpen, quizLog, onClose }: QuizResult
                   <th>Pertanyaan</th>
                   <th>Option</th>
                   <th>Jawaban user</th>
+                  <th>Reasoning</th>
                   <th>Status</th>
                 </tr>
               </thead>
@@ -94,6 +96,7 @@ export default function QuizResultModal({ isOpen, quizLog, onClose }: QuizResult
                       </ul>
                     </td>
                     <td>{ans.userAnswer}</td>
+                    <td>{ans.reasoningNote || '-'}</td>
                     <td>{ans.status}</td>
                   </tr>
                 ))}

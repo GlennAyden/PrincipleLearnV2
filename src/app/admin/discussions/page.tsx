@@ -94,6 +94,19 @@ function getPhaseLabel(phase?: string) {
   return PHASE_LABELS[normalized] ?? phase;
 }
 
+function getMessageTypeLabel(message: DiscussionMessage) {
+  const type = String(message.metadata?.type || '').toLowerCase();
+  if (type === 'student_input') return 'Student Input';
+  if (type === 'coach_feedback') return 'Coach Feedback';
+  if (type === 'manual_note') return 'Manual Admin Note';
+  if (type === 'manual_intervention') return 'Manual Admin Intervention';
+  if (type === 'closing') return 'Closing Message';
+  if (type === 'agent_response') return 'Agent Response';
+
+  if (message.role === 'student') return 'Student Input';
+  return 'Agent Response';
+}
+
 export default function AdminDiscussionsPage() {
   const router = useRouter();
   const { admin, loading: authLoading } = useAdmin();
@@ -155,6 +168,14 @@ export default function AdminDiscussionsPage() {
     loadSessions();
     return () => controller.abort();
   }, [admin, authLoading, statusFilter, reloadCounter]);
+
+  useEffect(() => {
+    if (!selectedSessionId) return;
+    const stillExists = sessions.some((session) => session.id === selectedSessionId);
+    if (!stillExists) {
+      setSelectedSessionId(null);
+    }
+  }, [sessions, selectedSessionId]);
 
   useEffect(() => {
     if (!selectedSessionId) {
@@ -628,11 +649,14 @@ export default function AdminDiscussionsPage() {
                           {message.role === 'agent' ? 'Mentor' : 'Siswa'} ·{' '}
                           {new Date(message.created_at).toLocaleTimeString()}
                         </span>
+                        <small>{getMessageTypeLabel(message)}</small>
                         {message.metadata?.phase && (
                           <small>{message.metadata.phase}</small>
                         )}
-                        {message.metadata?.type && (
-                          <small>{message.metadata.type}</small>
+                        {(message.metadata?.adminEmail || message.metadata?.admin_email) && (
+                          <small>
+                            {message.metadata.adminEmail || message.metadata.admin_email}
+                          </small>
                         )}
                       </div>
                       <p>{message.content}</p>

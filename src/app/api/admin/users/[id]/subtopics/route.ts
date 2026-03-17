@@ -8,7 +8,7 @@ function unauthorized() {
 }
 
 async function requireAdmin(request: NextRequest) {
-  const token = request.cookies.get('token')?.value;
+  const token = request.cookies.get('access_token')?.value ?? request.cookies.get('token')?.value;
   if (!token) return null;
   const payload = verifyToken(token);
   if (!payload || (payload.role ?? '').toUpperCase() !== 'ADMIN') {

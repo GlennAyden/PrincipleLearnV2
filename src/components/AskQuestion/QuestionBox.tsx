@@ -54,6 +54,24 @@ export default function QuestionBox({
       });
       const data = await res.json();
       if (!res.ok) throw new Error(data.error || 'Failed to fetch answer');
+
+      // Persist a transcript snapshot so admin can review QnA trails.
+      if (courseId && subtopic) {
+        fetch('/api/transcript/save', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            userId: user.id,
+            courseId,
+            subtopic,
+            question: fullPrompt,
+            answer: data.answer,
+          }),
+        }).catch((transcriptErr) => {
+          console.error('Transcript save error:', transcriptErr);
+        });
+      }
+
       onAnswer(fullPrompt, data.answer);
     } catch (err: any) {
       console.error('AskQuestion error:', err);

@@ -1,13 +1,32 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { adminDb, DatabaseError } from '@/lib/database';
 import { verifyToken } from '@/lib/jwt';
+import { withApiLogging } from '@/lib/api-logger';
 
-export async function POST(req: NextRequest) {
+function normalizeIndex(value: unknown) {
+  if (typeof value === 'number' && Number.isFinite(value)) return Math.floor(value);
+  if (typeof value === 'string') {
+    const parsed = parseInt(value, 10);
+    if (!Number.isNaN(parsed)) return parsed;
+  }
+  return 0;
+}
+
+function normalizeText(value: unknown) {
+  return typeof value === 'string' ? value.trim() : '';
+}
+
+async function postHandler(req: NextRequest) {
   try {
     const body = await req.json();
     const { userId, courseId, moduleIndex, subtopicIndex, pageNumber, question, answer, feedback, reasoningNote } = body;
 
-    if (!userId || !courseId || !question || !answer) {
+    const normalizedQuestion = normalizeText(question);
+    const normalizedAnswer = normalizeText(answer);
+    const normalizedFeedback = normalizeText(feedback);
+    const normalizedReasoning = normalizeText(reasoningNote);
+
+    if (!userId || !courseId || !normalizedQuestion || !normalizedAnswer) {
       return NextResponse.json(
         { error: 'Missing required fields: userId, courseId, question, answer' },
         { status: 400 }
@@ -41,13 +60,13 @@ export async function POST(req: NextRequest) {
         id: challengeId,
         user_id: userId,
         course_id: courseId,
-        module_index: moduleIndex ?? 0,
-        subtopic_index: subtopicIndex ?? 0,
-        page_number: pageNumber ?? 0,
-        question,
-        answer,
-        feedback: feedback || null,
-        reasoning_note: reasoningNote || null,
+        module_index: normalizeIndex(moduleIndex),
+        subtopic_index: normalizeIndex(subtopicIndex),
+        page_number: normalizeIndex(pageNumber),
+        question: normalizedQuestion,
+        answer: normalizedAnswer,
+        feedback: normalizedFeedback,
+        reasoning_note: normalizedReasoning,
         created_at: timestamp,
         updated_at: timestamp
       };
@@ -91,6 +110,10 @@ export async function POST(req: NextRequest) {
     );
   }
 }
+
+export const POST = withApiLogging(postHandler, {
+  label: 'challenge-response',
+});
 
 export async function GET(req: NextRequest) {
   try {

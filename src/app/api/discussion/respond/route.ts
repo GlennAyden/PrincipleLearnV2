@@ -35,6 +35,19 @@ interface DiscussionGoalState {
   thinkingSkill?: ThinkingSkillMeta | null;
 }
 
+async function insertDiscussionMessage(payload: {
+  session_id: string;
+  role: 'agent' | 'student';
+  content: string;
+  step_key?: string | null;
+  metadata?: Record<string, any>;
+}) {
+  const { error } = await adminDb.from('discussion_messages').insert(payload);
+  if (error) {
+    throw new Error(`Failed to insert discussion message: ${error.message}`);
+  }
+}
+
 async function postHandler(request: NextRequest) {
   try {
     const accessToken = request.cookies.get('access_token')?.value;
@@ -110,11 +123,12 @@ async function postHandler(request: NextRequest) {
     });
 
     const studentMetadata = {
+      type: 'student_input',
       phase: currentStep?.phaseId ?? null,
       evaluation,
     };
 
-    await adminDb.from('discussion_messages').insert({
+    await insertDiscussionMessage({
       session_id: session.id,
       role: 'student',
       content: trimmedAnswer,
@@ -123,7 +137,7 @@ async function postHandler(request: NextRequest) {
     });
 
     if (evaluation.coachFeedback) {
-      await adminDb.from('discussion_messages').insert({
+      await insertDiscussionMessage({
         session_id: session.id,
         role: 'agent',
         content: evaluation.coachFeedback,
@@ -150,30 +164,35 @@ async function postHandler(request: NextRequest) {
         : null;
 
     if (nextStep) {
-      await adminDb.from('discussion_messages').insert({
+      await insertDiscussionMessage({
         session_id: session.id,
         role: 'agent',
         content: nextStep.step.prompt,
         step_key: nextStep.step.key,
         metadata: {
+          type: 'agent_response',
           phase: nextStep.phaseId,
           expected_type: nextStep.step.expected_type ?? 'open',
           options: nextStep.step.options ?? [],
         },
       });
 
-      await adminDb
+      const { error: phaseUpdateError } = await adminDb
         .from('discussion_sessions')
         .eq('id', session.id)
         .update({
           phase: nextStep.phaseId,
           learning_goals: learningGoals,
         });
+
+      if (phaseUpdateError) {
+        throw new Error(`Failed to update discussion phase: ${phaseUpdateError.message}`);
+      }
     } else {
       const closingMessage =
         templateRow.template?.closing_message || buildDefaultClosingMessage(learningGoals);
 
-      await adminDb
+      const { error: completionUpdateError } = await adminDb
         .from('discussion_sessions')
         .eq('id', session.id)
         .update({
@@ -182,7 +201,11 @@ async function postHandler(request: NextRequest) {
           learning_goals: learningGoals,
         });
 
-      await adminDb.from('discussion_messages').insert({
+      if (completionUpdateError) {
+        throw new Error(`Failed to complete discussion session: ${completionUpdateError.message}`);
+      }
+
+      await insertDiscussionMessage({
         session_id: session.id,
         role: 'agent',
         content: closingMessage,

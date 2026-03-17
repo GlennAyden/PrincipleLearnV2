@@ -31,6 +31,7 @@ interface ChallengeItem {
   question: string;
   answer: string;
   feedback?: string;
+  reasoningNote?: string;
 }
 
 // Skeleton loading component for subtopic content
@@ -107,6 +108,7 @@ export default function SubtopicPage() {
   );
   const [challengeQ, setChallengeQ] = useState<string>('');
   const [challengeAnswer, setChallengeAnswer] = useState<string>('');
+  const [challengeReasoning, setChallengeReasoning] = useState<string>('');
   const [challengeFeedback, setChallengeFeedback] = useState<string>('');
   const [activeChallengeIndex, setActiveChallengeIndex] = useState<number>(-1);
 
@@ -313,7 +315,8 @@ export default function SubtopicPage() {
             const transformedData = result.responses.map((resp: any) => ({
               question: resp.question,
               answer: resp.answer,
-              feedback: resp.feedback
+              feedback: resp.feedback,
+              reasoningNote: resp.reasoning_note || ''
             }));
             setChallengeData(transformedData);
           }
@@ -360,6 +363,7 @@ export default function SubtopicPage() {
     // Clear the current challenge if viewing history
     setChallengeQ('');
     setChallengeAnswer('');
+    setChallengeReasoning('');
     setChallengeFeedback('');
   };
 
@@ -368,6 +372,7 @@ export default function SubtopicPage() {
     setLoadingChallenge(true);
     setChallengeQ('');
     setChallengeAnswer('');
+    setChallengeReasoning('');
     setChallengeFeedback('');
     setActiveChallengeIndex(-1);
     
@@ -427,7 +432,8 @@ export default function SubtopicPage() {
       const newChallengeItem = {
         question: challengeQ,
         answer: challengeAnswer,
-        feedback: responseData.feedback
+        feedback: responseData.feedback,
+        reasoningNote: challengeReasoning.trim()
       };
       const newChallengeData = [...challengeData, newChallengeItem];
       setChallengeData(newChallengeData);
@@ -445,7 +451,8 @@ export default function SubtopicPage() {
             pageNumber: pageNumber,
             question: challengeQ,
             answer: challengeAnswer,
-            feedback: responseData.feedback
+            feedback: responseData.feedback,
+            reasoningNote: challengeReasoning.trim()
           })
         });
 
@@ -635,6 +642,12 @@ export default function SubtopicPage() {
                         {challengeData[activeChallengeIndex].feedback && (
                           <FeedbackList feedback={challengeData[activeChallengeIndex].feedback!} />
                         )}
+                        {challengeData[activeChallengeIndex].reasoningNote && (
+                          <div className={styles.challengeAnswer}>
+                            <div className={styles.answerLabel}>Your Reasoning:</div>
+                            <div className={styles.answerContent}>{challengeData[activeChallengeIndex].reasoningNote}</div>
+                          </div>
+                        )}
                         <button 
                           onClick={() => setActiveChallengeIndex(-1)} 
                           className={styles.newChallengeBtn}
@@ -674,6 +687,14 @@ export default function SubtopicPage() {
                                   value={challengeAnswer}
                                   onChange={(e) => setChallengeAnswer(e.target.value)}
                                   placeholder="Type your answer here..."
+                                  className={styles.answerInput}
+                                  disabled={loadingChallenge}
+                                />
+                                <input
+                                  type="text"
+                                  value={challengeReasoning}
+                                  onChange={(e) => setChallengeReasoning(e.target.value)}
+                                  placeholder="Why do you choose this answer? (optional)"
                                   className={styles.answerInput}
                                   disabled={loadingChallenge}
                                 />

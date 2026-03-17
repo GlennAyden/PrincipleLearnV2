@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server';
 import type { NextRequest } from 'next/server';
-import { DatabaseService, adminDb } from '@/lib/database';
+import { DatabaseService, DatabaseError, adminDb } from '@/lib/database';
+import { withApiLogging } from '@/lib/api-logger';
 
 interface QuizAnswer {
   question: string;
@@ -12,7 +13,7 @@ interface QuizAnswer {
 }
 
 interface QuizSubmission {
-  userId: string; // Ini adalah email user
+  userId: string; // User id or email
   courseId: string;
   moduleTitle?: string;
   subtopic: string;
@@ -24,32 +25,66 @@ interface QuizSubmission {
   reasoningNotes?: string[];
 }
 
-export async function POST(req: NextRequest) {
+function normalizeText(value: unknown) {
+  return typeof value === 'string' ? value.trim() : '';
+}
+
+function normalizeIndex(value: unknown) {
+  if (typeof value === 'number' && Number.isFinite(value)) return Math.floor(value);
+  if (typeof value === 'string') {
+    const parsed = parseInt(value, 10);
+    if (!Number.isNaN(parsed)) return parsed;
+  }
+  return null;
+}
+
+async function resolveUserByIdentifier(identifier: string) {
+  const trimmed = identifier.trim();
+  if (!trimmed) return null;
+
+  const byId = await DatabaseService.getRecords<{ id: string }>('users', {
+    filter: { id: trimmed },
+    limit: 1,
+  });
+  if (byId.length > 0) return byId[0];
+
+  const byEmail = await DatabaseService.getRecords<{ id: string }>('users', {
+    filter: { email: trimmed },
+    limit: 1,
+  });
+  return byEmail[0] ?? null;
+}
+
+async function postHandler(req: NextRequest) {
   try {
     const data: QuizSubmission = await req.json();
+    const normalizedSubtopic = normalizeText(data.subtopic);
+    const answers = Array.isArray(data.answers) ? data.answers : [];
     
     // Validasi data
-    if (!data.userId || !data.courseId || !data.subtopic) {
+    if (!data.userId || !data.courseId || !normalizedSubtopic) {
       return NextResponse.json(
         { error: "Missing required fields" },
         { status: 400 }
       );
     }
 
-    // Find user in database
-    const users = await DatabaseService.getRecords<{ id: string }>('users', {
-      filter: { email: data.userId },
-      limit: 1
-    });
+    if (answers.length === 0) {
+      return NextResponse.json(
+        { error: 'Quiz answers are required' },
+        { status: 400 }
+      );
+    }
 
-    if (users.length === 0) {
+    // Find user in database (accept both user id and email)
+    const user = await resolveUserByIdentifier(data.userId);
+
+    if (!user) {
       return NextResponse.json(
         { error: "User not found" },
         { status: 404 }
       );
     }
-
-    const user = users[0];
 
     // Find course in database
     const courses = await DatabaseService.getRecords('courses', {
@@ -112,11 +147,21 @@ export async function POST(req: NextRequest) {
     }
 
     // Save each quiz answer to database with improved matching
-    const submissionIds: string[] = [];
     const matchingResults: Array<{ questionIndex: number; matched: boolean; method: string; quizId?: string; question: string }> = [];
-    
-    for (let i = 0; i < data.answers.length; i++) {
-      const answer = data.answers[i];
+    const matchedRows: Array<{
+      user_id: string;
+      quiz_id: string;
+      course_id: string;
+      subtopic_id: string | null;
+      module_index: number | null;
+      subtopic_index: number | null;
+      answer: string;
+      is_correct: boolean;
+      reasoning_note: string | null;
+    }> = [];
+
+    for (let i = 0; i < answers.length; i++) {
+      const answer = answers[i];
       let matchingQuiz: any = null;
       let matchMethod = '';
       
@@ -140,7 +185,7 @@ export async function POST(req: NextRequest) {
       }
       
       // Strategy 3: Match by index position if we have the right number of questions
-      if (!matchingQuiz && data.answers.length === quizQuestions.length && i < quizQuestions.length) {
+      if (!matchingQuiz && answers.length === quizQuestions.length && i < quizQuestions.length) {
         matchingQuiz = quizQuestions[i];
         matchMethod = 'index_position';
       }
@@ -161,16 +206,20 @@ export async function POST(req: NextRequest) {
       }
       
       if (matchingQuiz) {
-        const submissionData = {
+        const reasoningFromAnswer = normalizeText(answer.reasoningNote);
+        const reasoningFromArray = normalizeText(data.reasoningNotes?.[i]);
+
+        matchedRows.push({
           user_id: user.id,
           quiz_id: matchingQuiz.id,
-          answer: answer.userAnswer,
+          course_id: data.courseId,
+          subtopic_id: subtopicId,
+          module_index: normalizeIndex(data.moduleIndex),
+          subtopic_index: normalizeIndex(data.subtopicIndex),
+          answer: normalizeText(answer.userAnswer),
           is_correct: answer.isCorrect,
-          reasoning_note: answer.reasoningNote || (data.reasoningNotes?.[i] ?? null),
-        };
-
-        const submission = await DatabaseService.insertRecord<any>('quiz_submissions', submissionData);
-        submissionIds.push(submission.id);
+          reasoning_note: reasoningFromAnswer || reasoningFromArray || null,
+        });
         
         matchingResults.push({
           questionIndex: i,
@@ -180,7 +229,7 @@ export async function POST(req: NextRequest) {
           question: answer.question.substring(0, 50) + '...'
         });
         
-        console.log(`✅ Saved submission ${i + 1}/${data.answers.length} (${matchMethod}):`, answer.question.substring(0, 50) + '...');
+        console.log(`✅ Matched submission ${i + 1}/${answers.length} (${matchMethod}):`, answer.question.substring(0, 50) + '...');
       } else {
         matchingResults.push({
           questionIndex: i,
@@ -191,6 +240,37 @@ export async function POST(req: NextRequest) {
         console.warn(`❌ No matching quiz found for answer ${i + 1}:`, answer.question.substring(0, 50) + '...');
       }
     }
+
+    const failedMatches = matchingResults.filter((r) => !r.matched);
+    if (failedMatches.length > 0) {
+      return NextResponse.json(
+        {
+          error: 'Some quiz answers could not be matched to quiz questions',
+          matchingResults,
+          details: {
+            totalAnswers: answers.length,
+            successfulMatches: matchedRows.length,
+            failedMatches: failedMatches.length,
+          },
+        },
+        { status: 400 }
+      );
+    }
+
+    const { data: insertedRows, error: insertError } = await adminDb
+      .from('quiz_submissions')
+      .insert(matchedRows);
+
+    if (insertError) {
+      throw new DatabaseError('Failed to insert quiz submissions', insertError);
+    }
+
+    const insertedRowList = Array.isArray(insertedRows)
+      ? insertedRows
+      : insertedRows
+        ? [insertedRows]
+        : [];
+    const submissionIds = insertedRowList.map((row: any) => row.id);
     
     console.log(`Quiz submission saved to database:`, {
       user: data.userId,
@@ -202,7 +282,7 @@ export async function POST(req: NextRequest) {
       matchingResults: matchingResults
     });
 
-    const successfulMatches = matchingResults.filter((r) => r.matched).length;
+    const successfulMatches = matchedRows.length;
 
     const { moduleTitle: resolvedModuleTitle, subtopicTitle: resolvedSubtopicTitle } =
       await resolveModuleContext({
@@ -226,9 +306,9 @@ export async function POST(req: NextRequest) {
       matchingResults,
       message: `Saved ${successfulMatches}/${data.answers.length} quiz answers to database`,
       details: {
-        totalAnswers: data.answers.length,
+        totalAnswers: answers.length,
         successfulMatches,
-        failedMatches: data.answers.length - successfulMatches,
+        failedMatches: 0,
         subtopicId,
         quizQuestionsFound: quizQuestions.length
       }
@@ -241,6 +321,10 @@ export async function POST(req: NextRequest) {
     );
   }
 }
+
+export const POST = withApiLogging(postHandler, {
+  label: 'quiz-submit',
+});
 
 function normalizeValue(value?: string | null) {
   return (value ?? '').trim().toLowerCase();

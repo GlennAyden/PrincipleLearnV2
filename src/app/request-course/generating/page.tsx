@@ -80,7 +80,7 @@ export default function GeneratingPage() {
       return;
     }
 
-    if (authLoading || !user?.email || hasStarted.current) return;
+    if (authLoading || !user?.id || !user?.email || hasStarted.current) return;
     if (!answers.topic || !answers.goal || !answers.problem || !answers.assumption) {
       router.replace('/request-course/step1');
       return;
@@ -105,7 +105,8 @@ export default function GeneratingPage() {
         },
         body: JSON.stringify({
           ...answers,
-          userId: user!.email,
+          userId: user!.id,
+          userEmail: user!.email,
         }),
         signal: (() => {
           // Start AI progress as soon as fetch begins
@@ -147,7 +148,7 @@ export default function GeneratingPage() {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({
-            userId: user!.email,
+            userId: user!.id,
             courseName: answers.topic,
             parameter: JSON.stringify({
               topic: answers.topic,

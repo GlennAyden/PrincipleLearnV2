@@ -4,18 +4,32 @@ import { verifyToken } from '@/lib/jwt';
 import { adminDb } from '@/lib/database';
 import { withApiLogging } from '@/lib/api-logger';
 
+let hasDiscussionAdminActionsTable: boolean | null = null;
+
+function isMissingTableError(error: any, tableName: string): boolean {
+  return (
+    error?.code === 'PGRST205' &&
+    typeof error?.message === 'string' &&
+    error.message.includes(`'public.${tableName}'`)
+  );
+}
+
+function markDiscussionAdminActionsTableUnavailable() {
+  hasDiscussionAdminActionsTable = false;
+}
+
 async function getHandler(
   request: NextRequest,
-  { params }: { params: { sessionId: string } }
+  context: { params: Promise<{ sessionId: string }> }
 ) {
   try {
-    const token = request.cookies.get('access_token')?.value;
+    const token = request.cookies.get('access_token')?.value ?? request.cookies.get('token')?.value;
     const payload = token ? verifyToken(token) : null;
-    if (!payload || payload.role !== 'ADMIN') {
+    if (!payload || (payload.role ?? '').toLowerCase() !== 'admin') {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 403 });
     }
 
-    const sessionId = params.sessionId;
+    const { sessionId } = await context.params;
     if (!sessionId) {
       return NextResponse.json({ error: 'sessionId is required' }, { status: 400 });
     }
@@ -55,14 +69,38 @@ async function getHandler(
       console.error('[AdminDiscussions] Failed to fetch messages', messageError);
     }
 
-    const { data: actions, error: actionsError } = await adminDb
-      .from('discussion_admin_actions')
-      .select('id, action, payload, created_at, admin_id, admin_email')
-      .eq('session_id', sessionId)
-      .order('created_at', { ascending: true });
+    let actions: any[] = [];
+    if (hasDiscussionAdminActionsTable !== false) {
+      try {
+        const { data: actionsData, error: actionsError } = await adminDb
+          .from('discussion_admin_actions')
+          .select('id, action, payload, created_at, admin_id, admin_email')
+          .eq('session_id', sessionId)
+          .order('created_at', { ascending: true });
 
-    if (actionsError) {
-      console.error('[AdminDiscussions] Failed to fetch admin actions', actionsError);
+        if (actionsError) {
+          if (isMissingTableError(actionsError, 'discussion_admin_actions')) {
+            markDiscussionAdminActionsTableUnavailable();
+            console.warn(
+              '[AdminDiscussions] discussion_admin_actions table not found, continuing without admin actions'
+            );
+          } else {
+            console.error('[AdminDiscussions] Failed to fetch admin actions', actionsError);
+          }
+        } else {
+          hasDiscussionAdminActionsTable = true;
+          actions = actionsData ?? [];
+        }
+      } catch (actionsError: any) {
+        if (isMissingTableError(actionsError, 'discussion_admin_actions')) {
+          markDiscussionAdminActionsTableUnavailable();
+          console.warn(
+            '[AdminDiscussions] discussion_admin_actions table not found, continuing without admin actions'
+          );
+        } else {
+          console.error('[AdminDiscussions] Failed to fetch admin actions', actionsError);
+        }
+      }
     }
 
     return NextResponse.json({
@@ -89,7 +127,7 @@ async function getHandler(
         },
       },
       messages: messages ?? [],
-      adminActions: actions ?? [],
+      adminActions: actions,
     });
   } catch (error) {
     console.error('[AdminDiscussions] Unexpected error loading session details', error);
@@ -102,16 +140,16 @@ async function getHandler(
 
 async function postHandler(
   request: NextRequest,
-  { params }: { params: { sessionId: string } }
+  context: { params: Promise<{ sessionId: string }> }
 ) {
   try {
-    const token = request.cookies.get('access_token')?.value;
+    const token = request.cookies.get('access_token')?.value ?? request.cookies.get('token')?.value;
     const payload = token ? verifyToken(token) : null;
-    if (!payload || payload.role !== 'ADMIN') {
+    if (!payload || (payload.role ?? '').toLowerCase() !== 'admin') {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 403 });
     }
 
-    const sessionId = params.sessionId;
+    const { sessionId } = await context.params;
     if (!sessionId) {
       return NextResponse.json({ error: 'sessionId is required' }, { status: 400 });
     }
@@ -157,8 +195,8 @@ async function postHandler(
 
       const { error: updateError } = await adminDb
         .from('discussion_sessions')
-        .update({ learning_goals: updatedGoals })
-        .eq('id', sessionId);
+        .eq('id', sessionId)
+        .update({ learning_goals: updatedGoals });
 
       if (updateError) {
         console.error('[AdminDiscussions] Failed to update goals', updateError);
@@ -183,20 +221,35 @@ async function postHandler(
         });
       }
 
-      await adminDb.from('discussion_admin_actions').insert({
-        session_id: sessionId,
-        admin_id: payload.userId,
-        admin_email: payload.email,
-        action: 'mark_goal',
-        payload: { goalId, covered, note },
-      });
+      if (hasDiscussionAdminActionsTable !== false) {
+        const { error: actionLogError } = await adminDb.from('discussion_admin_actions').insert({
+          session_id: sessionId,
+          admin_id: payload.userId,
+          admin_email: payload.email,
+          action: 'mark_goal',
+          payload: { goalId, covered, note },
+        });
+
+        if (actionLogError) {
+          if (isMissingTableError(actionLogError, 'discussion_admin_actions')) {
+            markDiscussionAdminActionsTableUnavailable();
+            console.warn(
+              '[AdminDiscussions] discussion_admin_actions table not found, skipping action log insert'
+            );
+          } else {
+            console.error('[AdminDiscussions] Failed to insert admin action log', actionLogError);
+          }
+        } else {
+          hasDiscussionAdminActionsTable = true;
+        }
+      }
 
       return NextResponse.json({ success: true });
     }
 
     if (body.action === 'addCoachNote') {
       const { message, phase } = body;
-      if (!message || typeof message !== 'string') {
+      if (!message || typeof message !== 'string' || !message.trim()) {
         return NextResponse.json(
           { error: 'message is required' },
           { status: 400 }
@@ -206,7 +259,7 @@ async function postHandler(
       await adminDb.from('discussion_messages').insert({
         session_id: sessionId,
         role: 'agent',
-        content: message,
+        content: message.trim(),
         metadata: {
           type: 'manual_note',
           phase: phase ?? null,
@@ -215,13 +268,28 @@ async function postHandler(
         },
       });
 
-      await adminDb.from('discussion_admin_actions').insert({
-        session_id: sessionId,
-        admin_id: payload.userId,
-        admin_email: payload.email,
-        action: 'add_note',
-        payload: { message, phase },
-      });
+      if (hasDiscussionAdminActionsTable !== false) {
+        const { error: actionLogError } = await adminDb.from('discussion_admin_actions').insert({
+          session_id: sessionId,
+          admin_id: payload.userId,
+          admin_email: payload.email,
+          action: 'add_note',
+          payload: { message: message.trim(), phase },
+        });
+
+        if (actionLogError) {
+          if (isMissingTableError(actionLogError, 'discussion_admin_actions')) {
+            markDiscussionAdminActionsTableUnavailable();
+            console.warn(
+              '[AdminDiscussions] discussion_admin_actions table not found, skipping action log insert'
+            );
+          } else {
+            console.error('[AdminDiscussions] Failed to insert admin action log', actionLogError);
+          }
+        } else {
+          hasDiscussionAdminActionsTable = true;
+        }
+      }
 
       return NextResponse.json({ success: true });
     }

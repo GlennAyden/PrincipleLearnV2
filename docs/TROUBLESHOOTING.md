@@ -1,3 +1,9 @@
+## Logging & Monitoring API (Admin)
+
+- Endpoint: `GET /api/admin/monitoring/logging?days=7`
+- Fungsi: ringkasan sukses vs gagal untuk route input user, daftar endpoint yang paling sering gagal, dan alert route kritis (`jurnal`, `transcript`, `quiz`, `discussion`).
+- Sumber data: tabel `api_logs`.
+
 # Troubleshooting Guide
 
 Panduan untuk mengatasi masalah umum di PrincipleLearn V3.

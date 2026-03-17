@@ -15,7 +15,7 @@ export interface JournalLogItem {
 
 interface JournalModalProps {
   isOpen: boolean
-  journal: JournalLogItem
+  journal: JournalLogItem | null
   onClose: () => void
 }
 

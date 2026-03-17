@@ -83,13 +83,13 @@ export default function Quiz({
     
     const score = Math.round((correctCount / safeItems.length) * 100);
     
-    if (user?.email && courseId) {
+    if (user?.id && courseId) {
       await submitQuizToServer(answers, score);
     }
   };
   
   const submitQuizToServer = async (answers: any[], score: number) => {
-    if (submitted || !user?.email) return;
+    if (submitted || !user?.id) return;
     
     try {
       setLoading(true);
@@ -99,7 +99,8 @@ export default function Quiz({
           'Content-Type': 'application/json',
         },
         body: JSON.stringify({
-          userId: user.email,
+          userId: user.id,
+          userEmail: user.email,
           courseId,
           moduleTitle,
           subtopic,
@@ -108,7 +109,7 @@ export default function Quiz({
           subtopicIndex,
           score,
           answers,
-          reasoningNotes: reasoningNotes.filter(r => r.trim()),
+          reasoningNotes,
         }),
       });
       

@@ -41,8 +41,9 @@ export default function FeedbackForm({
           subtopicId,
           moduleIndex,
           subtopicIndex,
-          feedback: feedback.trim(),
-          userId: user?.email || '',
+          comment: feedback.trim(),
+          rating: null,
+          userId: user?.id || '',
           courseId,
         }),
       });

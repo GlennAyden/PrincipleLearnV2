@@ -8,10 +8,10 @@ const DEFAULT_LIMIT = 100;
 
 async function getHandler(request: NextRequest) {
   try {
-    const accessToken = request.cookies.get('access_token')?.value;
+    const accessToken = request.cookies.get('access_token')?.value ?? request.cookies.get('token')?.value;
     const tokenPayload = accessToken ? verifyToken(accessToken) : null;
 
-    if (!tokenPayload || tokenPayload.role !== 'ADMIN') {
+    if (!tokenPayload || (tokenPayload.role ?? '').toLowerCase() !== 'admin') {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 403 });
     }
 

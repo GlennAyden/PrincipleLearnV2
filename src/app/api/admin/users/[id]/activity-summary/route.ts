@@ -7,12 +7,26 @@ function unauthorized(message = 'Unauthorized access') {
   return NextResponse.json({ message }, { status: 401 });
 }
 
+async function safeQuery<T>(query: Promise<{ data: T; error: any }>, label: string, fallback: T): Promise<T> {
+  try {
+    const { data, error } = await query;
+    if (error) {
+      console.error(`[Admin Users Activity] ${label} query failed`, error);
+      return fallback;
+    }
+    return (data ?? fallback) as T;
+  } catch (error) {
+    console.error(`[Admin Users Activity] ${label} query threw`, error);
+    return fallback;
+  }
+}
+
 export async function GET(
   request: NextRequest,
   context: { params: Promise<{ id: string }> }
 ) {
   try {
-    const token = request.cookies.get('token')?.value;
+    const token = request.cookies.get('access_token')?.value ?? request.cookies.get('token')?.value;
     const payload = token ? verifyToken(token) : null;
     if (!payload || (payload.role ?? '').toLowerCase() !== 'admin') {
       return unauthorized();
@@ -36,34 +50,47 @@ export async function GET(
       );
     }
 
-    const [discussionResult, journalResult] = await Promise.all([
-      adminDb
-        .from('discussion_sessions')
-        .select('id, status, phase, updated_at, learning_goals')
-        .eq('user_id', userId)
-        .order('updated_at', { ascending: false })
-        .limit(1),
-      adminDb
-        .from('jurnal')
-        .select('id, judul, konten, created_at')
-        .eq('user_id', userId)
-        .order('created_at', { ascending: false })
-        .limit(1),
+    const [discussionRows, journalRows, discussionCountRows, journalCountRows] = await Promise.all([
+      safeQuery<any[]>(
+        adminDb
+          .from('discussion_sessions')
+          .select('id, status, phase, updated_at, learning_goals')
+          .eq('user_id', userId)
+          .order('updated_at', { ascending: false })
+          .limit(1),
+        'recent discussion',
+        []
+      ),
+      safeQuery<any[]>(
+        adminDb
+          .from('jurnal')
+          .select('id, content, reflection, created_at')
+          .eq('user_id', userId)
+          .order('created_at', { ascending: false })
+          .limit(1),
+        'recent journal',
+        []
+      ),
+      safeQuery<any[]>(
+        adminDb
+          .from('discussion_sessions')
+          .select('id')
+          .eq('user_id', userId),
+        'discussion counts',
+        []
+      ),
+      safeQuery<any[]>(
+        adminDb
+          .from('jurnal')
+          .select('id')
+          .eq('user_id', userId),
+        'journal counts',
+        []
+      ),
     ]);
 
-    const [discussionCounts, journalCounts] = await Promise.all([
-      adminDb
-        .from('discussion_sessions')
-        .select('id')
-        .eq('user_id', userId),
-      adminDb
-        .from('jurnal')
-        .select('id')
-        .eq('user_id', userId),
-    ]);
-
-    const recentDiscussion: any = discussionResult.data?.[0] ?? null;
-    const recentJournal: any = journalResult.data?.[0] ?? null;
+    const recentDiscussion: any = discussionRows[0] ?? null;
+    const recentJournal: any = journalRows[0] ?? null;
     const recentTranscript: any = null;
 
     const response = {
@@ -83,10 +110,13 @@ export async function GET(
       recentJournal: recentJournal
         ? {
             id: recentJournal.id,
-            title: recentJournal.judul,
+            title:
+              typeof recentJournal.reflection === 'string'
+                ? recentJournal.reflection.replace(/^Subtopic:\s*/i, '')
+                : null,
             snippet:
-              typeof recentJournal.konten === 'string'
-                ? recentJournal.konten.slice(0, 160)
+              typeof recentJournal.content === 'string'
+                ? recentJournal.content.slice(0, 160)
                 : null,
             createdAt: recentJournal.created_at,
           }
@@ -99,8 +129,8 @@ export async function GET(
           }
         : null,
       totals: {
-        discussions: discussionCounts.data?.length ?? 0,
-        journals: journalCounts.data?.length ?? 0,
+        discussions: discussionCountRows.length,
+        journals: journalCountRows.length,
         transcripts: 0,
       },
     };

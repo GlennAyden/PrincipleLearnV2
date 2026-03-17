@@ -3,6 +3,19 @@ import { NextRequest, NextResponse } from 'next/server';
 import { adminDb } from '@/lib/database';
 import { verifyToken } from '@/lib/jwt';
 
+function normalizePromptComponents(value: unknown) {
+  if (!value) return null;
+  if (typeof value === 'string') {
+    try {
+      const parsed = JSON.parse(value);
+      return parsed && typeof parsed === 'object' ? parsed : null;
+    } catch {
+      return null;
+    }
+  }
+  return typeof value === 'object' ? value : null;
+}
+
 export async function GET(request: NextRequest) {
   try {
     const accessToken = request.cookies.get('access_token')?.value;
@@ -31,11 +44,11 @@ export async function GET(request: NextRequest) {
       jurnalResult,
       feedbackResult,
     ] = await Promise.all([
-      buildQuery('ask_question_history', 'id, user_id, course_id, question, answer, reasoning_note, prompt_components, prompt_version, session_number, subtopic_label, created_at'),
+      buildQuery('ask_question_history', 'id, user_id, course_id, question, answer, reasoning_note, prompt_components, prompt_version, session_number, module_index, subtopic_index, page_number, subtopic_label, created_at'),
       buildQuery('challenge_responses', 'id, user_id, course_id, question, answer, feedback, reasoning_note, created_at'),
       buildQuery('quiz_submissions', 'id, user_id, quiz_id, answer, is_correct, reasoning_note, created_at'),
       buildQuery('jurnal', 'id, user_id, course_id, content, type, created_at'),
-      buildQuery('feedback', 'id, user_id, course_id, content, rating, created_at'),
+      buildQuery('feedback', 'id, user_id, course_id, subtopic_id, module_index, subtopic_index, comment, rating, created_at'),
     ]);
 
     // Combine and sort all evidence chronologically
@@ -56,6 +69,16 @@ export async function GET(request: NextRequest) {
 
     // Sort by created_at descending
     evidence.sort((a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime());
+
+    for (const item of evidence) {
+      if (item.evidence_type === 'ask_question') {
+        item.prompt_components = normalizePromptComponents(item.prompt_components);
+      }
+      if (item.evidence_type === 'feedback') {
+        // Keep UI contract stable while reading the current feedback schema (`comment`).
+        item.content = item.comment ?? item.content ?? null;
+      }
+    }
 
     // Also fetch list of users for the filter dropdown
     const { data: users } = await adminDb.from('users').select('id, name, email').order('name', { ascending: true });

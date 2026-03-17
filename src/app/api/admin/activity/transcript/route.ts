@@ -8,11 +8,17 @@ interface Transcript {
   id: string;
   user_id: string;
   course_id: string;
-  subtopic_id: string;
+  subtopic_id?: string | null;
   content: string;
   notes?: string;
   created_at: string;
   updated_at: string;
+}
+
+function extractSubtopicFromNotes(notes?: string) {
+  if (!notes) return null;
+  const match = notes.match(/^Subtopic:\s*(.+)$/i);
+  return match?.[1]?.trim() || null;
 }
 
 interface User {
@@ -50,8 +56,20 @@ export async function GET(req: NextRequest) {
         orderBy: { column: 'created_at', ascending: false }
       });
     } catch (dbError) {
-      console.error('[Activity API] Database error fetching transcripts:', dbError);
-      return NextResponse.json([], { status: 200 });
+      const message = String((dbError as any)?.message || '');
+      if (!message.includes("public.transcript")) {
+        console.error('[Activity API] Database error fetching transcripts:', dbError);
+        return NextResponse.json([], { status: 200 });
+      }
+
+      try {
+        transcripts = await DatabaseService.getRecords<Transcript>('transcripts', {
+          orderBy: { column: 'created_at', ascending: false }
+        });
+      } catch (fallbackError) {
+        console.error('[Activity API] Database error fetching transcripts fallback table:', fallbackError);
+        return NextResponse.json([], { status: 200 });
+      }
     }
 
     console.log(`[Activity API] Found ${transcripts.length} total transcripts in database`);
@@ -103,10 +121,12 @@ export async function GET(req: NextRequest) {
         });
         
         // Get subtopic info
-        const subtopics: Subtopic[] = await DatabaseService.getRecords<Subtopic>('subtopics', {
-          filter: { id: transcript.subtopic_id },
-          limit: 1
-        });
+        const subtopics: Subtopic[] = transcript.subtopic_id
+          ? await DatabaseService.getRecords<Subtopic>('subtopics', {
+            filter: { id: transcript.subtopic_id },
+            limit: 1
+          })
+          : [];
         
         const user = users.length > 0 ? users[0] : null;
         const courseData = courses.length > 0 ? courses[0] : null;
@@ -121,6 +141,8 @@ export async function GET(req: NextRequest) {
           } catch (parseError) {
             topicName = subtopic.title || 'Unknown Topic';
           }
+        } else {
+          topicName = extractSubtopicFromNotes(transcript.notes) || 'Unknown Topic';
         }
         
         // Filter by topic if specified (after we have the parsed topic name)

@@ -4,7 +4,18 @@
 import React, { useEffect, useMemo, useState } from 'react'
 import styles from './page.module.scss'
 import { useRouter } from 'next/navigation'
-import { FiTrash2, FiAlertCircle, FiBookOpen, FiCheckSquare, FiMessageCircle, FiFileText } from 'react-icons/fi'
+import {
+  FiTrash2,
+  FiAlertCircle,
+  FiBookOpen,
+  FiCheckSquare,
+  FiMessageCircle,
+  FiFileText,
+  FiSearch,
+  FiUsers,
+  FiClock,
+  FiTrendingUp,
+} from 'react-icons/fi'
 import { useAdmin } from '@/hooks/useAdmin'
 
 interface UserRow {
@@ -12,6 +23,7 @@ interface UserRow {
   email: string
   role: string
   createdAt: string
+  created_at?: string
   totalGenerate: number
   totalTranscripts: number
   totalQuizzes: number
@@ -72,7 +84,10 @@ export default function AdminUsersPage() {
   const router = useRouter()
   const { admin, loading: authLoading } = useAdmin()
   const [users, setUsers] = useState<UserRow[]>([])
-  const [filterUser, setFilterUser] = useState('')
+  const [searchTerm, setSearchTerm] = useState('')
+  const [roleFilter, setRoleFilter] = useState<'ALL' | 'USER' | 'ADMIN'>('ALL')
+  const [sortBy, setSortBy] = useState<'recent' | 'email' | 'engagement'>('recent')
+  const [activeTab, setActiveTab] = useState<'overview' | 'activity' | 'subtopics'>('overview')
   const [isLoading, setIsLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
   const [deleteInProgress, setDeleteInProgress] = useState<string | null>(null)
@@ -146,14 +161,31 @@ export default function AdminUsersPage() {
     }
   }
 
-  const handleRowClick = (
-    event: React.MouseEvent<HTMLTableRowElement>,
-    id: string
-  ) => {
-    if ((event.target as HTMLElement).closest('button')) {
-      return
+  const parseDate = (value?: string | null) => {
+    if (!value) return null
+    const parsed = new Date(value)
+    if (Number.isNaN(parsed.getTime())) return null
+    return parsed
+  }
+
+  const getActivityStatus = (lastActivity?: string | null) => {
+    const last = parseDate(lastActivity)
+    if (!last) {
+      return { label: 'No Activity', tone: 'cold' as const }
     }
-    setSelectedUserId(id)
+
+    const diffMs = Date.now() - last.getTime()
+    const diffDays = diffMs / (1000 * 60 * 60 * 24)
+
+    if (diffDays <= 2) return { label: 'Active', tone: 'hot' as const }
+    if (diffDays <= 7) return { label: 'Warm', tone: 'warm' as const }
+    return { label: 'Idle', tone: 'cold' as const }
+  }
+
+  const getCreatedAt = (user: UserRow) => user.createdAt || user.created_at || ''
+
+  const getEngagementScore = (user: UserRow) => {
+    return user.totalGenerate * 3 + user.totalQuizzes * 2 + user.totalJournals * 2 + user.totalTranscripts
   }
 
   const isSubtopicLogged = (subtopicId: string) => {
@@ -199,12 +231,88 @@ export default function AdminUsersPage() {
   }
 
   const displayedUsers = useMemo(
-    () =>
-      filterUser
-        ? users.filter((u) => u.id === filterUser)
-        : users,
-    [filterUser, users]
+    () => {
+      const normalizedSearch = searchTerm.trim().toLowerCase()
+      const list = users
+        .filter((user) => (roleFilter === 'ALL' ? true : user.role.toUpperCase() === roleFilter))
+        .filter((user) => {
+          if (!normalizedSearch) return true
+          return user.email.toLowerCase().includes(normalizedSearch)
+        })
+
+      const sorted = [...list]
+      if (sortBy === 'email') {
+        sorted.sort((a, b) => a.email.localeCompare(b.email))
+      }
+      if (sortBy === 'engagement') {
+        sorted.sort((a, b) => getEngagementScore(b) - getEngagementScore(a))
+      }
+      if (sortBy === 'recent') {
+        sorted.sort((a, b) => {
+          const aTime = parseDate(a.lastActivity)?.getTime() ?? 0
+          const bTime = parseDate(b.lastActivity)?.getTime() ?? 0
+          return bTime - aTime
+        })
+      }
+
+      return sorted
+    },
+    [roleFilter, searchTerm, sortBy, users]
   )
+
+  const studentUsers = useMemo(
+    () => users.filter((u) => u.role.toUpperCase() === 'USER'),
+    [users]
+  )
+
+  const activeCount = useMemo(
+    () => studentUsers.filter((u) => getActivityStatus(u.lastActivity).tone === 'hot').length,
+    [studentUsers]
+  )
+
+  const idleCount = useMemo(
+    () => studentUsers.filter((u) => getActivityStatus(u.lastActivity).tone === 'cold').length,
+    [studentUsers]
+  )
+
+  const selectedUser = useMemo(
+    () => users.find((u) => u.id === selectedUserId) ?? null,
+    [selectedUserId, users]
+  )
+
+  const timelineEntries = useMemo(() => {
+    if (!activitySummary) return []
+    const entries: Array<{ label: string; title: string; timestamp?: string | null; detail?: string | null }> = []
+    if (activitySummary.recentDiscussion) {
+      entries.push({
+        label: 'Discussion',
+        title: 'Latest discussion session',
+        timestamp: activitySummary.recentDiscussion.updatedAt,
+        detail: `Phase ${activitySummary.recentDiscussion.phase ?? 'N/A'} · Goals ${activitySummary.recentDiscussion.goalCount}`,
+      })
+    }
+    if (activitySummary.recentJournal) {
+      entries.push({
+        label: 'Journal',
+        title: activitySummary.recentJournal.title ?? 'Latest journal entry',
+        timestamp: activitySummary.recentJournal.createdAt,
+        detail: activitySummary.recentJournal.snippet ?? null,
+      })
+    }
+    if (activitySummary.recentTranscript) {
+      entries.push({
+        label: 'Transcript',
+        title: activitySummary.recentTranscript.title ?? 'Latest transcript',
+        timestamp: activitySummary.recentTranscript.createdAt,
+      })
+    }
+
+    return entries.sort((a, b) => {
+      const aTime = parseDate(a.timestamp)?.getTime() ?? 0
+      const bTime = parseDate(b.timestamp)?.getTime() ?? 0
+      return bTime - aTime
+    })
+  }, [activitySummary])
 
   useEffect(() => {
     if (displayedUsers.length === 0) {
@@ -275,264 +383,299 @@ export default function AdminUsersPage() {
       .finally(() => setSubtopicLoading(false))
   }, [selectedUserId])
 
-  if (authLoading) return <div className={styles.loading}>Loading...</div>;
-  if (!admin) return null;
+  if (authLoading) return <div className={styles.loading}>Loading...</div>
+  if (!admin) return null
 
   return (
     <div className={styles.page}>
       <header className={styles.header}>
-        <h1 className={styles.pageTitle}>Student Management</h1>
-        <div className={styles.filters}>
-          <select
-            className={styles.select}
-            value={filterUser}
-            onChange={(e) => setFilterUser(e.target.value)}
-          >
-            <option value="">All Students</option>
-            {users.map((u) => (
-              <option key={u.id} value={u.id}>
-                {u.email}
-              </option>
-            ))}
-          </select>
+        <div>
+          <h1 className={styles.pageTitle}>Students Workspace</h1>
+          <p className={styles.pageSubtitle}>Monitor engagement, inspect learning traces, and manage student actions in one place.</p>
         </div>
       </header>
 
-        {isLoading ? (
-          <div className={styles.loading}>Loading users...</div>
-        ) : error ? (
-          <div className={styles.error}>
-            <FiAlertCircle /> {error}
-          </div>
-        ) : (
-          <section className={styles.tableWrapper}>
-            <table className={styles.table}>
-              <thead>
-                <tr>
-                  <th>Email</th>
-                  <th>Role</th>
-                  <th>Registered</th>
-                  <th>
-                    <div className={styles.iconHeader}>
-                      <FiFileText title="Generated Courses" />
-                    </div>
-                  </th>
-                  <th>
-                    <div className={styles.iconHeader}>
-                      <FiMessageCircle title="Transcripts" />
-                    </div>
-                  </th>
-                  <th>
-                    <div className={styles.iconHeader}>
-                      <FiCheckSquare title="Quizzes" />
-                    </div>
-                  </th>
-                  <th>
-                    <div className={styles.iconHeader}>
-                      <FiBookOpen title="Journals" />
-                    </div>
-                  </th>
-                  <th>Last Activity</th>
-                  <th>Actions</th>
-                </tr>
-              </thead>
-                  <tbody>
-                    {displayedUsers.length === 0 ? (
-                      <tr>
-                        <td colSpan={9} className={styles.noData}>No users found</td>
-                      </tr>
-                    ) : (
-                      displayedUsers.map((u) => (
-                        <tr
-                          key={u.id}
-                          className={[
-                            styles.userRow,
-                            u.role === 'ADMIN' ? styles.adminRow : '',
-                            selectedUserId === u.id ? styles.activeRow : '',
-                          ].join(' ')}
-                          onClick={(event) => handleRowClick(event, u.id)}
-                        >
-                          <td>{u.email}</td>
-                          <td>
-                            <span className={`${styles.roleBadge} ${u.role === 'ADMIN' ? styles.adminBadge : styles.userBadge}`}>
-                              {u.role}
-                            </span>
-                          </td>
-                          <td>{formatDate(u.createdAt)}</td>
-                          <td>{u.totalGenerate}</td>
-                          <td>{u.totalTranscripts}</td>
-                          <td>{u.totalQuizzes}</td>
-                          <td>{u.totalJournals}</td>
-                          <td>{u.lastActivity}</td>
-                          <td className={styles.actionBtns}>
-                            <button 
-                              className={`${styles.deleteBtn} ${u.role === 'ADMIN' ? styles.disabled : ''}`} 
-                              onClick={() => u.role !== 'ADMIN' && handleDelete(u.id, u.email)}
-                              disabled={u.role === 'ADMIN' || deleteInProgress === u.id}
-                            >
-                              {deleteInProgress === u.id ? 'Deleting...' : (
-                                <>
-                                  <FiTrash2 /> Delete
-                                </>
-                              )}
-                            </button>
-                          </td>
-                        </tr>
-                      ))
-                    )}
-                  </tbody>
-                </table>
-              </section>
-            )}
-            {selectedUserId && (
-              <>
-                <section className={styles.activityPanel}>
-                  <header>
-                    <h3>Activity Snapshot</h3>
-                    <p>Data synced directly from the database tables the user interacts with.</p>
-                  </header>
-                  {activityLoading && <div className={styles.loading}>Loading activity details...</div>}
-                  {activityError && (
-                    <div className={styles.error}>
-                      <FiAlertCircle /> {activityError}
-                    </div>
-                  )}
-                  {activitySummary && !activityLoading && !activityError && (
-                    <div className={styles.activityGrid}>
-                      <div className={styles.activityCard}>
-                        <h4>Discussion Sessions</h4>
-                        <p className={styles.activityValue}>{activitySummary.totals.discussions}</p>
-                        {activitySummary.recentDiscussion ? (
-                          <>
-                            <p className={styles.activityLabel}>
-                              Last session: {new Date(activitySummary.recentDiscussion.updatedAt).toLocaleString()}
-                            </p>
-                            <p className={styles.activityLabel}>
-                              Phase: {activitySummary.recentDiscussion.phase ?? '—'} · Goals {activitySummary.recentDiscussion.goalCount}
-                            </p>
-                          </>
-                        ) : (
-                          <p className={styles.activityLabel}>No discussion yet</p>
-                        )}
-                      </div>
-                      <div className={styles.activityCard}>
-                        <h4>Journals</h4>
-                        <p className={styles.activityValue}>{activitySummary.totals.journals}</p>
-                        {activitySummary.recentJournal ? (
-                          <>
-                            <p className={styles.activityLabel}>
-                              Last: {new Date(activitySummary.recentJournal.createdAt).toLocaleString()}
-                            </p>
-                            <p className={styles.activityLabel}>
-                              {activitySummary.recentJournal.title ?? 'Journal entry'}
-                            </p>
-                            {activitySummary.recentJournal.snippet && (
-                              <p className={styles.activityPreview}>
-                                {activitySummary.recentJournal.snippet}…
-                              </p>
-                            )}
-                          </>
-                        ) : (
-                          <p className={styles.activityLabel}>No journal entries</p>
-                        )}
-                      </div>
-                      <div className={styles.activityCard}>
-                        <h4>Transcripts</h4>
-                        <p className={styles.activityValue}>{activitySummary.totals.transcripts}</p>
-                        {activitySummary.recentTranscript ? (
-                          <>
-                            <p className={styles.activityLabel}>
-                              Last: {new Date(activitySummary.recentTranscript.createdAt).toLocaleString()}
-                            </p>
-                            <p className={styles.activityLabel}>
-                              {activitySummary.recentTranscript.title ?? 'Transcript record'}
-                            </p>
-                          </>
-                        ) : (
-                          <p className={styles.activityLabel}>No transcripts</p>
-                        )}
-                      </div>
-                    </div>
-                  )}
-                </section>
+      <section className={styles.controlBar}>
+        <label className={styles.searchInput}>
+          <FiSearch />
+          <input
+            type="text"
+            placeholder="Search by email..."
+            value={searchTerm}
+            onChange={(e) => setSearchTerm(e.target.value)}
+          />
+        </label>
+        <select className={styles.select} value={roleFilter} onChange={(e) => setRoleFilter(e.target.value as 'ALL' | 'USER' | 'ADMIN')}>
+          <option value="ALL">All Roles</option>
+          <option value="USER">Students</option>
+          <option value="ADMIN">Admins</option>
+        </select>
+        <select className={styles.select} value={sortBy} onChange={(e) => setSortBy(e.target.value as 'recent' | 'email' | 'engagement')}>
+          <option value="recent">Sort: Recent Activity</option>
+          <option value="engagement">Sort: Engagement</option>
+          <option value="email">Sort: Email A-Z</option>
+        </select>
+      </section>
 
-                <section className={styles.subtopicPanel}>
-                  <header>
-                    <h3>Subtopic Admin Actions</h3>
-                    <p>Catat permintaan delete subtopic tanpa menghapus data siswa.</p>
-                  </header>
-                  {subtopicLoading && <div className={styles.loading}>Loading subtopics...</div>}
-                  {subtopicError && (
-                    <div className={styles.error}>
-                      <FiAlertCircle /> {subtopicError}
-                    </div>
-                  )}
-                  {!subtopicLoading && !subtopicError && (
-                    <>
-                      {subtopicData && subtopicData.courses.length > 0 ? (
-                        <div className={styles.subtopicCourses}>
-                          {subtopicData.courses.map((course) => (
-                            <article key={course.courseId} className={styles.courseCard}>
-                              <div className={styles.courseHeader}>
-                                <div>
-                                  <h4>{course.courseTitle}</h4>
-                                  <span>{course.subtopics.length} subtopic</span>
+      <section className={styles.statGrid}>
+        <article className={styles.statCard}>
+          <span className={styles.statIcon}><FiUsers /></span>
+          <div>
+            <p className={styles.statLabel}>Total Students</p>
+            <h3>{studentUsers.length}</h3>
+          </div>
+        </article>
+        <article className={styles.statCard}>
+          <span className={styles.statIcon}><FiTrendingUp /></span>
+          <div>
+            <p className={styles.statLabel}>Active (2 Days)</p>
+            <h3>{activeCount}</h3>
+          </div>
+        </article>
+        <article className={styles.statCard}>
+          <span className={styles.statIcon}><FiClock /></span>
+          <div>
+            <p className={styles.statLabel}>Idle (7+ Days)</p>
+            <h3>{idleCount}</h3>
+          </div>
+        </article>
+      </section>
+
+      {isLoading ? (
+        <div className={styles.loading}>Loading students...</div>
+      ) : error ? (
+        <div className={styles.error}>
+          <FiAlertCircle /> {error}
+        </div>
+      ) : (
+        <section className={styles.workspace}>
+          <aside className={styles.studentRail}>
+            <div className={styles.railHeader}>
+              <h3>Student List</h3>
+              <span>{displayedUsers.length} records</span>
+            </div>
+
+            {displayedUsers.length === 0 ? (
+              <p className={styles.noData}>No users matched your filter.</p>
+            ) : (
+              <div className={styles.studentList}>
+                {displayedUsers.map((u) => {
+                  const status = getActivityStatus(u.lastActivity)
+                  const isActive = selectedUserId === u.id
+                  return (
+                    <article
+                      key={u.id}
+                      className={`${styles.studentCard} ${isActive ? styles.studentCardActive : ''}`}
+                      onClick={() => setSelectedUserId(u.id)}
+                    >
+                      <div className={styles.studentCardTop}>
+                        <h4>{u.email}</h4>
+                        <span className={`${styles.roleBadge} ${u.role.toUpperCase() === 'ADMIN' ? styles.adminBadge : styles.userBadge}`}>
+                          {u.role}
+                        </span>
+                      </div>
+
+                      <div className={styles.metaRow}>
+                        <span className={`${styles.statusPill} ${styles[`status_${status.tone}`]}`}>{status.label}</span>
+                        <span>Joined {formatDate(getCreatedAt(u))}</span>
+                      </div>
+
+                      <div className={styles.countGrid}>
+                        <span><FiFileText /> {u.totalGenerate}</span>
+                        <span><FiCheckSquare /> {u.totalQuizzes}</span>
+                        <span><FiBookOpen /> {u.totalJournals}</span>
+                        <span><FiMessageCircle /> {u.totalTranscripts}</span>
+                      </div>
+
+                      <div className={styles.cardFooter}>
+                        <small>Last activity: {u.lastActivity || 'N/A'}</small>
+                        <button
+                          className={`${styles.deleteBtn} ${u.role.toUpperCase() === 'ADMIN' ? styles.disabled : ''}`}
+                          onClick={(event) => {
+                            event.stopPropagation()
+                            if (u.role.toUpperCase() !== 'ADMIN') {
+                              handleDelete(u.id, u.email)
+                            }
+                          }}
+                          disabled={u.role.toUpperCase() === 'ADMIN' || deleteInProgress === u.id}
+                        >
+                          {deleteInProgress === u.id ? 'Deleting...' : <FiTrash2 />}
+                        </button>
+                      </div>
+                    </article>
+                  )
+                })}
+              </div>
+            )}
+          </aside>
+
+          <section className={styles.detailPanel}>
+            {!selectedUser ? (
+              <div className={styles.emptyDetail}>Select a student to inspect activity and actions.</div>
+            ) : (
+              <>
+                <header className={styles.detailHeader}>
+                  <div>
+                    <h2>{selectedUser.email}</h2>
+                    <p>
+                      Role {selectedUser.role} · Joined {formatDate(getCreatedAt(selectedUser))}
+                    </p>
+                  </div>
+                  <div className={styles.detailStats}>
+                    <span>Courses {selectedUser.totalGenerate}</span>
+                    <span>Quizzes {selectedUser.totalQuizzes}</span>
+                    <span>Journals {selectedUser.totalJournals}</span>
+                  </div>
+                </header>
+
+                <div className={styles.tabs}>
+                  <button className={activeTab === 'overview' ? styles.tabActive : ''} onClick={() => setActiveTab('overview')}>Overview</button>
+                  <button className={activeTab === 'activity' ? styles.tabActive : ''} onClick={() => setActiveTab('activity')}>Timeline</button>
+                  <button className={activeTab === 'subtopics' ? styles.tabActive : ''} onClick={() => setActiveTab('subtopics')}>Subtopic Actions</button>
+                </div>
+
+                {activityLoading && activeTab !== 'subtopics' && <div className={styles.loading}>Loading activity details...</div>}
+                {activityError && activeTab !== 'subtopics' && (
+                  <div className={styles.error}>
+                    <FiAlertCircle /> {activityError}
+                  </div>
+                )}
+
+                {activeTab === 'overview' && (
+                  <div className={styles.activityGrid}>
+                    <article className={styles.activityCard}>
+                      <h4>Discussion Sessions</h4>
+                      <p className={styles.activityValue}>{activitySummary?.totals.discussions ?? 0}</p>
+                      <p className={styles.activityLabel}>
+                        {activitySummary?.recentDiscussion
+                          ? `Last: ${new Date(activitySummary.recentDiscussion.updatedAt).toLocaleString()}`
+                          : 'No discussion yet'}
+                      </p>
+                    </article>
+                    <article className={styles.activityCard}>
+                      <h4>Journals</h4>
+                      <p className={styles.activityValue}>{activitySummary?.totals.journals ?? 0}</p>
+                      <p className={styles.activityLabel}>
+                        {activitySummary?.recentJournal
+                          ? activitySummary.recentJournal.title ?? 'Latest journal'
+                          : 'No journal entries'}
+                      </p>
+                    </article>
+                    <article className={styles.activityCard}>
+                      <h4>Transcripts</h4>
+                      <p className={styles.activityValue}>{activitySummary?.totals.transcripts ?? 0}</p>
+                      <p className={styles.activityLabel}>
+                        {activitySummary?.recentTranscript
+                          ? activitySummary.recentTranscript.title ?? 'Latest transcript'
+                          : 'No transcript records'}
+                      </p>
+                    </article>
+                  </div>
+                )}
+
+                {activeTab === 'activity' && (
+                  <div className={styles.timelineWrap}>
+                    {timelineEntries.length === 0 ? (
+                      <p className={styles.noData}>No recent activity available.</p>
+                    ) : (
+                      <ul className={styles.timelineList}>
+                        {timelineEntries.map((item, index) => (
+                          <li key={`${item.label}-${index}`}>
+                            <div>
+                              <strong>{item.label}</strong>
+                              <p>{item.title}</p>
+                              {item.detail ? <small>{item.detail}</small> : null}
+                            </div>
+                            <time>{item.timestamp ? new Date(item.timestamp).toLocaleString() : 'N/A'}</time>
+                          </li>
+                        ))}
+                      </ul>
+                    )}
+                  </div>
+                )}
+
+                {activeTab === 'subtopics' && (
+                  <section className={styles.subtopicPanel}>
+                    <header>
+                      <h3>Subtopic Admin Actions</h3>
+                      <p>Catat permintaan delete subtopic tanpa menghapus data siswa.</p>
+                    </header>
+                    {subtopicLoading && <div className={styles.loading}>Loading subtopics...</div>}
+                    {subtopicError && (
+                      <div className={styles.error}>
+                        <FiAlertCircle /> {subtopicError}
+                      </div>
+                    )}
+                    {!subtopicLoading && !subtopicError && (
+                      <>
+                        {subtopicData && subtopicData.courses.length > 0 ? (
+                          <div className={styles.subtopicCourses}>
+                            {subtopicData.courses.map((course) => (
+                              <article key={course.courseId} className={styles.courseCard}>
+                                <div className={styles.courseHeader}>
+                                  <div>
+                                    <h4>{course.courseTitle}</h4>
+                                    <span>{course.subtopics.length} subtopic</span>
+                                  </div>
                                 </div>
-                              </div>
-                              {course.subtopics.length === 0 ? (
-                                <p className={styles.noData}>Course belum memiliki subtopic</p>
-                              ) : (
-                                <ul className={styles.subtopicList}>
-                                  {course.subtopics.map((subtopic) => {
-                                    const logged = isSubtopicLogged(subtopic.subtopicId)
-                                    const isBusy = subtopicAction === subtopic.subtopicId
-                                    return (
-                                      <li key={subtopic.subtopicId} className={styles.subtopicItem}>
-                                        <div className={styles.subtopicMeta}>
-                                          <strong>{subtopic.title}</strong>
-                                          <span>Order #{subtopic.orderIndex + 1}</span>
-                                        </div>
-                                        <button
-                                          className={`${styles.subtopicActionBtn} ${logged ? styles.deleteLogged : ''}`}
-                                          disabled={logged || isBusy}
-                                          onClick={() =>
-                                            handleLogSubtopicDelete(course.courseId, subtopic.subtopicId, subtopic.title)
-                                          }
-                                        >
-                                          {logged ? 'Logged' : isBusy ? 'Saving…' : 'Log Delete'}
-                                        </button>
-                                      </li>
-                                    )
-                                  })}
-                                </ul>
-                              )}
-                            </article>
-                          ))}
-                        </div>
-                      ) : (
-                        <p className={styles.noData}>User ini belum memiliki course.</p>
-                      )}
-                      {subtopicData && subtopicData.deleteLogs.length > 0 && (
-                        <div className={styles.logList}>
-                          <h4>Riwayat Delete Terbaru</h4>
-                          <ul>
-                            {subtopicData.deleteLogs.slice(0, 6).map((log) => (
-                              <li key={log.id}>
-                                <div>
-                                  <strong>{log.subtopicTitle}</strong>
-                                  <span>{new Date(log.createdAt).toLocaleString()}</span>
-                                </div>
-                                <small>{log.adminEmail ?? 'Admin'}</small>
-                              </li>
+                                {course.subtopics.length === 0 ? (
+                                  <p className={styles.noData}>Course belum memiliki subtopic</p>
+                                ) : (
+                                  <ul className={styles.subtopicList}>
+                                    {course.subtopics.map((subtopic) => {
+                                      const logged = isSubtopicLogged(subtopic.subtopicId)
+                                      const isBusy = subtopicAction === subtopic.subtopicId
+                                      return (
+                                        <li key={subtopic.subtopicId} className={styles.subtopicItem}>
+                                          <div className={styles.subtopicMeta}>
+                                            <strong>{subtopic.title}</strong>
+                                            <span>Order #{subtopic.orderIndex + 1}</span>
+                                          </div>
+                                          <button
+                                            className={`${styles.subtopicActionBtn} ${logged ? styles.deleteLogged : ''}`}
+                                            disabled={logged || isBusy}
+                                            onClick={() =>
+                                              handleLogSubtopicDelete(course.courseId, subtopic.subtopicId, subtopic.title)
+                                            }
+                                          >
+                                            {logged ? 'Logged' : isBusy ? 'Saving…' : 'Log Delete'}
+                                          </button>
+                                        </li>
+                                      )
+                                    })}
+                                  </ul>
+                                )}
+                              </article>
                             ))}
-                          </ul>
-                        </div>
-                      )}
-                    </>
-                  )}
-                </section>
+                          </div>
+                        ) : (
+                          <p className={styles.noData}>User ini belum memiliki course.</p>
+                        )}
+                        {subtopicData && subtopicData.deleteLogs.length > 0 && (
+                          <div className={styles.logList}>
+                            <h4>Riwayat Delete Terbaru</h4>
+                            <ul>
+                              {subtopicData.deleteLogs.slice(0, 6).map((log) => (
+                                <li key={log.id}>
+                                  <div>
+                                    <strong>{log.subtopicTitle}</strong>
+                                    <span>{new Date(log.createdAt).toLocaleString()}</span>
+                                  </div>
+                                  <small>{log.adminEmail ?? 'Admin'}</small>
+                                </li>
+                              ))}
+                            </ul>
+                          </div>
+                        )}
+                      </>
+                    )}
+                  </section>
+                )}
               </>
             )}
-        </div>
-      )
-    }
+          </section>
+        </section>
+      )}
+    </div>
+  )
+}

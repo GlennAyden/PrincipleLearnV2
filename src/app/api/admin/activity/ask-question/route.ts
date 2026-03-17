@@ -14,6 +14,8 @@ interface AskQuestionHistory {
   subtopic_label: string | null;
   question: string;
   answer: string;
+  prompt_components?: any;
+  reasoning_note?: string | null;
   created_at: string;
 }
 
@@ -122,6 +124,8 @@ export async function GET(req: NextRequest) {
         courseTitle: course?.title ?? 'Tanpa Kursus',
         question: record.question,
         answer: record.answer,
+        promptComponents: record.prompt_components ?? null,
+        reasoningNote: record.reasoning_note ?? '',
         moduleIndex: record.module_index ?? 0,
         subtopicIndex: record.subtopic_index ?? 0,
         pageNumber: record.page_number ?? 0,

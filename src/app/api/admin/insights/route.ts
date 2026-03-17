@@ -74,12 +74,18 @@ export async function GET(request: NextRequest) {
     // ── 2. Quiz Performance (RM3) ──
     let quizQuery = adminDb
       .from('quiz_submissions')
-      .select('id, user_id, is_correct, reasoning_note, submitted_at');
+      .select('id, user_id, is_correct, reasoning_note, created_at');
 
     if (userId) quizQuery = quizQuery.eq('user_id', userId);
 
     const { data: quizzes } = await quizQuery;
-    const quizList = Array.isArray(quizzes) ? quizzes : [];
+    const quizList = Array.isArray(quizzes)
+      ? quizzes.map((item: any) => ({
+          ...item,
+          submitted_at: item.created_at ?? null,
+        }))
+      : [];
+
     const quizCorrect = quizList.filter((q: any) => q.is_correct).length;
     const quizAccuracy = quizList.length > 0
       ? Math.round((quizCorrect / quizList.length) * 100) : 0;

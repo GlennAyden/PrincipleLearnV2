@@ -3,19 +3,10 @@
 import { NextResponse } from 'next/server'
 import type { NextRequest } from 'next/server'
 import jwt from 'jsonwebtoken'
-import { DatabaseService } from '@/lib/database'
 
 const JWT_SECRET = process.env.JWT_SECRET!
 if (!JWT_SECRET) {
   throw new Error('JWT_SECRET belum di-set di env')
-}
-
-interface User {
-  id: string;
-  email: string;
-  password_hash: string;
-  name?: string;
-  role: string;
 }
 
 export async function GET(req: NextRequest) {
@@ -40,38 +31,19 @@ export async function GET(req: NextRequest) {
       return NextResponse.json({ message: 'Invalid token' }, { status: 401 })
     }
 
-    // Get user from database
-    let users: User[] = []
-    try {
-      users = await DatabaseService.getRecords<User>('users', {
-        filter: { id: payload.userId },
-        limit: 1
-      })
-    } catch (dbError) {
-      console.error('[Admin Me] Database error:', dbError)
-      return NextResponse.json({ message: 'Database connection error' }, { status: 500 })
-    }
-
-    if (users.length === 0) {
-      console.log('[Admin Me] User not found in database:', payload.userId)
-      return NextResponse.json({ message: 'User not found' }, { status: 404 })
-    }
-
-    const user = users[0]
-    console.log('[Admin Me] User found:', { id: user.id, email: user.email, role: user.role })
-
-    // Check if user has admin role
-    if (user.role !== 'admin') {
-      console.log('[Admin Me] Access denied - user role:', user.role)
+    // Check if user has admin role (from token payload — avoids unnecessary DB round-trip)
+    const role: string = (payload.role as string) || ''
+    if (role.toLowerCase() !== 'admin') {
+      console.log('[Admin Me] Access denied - user role:', role)
       return NextResponse.json({ message: 'Access denied' }, { status: 403 })
     }
 
-    // Return user data (without sensitive info)
+    // Return user data directly from token payload (no DB query needed)
     const userData = {
-      id: user.id,
-      email: user.email,
-      name: user.name || 'Admin User',
-      role: user.role
+      id: payload.userId,
+      email: payload.email,
+      name: payload.name || 'Admin User',
+      role: role,
     }
 
     console.log('[Admin Me] Returning user data:', userData)

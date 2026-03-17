@@ -3,6 +3,21 @@ import { NextRequest, NextResponse } from 'next/server';
 import { adminDb } from '@/lib/database';
 import { verifyToken } from '@/lib/jwt';
 
+function normalizePromptComponents(value: unknown) {
+  if (!value) return null;
+
+  if (typeof value === 'string') {
+    try {
+      const parsed = JSON.parse(value);
+      return parsed && typeof parsed === 'object' ? parsed : null;
+    } catch {
+      return null;
+    }
+  }
+
+  return typeof value === 'object' ? value : null;
+}
+
 export async function GET(request: NextRequest) {
   try {
     const { searchParams } = new URL(request.url);
@@ -38,10 +53,23 @@ export async function GET(request: NextRequest) {
       return NextResponse.json({ error: 'Failed to fetch prompt journey' }, { status: 500 });
     }
 
+    const normalizedEntries = (data || []).map((entry: any) => ({
+      ...entry,
+      prompt_components: normalizePromptComponents(entry.prompt_components),
+      prompt_version:
+        typeof entry.prompt_version === 'number' && entry.prompt_version > 0
+          ? entry.prompt_version
+          : 1,
+      session_number:
+        typeof entry.session_number === 'number' && entry.session_number > 0
+          ? entry.session_number
+          : 1,
+    }));
+
     return NextResponse.json({
       success: true,
-      entries: data || [],
-      count: (data || []).length,
+      entries: normalizedEntries,
+      count: normalizedEntries.length,
     });
   } catch (err: any) {
     console.error('[PromptJourney] Error:', err);

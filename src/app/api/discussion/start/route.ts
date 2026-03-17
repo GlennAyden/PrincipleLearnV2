@@ -110,17 +110,22 @@ async function postHandler(request: NextRequest) {
         goals: buildInitialGoals(templateRow.template?.learning_goals),
       });
 
-      await adminDb.from('discussion_messages').insert({
+      const { error: initialMessageError } = await adminDb.from('discussion_messages').insert({
         session_id: session.id,
         role: 'agent',
         content: steps[0].step.prompt,
         step_key: steps[0].step.key,
         metadata: {
+          type: 'agent_response',
           phase: steps[0].phaseId,
           expected_type: steps[0].step.expected_type ?? 'open',
           options: steps[0].step.options ?? [],
         },
       });
+
+      if (initialMessageError) {
+        throw new Error('Failed to persist initial discussion prompt');
+      }
     }
 
     const messages = await fetchMessages(session.id);
@@ -222,15 +227,15 @@ async function createSession(params: {
       status: 'in_progress',
       phase: firstPhaseId,
       learning_goals: goals,
-    })
-    .select('id, status, phase, learning_goals, template_id, course_id, subtopic_id')
-    .single();
+    });
 
-  if (error || !data) {
+  const row = Array.isArray(data) ? data[0] : data;
+
+  if (error || !row) {
     throw new Error('Failed to create discussion session');
   }
 
-  return data;
+  return row;
 }
 
 async function fetchMessages(sessionId: string) {
