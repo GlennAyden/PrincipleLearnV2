@@ -6,6 +6,8 @@
   margin: 0 auto;
   width: 100%;
   color: #1e293b;
+  overflow-x: hidden;
+  /* Prevent horizontal scrollbar */
 }
 
 .hero {
@@ -242,22 +244,6 @@
   gap: 8px;
 }
 
-.evidenceLinkBtn {
-  border: 1px solid #c7d2fe;
-  background: #eef2ff;
-  color: #4338ca;
-  border-radius: 999px;
-  padding: 0.28rem 0.7rem;
-  font-size: 0.74rem;
-  font-weight: 700;
-  cursor: pointer;
-}
-
-.evidenceLinkBtn:hover {
-  background: #e0e7ff;
-  border-color: #a5b4fc;
-}
-
 .rawDetail {
   border: 1px solid #dbe3ef;
   border-radius: 10px;
@@ -307,6 +293,7 @@
   0% {
     background-position: 200% 0;
   }
+
   100% {
     background-position: -200% 0;
   }

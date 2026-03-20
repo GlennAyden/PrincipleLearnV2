@@ -701,13 +701,6 @@ export default function AdminActivityPage() {
           </div>
           <div className={styles.sectionMeta}>
             <span>{tabCount} records</span>
-            <button
-              type="button"
-              className={styles.evidenceLinkBtn}
-              onClick={() => router.push('/admin/evidence')}
-            >
-              Open Evidence Locker
-            </button>
           </div>
         </header>
 
@@ -814,413 +807,413 @@ export default function AdminActivityPage() {
               </div>
             )}
 
-          {activeTab === 'ask' && (
-            <div className={styles.topicGrid}>
-              {groupedAskLogs.length === 0 ? (
-                <EmptyState message="Belum ada riwayat pertanyaan otomatis" />
-              ) : (
-                groupedAskLogs.map(({ topic, items }) => (
-                  <article key={topic} className={styles.topicCard}>
-                    <header>
-                      <h3>{topic}</h3>
-                      <span>{items.length} percakapan</span>
-                    </header>
-                    <ul>
-                      {items.map((log) => (
-                        <li key={log.id}>
-                          <div className={styles.promptLine}>
-                            <strong>Q:</strong>
-                            <p>{log.question}</p>
-                          </div>
-                          <div className={styles.answerLine}>
-                            <strong>A:</strong>
-                            <p>{log.answer}</p>
-                          </div>
-                          {log.promptComponents && (
-                            <div className={styles.feedbackBox}>
-                              <strong>Komponen Prompt:</strong>
-                              <p>
-                                {[
-                                  log.promptComponents.tujuan ? 'Tujuan' : null,
-                                  log.promptComponents.konteks ? 'Konteks' : null,
-                                  log.promptComponents.batasan ? 'Batasan' : null,
-                                ].filter(Boolean).join(', ') || '-'}
-                              </p>
+            {activeTab === 'ask' && (
+              <div className={styles.topicGrid}>
+                {groupedAskLogs.length === 0 ? (
+                  <EmptyState message="Belum ada riwayat pertanyaan otomatis" />
+                ) : (
+                  groupedAskLogs.map(({ topic, items }) => (
+                    <article key={topic} className={styles.topicCard}>
+                      <header>
+                        <h3>{topic}</h3>
+                        <span>{items.length} percakapan</span>
+                      </header>
+                      <ul>
+                        {items.map((log) => (
+                          <li key={log.id}>
+                            <div className={styles.promptLine}>
+                              <strong>Q:</strong>
+                              <p>{log.question}</p>
                             </div>
-                          )}
-                          {log.reasoningNote && (
-                            <div className={styles.feedbackBox}>
-                              <strong>Reasoning Siswa:</strong>
-                              <p>{log.reasoningNote}</p>
+                            <div className={styles.answerLine}>
+                              <strong>A:</strong>
+                              <p>{log.answer}</p>
                             </div>
-                          )}
-                          <RawDetail title="Buka Detail Record" data={log} />
-                          <footer>
-                            <span>{log.userEmail}</span>
-                            <span>{log.timestamp}</span>
-                          </footer>
-                        </li>
-                      ))}
-                    </ul>
-                  </article>
-                ))
-              )}
-            </div>
-          )}
-
-          {activeTab === 'challenge' && (
-            <div className={styles.topicGrid}>
-              {groupedChallengeLogs.length === 0 ? (
-                <EmptyState message="Belum ada aktivitas challenge thinking" />
-              ) : (
-                groupedChallengeLogs.map(({ topic, items }) => (
-                  <article key={topic} className={styles.topicCard}>
-                    <header>
-                      <h3>{topic}</h3>
-                      <span>{items.length} tantangan</span>
-                    </header>
-                    <ul>
-                      {items.map((log) => (
-                        <li key={log.id}>
-                          <div className={styles.promptLine}>
-                            <strong>Tantangan:</strong>
-                            <p>{log.question}</p>
-                          </div>
-                          <div className={styles.answerLine}>
-                            <strong>Jawaban Siswa:</strong>
-                            <p>{log.answer}</p>
-                          </div>
-                          <div className={styles.feedbackBox}>
-                            <strong>Feedback AI:</strong>
-                            <p>{log.feedback || 'Belum ada feedback'}</p>
-                          </div>
-                          {log.reasoningNote && (
-                            <div className={styles.feedbackBox}>
-                              <strong>Reasoning Siswa:</strong>
-                              <p>{log.reasoningNote}</p>
-                            </div>
-                          )}
-                          <RawDetail title="Buka Detail Record" data={log} />
-                          <footer>
-                            <span>{log.userEmail}</span>
-                            <span>{log.timestamp}</span>
-                          </footer>
-                        </li>
-                      ))}
-                    </ul>
-                  </article>
-                ))
-              )}
-            </div>
-          )}
-
-          {activeTab === 'quiz' && (
-            <div className={styles.quizList}>
-              {quizLogs.length === 0 ? (
-                <EmptyState message="Belum ada pengerjaan kuis" />
-              ) : (
-                quizLogs.map((log) => (
-                  <article key={log.id} className={styles.quizCard}>
-                    <header>
-                      <div>
-                        <h3>{log.topic}</h3>
-                        <p>{log.courseTitle}</p>
-                      </div>
-                      <div className={log.isCorrect ? styles.pillSuccess : styles.pillMuted}>
-                        {log.isCorrect ? 'Benar' : 'Belum tepat'}
-                      </div>
-                    </header>
-                    <div className={styles.questionBox}>
-                      <strong>Pertanyaan</strong>
-                      <p>{log.question}</p>
-                    </div>
-                    <div className={styles.answerCompare}>
-                      <div>
-                        <span>Jawaban User</span>
-                        <p>{log.userAnswer || '-'}</p>
-                      </div>
-                      <div>
-                        <span>Kunci</span>
-                        <p>{log.correctAnswer || '-'}</p>
-                      </div>
-                    </div>
-                    {log.reasoningNote && (
-                      <div className={styles.feedbackBox}>
-                        <strong>Reasoning Siswa:</strong>
-                        <p>{log.reasoningNote}</p>
-                      </div>
-                    )}
-                    <RawDetail title="Buka Detail Record" data={log} />
-                    <footer>
-                      <span>{log.userEmail}</span>
-                      <span>{log.timestamp}</span>
-                    </footer>
-                  </article>
-                ))
-              )}
-            </div>
-          )}
-
-          {activeTab === 'feedback' && (
-            <div className={styles.feedbackGrid}>
-              {feedbackLogs.length === 0 ? (
-                <EmptyState message="Belum ada feedback" />
-              ) : (
-                feedbackLogs.map((log) => (
-                  <article key={log.id} className={styles.feedbackCard}>
-                    <header>
-                      <div>
-                        <h3>{log.topic}</h3>
-                        <p>{log.courseTitle}</p>
-                      </div>
-                      <span className={styles.ratingBadge}>{log.rating ?? '-'}</span>
-                    </header>
-                    <p className={styles.feedbackComment}>{log.comment || 'Tidak ada komentar'}</p>
-                    <RawDetail title="Buka Detail Record" data={log} />
-                    <footer>
-                      <div>
-                        <small>User</small>
-                        <span>{log.userEmail}</span>
-                      </div>
-                      <div>
-                        <small>Waktu</small>
-                        <span>{log.timestamp}</span>
-                      </div>
-                    </footer>
-                  </article>
-                ))
-              )}
-            </div>
-          )}
-
-          {activeTab === 'jurnal' && (
-            <div className={styles.feedbackGrid}>
-              {jurnalLogs.length === 0 ? (
-                <EmptyState message="Belum ada jurnal" />
-              ) : (
-                jurnalLogs.map((log) => (
-                  <article key={log.id} className={styles.feedbackCard}>
-                    <header>
-                      <div>
-                        <h3>{log.topic}</h3>
-                        <p>{log.userEmail}</p>
-                      </div>
-                    </header>
-                    {log.type === 'structured_reflection' ? (
-                      <>
-                        <div className={styles.feedbackBox}>
-                          <strong>Understood:</strong>
-                          <p>{log.understood || '-'}</p>
-                        </div>
-                        <div className={styles.feedbackBox}>
-                          <strong>Confused:</strong>
-                          <p>{log.confused || '-'}</p>
-                        </div>
-                        <div className={styles.feedbackBox}>
-                          <strong>Strategy:</strong>
-                          <p>{log.strategy || '-'}</p>
-                        </div>
-                        <div className={styles.feedbackBox}>
-                          <strong>Prompt Evolution:</strong>
-                          <p>{log.promptEvolution || '-'}</p>
-                        </div>
-                        <div className={styles.answerCompare}>
-                          <div>
-                            <span>Content Rating</span>
-                            <p>{typeof log.contentRating === 'number' ? log.contentRating : '-'}</p>
-                          </div>
-                          <div>
-                            <span>Content Feedback</span>
-                            <p>{log.contentFeedback || '-'}</p>
-                          </div>
-                        </div>
-                      </>
-                    ) : (
-                      <p className={styles.feedbackComment}>{log.content || 'Tidak ada konten'}</p>
-                    )}
-                    <RawDetail title="Buka Detail Record" data={log} />
-                    <footer>
-                      <div>
-                        <small>User</small>
-                        <span>{log.userEmail}</span>
-                      </div>
-                      <div>
-                        <small>Waktu</small>
-                        <span>{log.timestamp}</span>
-                      </div>
-                      <div>
-                        <button
-                          type="button"
-                          className={styles.clearFilterBtn}
-                          onClick={() => setSelectedJournal(log)}
-                        >
-                          Detail
-                        </button>
-                      </div>
-                    </footer>
-                  </article>
-                ))
-              )}
-            </div>
-          )}
-
-          {activeTab === 'transcript' && (
-            <div className={styles.feedbackGrid}>
-              {transcriptLogs.length === 0 ? (
-                <EmptyState message="Belum ada transcript" />
-              ) : (
-                transcriptLogs.map((log) => (
-                  <article key={log.id} className={styles.feedbackCard}>
-                    <header>
-                      <div>
-                        <h3>{log.topic}</h3>
-                        <p>{log.userEmail}</p>
-                      </div>
-                    </header>
-                    <p className={styles.feedbackComment}>{log.content || 'Tidak ada konten'}</p>
-                    <RawDetail title="Buka Detail Record" data={log} />
-                    <footer>
-                      <div>
-                        <small>User</small>
-                        <span>{log.userEmail}</span>
-                      </div>
-                      <div>
-                        <small>Waktu</small>
-                        <span>{log.timestamp}</span>
-                      </div>
-                      <div>
-                        <button
-                          type="button"
-                          className={styles.clearFilterBtn}
-                          onClick={() => setSelectedTranscript(log)}
-                        >
-                          Detail
-                        </button>
-                      </div>
-                    </footer>
-                  </article>
-                ))
-              )}
-            </div>
-          )}
-
-          {activeTab === 'learningProfile' && (
-            <div className={styles.feedbackGrid}>
-              {learningProfileLogs.length === 0 ? (
-                <EmptyState message="Belum ada learning profile" />
-              ) : (
-                learningProfileLogs.map((log) => (
-                  <article key={log.id} className={styles.feedbackCard}>
-                    <header>
-                      <div>
-                        <h3>{log.displayName || log.userEmail}</h3>
-                        <p>{log.userEmail}</p>
-                      </div>
-                    </header>
-                    <div className={styles.answerCompare}>
-                      <div>
-                        <span>Programming Experience</span>
-                        <p>{log.programmingExperience || '-'}</p>
-                      </div>
-                      <div>
-                        <span>Learning Style</span>
-                        <p>{log.learningStyle || '-'}</p>
-                      </div>
-                    </div>
-                    <div className={styles.feedbackBox}>
-                      <strong>Learning Goals:</strong>
-                      <p>{log.learningGoals || '-'}</p>
-                    </div>
-                    <div className={styles.feedbackBox}>
-                      <strong>Challenges:</strong>
-                      <p>{log.challenges || '-'}</p>
-                    </div>
-                    <RawDetail title="Buka Detail Record" data={log} />
-                    <footer>
-                      <div>
-                        <small>User</small>
-                        <span>{log.userEmail}</span>
-                      </div>
-                      <div>
-                        <small>Update</small>
-                        <span>{log.timestamp}</span>
-                      </div>
-                    </footer>
-                  </article>
-                ))
-              )}
-            </div>
-          )}
-
-          {activeTab === 'discussion' && (
-            <div className={styles.discussionGrid}>
-              {discussionLogs.length === 0 ? (
-                <EmptyState message="Belum ada diskusi" />
-              ) : (
-                discussionLogs.map((log, index) => (
-                  <article key={log.id} className={styles.discussionCard}>
-                    <header>
-                      <div>
-                        <h3>{log.subtopicTitle}</h3>
-                        <p>{log.userEmail}</p>
-                      </div>
-                      <div className={styles.badgeRow}>
-                        <span className={styles.badge}>{log.status}</span>
-                        <span className={styles.badgeMuted}>{log.timestamp}</span>
-                      </div>
-                    </header>
-                    <div className={styles.goalList}>
-                      {log.goals.length === 0 ? (
-                        <p className={styles.muted}>Belum ada goal yang tercatat</p>
-                      ) : (
-                        log.goals.map((goal) => (
-                          <div
-                            key={goal.id || `${log.id}-${goal.description}`}
-                            className={`${styles.goalChip} ${goal.covered ? styles.goalHit : ''}`}
-                          >
-                            <span>{goal.description}</span>
-                            {goal.thinkingSkill?.indicator && (
-                              <small>{goal.thinkingSkill.indicator}</small>
-                            )}
-                          </div>
-                        ))
-                      )}
-                    </div>
-                    <div className={styles.timeline}>
-                      {log.exchanges.length === 0 ? (
-                        <p className={styles.muted}>Belum ada percakapan</p>
-                      ) : (
-                        log.exchanges.map((exchange, stepIndex) => (
-                          <div
-                            key={exchange.stepKey ?? `${log.id}-${index}-${stepIndex}`}
-                            className={styles.timelineItem}
-                          >
-                            <div className={styles.promptBubble}>{exchange.prompt}</div>
-                            {exchange.response && (
-                              <div className={styles.responseBubble}>{exchange.response}</div>
-                            )}
-                            {exchange.coachFeedback && (
-                              <div className={styles.feedbackBubble}>{exchange.coachFeedback}</div>
-                            )}
-                            {exchange.thinkingSkills.length > 0 && (
-                              <div className={styles.skillBadges}>
-                                {exchange.thinkingSkills.map((skill) => (
-                                  <span key={`${exchange.stepKey}-${skill.id}`}>
-                                    {skill.thinkingSkill?.indicator ?? 'Goal tercapai'}
-                                  </span>
-                                ))}
+                            {log.promptComponents && (
+                              <div className={styles.feedbackBox}>
+                                <strong>Komponen Prompt:</strong>
+                                <p>
+                                  {[
+                                    log.promptComponents.tujuan ? 'Tujuan' : null,
+                                    log.promptComponents.konteks ? 'Konteks' : null,
+                                    log.promptComponents.batasan ? 'Batasan' : null,
+                                  ].filter(Boolean).join(', ') || '-'}
+                                </p>
                               </div>
                             )}
-                          </div>
-                        ))
+                            {log.reasoningNote && (
+                              <div className={styles.feedbackBox}>
+                                <strong>Reasoning Siswa:</strong>
+                                <p>{log.reasoningNote}</p>
+                              </div>
+                            )}
+                            <RawDetail title="Buka Detail Record" data={log} />
+                            <footer>
+                              <span>{log.userEmail}</span>
+                              <span>{log.timestamp}</span>
+                            </footer>
+                          </li>
+                        ))}
+                      </ul>
+                    </article>
+                  ))
+                )}
+              </div>
+            )}
+
+            {activeTab === 'challenge' && (
+              <div className={styles.topicGrid}>
+                {groupedChallengeLogs.length === 0 ? (
+                  <EmptyState message="Belum ada aktivitas challenge thinking" />
+                ) : (
+                  groupedChallengeLogs.map(({ topic, items }) => (
+                    <article key={topic} className={styles.topicCard}>
+                      <header>
+                        <h3>{topic}</h3>
+                        <span>{items.length} tantangan</span>
+                      </header>
+                      <ul>
+                        {items.map((log) => (
+                          <li key={log.id}>
+                            <div className={styles.promptLine}>
+                              <strong>Tantangan:</strong>
+                              <p>{log.question}</p>
+                            </div>
+                            <div className={styles.answerLine}>
+                              <strong>Jawaban Siswa:</strong>
+                              <p>{log.answer}</p>
+                            </div>
+                            <div className={styles.feedbackBox}>
+                              <strong>Feedback AI:</strong>
+                              <p>{log.feedback || 'Belum ada feedback'}</p>
+                            </div>
+                            {log.reasoningNote && (
+                              <div className={styles.feedbackBox}>
+                                <strong>Reasoning Siswa:</strong>
+                                <p>{log.reasoningNote}</p>
+                              </div>
+                            )}
+                            <RawDetail title="Buka Detail Record" data={log} />
+                            <footer>
+                              <span>{log.userEmail}</span>
+                              <span>{log.timestamp}</span>
+                            </footer>
+                          </li>
+                        ))}
+                      </ul>
+                    </article>
+                  ))
+                )}
+              </div>
+            )}
+
+            {activeTab === 'quiz' && (
+              <div className={styles.quizList}>
+                {quizLogs.length === 0 ? (
+                  <EmptyState message="Belum ada pengerjaan kuis" />
+                ) : (
+                  quizLogs.map((log) => (
+                    <article key={log.id} className={styles.quizCard}>
+                      <header>
+                        <div>
+                          <h3>{log.topic}</h3>
+                          <p>{log.courseTitle}</p>
+                        </div>
+                        <div className={log.isCorrect ? styles.pillSuccess : styles.pillMuted}>
+                          {log.isCorrect ? 'Benar' : 'Belum tepat'}
+                        </div>
+                      </header>
+                      <div className={styles.questionBox}>
+                        <strong>Pertanyaan</strong>
+                        <p>{log.question}</p>
+                      </div>
+                      <div className={styles.answerCompare}>
+                        <div>
+                          <span>Jawaban User</span>
+                          <p>{log.userAnswer || '-'}</p>
+                        </div>
+                        <div>
+                          <span>Kunci</span>
+                          <p>{log.correctAnswer || '-'}</p>
+                        </div>
+                      </div>
+                      {log.reasoningNote && (
+                        <div className={styles.feedbackBox}>
+                          <strong>Reasoning Siswa:</strong>
+                          <p>{log.reasoningNote}</p>
+                        </div>
                       )}
-                    </div>
-                    <RawDetail title="Buka Detail Record" data={log} />
-                  </article>
-                ))
-              )}
-            </div>
-          )}
+                      <RawDetail title="Buka Detail Record" data={log} />
+                      <footer>
+                        <span>{log.userEmail}</span>
+                        <span>{log.timestamp}</span>
+                      </footer>
+                    </article>
+                  ))
+                )}
+              </div>
+            )}
+
+            {activeTab === 'feedback' && (
+              <div className={styles.feedbackGrid}>
+                {feedbackLogs.length === 0 ? (
+                  <EmptyState message="Belum ada feedback" />
+                ) : (
+                  feedbackLogs.map((log) => (
+                    <article key={log.id} className={styles.feedbackCard}>
+                      <header>
+                        <div>
+                          <h3>{log.topic}</h3>
+                          <p>{log.courseTitle}</p>
+                        </div>
+                        <span className={styles.ratingBadge}>{log.rating ?? '-'}</span>
+                      </header>
+                      <p className={styles.feedbackComment}>{log.comment || 'Tidak ada komentar'}</p>
+                      <RawDetail title="Buka Detail Record" data={log} />
+                      <footer>
+                        <div>
+                          <small>User</small>
+                          <span>{log.userEmail}</span>
+                        </div>
+                        <div>
+                          <small>Waktu</small>
+                          <span>{log.timestamp}</span>
+                        </div>
+                      </footer>
+                    </article>
+                  ))
+                )}
+              </div>
+            )}
+
+            {activeTab === 'jurnal' && (
+              <div className={styles.feedbackGrid}>
+                {jurnalLogs.length === 0 ? (
+                  <EmptyState message="Belum ada jurnal" />
+                ) : (
+                  jurnalLogs.map((log) => (
+                    <article key={log.id} className={styles.feedbackCard}>
+                      <header>
+                        <div>
+                          <h3>{log.topic}</h3>
+                          <p>{log.userEmail}</p>
+                        </div>
+                      </header>
+                      {log.type === 'structured_reflection' ? (
+                        <>
+                          <div className={styles.feedbackBox}>
+                            <strong>Understood:</strong>
+                            <p>{log.understood || '-'}</p>
+                          </div>
+                          <div className={styles.feedbackBox}>
+                            <strong>Confused:</strong>
+                            <p>{log.confused || '-'}</p>
+                          </div>
+                          <div className={styles.feedbackBox}>
+                            <strong>Strategy:</strong>
+                            <p>{log.strategy || '-'}</p>
+                          </div>
+                          <div className={styles.feedbackBox}>
+                            <strong>Prompt Evolution:</strong>
+                            <p>{log.promptEvolution || '-'}</p>
+                          </div>
+                          <div className={styles.answerCompare}>
+                            <div>
+                              <span>Content Rating</span>
+                              <p>{typeof log.contentRating === 'number' ? log.contentRating : '-'}</p>
+                            </div>
+                            <div>
+                              <span>Content Feedback</span>
+                              <p>{log.contentFeedback || '-'}</p>
+                            </div>
+                          </div>
+                        </>
+                      ) : (
+                        <p className={styles.feedbackComment}>{log.content || 'Tidak ada konten'}</p>
+                      )}
+                      <RawDetail title="Buka Detail Record" data={log} />
+                      <footer>
+                        <div>
+                          <small>User</small>
+                          <span>{log.userEmail}</span>
+                        </div>
+                        <div>
+                          <small>Waktu</small>
+                          <span>{log.timestamp}</span>
+                        </div>
+                        <div>
+                          <button
+                            type="button"
+                            className={styles.clearFilterBtn}
+                            onClick={() => setSelectedJournal(log)}
+                          >
+                            Detail
+                          </button>
+                        </div>
+                      </footer>
+                    </article>
+                  ))
+                )}
+              </div>
+            )}
+
+            {activeTab === 'transcript' && (
+              <div className={styles.feedbackGrid}>
+                {transcriptLogs.length === 0 ? (
+                  <EmptyState message="Belum ada transcript" />
+                ) : (
+                  transcriptLogs.map((log) => (
+                    <article key={log.id} className={styles.feedbackCard}>
+                      <header>
+                        <div>
+                          <h3>{log.topic}</h3>
+                          <p>{log.userEmail}</p>
+                        </div>
+                      </header>
+                      <p className={styles.feedbackComment}>{log.content || 'Tidak ada konten'}</p>
+                      <RawDetail title="Buka Detail Record" data={log} />
+                      <footer>
+                        <div>
+                          <small>User</small>
+                          <span>{log.userEmail}</span>
+                        </div>
+                        <div>
+                          <small>Waktu</small>
+                          <span>{log.timestamp}</span>
+                        </div>
+                        <div>
+                          <button
+                            type="button"
+                            className={styles.clearFilterBtn}
+                            onClick={() => setSelectedTranscript(log)}
+                          >
+                            Detail
+                          </button>
+                        </div>
+                      </footer>
+                    </article>
+                  ))
+                )}
+              </div>
+            )}
+
+            {activeTab === 'learningProfile' && (
+              <div className={styles.feedbackGrid}>
+                {learningProfileLogs.length === 0 ? (
+                  <EmptyState message="Belum ada learning profile" />
+                ) : (
+                  learningProfileLogs.map((log) => (
+                    <article key={log.id} className={styles.feedbackCard}>
+                      <header>
+                        <div>
+                          <h3>{log.displayName || log.userEmail}</h3>
+                          <p>{log.userEmail}</p>
+                        </div>
+                      </header>
+                      <div className={styles.answerCompare}>
+                        <div>
+                          <span>Programming Experience</span>
+                          <p>{log.programmingExperience || '-'}</p>
+                        </div>
+                        <div>
+                          <span>Learning Style</span>
+                          <p>{log.learningStyle || '-'}</p>
+                        </div>
+                      </div>
+                      <div className={styles.feedbackBox}>
+                        <strong>Learning Goals:</strong>
+                        <p>{log.learningGoals || '-'}</p>
+                      </div>
+                      <div className={styles.feedbackBox}>
+                        <strong>Challenges:</strong>
+                        <p>{log.challenges || '-'}</p>
+                      </div>
+                      <RawDetail title="Buka Detail Record" data={log} />
+                      <footer>
+                        <div>
+                          <small>User</small>
+                          <span>{log.userEmail}</span>
+                        </div>
+                        <div>
+                          <small>Update</small>
+                          <span>{log.timestamp}</span>
+                        </div>
+                      </footer>
+                    </article>
+                  ))
+                )}
+              </div>
+            )}
+
+            {activeTab === 'discussion' && (
+              <div className={styles.discussionGrid}>
+                {discussionLogs.length === 0 ? (
+                  <EmptyState message="Belum ada diskusi" />
+                ) : (
+                  discussionLogs.map((log, index) => (
+                    <article key={log.id} className={styles.discussionCard}>
+                      <header>
+                        <div>
+                          <h3>{log.subtopicTitle}</h3>
+                          <p>{log.userEmail}</p>
+                        </div>
+                        <div className={styles.badgeRow}>
+                          <span className={styles.badge}>{log.status}</span>
+                          <span className={styles.badgeMuted}>{log.timestamp}</span>
+                        </div>
+                      </header>
+                      <div className={styles.goalList}>
+                        {log.goals.length === 0 ? (
+                          <p className={styles.muted}>Belum ada goal yang tercatat</p>
+                        ) : (
+                          log.goals.map((goal) => (
+                            <div
+                              key={goal.id || `${log.id}-${goal.description}`}
+                              className={`${styles.goalChip} ${goal.covered ? styles.goalHit : ''}`}
+                            >
+                              <span>{goal.description}</span>
+                              {goal.thinkingSkill?.indicator && (
+                                <small>{goal.thinkingSkill.indicator}</small>
+                              )}
+                            </div>
+                          ))
+                        )}
+                      </div>
+                      <div className={styles.timeline}>
+                        {log.exchanges.length === 0 ? (
+                          <p className={styles.muted}>Belum ada percakapan</p>
+                        ) : (
+                          log.exchanges.map((exchange, stepIndex) => (
+                            <div
+                              key={exchange.stepKey ?? `${log.id}-${index}-${stepIndex}`}
+                              className={styles.timelineItem}
+                            >
+                              <div className={styles.promptBubble}>{exchange.prompt}</div>
+                              {exchange.response && (
+                                <div className={styles.responseBubble}>{exchange.response}</div>
+                              )}
+                              {exchange.coachFeedback && (
+                                <div className={styles.feedbackBubble}>{exchange.coachFeedback}</div>
+                              )}
+                              {exchange.thinkingSkills.length > 0 && (
+                                <div className={styles.skillBadges}>
+                                  {exchange.thinkingSkills.map((skill) => (
+                                    <span key={`${exchange.stepKey}-${skill.id}`}>
+                                      {skill.thinkingSkill?.indicator ?? 'Goal tercapai'}
+                                    </span>
+                                  ))}
+                                </div>
+                              )}
+                            </div>
+                          ))
+                        )}
+                      </div>
+                      <RawDetail title="Buka Detail Record" data={log} />
+                    </article>
+                  ))
+                )}
+              </div>
+            )}
           </>
         )}
       </section>

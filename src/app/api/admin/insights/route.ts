@@ -9,6 +9,8 @@ export async function GET(request: NextRequest) {
     const userId = searchParams.get('userId') || '';
     const courseId = searchParams.get('courseId') || '';
 
+    console.log('[Admin Insights] Fetching data with filters:', { userId, courseId });
+
     // ── 1. Prompt Evolution Data (RM2) ──
     let promptQuery = adminDb
       .from('ask_question_history')
@@ -17,21 +19,23 @@ export async function GET(request: NextRequest) {
     if (userId) promptQuery = promptQuery.eq('user_id', userId);
     if (courseId) promptQuery = promptQuery.eq('course_id', courseId);
 
-    const { data: prompts } = await promptQuery;
+    const { data: prompts, error: promptError } = await promptQuery;
+    if (promptError) console.error('[Admin Insights] Prompt query error:', promptError);
+    console.log('[Admin Insights] Prompts fetched:', prompts?.length || 0);
     const promptList = Array.isArray(prompts) ? prompts : [];
 
     // Compute prompt complexity metrics
     const promptsWithComponents = promptList.filter((p: any) => p.prompt_components);
     const avgComponentsUsed = promptsWithComponents.length > 0
       ? promptsWithComponents.reduce((sum: number, p: any) => {
-          const comps = typeof p.prompt_components === 'string'
-            ? JSON.parse(p.prompt_components) : p.prompt_components;
-          let count = 0;
-          if (comps?.tujuan) count++;
-          if (comps?.konteks) count++;
-          if (comps?.batasan) count++;
-          return sum + count;
-        }, 0) / promptsWithComponents.length
+        const comps = typeof p.prompt_components === 'string'
+          ? JSON.parse(p.prompt_components) : p.prompt_components;
+        let count = 0;
+        if (comps?.tujuan) count++;
+        if (comps?.konteks) count++;
+        if (comps?.batasan) count++;
+        return sum + count;
+      }, 0) / promptsWithComponents.length
       : 0;
 
     const promptsWithReasoning = promptList.filter((p: any) => p.reasoning_note?.trim());
@@ -51,14 +55,14 @@ export async function GET(request: NextRequest) {
         const withComps = items.filter((i: any) => i.prompt_components);
         const avgComps = withComps.length > 0
           ? withComps.reduce((s: number, i: any) => {
-              const c = typeof i.prompt_components === 'string'
-                ? JSON.parse(i.prompt_components) : i.prompt_components;
-              let n = 0;
-              if (c?.tujuan) n++;
-              if (c?.konteks) n++;
-              if (c?.batasan) n++;
-              return s + n;
-            }, 0) / withComps.length
+            const c = typeof i.prompt_components === 'string'
+              ? JSON.parse(i.prompt_components) : i.prompt_components;
+            let n = 0;
+            if (c?.tujuan) n++;
+            if (c?.konteks) n++;
+            if (c?.batasan) n++;
+            return s + n;
+          }, 0) / withComps.length
           : 0;
         const withReason = items.filter((i: any) => i.reasoning_note?.trim());
         return {
@@ -81,9 +85,9 @@ export async function GET(request: NextRequest) {
     const { data: quizzes } = await quizQuery;
     const quizList = Array.isArray(quizzes)
       ? quizzes.map((item: any) => ({
-          ...item,
-          submitted_at: item.created_at ?? null,
-        }))
+        ...item,
+        submitted_at: item.created_at ?? null,
+      }))
       : [];
 
     const quizCorrect = quizList.filter((q: any) => q.is_correct).length;
@@ -111,7 +115,7 @@ export async function GET(request: NextRequest) {
         if (parsed?.contentRating && parsed.contentRating > 0) {
           ratings.push(parsed.contentRating);
         }
-      } catch {}
+      } catch { }
     });
     const avgContentRating = ratings.length > 0
       ? Math.round((ratings.reduce((s, r) => s + r, 0) / ratings.length) * 10) / 10
@@ -126,7 +130,7 @@ export async function GET(request: NextRequest) {
         if (parsed?.confused?.trim()) ctIndicators++;
         if (parsed?.strategy?.trim()) ctIndicators++;
         if (parsed?.promptEvolution?.trim()) ctIndicators++;
-      } catch {}
+      } catch { }
     });
 
     // ── 4. Challenge Responses ──

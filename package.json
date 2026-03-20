@@ -7,7 +7,10 @@
     "dev:no-lint": "cross-env FAST_REFRESH=false next dev --no-lint",
     "build": "next build",
     "start": "next start",
-    "lint": "next lint"
+    "lint": "next lint",
+    "test:api": "npx ts-node scripts/test-admin-user-api.ts",
+    "test:dataflow": "npx ts-node scripts/test-api-endpoints.ts",
+    "test:all-api": "npm run test:api && npm run test:dataflow"
   },
   "dependencies": {
     "@supabase/supabase-js": "^2.99.1",

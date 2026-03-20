@@ -6,7 +6,7 @@ import { useRouter, usePathname } from 'next/navigation'
 import {
   FiGrid, FiUsers, FiActivity,
   FiBarChart2, FiMessageCircle,
-  FiLogOut
+  FiLogOut, FiClipboard
 } from 'react-icons/fi'
 import styles from './layout.module.scss'
 
@@ -20,6 +20,7 @@ const NAV_ITEMS = [
   { href: '/admin/activity', label: 'Activity', icon: FiActivity },
   { href: '/admin/insights', label: 'Insights', icon: FiBarChart2 },
   { href: '/admin/discussions', label: 'Discussions', icon: FiMessageCircle },
+  { href: '/admin/research', label: 'Research', icon: FiClipboard },
 ]
 
 export default function AdminLayout({ children }: AdminLayoutProps) {
@@ -43,7 +44,11 @@ export default function AdminLayout({ children }: AdminLayoutProps) {
       <aside className={styles.sidebar}>
         <div className={styles.sidebarHeader}>
           <div className={styles.logo}>
-            <span className={styles.logoIcon}>📊</span>
+            <div className={styles.logoIcon}>
+              <svg width="22" height="22" viewBox="0 0 28 28" fill="none">
+                <path d="M8 14L12 18L20 10" stroke="white" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" />
+              </svg>
+            </div>
             <span className={styles.logoText}>PrincipleLearn</span>
           </div>
           <span className={styles.logoSub}>Research Admin</span>
@@ -52,7 +57,7 @@ export default function AdminLayout({ children }: AdminLayoutProps) {
         <nav className={styles.nav}>
           <ul className={styles.navList}>
             {NAV_ITEMS.map((item) => {
-              const isActive = pathname === item.href
+              const isActive = pathname === item.href || pathname?.startsWith(item.href + '/')
               return (
                 <li
                   key={item.href}
