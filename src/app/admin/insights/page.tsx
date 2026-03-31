@@ -1,49 +1,33 @@
 // src/app/admin/insights/page.tsx
 'use client';
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import styles from './page.module.scss';
 import {
   BarChart, Bar, XAxis, YAxis, CartesianGrid,
-  Tooltip, ResponsiveContainer, Cell,
+  Tooltip, ResponsiveContainer, Legend,
 } from 'recharts';
 import {
-  FiTrendingUp, FiTarget, FiMessageCircle,
-  FiStar, FiUsers, FiBarChart2,
+  FiTrendingUp, FiTarget, FiMessageCircle, FiDownload,
+  FiStar, FiUsers, FiBarChart2, FiClock, FiDatabase,
 } from 'react-icons/fi';
 import { useRouter } from 'next/navigation';
 import { useAdmin } from '@/hooks/useAdmin';
+import type {
+  InsightsAPIResponse,
+  InsightsSummary,
+  EvolutionPoint as InsightsEvolutionPoint,
+  InsightsStudentRow,
+  UserOption,
+  CourseOption,
+  ResearchMetrics
+} from '@/types/insights';
+import type { TimeRange } from '@/types/dashboard';
 
-interface InsightsSummary {
-  totalPrompts: number;
-  avgComponentsUsed: number;
-  reasoningRate: number;
-  quizAccuracy: number;
-  quizTotal: number;
-  quizWithReasoning: number;
-  reflectionTotal: number;
-  structuredReflections: number;
-  avgContentRating: number;
-  ctIndicators: number;
-  challengeTotal: number;
-  challengesWithReasoning: number;
-}
-
-interface EvolutionPoint {
+interface LocalEvolutionPoint {
   session: string;
   totalPrompts: number;
   avgComponents: number;
   reasoningRate: number;
-}
-
-interface StudentRow {
-  userId: string;
-  email: string;
-  totalPrompts: number;
-  totalQuizzes: number;
-  quizAccuracy: number;
-  totalReflections: number;
-  totalChallenges: number;
-  joinedAt: string;
 }
 
 const CHART_COLORS = {
@@ -56,11 +40,8 @@ export default function InsightsPage() {
   const router = useRouter();
   const { admin, loading: authLoading } = useAdmin();
 
-  const [summary, setSummary] = useState<InsightsSummary | null>(null);
-  const [evolutionChart, setEvolutionChart] = useState<EvolutionPoint[]>([]);
-  const [students, setStudents] = useState<StudentRow[]>([]);
-  const [users, setUsers] = useState<{ id: string; email: string }[]>([]);
-  const [courses, setCourses] = useState<{ id: string; title: string }[]>([]);
+  const [data, setData] = useState<InsightsAPIResponse | null>(null);
+  const [timeRange, setTimeRange] = useState<TimeRange>('all');
   const [selectedUser, setSelectedUser] = useState('');
   const [selectedCourse, setSelectedCourse] = useState('');
   const [loading, setLoading] = useState(true);
@@ -70,32 +51,31 @@ export default function InsightsPage() {
     if (!authLoading && !admin) router.push('/admin/login');
   }, [authLoading, admin, router]);
 
-  useEffect(() => {
-    if (authLoading || !admin) return;
-    fetchInsights();
-  }, [authLoading, admin, selectedUser, selectedCourse]);
-
-  const fetchInsights = async () => {
+  const fetchInsights = useCallback(async () => {
     setLoading(true);
     setError('');
     try {
       const params = new URLSearchParams();
       if (selectedUser) params.set('userId', selectedUser);
       if (selectedCourse) params.set('courseId', selectedCourse);
+      if (timeRange !== 'all') params.set('range', timeRange);
       const res = await fetch(`/api/admin/insights?${params.toString()}`);
       if (!res.ok) throw new Error('Failed to load insights');
-      const data = await res.json();
-      setSummary(data.summary || null);
-      setEvolutionChart(data.promptEvolutionChart || []);
-      setStudents(data.studentSummary || []);
-      setUsers(data.users || []);
-      setCourses(data.courses || []);
+      const apiData: InsightsAPIResponse = await res.json();
+      setData(apiData);
     } catch (err: any) {
       setError(err.message);
     } finally {
       setLoading(false);
     }
-  };
+  }, [selectedUser, selectedCourse, timeRange]);
+
+  useEffect(() => {
+    if (authLoading || !admin) return;
+    fetchInsights();
+  }, [authLoading, admin, fetchInsights]);
+
+  // Remove duplicate fetchInsights - now defined above with useCallback
 
   const getInitials = (email: string) => {
     return email.split('@')[0].substring(0, 2).toUpperCase();
@@ -132,15 +112,33 @@ export default function InsightsPage() {
           <label>Siswa</label>
           <select value={selectedUser} onChange={e => setSelectedUser(e.target.value)}>
             <option value="">Semua Siswa</option>
-            {users.map(u => <option key={u.id} value={u.id}>{u.email}</option>)}
+            {(data?.filters?.users || []).map((u) => (
+              <option key={u.id} value={u.id}>{u.email}</option>
+            ))}
           </select>
         </div>
         <div className={styles.filterGroup}>
           <label>Course</label>
           <select value={selectedCourse} onChange={e => setSelectedCourse(e.target.value)}>
             <option value="">Semua Course</option>
-            {courses.map(c => <option key={c.id} value={c.id}>{c.title}</option>)}
+            {(data?.filters?.courses || []).map((c) => (
+              <option key={c.id} value={c.id}>{c.title}</option>
+            ))}
           </select>
+        </div>
+        <div className={styles.filterGroup}>
+          <label>Periode</label>
+          <div className={styles.timeFilter}>
+            {(['7d', '30d', '90d', 'all'] as const).map(range => (
+              <button
+                key={range}
+                className={`${styles.timeBtn} ${timeRange === range ? styles.timeActive : ''}`}
+                onClick={() => setTimeRange(range)}
+              >
+                {range === '7d' ? '7H' : range === '30d' ? '30H' : range === '90d' ? '90H' : 'All'}
+              </button>
+            ))}
+          </div>
         </div>
       </section>
 
@@ -148,8 +146,35 @@ export default function InsightsPage() {
 
       {loading ? (
         <div className={styles.loading}>Memuat data insights...</div>
-      ) : summary ? (
+      ) : data ? (
         <>
+          {/* Research Badge Row */}
+          <div className={styles.researchBadges}>
+            <span className={`${styles.researchBadge} ${data.research.rm2ResearchData ? styles.researchActive : styles.researchFallback}`}>
+              <FiDatabase /> RM2: {data.research.rm2ResearchData ? 'Research Data' : 'Heuristic'}
+            </span>
+            {data.research.rm3ResearchData !== undefined && (
+              <span className={`${styles.researchBadge} ${data.research.rm3ResearchData ? styles.researchActive : styles.researchFallback}`}>
+                <FiDatabase /> RM3: {data.research.rm3ResearchData ? 'Research Data' : 'Heuristic'}
+              </span>
+            )}
+            <span className={styles.metaBadge}>
+              {data.meta.queryTimeMs}ms | {data.meta.totalRecords.toLocaleString()} records
+            </span>
+            <button 
+              className={styles.exportBtn}
+              onClick={() => {
+                const params = new URLSearchParams({ format: 'csv' })
+                if (timeRange !== 'all') params.set('range', timeRange)
+                if (selectedUser) params.set('userIds', selectedUser)
+                window.open(`/api/admin/insights/export?${params.toString()}`, '_blank')
+              }}
+              title="Download CSV"
+            >
+              <FiDownload /> Export
+            </button>
+          </div>
+
           {/* Summary Cards */}
           <section className={styles.cardsGrid}>
             {/* Total Prompts Card */}

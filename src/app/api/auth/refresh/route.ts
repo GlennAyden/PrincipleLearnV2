@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server';
 import { cookies } from 'next/headers';
 import { verifyToken, generateAccessToken, getTokenExpiration } from '@/lib/jwt';
+import { DatabaseService } from '@/lib/database';
 import { randomBytes } from 'crypto';
 
 export async function POST(req: Request) {
@@ -27,45 +28,62 @@ export async function POST(req: Request) {
       );
 
       // Clear the invalid tokens
-      cookieStore.delete('access_token');
-      cookieStore.delete('refresh_token');
-      cookieStore.delete('csrf_token');
+      response.cookies.delete('access_token');
+      response.cookies.delete('refresh_token');
+      response.cookies.delete('csrf_token');
 
       return response;
     }
 
-    // Mock user validation - in real implementation would check database
-    const mockUsers = {
-      'user-123': { id: 'user-123', email: 'user@example.com', role: 'USER' },
-      'admin-456': { id: 'admin-456', email: 'admin@example.com', role: 'ADMIN' }
-    };
+    // Validate user exists in the database (replaces old mock users)
+    let user: any = null;
+    try {
+      const users = await DatabaseService.getRecords('users', {
+        filter: { id: payload.userId },
+        limit: 1
+      });
+      user = users.length > 0 ? users[0] : null;
+    } catch (dbError) {
+      console.error('Token refresh - database error:', dbError);
+      return NextResponse.json(
+        { error: 'Database error during token refresh' },
+        { status: 500 }
+      );
+    }
 
-    const user = mockUsers[payload.userId as keyof typeof mockUsers];
-
-    // Check if user exists in mock data
+    // Check if user still exists (e.g., admin may have deleted the user)
     if (!user) {
       const response = NextResponse.json(
-        { error: 'Invalid refresh token' },
+        { error: 'User no longer exists' },
         { status: 401 }
       );
 
       // Clear the invalid tokens
-      cookieStore.delete('access_token');
-      cookieStore.delete('refresh_token');
-      cookieStore.delete('csrf_token');
+      response.cookies.delete('access_token');
+      response.cookies.delete('refresh_token');
+      response.cookies.delete('csrf_token');
 
       return response;
     }
 
-    // Generate new access token
+    // Generate new access token with real user data
     const newAccessToken = generateAccessToken({
       userId: user.id,
       email: user.email,
       role: user.role
     });
 
+    // Generate new CSRF token
+    const csrfToken = randomBytes(32).toString('hex');
+
+    // Create response
+    const response = NextResponse.json({
+      success: true,
+      csrfToken
+    });
+
     // Set new access token cookie
-    cookieStore.set('access_token', newAccessToken, {
+    response.cookies.set('access_token', newAccessToken, {
       httpOnly: true,
       secure: process.env.NODE_ENV === 'production',
       sameSite: 'lax',
@@ -73,9 +91,8 @@ export async function POST(req: Request) {
       path: '/'
     });
 
-    // Set new CSRF token
-    const csrfToken = randomBytes(32).toString('hex');
-    cookieStore.set('csrf_token', csrfToken, {
+    // Set new CSRF token cookie
+    response.cookies.set('csrf_token', csrfToken, {
       httpOnly: false, // Accessible from JavaScript
       secure: process.env.NODE_ENV === 'production',
       sameSite: 'lax',
@@ -83,11 +100,7 @@ export async function POST(req: Request) {
       path: '/'
     });
 
-    // Return success with new CSRF token
-    return NextResponse.json({
-      success: true,
-      csrfToken
-    });
+    return response;
   } catch (error: any) {
     console.error('Token refresh error:', error);
     return NextResponse.json(
@@ -95,4 +108,4 @@ export async function POST(req: Request) {
       { status: 500 }
     );
   }
-} 
+}

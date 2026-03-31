@@ -17,7 +17,12 @@ export async function POST(req: Request) {
       );
     }
 
-    const { email, password } = await req.json();
+    const body = await req.json();
+    const password = body.password;
+    
+    // Normalize email: trim whitespace and convert to lowercase
+    const email = (body.email || '').trim().toLowerCase();
+    const name = (body.name || '').trim() || null;
 
     // Validate email format
     const emailValidation = validateEmail(email);
@@ -66,12 +71,17 @@ export async function POST(req: Request) {
     const salt = await bcrypt.genSalt(10);
     const passwordHash = await bcrypt.hash(password, salt);
 
-    // Create user in Notion database
-    const userData = {
+    // Create user in database
+    const userData: Record<string, any> = {
       email,
       password_hash: passwordHash,
       role: 'user'
     };
+    
+    // Add name if provided
+    if (name) {
+      userData.name = name;
+    }
 
     console.log('Debug: Attempting to create user with data:', userData);
 

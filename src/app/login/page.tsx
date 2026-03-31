@@ -9,9 +9,10 @@ import { useAuth } from '@/hooks/useAuth';
 
 export default function LoginPage() {
   const router = useRouter();
-  const { user, isAuthenticated, login } = useAuth();
+  const { user, isAuthenticated, isLoading: authLoading, login } = useAuth();
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
+  const [rememberMe, setRememberMe] = useState(false);
   const [error, setError] = useState('');
   const [isLoading, setIsLoading] = useState(false);
   const [showPassword, setShowPassword] = useState(false);
@@ -36,7 +37,7 @@ export default function LoginPage() {
     setIsLoading(true);
     
     try {
-      const result = await login(email, password);
+      const result = await login(email, password, rememberMe);
       
       if (!result.success) {
         setError(result.error || 'Login failed');
@@ -59,15 +60,19 @@ export default function LoginPage() {
         } catch {
           // If profile check fails, continue to dashboard
         }
-      }
 
-      const coursesResponse = await fetch(`/api/courses?userId=${encodeURIComponent(email)}`);
-      const coursesResult = await coursesResponse.json();
-      
-      if (coursesResult.success && coursesResult.courses.length > 0) {
-        router.replace('/dashboard');
+        // Use userId (not email) for courses query
+        const coursesResponse = await fetch(`/api/courses?userId=${encodeURIComponent(userId)}`);
+        const coursesResult = await coursesResponse.json();
+        
+        if (coursesResult.success && coursesResult.courses.length > 0) {
+          router.replace('/dashboard');
+        } else {
+          router.replace('/request-course/step1');
+        }
       } else {
-        router.replace('/request-course/step1');
+        // Fallback: go to dashboard if we can't get userId
+        router.replace('/dashboard');
       }
     } catch (err: any) {
       setError(err.message || 'Login failed. Please check your credentials.');
@@ -76,6 +81,26 @@ export default function LoginPage() {
       setIsLoading(false);
     }
   };
+
+  // Show loading skeleton while checking auth state
+  if (authLoading) {
+    return (
+      <div className={styles.page}>
+        <div className={styles.bgOrb1} />
+        <div className={styles.bgOrb2} />
+        <div className={styles.card}>
+          <div className={styles.skeletonGroup}>
+            <div className={styles.skeletonLogo} />
+            <div className={styles.skeletonTitle} />
+            <div className={styles.skeletonSubtitle} />
+            <div className={styles.skeletonInput} />
+            <div className={styles.skeletonInput} />
+            <div className={styles.skeletonButton} />
+          </div>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className={styles.page}>
@@ -139,6 +164,7 @@ export default function LoginPage() {
                 placeholder="you@example.com"
                 required
                 disabled={isLoading}
+                autoComplete="email"
               />
             </div>
           </div>
@@ -159,6 +185,7 @@ export default function LoginPage() {
                 placeholder="Enter your password"
                 required
                 disabled={isLoading}
+                autoComplete="current-password"
               />
               <button
                 type="button"
@@ -180,6 +207,24 @@ export default function LoginPage() {
                 )}
               </button>
             </div>
+          </div>
+
+          {/* Remember Me & Forgot Password row */}
+          <div className={styles.rememberRow}>
+            <label className={styles.rememberLabel}>
+              <input
+                type="checkbox"
+                name="rememberMe"
+                checked={rememberMe}
+                onChange={(e) => setRememberMe(e.target.checked)}
+                className={styles.rememberCheckbox}
+                disabled={isLoading}
+              />
+              <span className={styles.rememberText}>Remember me</span>
+            </label>
+            <Link href="/forgot-password" className={styles.forgotLink}>
+              Forgot password?
+            </Link>
           </div>
 
           <button 

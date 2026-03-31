@@ -657,4 +657,208 @@ Database IDs dikonfigurasi di `src/lib/database.ts`:
 
 ---
 
-*Dokumentasi ini terakhir diperbarui: Februari 2026*
+## 🔬 Research Tables (Thesis - RM2 & RM3)
+
+Tabel-tabel berikut digunakan untuk analisis penelitian tesis tentang perkembangan prompt dan indikator kognitif siswa.
+
+### 20. LearningSession (learning_sessions)
+
+Sesi pembelajaran longitudinal untuk tracking perkembangan prompt siswa.
+
+| Column | Type | Constraints | Description |
+|--------|------|-------------|-------------|
+| `id` | UUID | PK | Unique identifier |
+| `user_id` | UUID | FK → users.id, INDEXED | Student |
+| `course_id` | UUID | FK → courses.id, INDEXED | Course context |
+| `session_number` | INT | NOT NULL | Sequential session number |
+| `session_date` | DATE | NOT NULL | Session date |
+| `session_start` | TIMESTAMP | NULL | Start time |
+| `session_end` | TIMESTAMP | NULL | End time |
+| `total_prompts` | INT | DEFAULT 0 | Total prompts in session |
+| `total_revisions` | INT | DEFAULT 0 | Total revisions |
+| `dominant_stage` | VARCHAR | NULL | SCP/SRP/MQP/REFLECTIVE |
+| `dominant_stage_score` | INT | NULL | 1-4 |
+| `avg_cognitive_depth` | DECIMAL | NULL | Average depth level |
+| `avg_ct_score` | DECIMAL | NULL | Average CT score |
+| `avg_cth_score` | DECIMAL | NULL | Average CTh score |
+| `stage_transition` | INT | NULL | -3 to +3 |
+| `transition_status` | VARCHAR | NULL | naik_stabil/fluktuatif/stagnan/turun |
+| `topic_focus` | TEXT | NULL | Topic being studied |
+| `duration_minutes` | INT | NULL | Session duration in minutes |
+| `status` | VARCHAR | DEFAULT 'active' | active/completed/paused |
+| `is_valid_for_analysis` | BOOLEAN | DEFAULT TRUE | Quality gate |
+| `validity_note` | TEXT | NULL | Validity explanation |
+| `researcher_notes` | TEXT | NULL | Researcher annotations |
+| `created_at` | TIMESTAMP | DEFAULT NOW() | Creation time |
+| `updated_at` | TIMESTAMP | Auto-update | Last update |
+
+**API Routes**: `GET/POST/PUT/DELETE /api/admin/research/sessions`
+
+---
+
+### 21. PromptClassification (prompt_classifications)
+
+Klasifikasi tahap prompt siswa (RM2: SCP → SRP → MQP → REFLECTIVE).
+
+| Column | Type | Constraints | Description |
+|--------|------|-------------|-------------|
+| `id` | UUID | PK | Unique identifier |
+| `prompt_source` | VARCHAR | NOT NULL | ask_question/discussion/challenge |
+| `prompt_id` | UUID | NOT NULL | Source prompt reference |
+| `learning_session_id` | UUID | FK → learning_sessions.id | Associated session |
+| `user_id` | UUID | FK → users.id, INDEXED | Student |
+| `course_id` | UUID | FK → courses.id | Course context |
+| `prompt_text` | TEXT | NOT NULL | Original prompt text |
+| `prompt_sequence` | INT | NULL | Order within session |
+| `prompt_stage` | VARCHAR | NOT NULL | SCP/SRP/MQP/REFLECTIVE |
+| `prompt_stage_score` | INT | NOT NULL | 1-4 |
+| `micro_markers` | JSON | NULL | Array of GCP/PP/ARP |
+| `primary_marker` | VARCHAR | NULL | Primary micro marker |
+| `classified_by` | VARCHAR | NOT NULL | auto/manual/researcher_1/researcher_2 |
+| `classification_method` | VARCHAR | NULL | rule_based/llm_assisted/manual_coding |
+| `confidence_score` | DECIMAL | NULL | 0-1 confidence |
+| `secondary_classification_id` | UUID | NULL | For inter-rater comparison |
+| `agreement_status` | VARCHAR | NULL | agreed/disagreed/resolved |
+| `classification_evidence` | TEXT | NULL | Evidence for classification |
+| `researcher_notes` | TEXT | NULL | Researcher notes |
+| `created_at` | TIMESTAMP | DEFAULT NOW() | Creation time |
+| `updated_at` | TIMESTAMP | Auto-update | Last update |
+
+**API Routes**: `GET/POST/PUT/DELETE /api/admin/research/classifications`
+
+---
+
+### 22. CognitiveIndicators (cognitive_indicators)
+
+Penilaian indikator CT (Computational Thinking) dan Critical Thinking (RM3).
+
+| Column | Type | Constraints | Description |
+|--------|------|-------------|-------------|
+| `id` | UUID | PK | Unique identifier |
+| `prompt_classification_id` | UUID | FK → prompt_classifications.id | Linked classification |
+| `prompt_id` | UUID | NOT NULL | Source prompt |
+| `user_id` | UUID | FK → users.id, INDEXED | Student |
+| `ct_decomposition` | INT | DEFAULT 0 | CT: Decomposition (0-2) |
+| `ct_pattern_recognition` | INT | DEFAULT 0 | CT: Pattern Recognition (0-2) |
+| `ct_abstraction` | INT | DEFAULT 0 | CT: Abstraction (0-2) |
+| `ct_algorithm_design` | INT | DEFAULT 0 | CT: Algorithm Design (0-2) |
+| `ct_evaluation_debugging` | INT | DEFAULT 0 | CT: Evaluation/Debugging (0-2) |
+| `ct_generalization` | INT | DEFAULT 0 | CT: Generalization (0-2) |
+| `ct_total_score` | INT | **GENERATED** | Sum of CT indicators (0-12) |
+| `cth_interpretation` | INT | DEFAULT 0 | CTh: Interpretation (0-2) |
+| `cth_analysis` | INT | DEFAULT 0 | CTh: Analysis (0-2) |
+| `cth_evaluation` | INT | DEFAULT 0 | CTh: Evaluation (0-2) |
+| `cth_inference` | INT | DEFAULT 0 | CTh: Inference (0-2) |
+| `cth_explanation` | INT | DEFAULT 0 | CTh: Explanation (0-2) |
+| `cth_self_regulation` | INT | DEFAULT 0 | CTh: Self-Regulation (0-2) |
+| `cth_total_score` | INT | **GENERATED** | Sum of CTh indicators (0-12) |
+| `cognitive_depth_level` | INT | NULL | 1-4 depth level |
+| `evidence_text` | TEXT | NULL | Supporting evidence |
+| `indicator_notes` | TEXT | NULL | Assessment notes |
+| `assessed_by` | VARCHAR | NOT NULL | Assessor identity |
+| `assessment_method` | VARCHAR | DEFAULT 'manual_coding' | Assessment method |
+| `secondary_assessment_id` | UUID | NULL | For inter-rater comparison |
+| `agreement_status` | VARCHAR | NULL | agreed/disagreed/resolved |
+| `created_at` | TIMESTAMP | DEFAULT NOW() | Creation time |
+| `updated_at` | TIMESTAMP | Auto-update | Last update |
+
+> **Note**: `ct_total_score` and `cth_total_score` are PostgreSQL GENERATED columns. Do NOT include them in INSERT or UPDATE queries.
+
+**API Routes**: `GET/POST/PUT/DELETE /api/admin/research/indicators`
+
+---
+
+### 23. InterRaterReliability (inter_rater_reliability)
+
+Rekaman reliabilitas antar-penilai (Cohen's Kappa).
+
+| Column | Type | Constraints | Description |
+|--------|------|-------------|-------------|
+| `id` | UUID | PK | Unique identifier |
+| `coding_round` | VARCHAR | NOT NULL | Round identifier |
+| `coding_type` | VARCHAR | NOT NULL | prompt_stage/ct_indicators |
+| `total_units_coded` | INT | NOT NULL | Total coded units |
+| `sample_size` | INT | NOT NULL | Sample size |
+| `sample_percentage` | DECIMAL | NULL | Sample percentage |
+| `rater_1_id` | VARCHAR | NOT NULL | First rater |
+| `rater_2_id` | VARCHAR | NOT NULL | Second rater |
+| `observed_agreement` | DECIMAL | NULL | Po (observed agreement) |
+| `expected_agreement` | DECIMAL | NULL | Pe (expected agreement) |
+| `cohens_kappa` | DECIMAL | NULL | κ (Cohen's Kappa) |
+| `meets_po_threshold` | BOOLEAN | NULL | Po ≥ 0.80 |
+| `meets_kappa_threshold` | BOOLEAN | NULL | κ ≥ 0.70 |
+| `overall_acceptable` | BOOLEAN | NULL | Both thresholds met |
+| `disagreement_resolution` | TEXT | NULL | Resolution notes |
+| `codebook_revisions` | TEXT | NULL | Codebook changes |
+| `notes` | TEXT | NULL | Additional notes |
+| `created_at` | TIMESTAMP | DEFAULT NOW() | Creation time |
+
+**Referenced by**: Analytics API for inter-rater reliability display
+
+---
+
+### Research ERD
+
+```mermaid
+erDiagram
+    User ||--o{ LearningSession : participates
+    Course ||--o{ LearningSession : contains
+    LearningSession ||--o{ PromptClassification : has
+    PromptClassification ||--o{ CognitiveIndicators : assessed
+    
+    LearningSession {
+        uuid id PK
+        uuid user_id FK
+        uuid course_id FK
+        int session_number
+        date session_date
+        varchar dominant_stage
+        varchar status
+        text topic_focus
+        int duration_minutes
+    }
+    
+    PromptClassification {
+        uuid id PK
+        uuid learning_session_id FK
+        uuid user_id FK
+        text prompt_text
+        varchar prompt_stage
+        int prompt_stage_score
+        json micro_markers
+        varchar classified_by
+    }
+    
+    CognitiveIndicators {
+        uuid id PK
+        uuid prompt_classification_id FK
+        uuid user_id FK
+        int ct_total_score
+        int cth_total_score
+        int cognitive_depth_level
+        varchar assessed_by
+    }
+    
+    InterRaterReliability {
+        uuid id PK
+        varchar coding_type
+        decimal cohens_kappa
+        boolean overall_acceptable
+    }
+```
+
+### Research API Endpoints
+
+| Endpoint | Methods | Description |
+|----------|---------|-------------|
+| `/api/admin/research/sessions` | GET, POST, PUT, DELETE | CRUD sesi pembelajaran |
+| `/api/admin/research/classifications` | GET, POST, PUT, DELETE | CRUD klasifikasi prompt |
+| `/api/admin/research/indicators` | GET, POST, PUT, DELETE | CRUD indikator kognitif |
+| `/api/admin/research/analytics` | GET | Analytics dashboard data |
+| `/api/admin/research/classify` | POST | LLM auto-classification |
+| `/api/admin/research/bulk` | POST | Bulk operations |
+| `/api/admin/research/export` | GET | Data export (JSON/CSV/SPSS) |
+
+---
+
+*Dokumentasi ini terakhir diperbarui: Maret 2026*

@@ -1,0 +1,997 @@
+<!DOCTYPE html>
+<html lang="id">
+
+<head>
+    <meta charset="UTF-8">
+    <title>PrincipleLearn V2.0 — Dokumentasi Media Pembelajaran</title>
+    <style>
+        @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=Merriweather:wght@400;700&display=swap');
+
+        :root {
+            --primary: #1a365d;
+            --primary-light: #2c5282;
+            --accent: #3182ce;
+            --text: #1a202c;
+            --text-light: #4a5568;
+            --bg-light: #f7fafc;
+            --border: #e2e8f0;
+            --success: #38a169;
+        }
+
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+
+        body {
+            font-family: 'Merriweather', Georgia, serif;
+            font-size: 11pt;
+            line-height: 1.8;
+            color: var(--text);
+        }
+
+        h1, h2, h3, h4 {
+            font-family: 'Inter', 'Segoe UI', sans-serif;
+            color: var(--primary);
+            line-height: 1.3;
+        }
+
+        h1 { font-size: 26pt; margin-bottom: 10px; }
+        h2 { font-size: 18pt; margin-top: 30px; margin-bottom: 12px; border-bottom: 2px solid var(--accent); padding-bottom: 6px; }
+        h3 { font-size: 13pt; margin-top: 20px; margin-bottom: 8px; color: var(--primary-light); }
+        h4 { font-size: 11pt; margin-top: 14px; margin-bottom: 6px; }
+        p { margin-bottom: 10px; text-align: justify; }
+
+        .cover-page {
+            page-break-after: always;
+            display: flex; flex-direction: column; justify-content: center; align-items: center;
+            min-height: 90vh; text-align: center;
+        }
+        .cover-page h1 { font-size: 32pt; color: var(--primary); margin-bottom: 8px; }
+        .cover-page .subtitle { font-size: 14pt; color: var(--text-light); margin-bottom: 40px; font-style: italic; }
+        .cover-page .meta { font-size: 11pt; color: var(--text-light); line-height: 2; }
+        .cover-line { width: 100px; height: 3px; background: var(--accent); margin: 20px auto; }
+
+        .toc { page-break-after: always; }
+        .toc h2 { text-align: center; border: none; }
+        .toc ul { list-style: none; padding: 0; }
+        .toc>ul>li { margin-bottom: 6px; font-family: 'Inter', sans-serif; font-weight: 600; font-size: 11pt; }
+        .toc>ul>li>ul>li { font-weight: 400; font-size: 10pt; color: var(--text-light); margin-left: 20px; }
+
+        .chapter { page-break-before: always; }
+        .chapter:first-of-type { page-break-before: auto; }
+
+        table { width: 100%; border-collapse: collapse; margin: 12px 0; font-size: 10pt; }
+        th { background: var(--primary); color: white; padding: 8px 10px; text-align: left; font-family: 'Inter', sans-serif; font-size: 9pt; }
+        td { padding: 7px 10px; border-bottom: 1px solid var(--border); }
+        tr:nth-child(even) { background: var(--bg-light); }
+
+        .info-box { background: #ebf8ff; border-left: 4px solid var(--accent); padding: 12px 16px; margin: 14px 0; font-size: 10pt; border-radius: 0 4px 4px 0; }
+        .key-point { background: #f0fff4; border-left: 4px solid var(--success); padding: 12px 16px; margin: 14px 0; font-size: 10pt; border-radius: 0 4px 4px 0; }
+        .new-badge { background: #fed7d7; border-left: 4px solid #e53e3e; padding: 12px 16px; margin: 14px 0; font-size: 10pt; border-radius: 0 4px 4px 0; }
+
+        code { font-family: 'Consolas', 'Courier New', monospace; background: #edf2f7; padding: 1px 4px; border-radius: 3px; font-size: 9pt; }
+        ul, ol { margin: 8px 0 12px 24px; }
+        li { margin-bottom: 4px; }
+
+        .two-col { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; margin: 12px 0; }
+        .col-box { background: var(--bg-light); border: 1px solid var(--border); border-radius: 6px; padding: 14px; }
+        .col-box h4 { margin-top: 0; color: var(--accent); }
+
+        .flow-diagram { background: var(--bg-light); border: 1px solid var(--border); padding: 16px; text-align: center; font-family: 'Inter', sans-serif; font-size: 10pt; margin: 14px 0; border-radius: 6px; }
+        .flow-arrow { color: var(--accent); font-weight: bold; margin: 0 8px; }
+
+        .badge { display: inline-block; padding: 2px 8px; border-radius: 10px; font-size: 8pt; font-family: 'Inter', sans-serif; font-weight: 600; color: white; }
+        .badge-blue { background: var(--accent); }
+        .badge-green { background: var(--success); }
+        .badge-orange { background: #dd6b20; }
+        .badge-red { background: #e53e3e; }
+        .badge-purple { background: #805ad5; }
+    </style>
+</head>
+
+<body>
+
+    <!-- COVER PAGE -->
+    <div class="cover-page">
+        <h1>PrincipleLearn V2.0</h1>
+        <div class="cover-line"></div>
+        <div class="subtitle">Dokumentasi Komprehensif Media Pembelajaran Berbasis AI</div>
+        <div class="meta">
+            <strong>AI-Powered Learning Management System</strong><br>
+            Platform Pembelajaran yang Mengintegrasikan Kecerdasan Buatan<br>
+            untuk Pengembangan Critical Thinking &amp; Computational Thinking<br><br>
+            Versi Dokumen: 2.0<br>
+            Maret 2026
+        </div>
+    </div>
+
+    <!-- TABLE OF CONTENTS -->
+    <div class="toc">
+        <h2>Daftar Isi</h2>
+        <ul>
+            <li>Bab 1 — Pendahuluan
+                <ul>
+                    <li>1.1 Latar Belakang</li>
+                    <li>1.2 Tujuan Media Pembelajaran</li>
+                    <li>1.3 Gambaran Umum Platform</li>
+                    <li>1.4 Perubahan dari Versi Sebelumnya</li>
+                </ul>
+            </li>
+            <li>Bab 2 — Landasan Teori Pembelajaran
+                <ul>
+                    <li>2.1 Konstruktivisme</li>
+                    <li>2.2 Taksonomi Bloom (Revisi)</li>
+                    <li>2.3 Critical Thinking</li>
+                    <li>2.4 Computational Thinking</li>
+                    <li>2.5 Metode Sokratik</li>
+                    <li>2.6 Adaptive Learning &amp; Scaffolding</li>
+                    <li>2.7 Metakognisi &amp; Self-Regulated Learning</li>
+                </ul>
+            </li>
+            <li>Bab 3 — Desain Instruksional
+                <ul>
+                    <li>3.1 Model ADDIE</li>
+                    <li>3.2 Prinsip Desain Instruksional</li>
+                    <li>3.3 Strategi per Fitur</li>
+                    <li>3.4 Desain Interaksi AI-Learner</li>
+                    <li>3.5 Desain Motivasi (Model ARCS)</li>
+                </ul>
+            </li>
+            <li>Bab 4 — Arsitektur Sistem
+                <ul>
+                    <li>4.1 Tech Stack</li>
+                    <li>4.2 Arsitektur High-Level</li>
+                    <li>4.3 Arsitektur Database</li>
+                    <li>4.4 Integrasi AI</li>
+                    <li>4.5 Keamanan</li>
+                </ul>
+            </li>
+            <li>Bab 5 — Fitur-Fitur Utama
+                <ul>
+                    <li>5.1 Generasi Course Berbasis AI</li>
+                    <li>5.2 Pembelajaran Interaktif</li>
+                    <li>5.3 Diskusi Sokratik</li>
+                    <li>5.4 Alat Pembelajaran Personal</li>
+                    <li>5.5 Prompt Builder &amp; Prompt Journey</li>
+                    <li>5.6 Structured Reflection &amp; Reasoning Note</li>
+                    <li>5.7 Panel Administrasi</li>
+                    <li>5.8 Teacher Insight Dashboard</li>
+                    <li>5.9 Research Dashboard</li>
+                </ul>
+            </li>
+            <li>Bab 6 — Alur Pengalaman Belajar
+                <ul>
+                    <li>6.1 Fase 1: Onboarding &amp; Profil Belajar</li>
+                    <li>6.2 Fase 2: Generasi Course</li>
+                    <li>6.3 Fase 3: Pembelajaran Aktif</li>
+                    <li>6.4 Fase 4: Keterlibatan Mendalam</li>
+                    <li>6.5 Fase 5: Refleksi Terstruktur &amp; Evaluasi</li>
+                </ul>
+            </li>
+            <li>Bab 7 — Sistem Penilaian &amp; Framework Riset
+                <ul>
+                    <li>7.1 Rubrik Critical Thinking</li>
+                    <li>7.2 Rubrik Computational Thinking</li>
+                    <li>7.3 Skala &amp; Formula Penilaian</li>
+                    <li>7.4 Framework Evolusi Prompt</li>
+                    <li>7.5 Indikator Kognitif &amp; Klasifikasi</li>
+                </ul>
+            </li>
+            <li>Bab 8 — Manajemen Pengguna
+                <ul>
+                    <li>8.1 Peran Pengguna</li>
+                    <li>8.2 Sistem Autentikasi</li>
+                    <li>8.3 Akses Kontrol Berbasis Peran</li>
+                </ul>
+            </li>
+            <li>Bab 9 — Penutup</li>
+        </ul>
+    </div>
+
+    <!-- BAB 1: PENDAHULUAN -->
+    <div class="chapter">
+        <h2>Bab 1 — Pendahuluan</h2>
+
+        <h3>1.1 Latar Belakang</h3>
+        <p>Perkembangan teknologi kecerdasan buatan (AI) telah membuka peluang baru dalam dunia pendidikan. Salah satu
+            tantangan utama dalam pembelajaran konvensional adalah keterbatasan personalisasi — setiap peserta didik
+            memiliki kebutuhan, gaya belajar, dan tingkat pemahaman yang berbeda, namun sering kali menerima materi yang
+            sama. PrincipleLearn V2.0 hadir sebagai solusi media pembelajaran berbasis AI yang dirancang untuk mengatasi
+            permasalahan ini.</p>
+        <p>Platform ini mengintegrasikan model bahasa besar (Large Language Model) dari OpenAI untuk menghasilkan materi
+            pembelajaran yang dipersonalisasi secara otomatis berdasarkan input pengguna. Lebih dari sekadar penyedia
+            konten, PrincipleLearn V2.0 menerapkan pendekatan pedagogis yang mendalam — menggunakan metode Sokratik,
+            scaffolding adaptif, dan asesmen otentik — untuk mengembangkan keterampilan berpikir kritis (Critical
+            Thinking) dan berpikir komputasional (Computational Thinking) pada peserta didik.</p>
+        <p>Pada versi V2.0 ini, platform mengalami transformasi signifikan: migrasi database dari Notion API ke
+            <strong>Supabase PostgreSQL</strong> untuk performa dan skalabilitas yang lebih baik, serta penambahan
+            fitur-fitur baru yang dirancang untuk mendukung penelitian longitudinal tentang evolusi prompt dan
+            perkembangan keterampilan berpikir kritis siswa.</p>
+
+        <h3>1.2 Tujuan Media Pembelajaran</h3>
+        <p>PrincipleLearn V2.0 dikembangkan dengan tujuan utama sebagai berikut:</p>
+        <ol>
+            <li><strong>Personalisasi Pembelajaran:</strong> Menghasilkan materi, quiz, dan tantangan yang disesuaikan
+                dengan topik, tujuan, dan tingkat kemampuan masing-masing peserta didik melalui AI.</li>
+            <li><strong>Pengembangan Higher-Order Thinking Skills (HOTS):</strong> Menstimulasi keterampilan berpikir
+                tingkat tinggi — khususnya Critical Thinking (CT) dan Computational Thinking (CPT) — melalui interaksi
+                yang dirancang secara pedagogis.</li>
+            <li><strong>Pembelajaran Aktif dan Reflektif:</strong> Mendorong peserta didik untuk aktif membangun
+                pengetahuan melalui quiz interaktif, diskusi Sokratik, challenge, dan jurnal refleksi terstruktur.</li>
+            <li><strong>Asesmen Otentik Berbasis Interaksi:</strong> Menilai kemampuan CT dan CPT secara real-time
+                berdasarkan aktivitas belajar, bukan ujian terpisah.</li>
+            <li><strong>Dukungan Penelitian Longitudinal:</strong> Menyediakan infrastruktur untuk melacak evolusi prompt
+                siswa dan perkembangan keterampilan kognitif lintas sesi belajar.</li>
+        </ol>
+
+        <h3>1.3 Gambaran Umum Platform</h3>
+        <p>PrincipleLearn V2.0 adalah Learning Management System (LMS) berbasis web yang dibangun menggunakan Next.js 15
+            sebagai framework full-stack, dengan Supabase PostgreSQL sebagai database backend dan OpenAI API sebagai
+            engine AI. Platform ini terdiri dari dua sisi utama:</p>
+
+        <div class="two-col">
+            <div class="col-box">
+                <h4>👤 Sisi Learner (Peserta Didik)</h4>
+                <ul>
+                    <li>Membuat profil belajar personal</li>
+                    <li>Membuat course personal via AI</li>
+                    <li>Belajar melalui konten interaktif</li>
+                    <li>Mengerjakan quiz dengan feedback</li>
+                    <li>Berdiskusi secara Sokratik</li>
+                    <li>Menulis refleksi terstruktur</li>
+                    <li>Bertanya menggunakan Prompt Builder</li>
+                    <li>Melihat evolusi prompt (Prompt Timeline)</li>
+                    <li>Memberi rating kepuasan konten</li>
+                </ul>
+            </div>
+            <div class="col-box">
+                <h4>👨‍💼 Sisi Administrator</h4>
+                <ul>
+                    <li>Dashboard statistik platform</li>
+                    <li>Monitoring aktivitas pengguna</li>
+                    <li>Teacher Insight Dashboard (RM2/RM3)</li>
+                    <li>Research Dashboard riset longitudinal</li>
+                    <li>Klasifikasi prompt (SCP/SRP/MQP/Reflective)</li>
+                    <li>Analisis indikator kognitif CT/CPT</li>
+                    <li>Export data riset (JSON/CSV)</li>
+                    <li>User management &amp; content moderation</li>
+                </ul>
+            </div>
+        </div>
+
+        <div class="flow-diagram">
+            <strong>Alur Utama V2.0:</strong><br>
+            Registrasi <span class="flow-arrow">→</span>
+            Profil Belajar <span class="flow-arrow">→</span>
+            Input Topik &amp; Tujuan <span class="flow-arrow">→</span>
+            AI Generate Course <span class="flow-arrow">→</span>
+            Belajar Interaktif <span class="flow-arrow">→</span>
+            Prompt Builder &amp; Quiz <span class="flow-arrow">→</span>
+            Diskusi Sokratik <span class="flow-arrow">→</span>
+            Refleksi Terstruktur &amp; Evaluasi
+        </div>
+
+        <table>
+            <tr><th>Komponen</th><th>Teknologi</th><th>Fungsi</th></tr>
+            <tr><td>Frontend</td><td>Next.js 15, React 19, TypeScript, Sass</td><td>Antarmuka pengguna responsif</td></tr>
+            <tr><td>Backend</td><td>Next.js API Routes, JWT</td><td>Logic bisnis dan autentikasi</td></tr>
+            <tr><td>Database</td><td>Supabase (PostgreSQL)</td><td>Penyimpanan data relasional dengan RLS</td></tr>
+            <tr><td>AI Engine</td><td>OpenAI GPT-5-mini</td><td>Generasi konten, quiz, feedback, dialog</td></tr>
+            <tr><td>Deployment</td><td>Vercel</td><td>Hosting dan CD/CI</td></tr>
+        </table>
+
+        <h3>1.4 Perubahan dari Versi Sebelumnya</h3>
+        <div class="new-badge">
+            <strong>🆕 Baru di V2.0</strong> — Bagian ini merangkum perubahan utama dari versi sebelumnya.
+        </div>
+
+        <table>
+            <tr><th>Aspek</th><th>Versi Sebelumnya</th><th>V2.0</th></tr>
+            <tr><td>Database</td><td>Notion API (REST)</td><td>Supabase PostgreSQL</td></tr>
+            <tr><td>Ask Question</td><td>Input teks sederhana</td><td>Prompt Builder terstruktur (Tujuan, Konteks, Batasan) + Reasoning Step</td></tr>
+            <tr><td>Refleksi</td><td>Jurnal bebas</td><td>Structured Reflection 4 dimensi + Content Rating</td></tr>
+            <tr><td>Reasoning</td><td>Tidak ada</td><td>Reasoning Note pada quiz, challenge, dan prompt</td></tr>
+            <tr><td>Tracking Prompt</td><td>Tidak ada</td><td>Prompt Timeline &amp; versioning per sesi</td></tr>
+            <tr><td>Profil Belajar</td><td>Tidak ada</td><td>Learning Profile (onboarding)</td></tr>
+            <tr><td>Admin Insight</td><td>Dashboard dasar</td><td>Teacher Insight Dashboard (RM2 &amp; RM3)</td></tr>
+            <tr><td>Admin Riset</td><td>Tidak ada</td><td>Research Dashboard dengan klasifikasi prompt &amp; export data</td></tr>
+        </table>
+    </div>
+    <!-- BAB 2: LANDASAN TEORI PEMBELAJARAN -->
+    <div class="chapter">
+        <h2>Bab 2 — Landasan Teori Pembelajaran</h2>
+        <p>PrincipleLearn V2.0 dibangun di atas fondasi teori pembelajaran yang kuat. Setiap fitur platform dirancang
+            berdasarkan prinsip-prinsip pedagogis yang telah terbukti efektif dalam mendukung pembelajaran bermakna.</p>
+
+        <h3>2.1 Konstruktivisme</h3>
+        <p>Konstruktivisme (Piaget, Vygotsky) menyatakan bahwa pengetahuan dibangun secara aktif oleh peserta didik,
+            bukan ditransfer secara pasif. Dalam PrincipleLearn V2.0, prinsip ini diimplementasikan melalui:</p>
+        <ul>
+            <li><strong>Course Generation berdasarkan input learner:</strong> Peserta didik menentukan topik, tujuan,
+                tingkat kesulitan, dan asumsi awal — menjadikan pembelajaran relevan dan bermakna secara personal.</li>
+            <li><strong>Aktivitas interaktif:</strong> Quiz, challenge, dan diskusi mengharuskan peserta didik aktif
+                mengkonstruksi pemahaman, bukan sekadar membaca.</li>
+            <li><strong>Jurnal refleksi terstruktur:</strong> Peserta didik diminta merefleksikan secara terstruktur: apa yang dipahami, apa yang masih membingungkan, strategi ke depan, dan bagaimana cara bertanya berevolusi.</li>
+            <li><strong>Prompt Builder:</strong> Peserta didik secara aktif menyusun pertanyaan terstruktur (tujuan, konteks, batasan), melatih kemampuan merumuskan kebutuhan belajar.</li>
+        </ul>
+
+        <div class="key-point">
+            <strong>Prinsip Kunci:</strong> AI berperan sebagai fasilitator yang memandu discovery, bukan sebagai
+            dispenser informasi. Peserta didik membangun pengetahuannya sendiri melalui interaksi aktif.
+        </div>
+
+        <h3>2.2 Taksonomi Bloom (Revisi)</h3>
+        <p>Taksonomi Bloom Revisi (Anderson &amp; Krathwohl, 2001) menyediakan hierarki proses kognitif dari tingkat rendah
+            ke tingkat tinggi. PrincipleLearn V2.0 secara eksplisit menargetkan level berpikir tingkat tinggi:</p>
+
+        <table>
+            <tr><th>Level Bloom</th><th>Fitur yang Menstimulasi</th><th>Contoh Aktivitas</th></tr>
+            <tr><td><span class="badge badge-green">Mengingat</span></td><td>Konten Subtopik</td><td>Membaca materi AI-generated</td></tr>
+            <tr><td><span class="badge badge-green">Memahami</span></td><td>Examples, Ask Question, Prompt Builder</td><td>Melihat contoh, bertanya dengan konteks terstruktur</td></tr>
+            <tr><td><span class="badge badge-blue">Mengaplikasikan</span></td><td>Quiz</td><td>Menerapkan konsep dalam soal pilihan ganda</td></tr>
+            <tr><td><span class="badge badge-blue">Menganalisis</span></td><td>Challenge My Thinking</td><td>Membedah argumen, identifikasi asumsi</td></tr>
+            <tr><td><span class="badge badge-orange">Mengevaluasi</span></td><td>Diskusi Sokratik, Reasoning Note</td><td>Menilai solusi, menjustifikasi keputusan</td></tr>
+            <tr><td><span class="badge badge-orange">Mencipta</span></td><td>Structured Reflection, Prompt Builder</td><td>Merumuskan pemahaman baru, menyusun pertanyaan terstruktur</td></tr>
+        </table>
+
+        <h3>2.3 Critical Thinking (Facione)</h3>
+        <p>Model Critical Thinking dari Facione (1990) mengidentifikasi enam keterampilan inti yang menjadi target
+            pengembangan di PrincipleLearn V2.0:</p>
+
+        <table>
+            <tr><th>Keterampilan CT</th><th>Definisi</th><th>Stimulasi pada Platform</th></tr>
+            <tr><td><strong>Analysis</strong></td><td>Mengidentifikasi hubungan antar bagian dari keseluruhan argumen</td><td>Challenge My Thinking — menguraikan komponen masalah</td></tr>
+            <tr><td><strong>Evaluation</strong></td><td>Menilai kredibilitas pernyataan dan kekuatan argumen</td><td>Diskusi Sokratik — mengevaluasi solusi alternatif</td></tr>
+            <tr><td><strong>Inference</strong></td><td>Menarik kesimpulan yang masuk akal berdasarkan bukti</td><td>Quiz — menyimpulkan jawaban dari konteks materi</td></tr>
+            <tr><td><strong>Explanation</strong></td><td>Menjelaskan alasan dan bukti di balik kesimpulan</td><td>Reasoning Note — menjelaskan alasan pilihan jawaban</td></tr>
+            <tr><td><strong>Self-Regulation</strong></td><td>Memantau dan mengoreksi proses berpikir sendiri</td><td>Structured Reflection — merefleksikan proses dan strategi belajar</td></tr>
+            <tr><td><strong>Interpretation</strong></td><td>Memahami dan mengkategorikan makna pengalaman</td><td>Prompt Builder — merumuskan kebutuhan belajar secara terstruktur</td></tr>
+        </table>
+
+        <h3>2.4 Computational Thinking (Wing)</h3>
+        <p>Computational Thinking (Wing, 2006) adalah seperangkat keterampilan pemecahan masalah yang relevan di
+            berbagai disiplin ilmu. PrincipleLearn V2.0 menstimulasi lima komponen utama CPT:</p>
+
+        <table>
+            <tr><th>Komponen CPT</th><th>Definisi</th><th>Stimulasi pada Platform</th></tr>
+            <tr><td><strong>Decomposition</strong></td><td>Memecah masalah besar menjadi bagian-bagian kecil</td><td>Request Course &amp; Prompt Builder — memecah topik/pertanyaan menjadi komponen</td></tr>
+            <tr><td><strong>Pattern Recognition</strong></td><td>Mengidentifikasi pola dan kesamaan</td><td>Quiz &amp; Prompt Timeline — mengenali pola dalam evolusi prompt</td></tr>
+            <tr><td><strong>Abstraction</strong></td><td>Fokus pada informasi penting, mengabaikan detail tidak relevan</td><td>Key Takeaways &amp; Structured Reflection — menyarikan inti materi</td></tr>
+            <tr><td><strong>Algorithmic Thinking</strong></td><td>Merancang langkah-langkah penyelesaian sistematis</td><td>Challenge — menyusun solusi bertahap</td></tr>
+            <tr><td><strong>Debugging</strong></td><td>Menemukan dan memperbaiki kesalahan</td><td>Quiz feedback &amp; Reasoning Note — menganalisis jawaban salah dan menjustifikasi</td></tr>
+        </table>
+
+        <h3>2.5 Metode Sokratik</h3>
+        <p>Metode Sokratik adalah teknik dialog terpandu di mana pengajar mengajukan serangkaian pertanyaan untuk
+            memandu peserta didik menemukan jawaban sendiri. Dalam PrincipleLearn V2.0, AI bertindak sebagai mentor
+            Sokratik yang:</p>
+        <ul>
+            <li><strong>Bertanya, bukan memberitahu:</strong> AI mengajukan pertanyaan pendalaman alih-alih langsung memberikan jawaban.</li>
+            <li><strong>Memandu penemuan:</strong> Melalui dialog bertahap (diagnosis → eksplorasi → latihan → sintesis), AI membimbing peserta didik menuju pemahaman mendalam.</li>
+            <li><strong>Menantang asumsi:</strong> Fitur Challenge My Thinking secara eksplisit menantang asumsi peserta didik dan mengajak evaluasi ulang.</li>
+        </ul>
+
+        <div class="info-box">
+            <strong>Contoh Dialog Sokratik pada Platform:</strong><br>
+            <em>AI:</em> "Menurutmu, apa perbedaan utama antara supervised dan unsupervised learning?"<br>
+            <em>Learner:</em> "Supervised pakai label, unsupervised tidak."<br>
+            <em>AI:</em> "Bagus! Sekarang, dalam kasus apa kamu akan memilih unsupervised meskipun data berlabel
+            tersedia? Pikirkan dari segi efisiensi dan tujuan analisis."
+        </div>
+
+        <h3>2.6 Adaptive Learning &amp; Scaffolding</h3>
+        <p><strong>Adaptive Learning</strong> memungkinkan pengalaman belajar menyesuaikan diri dengan kebutuhan individu. Di PrincipleLearn V2.0, adaptasi terjadi melalui:</p>
+        <ul>
+            <li>AI menghasilkan konten sesuai level yang dipilih (Beginner/Intermediate/Advanced)</li>
+            <li>Feedback quiz disesuaikan dengan jawaban spesifik peserta didik</li>
+            <li>Pertanyaan diskusi disesuaikan dengan fase dan respons sebelumnya</li>
+            <li>Prompt Builder menyediakan scaffolding bertahap dari mode sederhana ke guided</li>
+        </ul>
+
+        <p><strong>Scaffolding</strong> (Vygotsky — Zone of Proximal Development) menyediakan dukungan bertahap yang
+            dikurangi seiring meningkatnya kompetensi peserta didik:</p>
+        <ul>
+            <li><strong>High scaffolding (awal):</strong> Contoh detail, hints di quiz, pertanyaan terbimbing, chip starter di Prompt Builder</li>
+            <li><strong>Medium scaffolding (tengah):</strong> Contoh parsial, pertanyaan semi-terbuka</li>
+            <li><strong>Low scaffolding (akhir):</strong> Tantangan terbuka, refleksi mandiri, diskusi mendalam</li>
+        </ul>
+
+        <h3>2.7 Metakognisi &amp; Self-Regulated Learning</h3>
+        <div class="new-badge">
+            <strong>🆕 Baru di V2.0</strong> — Landasan teori tambahan yang mendukung fitur-fitur baru.
+        </div>
+        <p><strong>Metakognisi</strong> (Flavell, 1979) adalah kesadaran dan pengelolaan proses berpikir sendiri. Dalam PrincipleLearn V2.0, metakognisi distimulasi secara eksplisit melalui:</p>
+        <ul>
+            <li><strong>Reasoning Note:</strong> Peserta didik diminta menjelaskan <em>mengapa</em> mereka memilih jawaban tertentu di quiz, challenge, dan prompt — melatih kesadaran proses berpikir.</li>
+            <li><strong>Structured Reflection:</strong> Empat dimensi refleksi (dipahami, bingung, strategi, evolusi prompt) mendorong pemantauan diri yang terstruktur.</li>
+            <li><strong>Prompt Builder:</strong> Proses menyusun pertanyaan secara terstruktur melatih perencanaan kognitif — peserta didik harus memikirkan <em>apa</em> yang ingin diketahui, <em>apa</em> yang sudah diketahui, dan <em>bagaimana</em> ingin menerima jawaban.</li>
+        </ul>
+
+        <p><strong>Self-Regulated Learning</strong> (Zimmerman, 2002) adalah kemampuan peserta didik mengatur proses belajar sendiri melalui tiga fase:</p>
+        <table>
+            <tr><th>Fase SRL</th><th>Implementasi pada Platform</th><th>Fitur Pendukung</th></tr>
+            <tr><td><strong>Forethought</strong> (Perencanaan)</td><td>Merencanakan pertanyaan sebelum bertanya, menentukan tujuan belajar</td><td>Prompt Builder (komponen Tujuan &amp; Konteks), Learning Profile</td></tr>
+            <tr><td><strong>Performance</strong> (Pelaksanaan)</td><td>Memantau pemahaman selama belajar, mencatat alasan</td><td>Reasoning Note, Ask Question, Quiz</td></tr>
+            <tr><td><strong>Self-Reflection</strong> (Evaluasi Diri)</td><td>Mengevaluasi hasil belajar, merencanakan strategi selanjutnya</td><td>Structured Reflection, Prompt Timeline, Content Rating</td></tr>
+        </table>
+    </div>
+
+    <!-- BAB 3: DESAIN INSTRUKSIONAL -->
+    <div class="chapter">
+        <h2>Bab 3 — Desain Instruksional</h2>
+
+        <h3>3.1 Model ADDIE</h3>
+        <p>PrincipleLearn V2.0 mengadaptasi model instruksional ADDIE (Analysis, Design, Development, Implementation,
+            Evaluation) yang disesuaikan dengan konteks AI-powered learning:</p>
+
+        <table>
+            <tr><th>Fase ADDIE</th><th>Implementasi pada Platform</th></tr>
+            <tr><td><strong>Analysis</strong></td><td>User mengisi profil belajar (onboarding) lalu menginput topik, tujuan, level, problem, dan asumsi awal — AI menganalisis kebutuhan belajar</td></tr>
+            <tr><td><strong>Design</strong></td><td>AI merancang course outline dengan modul, subtopik, dan learning objectives yang terstruktur</td></tr>
+            <tr><td><strong>Development</strong></td><td>AI menghasilkan konten, quiz, contoh, dan template diskusi secara otomatis</td></tr>
+            <tr><td><strong>Implementation</strong></td><td>Peserta didik belajar melalui antarmuka interaktif dengan Prompt Builder, Reasoning Note, dan navigasi terstruktur</td></tr>
+            <tr><td><strong>Evaluation</strong></td><td>Penilaian otentik melalui quiz, challenge, diskusi, refleksi terstruktur, dan analisis evolusi prompt — dikumpulkan secara kontinu</td></tr>
+        </table>
+
+        <h3>3.2 Prinsip Desain Instruksional</h3>
+        <p>Platform ini mengikuti delapan prinsip desain instruksional inti:</p>
+        <ol>
+            <li><strong>Learner-Centered:</strong> Peserta didik menentukan arah pembelajaran melalui input personal dan profil belajar.</li>
+            <li><strong>Active Engagement:</strong> Setiap subtopik mengandung minimal satu aktivitas interaktif.</li>
+            <li><strong>Scaffolded Complexity:</strong> Tingkat kesulitan meningkat bertahap, dari Prompt Builder mode sederhana ke guided.</li>
+            <li><strong>Immediate Feedback:</strong> Setiap respons peserta didik mendapat umpan balik instan dari AI.</li>
+            <li><strong>Reflection Integration:</strong> Refleksi terstruktur dan Key Takeaways mendorong metakognisi.</li>
+            <li><strong>Authentic Assessment:</strong> Penilaian terintegrasi dalam aktivitas belajar.</li>
+            <li><strong>Multi-Modal Interaction:</strong> Kombinasi membaca, menjawab, berdiskusi, dan menulis.</li>
+            <li><strong>Metacognitive Awareness:</strong> Reasoning Note dan Prompt Timeline mendorong kesadaran proses berpikir sendiri.</li>
+        </ol>
+
+        <h3>3.3 Strategi Instruksional per Fitur</h3>
+
+        <h4>Request Course (Generasi AI)</h4>
+        <p>Strategi: <em>Personalized Learning Path</em>. Peserta didik mengisi formulir multi-langkah (topik, tujuan, level, masalah, asumsi) yang diproses AI untuk menghasilkan course yang relevan dan personal.</p>
+
+        <h4>Quiz Time</h4>
+        <p>Strategi: <em>Formative Assessment with Immediate Feedback &amp; Metacognitive Annotation</em>. Quiz bukan sekadar pengujian — setiap jawaban disertai penjelasan detail dari AI. Peserta didik juga dapat menulis Reasoning Note untuk menjelaskan alasan di balik pilihan jawaban mereka.</p>
+
+        <h4>Challenge My Thinking</h4>
+        <p>Strategi: <em>Cognitive Conflict &amp; Provocation</em>. AI mengajukan pertanyaan provokatif yang menantang asumsi peserta didik. Setiap respons challenge dapat disertai Reasoning Note.</p>
+
+        <h4>Discussion (Sokratik)</h4>
+        <p>Strategi: <em>Guided Socratic Dialogue</em>. Diskusi berlangsung dalam empat fase: Diagnosis, Eksplorasi, Latihan, dan Sintesis. AI menyesuaikan pertanyaan berdasarkan respons peserta didik.</p>
+
+        <h4>Prompt Builder &amp; Ask Question</h4>
+        <div class="new-badge"><strong>🆕 Baru di V2.0</strong></div>
+        <p>Strategi: <em>Scaffolded Inquiry &amp; Metacognitive Planning</em>. Prompt Builder menyediakan dua mode:</p>
+        <ul>
+            <li><strong>Mode Langsung (⚡):</strong> Input pertanyaan sederhana untuk pengguna yang sudah mahir merumuskan pertanyaan.</li>
+            <li><strong>Mode Guided (🧭):</strong> Tiga komponen terstruktur — Tujuan (🎯 apa yang ingin diketahui), Konteks (📝 apa yang sudah diketahui), Batasan (📏 format jawaban yang diinginkan) — dilengkapi chip starter untuk scaffolding.</li>
+        </ul>
+        <p>Setelah submit, peserta didik diminta mengisi <strong>Reasoning Step</strong> ("Kenapa kamu menanyakan ini?") yang mendorong refleksi metakognitif tentang motivasi pertanyaan.</p>
+
+        <h4>Structured Reflection</h4>
+        <div class="new-badge"><strong>🆕 Baru di V2.0</strong></div>
+        <p>Strategi: <em>Multi-Dimensional Metacognitive Reflection</em>. Refleksi terstruktur mencakup empat dimensi:</p>
+        <ol>
+            <li><strong>💡 Apa yang Dipahami:</strong> Identifikasi pencapaian belajar</li>
+            <li><strong>❓ Yang Masih Membingungkan:</strong> Kesadaran terhadap gap pengetahuan</li>
+            <li><strong>🗺️ Strategi ke Depan:</strong> Perencanaan tindakan belajar selanjutnya</li>
+            <li><strong>📈 Evolusi Cara Bertanya:</strong> Metakognisi tentang perkembangan kemampuan merumuskan pertanyaan</li>
+        </ol>
+        <p>Ditambah dengan <strong>Content Satisfaction Rating</strong> (⭐ 1-5) untuk evaluasi kualitas materi.</p>
+
+        <h4>Reasoning Note</h4>
+        <div class="new-badge"><strong>🆕 Baru di V2.0</strong></div>
+        <p>Strategi: <em>Metacognitive Annotation</em>. Komponen collapsible yang muncul pada quiz, challenge, dan prompt — mendorong peserta didik menjelaskan <em>mengapa</em> mereka memilih langkah/jawaban tertentu.</p>
+
+        <h3>3.4 Desain Interaksi AI-Learner</h3>
+        <p>AI dalam PrincipleLearn V2.0 dirancang dengan beberapa peran yang berbeda tergantung konteks:</p>
+
+        <table>
+            <tr><th>Konteks Fitur</th><th>Peran AI</th><th>Gaya Interaksi</th></tr>
+            <tr><td>Ask Question (Prompt Builder)</td><td>Tutor</td><td>Menjelaskan dengan sabar, menyediakan contoh tambahan, merespons berdasarkan komponen prompt</td></tr>
+            <tr><td>Challenge My Thinking</td><td>Provocateur</td><td>Menantang, mengajukan pertanyaan provokatif</td></tr>
+            <tr><td>Discussion</td><td>Mentor Sokratik</td><td>Bertanya untuk memandu penemuan</td></tr>
+            <tr><td>Quiz Feedback</td><td>Evaluator</td><td>Menilai dan menjelaskan secara konstruktif</td></tr>
+            <tr><td>Course Generation</td><td>Desainer Kurikulum</td><td>Merancang jalur pembelajaran terstruktur</td></tr>
+        </table>
+
+        <div class="info-box">
+            <strong>Prinsip Utama:</strong> AI tidak pernah langsung memberikan jawaban dalam konteks diskusi dan
+            challenge. AI selalu memandu melalui pertanyaan, mendorong peserta didik untuk sampai pada kesimpulan
+            sendiri — sesuai dengan prinsip konstruktivisme dan metode Sokratik.
+        </div>
+
+        <h3>3.5 Desain Motivasi (Model ARCS)</h3>
+        <p>Model ARCS (Keller, 1987) digunakan untuk memastikan peserta didik tetap termotivasi:</p>
+
+        <table>
+            <tr><th>Komponen ARCS</th><th>Strategi pada Platform</th><th>Fitur Pendukung</th></tr>
+            <tr><td><strong>Attention</strong></td><td>Konten yang personal dan relevan, tantangan yang menarik</td><td>AI Course Generation, Challenge, Prompt Builder</td></tr>
+            <tr><td><strong>Relevance</strong></td><td>Materi berdasarkan masalah nyata yang diinput user</td><td>Request Course (problem &amp; goal), Learning Profile</td></tr>
+            <tr><td><strong>Confidence</strong></td><td>Feedback positif, progress tracking, scaffolding bertahap</td><td>Quiz feedback, Dashboard progress, Prompt Builder chips</td></tr>
+            <tr><td><strong>Satisfaction</strong></td><td>Pencapaian terlihat, refleksi bermakna, tracking evolusi</td><td>Progress bar, Structured Reflection, Prompt Timeline</td></tr>
+        </table>
+    </div>
+
+    <!-- BAB 4: ARSITEKTUR SISTEM -->
+    <div class="chapter">
+        <h2>Bab 4 — Arsitektur Sistem</h2>
+
+        <h3>4.1 Technology Stack</h3>
+        <table>
+            <tr><th>Layer</th><th>Teknologi</th><th>Versi</th><th>Justifikasi</th></tr>
+            <tr><td>Framework</td><td>Next.js (App Router)</td><td>15.x</td><td>Full-stack React, SSR, API routes built-in</td></tr>
+            <tr><td>UI Library</td><td>React</td><td>19.x</td><td>Komponen deklaratif, ekosistem luas</td></tr>
+            <tr><td>Language</td><td>TypeScript</td><td>5.x</td><td>Type safety, developer experience</td></tr>
+            <tr><td>Styling</td><td>Sass (SCSS Modules)</td><td>-</td><td>Modular CSS, variabel, nesting</td></tr>
+            <tr><td>Database</td><td>Supabase (PostgreSQL)</td><td>-</td><td>Database relasional, RLS, real-time, scalable</td></tr>
+            <tr><td>AI</td><td>OpenAI API</td><td>GPT-5-mini</td><td>Generasi konten, dialog, evaluasi</td></tr>
+            <tr><td>Auth</td><td>JWT + bcrypt</td><td>-</td><td>Stateless auth, secure password hashing</td></tr>
+            <tr><td>Charts</td><td>Recharts</td><td>-</td><td>Visualisasi data admin dashboard</td></tr>
+            <tr><td>Deployment</td><td>Vercel</td><td>-</td><td>Hosting dan CD/CI</td></tr>
+        </table>
+
+        <div class="new-badge">
+            <strong>🆕 Perubahan V2.0:</strong> Database dimigrasikan dari Notion API ke Supabase PostgreSQL untuk performa query yang lebih baik, relasi antar tabel yang proper, dan dukungan untuk analisis data riset yang kompleks.
+        </div>
+
+        <h3>4.2 Arsitektur High-Level</h3>
+        <div class="flow-diagram">
+            <strong>Client Layer</strong><br>
+            Browser (React Components + Prompt Builder + Structured Reflection) <span class="flow-arrow">↕</span> Next.js Server<br><br>
+            <strong>Server Layer</strong><br>
+            API Routes <span class="flow-arrow">↔</span> Services (Business Logic) <span class="flow-arrow">↔</span>
+            Middleware (Auth, Rate Limit)<br><br>
+            <strong>Data Layer</strong><br>
+            Supabase PostgreSQL (Database) <span class="flow-arrow">↔</span> OpenAI API (AI Engine)
+        </div>
+
+        <h3>4.3 Arsitektur Database (Supabase PostgreSQL)</h3>
+        <p>PrincipleLearn V2.0 menggunakan Supabase PostgreSQL sebagai database utama, diakses melalui <code>@supabase/supabase-js</code> dengan wrapper <code>adminDb</code> di <code>src/lib/database.ts</code>.</p>
+
+        <table>
+            <tr><th>Tabel</th><th>Fungsi</th><th>Relasi Utama</th></tr>
+            <tr><td><strong>users</strong></td><td>Data pengguna, kredensial, peran</td><td>→ Courses, Journals, Sessions</td></tr>
+            <tr><td><strong>courses</strong></td><td>Course yang digenerate AI</td><td>→ Subtopics</td></tr>
+            <tr><td><strong>subtopics</strong></td><td>Unit pembelajaran terkecil</td><td>→ Content, Quiz, Discussion</td></tr>
+            <tr><td><strong>quiz</strong></td><td>Pertanyaan quiz assessment</td><td>← Subtopic, → QuizSubmission</td></tr>
+            <tr><td><strong>quiz_submissions</strong></td><td>Hasil quiz per user + reasoning_note</td><td>← User, ← Quiz</td></tr>
+            <tr><td><strong>ask_question_history</strong></td><td>Riwayat Q&amp;A + prompt_components + reasoning</td><td>← User, ← Course</td></tr>
+            <tr><td><strong>challenge_responses</strong></td><td>Respons challenge + reasoning_note</td><td>← User, ← Course</td></tr>
+            <tr><td><strong>discussion_sessions</strong></td><td>Sesi diskusi Sokratik</td><td>← User, ← Subtopic</td></tr>
+            <tr><td><strong>discussion_messages</strong></td><td>Pesan dalam sesi diskusi</td><td>← Session</td></tr>
+            <tr><td><strong>jurnal</strong></td><td>Refleksi terstruktur peserta didik</td><td>← User, ← Course</td></tr>
+            <tr><td><strong>feedback</strong></td><td>Rating &amp; feedback konten</td><td>← User, ← Course</td></tr>
+            <tr><td><strong>learning_profiles</strong></td><td>Profil belajar personal</td><td>← User</td></tr>
+            <tr><td><strong>course_generation_activity</strong></td><td>Log generasi course AI</td><td>← User, ← Course</td></tr>
+            <tr><td><strong>user_progress</strong></td><td>Tracking progress pembelajaran</td><td>← User, ← Course</td></tr>
+            <tr><td><strong>api_logs</strong></td><td>Logging API untuk monitoring</td><td>-</td></tr>
+        </table>
+
+        <h3>4.4 Integrasi AI (OpenAI)</h3>
+        <p>AI digunakan pada beberapa titik kritis dalam platform:</p>
+        <ul>
+            <li><strong>Course Generation:</strong> Menghasilkan outline course lengkap dari input peserta didik.</li>
+            <li><strong>Quiz Generation:</strong> Membuat soal pilihan ganda kontekstual dengan feedback per opsi.</li>
+            <li><strong>Challenge Generation:</strong> Menghasilkan pertanyaan provokatif yang menantang asumsi.</li>
+            <li><strong>Discussion Facilitation:</strong> Menjalankan dialog Sokratik multi-fase.</li>
+            <li><strong>Ask Question:</strong> Menjawab pertanyaan peserta didik berdasarkan komponen prompt (tujuan, konteks, batasan).</li>
+        </ul>
+
+        <h3>4.5 Keamanan</h3>
+        <ul>
+            <li><strong>Autentikasi:</strong> JWT (JSON Web Token) dengan refresh token mechanism</li>
+            <li><strong>Hashing:</strong> bcrypt untuk password storage</li>
+            <li><strong>RBAC:</strong> Role-Based Access Control (User, Admin)</li>
+            <li><strong>RLS:</strong> Row Level Security di Supabase PostgreSQL</li>
+            <li><strong>Session Lock:</strong> One active session per user via heartbeat mechanism</li>
+            <li><strong>Input Validation:</strong> Server-side validation pada semua API endpoints</li>
+            <li><strong>API Logging:</strong> Monitoring dan audit trail via api_logs</li>
+        </ul>
+    </div>
+
+    <!-- BAB 5: FITUR-FITUR UTAMA -->
+    <div class="chapter">
+        <h2>Bab 5 — Fitur-Fitur Utama</h2>
+
+        <h3>5.1 Generasi Course Berbasis AI</h3>
+        <p>Fitur unggulan PrincipleLearn V2.0 adalah kemampuan menghasilkan course pembelajaran secara otomatis melalui AI. Peserta didik mengisi formulir multi-langkah yang mencakup:</p>
+        <ol>
+            <li><strong>Topik:</strong> Apa yang ingin dipelajari</li>
+            <li><strong>Tujuan:</strong> Mengapa ingin belajar topik ini</li>
+            <li><strong>Level:</strong> Tingkat kemahiran (Beginner / Intermediate / Advanced)</li>
+            <li><strong>Masalah:</strong> Masalah spesifik yang dihadapi</li>
+            <li><strong>Asumsi Awal:</strong> Apa yang sudah diketahui</li>
+        </ol>
+        <p>AI kemudian menghasilkan course structure lengkap: modul, subtopik, konten materi, contoh, dan key takeaways yang langsung dapat dipelajari.</p>
+
+        <h3>5.2 Pembelajaran Interaktif</h3>
+        <p>Setiap subtopik dilengkapi dengan komponen interaktif:</p>
+        <div class="two-col">
+            <div class="col-box">
+                <h4>📝 Quiz Time</h4>
+                <p>Soal pilihan ganda (5 soal) yang digenerate AI berdasarkan materi subtopik. Setiap opsi jawaban dilengkapi penjelasan detail. Peserta didik dapat menambahkan Reasoning Note pada setiap jawaban.</p>
+            </div>
+            <div class="col-box">
+                <h4>🧠 Challenge My Thinking</h4>
+                <p>AI mengajukan pertanyaan provokatif yang menantang asumsi peserta didik. Dirancang untuk menstimulasi analisis dan evaluasi kritis. Disertai opsi Reasoning Note.</p>
+            </div>
+        </div>
+        <div class="two-col">
+            <div class="col-box">
+                <h4>❓ Ask Question (Prompt Builder)</h4>
+                <p>Peserta didik bertanya menggunakan Prompt Builder dengan mode Langsung atau Guided (Tujuan/Konteks/Batasan). AI menjawab kontekstual berdasarkan komponen prompt.</p>
+            </div>
+            <div class="col-box">
+                <h4>💡 Examples &amp; Key Takeaways</h4>
+                <p>Contoh-contoh praktis AI-generated dan ringkasan otomatis yang membantu peserta didik memahami dan mengingat poin-poin utama.</p>
+            </div>
+        </div>
+
+        <h3>5.3 Diskusi Sokratik</h3>
+        <p>Fitur diskusi menggunakan metode Sokratik dengan AI sebagai mentor yang memandu dialog bertahap:</p>
+        <table>
+            <tr><th>Fase</th><th>Tujuan</th><th>Contoh Pertanyaan AI</th></tr>
+            <tr><td><span class="badge badge-blue">Diagnosis</span></td><td>Mengecek pemahaman awal</td><td>"Menurut pemahamanmu saat ini, apa itu X?"</td></tr>
+            <tr><td><span class="badge badge-green">Eksplorasi</span></td><td>Memperdalam pemahaman</td><td>"Bagaimana jika kondisinya berubah menjadi Y?"</td></tr>
+            <tr><td><span class="badge badge-orange">Latihan</span></td><td>Menerapkan konsep</td><td>"Coba terapkan konsep ini pada kasus Z."</td></tr>
+            <tr><td><span class="badge badge-blue">Sintesis</span></td><td>Merangkum pemahaman</td><td>"Rangkum pemahamanmu tentang topik ini."</td></tr>
+        </table>
+
+        <h3>5.4 Alat Pembelajaran Personal</h3>
+        <ul>
+            <li><strong>Learning Journal:</strong> Ruang refleksi untuk mencatat insight dan rencana penerapan.</li>
+            <li><strong>Key Takeaways:</strong> Ringkasan otomatis dari setiap subtopik.</li>
+            <li><strong>Progress Tracking:</strong> Dashboard personal yang menunjukkan progres per course.</li>
+            <li><strong>Learning Profile:</strong> Profil belajar personal (pengalaman, gaya belajar, tujuan, tantangan) yang diisi saat onboarding.</li>
+        </ul>
+
+        <h3>5.5 Prompt Builder &amp; Prompt Journey</h3>
+        <div class="new-badge"><strong>🆕 Baru di V2.0</strong></div>
+        <p><strong>Prompt Builder</strong> adalah komponen pengganti input pertanyaan sederhana yang menyediakan dua mode:</p>
+
+        <div class="two-col">
+            <div class="col-box">
+                <h4>⚡ Mode Langsung</h4>
+                <p>Input pertanyaan sederhana satu baris. Cocok untuk pengguna yang sudah mahir merumuskan pertanyaan secara mandiri.</p>
+            </div>
+            <div class="col-box">
+                <h4>🧭 Mode Guided Builder</h4>
+                <ul>
+                    <li><strong>🎯 Tujuan</strong> — Apa yang ingin diketahui (wajib)</li>
+                    <li><strong>📝 Konteks</strong> — Apa yang sudah diketahui (opsional)</li>
+                    <li><strong>📏 Batasan</strong> — Format jawaban yang diinginkan (opsional)</li>
+                </ul>
+                <p>Dilengkapi <em>chip starter</em> untuk scaffolding, misalnya "Saya ingin memahami bagaimana...", "Yang sudah saya ketahui adalah..."</p>
+            </div>
+        </div>
+
+        <p>Setelah submit, muncul <strong>Reasoning Step (💭)</strong>: "Kenapa kamu menanyakan ini?" — peserta didik diminta menjelaskan motivasi di balik pertanyaannya.</p>
+
+        <p><strong>Prompt Timeline (🧭)</strong> adalah visualisasi kronologis yang menampilkan seluruh riwayat prompt peserta didik, dikelompokkan per sesi belajar dan dilengkapi badge versi, label subtopik, dan preview komponen prompt.</p>
+
+        <h3>5.6 Structured Reflection &amp; Reasoning Note</h3>
+        <div class="new-badge"><strong>🆕 Baru di V2.0</strong></div>
+
+        <p><strong>Structured Reflection</strong> menggantikan jurnal refleksi bebas dengan empat dimensi terstruktur:</p>
+        <table>
+            <tr><th>Dimensi</th><th>Pertanyaan Pemandu</th><th>Keterampilan yang Distimulasi</th></tr>
+            <tr><td>💡 Apa yang Dipahami</td><td>"Apa hal utama yang saya pahami hari ini?"</td><td>Explanation, Abstraction</td></tr>
+            <tr><td>❓ Yang Masih Membingungkan</td><td>"Apa yang masih salah atau membingungkan?"</td><td>Self-Regulation, Debugging</td></tr>
+            <tr><td>🗺️ Strategi ke Depan</td><td>"Apa strategi belajar saya selanjutnya?"</td><td>Algorithmic Thinking, Planning</td></tr>
+            <tr><td>📈 Evolusi Cara Bertanya</td><td>"Bagaimana cara saya bertanya berubah?"</td><td>Metacognition, Pattern Recognition</td></tr>
+        </table>
+        <p>Ditambah <strong>Content Satisfaction Rating</strong> (⭐ 1-5) dengan label: Kurang, Cukup, Baik, Sangat Baik, Luar Biasa.</p>
+
+        <p><strong>Reasoning Note (💭)</strong> adalah komponen collapsible yang muncul pada quiz, challenge, dan prompt. Peserta didik diminta menjelaskan <em>mengapa</em> mereka memilih jawaban/langkah tertentu, melatih kesadaran metakognitif.</p>
+
+        <h3>5.7 Panel Administrasi</h3>
+        <p>Admin memiliki akses ke dashboard komprehensif untuk monitoring dan manajemen:</p>
+        <ul>
+            <li><strong>User Management:</strong> Daftar pengguna, status aktif, dan manajemen sesi.</li>
+            <li><strong>Content Monitoring:</strong> Melihat course yang digenerate, quiz results, transkrip diskusi, dan challenge responses.</li>
+            <li><strong>Statistics Dashboard:</strong> Metrik platform (total users, courses, quiz completion rates, dll.).</li>
+            <li><strong>Activity Logs:</strong> Log aktivitas per fitur (quiz, challenge, feedback, jurnal, discussion, ask-question, course generation, learning profile).</li>
+            <li><strong>API Monitoring:</strong> Logging dan monitoring API requests.</li>
+        </ul>
+
+        <h3>5.8 Teacher Insight Dashboard</h3>
+        <div class="new-badge"><strong>🆕 Baru di V2.0</strong></div>
+        <p>Dashboard khusus untuk guru/pengajar yang menampilkan analisis data riset:</p>
+        <ul>
+            <li><strong>RM2 — Prompt Evolution:</strong> Grafik evolusi prompt per sesi menunjukkan total prompt, rata-rata komponen yang digunakan, dan reasoning rate.</li>
+            <li><strong>RM3 — Critical Thinking:</strong> Tracking indikator CT berdasarkan interaksi peserta didik.</li>
+            <li><strong>Summary Cards:</strong> Total prompt, akurasi quiz, reasoning rate, kepuasan konten, jumlah indikator CT.</li>
+            <li><strong>Per-Student Summary:</strong> Tabel ringkasan per siswa (prompt count, quiz accuracy, refleksi, challenge).</li>
+            <li><strong>Filtering:</strong> Filter per siswa dan per course untuk analisis mendalam.</li>
+        </ul>
+
+        <h3>5.9 Research Dashboard</h3>
+        <div class="new-badge"><strong>🆕 Baru di V2.0</strong></div>
+        <p>Dashboard riset longitudinal untuk analisis perkembangan prompt dan indikator kognitif siswa:</p>
+
+        <div class="two-col">
+            <div class="col-box">
+                <h4>📊 Statistik Riset</h4>
+                <ul>
+                    <li>Total sesi pembelajaran</li>
+                    <li>Total klasifikasi prompt</li>
+                    <li>Total penilaian indikator</li>
+                    <li>Jumlah siswa terlibat</li>
+                </ul>
+            </div>
+            <div class="col-box">
+                <h4>🔧 Aksi Cepat</h4>
+                <ul>
+                    <li>Kelola sesi longitudinal</li>
+                    <li>Klasifikasi prompt (SCP/SRP/MQP/Reflective)</li>
+                    <li>Analisis indikator kognitif CT &amp; CPT</li>
+                    <li>Export data riset (JSON/CSV)</li>
+                </ul>
+            </div>
+        </div>
+
+        <p><strong>Distribusi Tahap Prompt:</strong></p>
+        <table>
+            <tr><th>Tahap</th><th>Deskripsi</th></tr>
+            <tr><td><span class="badge badge-green">SCP</span></td><td>Simple Clarification Prompt — Pertanyaan tunggal, langsung, minim konteks masalah</td></tr>
+            <tr><td><span class="badge badge-blue">SRP</span></td><td>Structured Reformulation Prompt — Prompt direformulasi setelah respons awal AI untuk memperjelas tujuan</td></tr>
+            <tr><td><span class="badge badge-orange">MQP</span></td><td>Multi-Question Prompt — Pertanyaan berlapis dan iteratif dalam satu rangkaian penyelesaian masalah</td></tr>
+            <tr><td><span class="badge badge-purple">Reflective</span></td><td>Reflective Prompt — Prompt menilai kualitas solusi, membandingkan alternatif, dan menjustifikasi keputusan</td></tr>
+        </table>
+    </div>
+
+    <!-- BAB 6: ALUR PENGALAMAN BELAJAR -->
+    <div class="chapter">
+        <h2>Bab 6 — Alur Pengalaman Belajar</h2>
+        <p>PrincipleLearn V2.0 menyediakan alur pengalaman belajar yang terstruktur dalam lima fase utama, dirancang
+            untuk memaksimalkan pembelajaran bermakna dan perkembangan keterampilan berpikir kritis.</p>
+
+        <h3>6.1 Fase 1: Onboarding &amp; Profil Belajar</h3>
+        <div class="new-badge"><strong>🆕 Baru di V2.0</strong> — Learning Profile sebagai langkah awal personalisasi.</div>
+        <div class="flow-diagram">
+            Registrasi <span class="flow-arrow">→</span>
+            Isi Profil Belajar (pengalaman, gaya belajar, tujuan, tantangan) <span class="flow-arrow">→</span>
+            Dashboard Personal
+        </div>
+        <p>Setelah registrasi, peserta didik mengisi Learning Profile yang mencakup pengalaman pemrograman, preferensi gaya belajar, tujuan belajar, dan tantangan yang dihadapi. Profil ini menjadi konteks tambahan untuk personalisasi AI.</p>
+
+        <h3>6.2 Fase 2: Generasi Course</h3>
+        <div class="flow-diagram">
+            Input Topik <span class="flow-arrow">→</span>
+            Isi Tujuan &amp; Level <span class="flow-arrow">→</span>
+            Jelaskan Problem <span class="flow-arrow">→</span>
+            Asumsi Awal <span class="flow-arrow">→</span>
+            AI Generate Course
+        </div>
+        <p>Peserta didik melalui formulir multi-langkah untuk mendeskripsikan kebutuhan belajar. AI menganalisis input ini dan menghasilkan course structure yang komprehensif: modul, subtopik, konten, contoh, dan key takeaways.</p>
+
+        <h3>6.3 Fase 3: Pembelajaran Aktif</h3>
+        <p>Pada fase ini, peserta didik belajar secara aktif melalui konten interaktif:</p>
+        <div class="flow-diagram">
+            Baca Materi Subtopik <span class="flow-arrow">→</span>
+            Lihat Contoh Praktis <span class="flow-arrow">→</span>
+            Ask Question (via Prompt Builder) <span class="flow-arrow">→</span>
+            Tulis Reasoning Note
+        </div>
+        <ul>
+            <li><strong>Membaca:</strong> Konten AI-generated yang terstruktur per subtopik</li>
+            <li><strong>Bertanya:</strong> Menggunakan Prompt Builder dengan komponen Tujuan/Konteks/Batasan</li>
+            <li><strong>Reasoning:</strong> Menjelaskan motivasi di balik pertanyaan (Reasoning Step)</li>
+            <li><strong>Melihat Prompt Timeline:</strong> Melacak evolusi pertanyaan lintas sesi</li>
+        </ul>
+
+        <h3>6.4 Fase 4: Keterlibatan Mendalam</h3>
+        <p>Fase ini mendorong peserta didik ke level berpikir yang lebih tinggi:</p>
+        <div class="flow-diagram">
+            Quiz Time + Reasoning Note <span class="flow-arrow">→</span>
+            Challenge My Thinking + Reasoning Note <span class="flow-arrow">→</span>
+            Diskusi Sokratik (4 fase) <span class="flow-arrow">→</span>
+            Jurnal Belajar
+        </div>
+        <table>
+            <tr><th>Aktivitas</th><th>Level Bloom</th><th>Keterampilan CT/CPT</th></tr>
+            <tr><td>Quiz Time</td><td>Mengaplikasikan, Menganalisis</td><td>Inference, Pattern Recognition</td></tr>
+            <tr><td>+ Reasoning Note</td><td>Mengevaluasi</td><td>Explanation, Self-Regulation</td></tr>
+            <tr><td>Challenge My Thinking</td><td>Menganalisis, Mengevaluasi</td><td>Analysis, Evaluation</td></tr>
+            <tr><td>Diskusi Sokratik</td><td>Mengevaluasi, Mencipta</td><td>Evaluation, Algorithmic Thinking</td></tr>
+            <tr><td>Jurnal Belajar</td><td>Mencipta</td><td>Abstraction, Self-Regulation</td></tr>
+        </table>
+
+        <h3>6.5 Fase 5: Refleksi Terstruktur &amp; Evaluasi</h3>
+        <div class="new-badge"><strong>🆕 Baru di V2.0</strong> — Refleksi multi-dimensional menggantikan jurnal bebas.</div>
+        <div class="flow-diagram">
+            Structured Reflection (4 dimensi) <span class="flow-arrow">→</span>
+            Content Satisfaction Rating (⭐) <span class="flow-arrow">→</span>
+            Submit Evaluasi <span class="flow-arrow">→</span>
+            Data Tersimpan untuk Analisis Riset
+        </div>
+        <p>Peserta didik menutup sesi belajar dengan:</p>
+        <ol>
+            <li><strong>Refleksi terstruktur:</strong> Menulis tentang apa yang dipahami, yang membingungkan, strategi ke depan, dan evolusi cara bertanya.</li>
+            <li><strong>Rating kepuasan:</strong> Memberikan rating ⭐ 1-5 terhadap kualitas konten.</li>
+            <li><strong>Kontribusi data riset:</strong> Semua interaksi tersimpan untuk analisis oleh Teacher Insight Dashboard dan Research Dashboard.</li>
+        </ol>
+    </div>
+
+    <!-- BAB 7: SISTEM PENILAIAN & FRAMEWORK RISET -->
+    <div class="chapter">
+        <h2>Bab 7 — Sistem Penilaian &amp; Framework Riset</h2>
+
+        <h3>7.1 Rubrik Critical Thinking (CT)</h3>
+        <p>Penilaian CT mengacu pada enam keterampilan Facione, diukur melalui aktivitas pada platform:</p>
+        <table>
+            <tr><th>Keterampilan</th><th>Sumber Data</th><th>Indikator</th></tr>
+            <tr><td>Analysis</td><td>Challenge responses</td><td>Kemampuan menguraikan komponen masalah</td></tr>
+            <tr><td>Evaluation</td><td>Diskusi Sokratik</td><td>Kemampuan menilai solusi alternatif</td></tr>
+            <tr><td>Inference</td><td>Quiz responses</td><td>Ketepatan menarik kesimpulan dari konteks</td></tr>
+            <tr><td>Explanation</td><td>Reasoning Notes</td><td>Kejelasan menjelaskan alasan jawaban</td></tr>
+            <tr><td>Self-Regulation</td><td>Structured Reflection</td><td>Kesadaran diri tentang gap dan strategi</td></tr>
+            <tr><td>Interpretation</td><td>Prompt Builder</td><td>Kemampuan merumuskan kebutuhan belajar</td></tr>
+        </table>
+
+        <h3>7.2 Rubrik Computational Thinking (CPT)</h3>
+        <table>
+            <tr><th>Komponen</th><th>Sumber Data</th><th>Indikator</th></tr>
+            <tr><td>Decomposition</td><td>Prompt Builder, Course Request</td><td>Memecah topik/pertanyaan menjadi komponen</td></tr>
+            <tr><td>Pattern Recognition</td><td>Prompt Timeline, Quiz</td><td>Mengenali pola, mengidentifikasi kesamaan</td></tr>
+            <tr><td>Abstraction</td><td>Key Takeaways, Reflection</td><td>Menyarikan inti dari informasi kompleks</td></tr>
+            <tr><td>Algorithmic Thinking</td><td>Challenge, Discussion</td><td>Menyusun solusi bertahap dan sistematis</td></tr>
+            <tr><td>Debugging</td><td>Quiz feedback, Reasoning Note</td><td>Menganalisis jawaban salah dan memperbaiki</td></tr>
+        </table>
+
+        <h3>7.3 Skala &amp; Formula Penilaian</h3>
+        <p>Setiap indikator CT dan CPT dinilai pada skala 1-4:</p>
+        <table>
+            <tr><th>Skor</th><th>Level</th><th>Deskripsi</th></tr>
+            <tr><td>1</td><td>Kurang</td><td>Belum menunjukkan indikator keterampilan</td></tr>
+            <tr><td>2</td><td>Cukup</td><td>Menunjukkan indikator secara parsial</td></tr>
+            <tr><td>3</td><td>Baik</td><td>Menunjukkan indikator secara konsisten</td></tr>
+            <tr><td>4</td><td>Sangat Baik</td><td>Menunjukkan indikator secara mendalam dan reflektif</td></tr>
+        </table>
+
+        <p><strong>Formula Skor Total:</strong></p>
+        <div class="info-box">
+            <strong>CT Score</strong> = (Analysis + Evaluation + Inference + Explanation + Self-Regulation + Interpretation) / 24 × 100<br>
+            <strong>CPT Score</strong> = (Decomposition + Pattern Recognition + Abstraction + Algorithmic Thinking + Debugging) / 20 × 100
+        </div>
+
+        <h3>7.4 Framework Evolusi Prompt (RM2)</h3>
+        <div class="new-badge"><strong>🆕 Baru di V2.0</strong></div>
+        <p>Framework evolusi prompt melacak bagaimana peserta didik mengembangkan kemampuan merumuskan pertanyaan lintas sesi belajar:</p>
+        <table>
+            <tr><th>Tahap</th><th>Kode</th><th>Karakteristik</th><th>Contoh</th></tr>
+            <tr><td>Tahap 1</td><td><span class="badge badge-green">SCP</span></td><td>Pertanyaan sederhana, langsung, tanpa konteks</td><td>"Apa itu machine learning?"</td></tr>
+            <tr><td>Tahap 2</td><td><span class="badge badge-blue">SRP</span></td><td>Pertanyaan direformulasi dengan konteks dan tujuan</td><td>"Saya ingin memahami perbedaan supervised vs unsupervised learning untuk proyek klasifikasi saya"</td></tr>
+            <tr><td>Tahap 3</td><td><span class="badge badge-orange">MQP</span></td><td>Rangkaian pertanyaan iteratif yang saling membangun</td><td>"Bagaimana cara menangani overfitting? Apakah regularisasi cukup? Bagaimana dengan cross-validation?"</td></tr>
+            <tr><td>Tahap 4</td><td><span class="badge badge-purple">Reflective</span></td><td>Pertanyaan evaluatif, menjustifikasi, membandingkan</td><td>"Mengapa gradient boosting lebih baik dari random forest untuk dataset ini? Apa trade-off-nya?"</td></tr>
+        </table>
+
+        <p><strong>Metrik yang Dilacak:</strong></p>
+        <ul>
+            <li>Total prompt per sesi dan tren perkembangan</li>
+            <li>Rata-rata komponen prompt yang digunakan (Tujuan/Konteks/Batasan)</li>
+            <li>Reasoning rate (persentase prompt yang disertai reasoning note)</li>
+            <li>Transisi antar tahap prompt (SCP → SRP → MQP → Reflective)</li>
+        </ul>
+
+        <h3>7.5 Indikator Kognitif &amp; Klasifikasi</h3>
+        <div class="new-badge"><strong>🆕 Baru di V2.0</strong></div>
+        <p>Research Dashboard memungkinkan klasifikasi dan pelacakan indikator kognitif secara longitudinal:</p>
+        <ul>
+            <li><strong>CT Indicators:</strong> Indikator Critical Thinking berdasarkan kualitas analisis, evaluasi, dan penjelasan dalam interaksi siswa.</li>
+            <li><strong>CPT Indicators:</strong> Indikator Computational Thinking berdasarkan kemampuan dekomposisi, pengenalan pola, dan penyelesaian masalah algoritmik.</li>
+            <li><strong>Session Tracking:</strong> Setiap sesi belajar dicatat dengan <code>session_number</code> pada prompt, memungkinkan analisis longitudinal perkembangan.</li>
+            <li><strong>Data Export:</strong> Semua data riset dapat diekspor dalam format JSON atau CSV untuk analisis lanjutan dengan tools statistik eksternal.</li>
+        </ul>
+    </div>
+
+    <!-- BAB 8: MANAJEMEN PENGGUNA -->
+    <div class="chapter">
+        <h2>Bab 8 — Manajemen Pengguna</h2>
+
+        <h3>8.1 Peran Pengguna</h3>
+        <table>
+            <tr><th>Peran</th><th>Deskripsi</th><th>Fitur yang Dapat Diakses</th></tr>
+            <tr>
+                <td><strong>User (Learner)</strong></td>
+                <td>Peserta didik yang belajar melalui platform</td>
+                <td>
+                    <ul>
+                        <li>Onboarding &amp; Learning Profile</li>
+                        <li>Request Course (AI generation)</li>
+                        <li>Belajar interaktif (konten, quiz, challenge)</li>
+                        <li>Ask Question via Prompt Builder</li>
+                        <li>Diskusi Sokratik</li>
+                        <li>Structured Reflection &amp; Content Rating</li>
+                        <li>Prompt Timeline</li>
+                        <li>Reasoning Note</li>
+                        <li>Learning Journal</li>
+                        <li>Dashboard personal &amp; progress tracking</li>
+                    </ul>
+                </td>
+            </tr>
+            <tr>
+                <td><strong>Admin</strong></td>
+                <td>Administrator yang mengelola platform dan melakukan riset</td>
+                <td>
+                    <ul>
+                        <li>Dashboard admin &amp; statistik platform</li>
+                        <li>User management &amp; sesi monitoring</li>
+                        <li>Content monitoring &amp; moderation</li>
+                        <li>Activity logs per fitur</li>
+                        <li>Teacher Insight Dashboard (RM2/RM3)</li>
+                        <li>Research Dashboard (klasifikasi prompt, indikator kognitif)</li>
+                        <li>Data export (JSON/CSV)</li>
+                        <li>Admin register</li>
+                    </ul>
+                </td>
+            </tr>
+        </table>
+
+        <h3>8.2 Sistem Autentikasi</h3>
+        <p>PrincipleLearn V2.0 menggunakan sistem autentikasi berbasis JWT (JSON Web Token):</p>
+        <ul>
+            <li><strong>Registrasi:</strong> Email + password dengan validasi format</li>
+            <li><strong>Login:</strong> Verifikasi kredensial, generate JWT token</li>
+            <li><strong>Session Management:</strong> Token disimpan sebagai HTTP-only cookie, dengan heartbeat mechanism untuk session lock (satu sesi aktif per akun)</li>
+            <li><strong>Password Security:</strong> Hash bcrypt dengan salt rounds</li>
+        </ul>
+
+        <h3>8.3 Akses Kontrol Berbasis Peran</h3>
+        <p>Platform menerapkan Role-Based Access Control (RBAC):</p>
+        <table>
+            <tr><th>Endpoint / Halaman</th><th>User</th><th>Admin</th></tr>
+            <tr><td>/dashboard</td><td>✅</td><td>❌</td></tr>
+            <tr><td>/onboarding</td><td>✅</td><td>❌</td></tr>
+            <tr><td>/course/[id]</td><td>✅ (owner)</td><td>✅ (view)</td></tr>
+            <tr><td>/admin</td><td>❌</td><td>✅</td></tr>
+            <tr><td>/admin/insights</td><td>❌</td><td>✅</td></tr>
+            <tr><td>/admin/research</td><td>❌</td><td>✅</td></tr>
+            <tr><td>/admin/register</td><td>❌</td><td>✅</td></tr>
+            <tr><td>API /api/admin/*</td><td>❌</td><td>✅ (middleware validated)</td></tr>
+        </table>
+        <p>Proteksi admin menggunakan hook <code>useAdmin</code> pada client-side dan middleware validation pada API routes.</p>
+    </div>
+
+    <!-- BAB 9: PENUTUP -->
+    <div class="chapter">
+        <h2>Bab 9 — Penutup</h2>
+
+        <p>PrincipleLearn V2.0 merupakan evolusi signifikan dari versi sebelumnya, menghadirkan platform pembelajaran
+            berbasis AI yang lebih komprehensif, terukur, dan berorientasi riset. Transformasi utama yang dilakukan
+            mencakup:</p>
+
+        <h3>Keunggulan Arsitektur</h3>
+        <ul>
+            <li><strong>Migrasi ke Supabase PostgreSQL:</strong> Database relasional yang proper dengan RLS, indexing, dan relasi antar tabel — memungkinkan query analitis yang kompleks untuk kebutuhan riset.</li>
+            <li><strong>Full-stack Next.js 15:</strong> Framework modern dengan App Router, SSR, dan API routes built-in untuk performa optimal.</li>
+        </ul>
+
+        <h3>Keunggulan Pedagogis</h3>
+        <ul>
+            <li><strong>Prompt Builder:</strong> Scaffolding terstruktur untuk mengembangkan kemampuan merumuskan pertanyaan — dari mode sederhana ke guided builder dengan komponen Tujuan/Konteks/Batasan.</li>
+            <li><strong>Structured Reflection:</strong> Refleksi multi-dimensional yang mendorong metakognisi, menggantikan jurnal bebas dengan empat dimensi terstruktur.</li>
+            <li><strong>Reasoning Note:</strong> Metacognitive annotation yang melatih kesadaran proses berpikir pada setiap titik interaksi (quiz, challenge, prompt).</li>
+            <li><strong>Prompt Timeline:</strong> Visualisasi evolusi pertanyaan yang memungkinkan peserta didik dan pengajar melacak perkembangan kemampuan bertanya.</li>
+        </ul>
+
+        <h3>Keunggulan Riset</h3>
+        <ul>
+            <li><strong>Teacher Insight Dashboard:</strong> Dashboard analitik untuk RM2 (Prompt Evolution) dan RM3 (Critical Thinking) dengan visualisasi per siswa dan per course.</li>
+            <li><strong>Research Dashboard:</strong> Infrastruktur riset longitudinal dengan klasifikasi prompt (SCP/SRP/MQP/Reflective), indikator kognitif CT/CPT, manajemen sesi, dan export data.</li>
+            <li><strong>Framework Evolusi Prompt:</strong> Model empat tahap yang melacak perkembangan kemampuan siswa merumuskan pertanyaan dari klarifikasi sederhana ke evaluasi reflektif.</li>
+        </ul>
+
+        <div class="key-point">
+            <strong>Kontribusi Utama:</strong> PrincipleLearn V2.0 tidak hanya menjadi media pembelajaran, tetapi juga
+            menjadi instrumen riset yang memungkinkan pengukuran dan analisis perkembangan keterampilan berpikir kritis
+            dan komputasional secara longitudinal melalui interaksi alami peserta didik dengan platform.
+        </div>
+
+        <p style="text-align: center; margin-top: 40px; font-style: italic; color: var(--text-light);">
+            — Dokumentasi PrincipleLearn V2.0 — Maret 2026 —
+        </p>
+    </div>
+
+</body>
+</html>

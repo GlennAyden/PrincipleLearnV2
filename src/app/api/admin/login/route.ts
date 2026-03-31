@@ -76,8 +76,7 @@ export async function POST(request: Request) {
 
     // Validate password
     console.log(`[Admin Login] Comparing password for: ${email}`)
-    console.log(`[Admin Login] Password length: ${password.length}`)
-    console.log(`[Admin Login] Hash from DB: ${user.password_hash}`)
+
     
     let isValid = false
     try {
@@ -93,8 +92,8 @@ export async function POST(request: Request) {
 
     if (!isValid) {
       console.log(`[Admin Login] Invalid password for: ${email}`)
-      console.log(`[Admin Login] Expected password: admin123`)
       return NextResponse.json(
+
         { message: 'Email atau password salah' },
         { status: 401 }
       )
@@ -126,14 +125,26 @@ export async function POST(request: Request) {
       { status: 200 }
     )
     
+    // Set primary admin cookie ('token') — used by admin routes & useAdmin hook
     response.cookies.set('token', token, {
       httpOnly: true,
       secure: process.env.NODE_ENV === 'production',
+      sameSite: 'lax',
+      path: '/',
+      maxAge: 2 * 60 * 60, // 2 hours
+    })
+
+    // Also set 'access_token' for middleware compatibility (middleware checks both)
+    response.cookies.set('access_token', token, {
+      httpOnly: true,
+      secure: process.env.NODE_ENV === 'production',
+      sameSite: 'lax',
       path: '/',
       maxAge: 2 * 60 * 60, // 2 hours
     })
     
     return response
+
 
   } catch (err: any) {
     console.error('Error di /api/admin/login:', err)

@@ -1,26 +1,35 @@
 // Path: src/app/request-course/step2/page.tsx
 'use client';
 
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 import Link from 'next/link';
 import { useRequestCourse } from '@/context/RequestCourseContext';
+import { useAuth } from '@/hooks/useAuth';
 import type { Level } from '@/context/RequestCourseContext';
 import styles from './page.module.scss';
 
 const levels: { value: Level; label: string; icon: string; desc: string; color: string }[] = [
   { value: 'Beginner',     label: 'Beginner',     icon: '🌱', desc: 'Starting from the basics',     color: 'green' },
   { value: 'Intermediate', label: 'Intermediate', icon: '📚', desc: 'Some prior knowledge',         color: 'blue' },
-  { value: 'Advance',      label: 'Advanced',     icon: '🚀', desc: 'Deep dive & advanced topics',  color: 'purple' },
+  { value: 'Advanced',     label: 'Advanced',     icon: '🚀', desc: 'Deep dive & advanced topics',  color: 'purple' },
 ];
 
 export default function RequestCourseStep2() {
   const router = useRouter();
   const { answers, setPartial } = useRequestCourse();
+  const { isAuthenticated, isLoading: authLoading } = useAuth();
 
   const [level, setLevel]             = useState(answers.level);
   const [extraTopics, setExtraTopics] = useState(answers.extraTopics);
   const [error, setError]             = useState('');
+
+  // Auth guard: redirect to login if not authenticated
+  useEffect(() => {
+    if (!authLoading && !isAuthenticated) {
+      router.replace('/login');
+    }
+  }, [authLoading, isAuthenticated, router]);
 
   const handleContinue = () => {
     if (!level) {

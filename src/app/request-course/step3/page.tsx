@@ -28,7 +28,7 @@ export default function RequestCourseStep3() {
       setError('Please fill both fields');
       return;
     }
-    if (!user || !user.email) {
+    if (!user || !user.id || !user.email) {
       setError('You must be logged in to generate a course');
       return;
     }

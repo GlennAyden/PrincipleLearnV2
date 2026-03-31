@@ -30,11 +30,22 @@ export function middleware(req: NextRequest) {
     return NextResponse.next()
   }
   
-  // Get the access token from cookies
-  const accessToken = req.cookies.get('access_token')?.value
+  // Get token from cookies — check both 'token' (admin) and 'access_token' (user)
+  // Admin login sets 'token', user login sets 'access_token'
+  const adminToken = req.cookies.get('token')?.value
+  const userAccessToken = req.cookies.get('access_token')?.value
+  const activeToken = adminToken || userAccessToken || null
   
-  // If no token exists, redirect to login
-  if (!accessToken) {
+  // If no token exists, return appropriate response
+  if (!activeToken) {
+    // For API routes, return JSON 401 instead of HTML redirect
+    if (pathname.startsWith('/api/')) {
+      return NextResponse.json(
+        { error: 'Authentication required' },
+        { status: 401 }
+      )
+    }
+    
     // For admin routes, redirect to admin login
     if (pathname.startsWith('/admin')) {
       return NextResponse.redirect(new URL('/admin/login', req.url))
@@ -45,7 +56,7 @@ export function middleware(req: NextRequest) {
   }
   
   // Verify the token
-  const payload = verifyToken(accessToken)
+  const payload = verifyToken(activeToken)
   
   // If token is invalid or expired, check for refresh token
   if (!payload) {
@@ -57,19 +68,34 @@ export function middleware(req: NextRequest) {
       return NextResponse.redirect(new URL('/api/auth/refresh', req.url))
     }
     
-    // No refresh token, clear the invalid token and redirect to login
+    // No refresh token, clear the invalid tokens
+    // For API routes, return JSON 401
+    if (pathname.startsWith('/api/')) {
+      const response = NextResponse.json(
+        { error: 'Invalid or expired token' },
+        { status: 401 }
+      )
+      response.cookies.delete('access_token')
+      response.cookies.delete('token')
+      return response
+    }
+    
+    // For page routes, redirect to login
     const response = NextResponse.redirect(
       new URL(pathname.startsWith('/admin') ? '/admin/login' : '/login', req.url)
     )
     
     response.cookies.delete('access_token')
+    response.cookies.delete('token')
     return response
   }
   
   // For admin routes, check if the user has admin role
-  if (pathname.startsWith('/admin') && payload.role !== 'ADMIN') {
+  // Support both 'ADMIN' and 'admin' (admin login stores lowercase)
+  if (pathname.startsWith('/admin') && payload.role?.toLowerCase() !== 'admin') {
     return NextResponse.redirect(new URL('/', req.url))
   }
+
   
   // Add user info to request headers for use in API routes
   const requestHeaders = new Headers(req.headers)

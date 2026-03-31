@@ -1,0 +1,160 @@
+﻿.next/types/validator.ts(396,31): error TS2344: Type 'typeof import("c:/Data/S2 Magister/Thesis/Media V3/src/app/api/admin/activity/quiz/[id]/route")' does not satisfy the constraint 'RouteHandlerConfig<"/api/admin/activity/quiz/[id]">'.
+  Types of property 'GET' are incompatible.
+    Type '(request: NextRequest, context: { params: { id: string; }; }) => Promise<NextResponse<{ error: string; }> | NextResponse<{ id: string; result: { no: number; question: string; options: string[]; userAnswer: string; status: string; reasoningNote: string; }[]; }>>' is not assignable to type '(request: NextRequest, context: { params: Promise<{ id: string; }>; }) => void | Response | Promise<void | Response>'.
+      Types of parameters 'context' and 'context' are incompatible.
+        Type '{ params: Promise<{ id: string; }>; }' is not assignable to type '{ params: { id: string; }; }'.
+          Types of property 'params' are incompatible.
+            Property 'id' is missing in type 'Promise<{ id: string; }>' but required in type '{ id: string; }'.
+.next/types/validator.ts(432,31): error TS2344: Type 'typeof import("c:/Data/S2 Magister/Thesis/Media V3/src/app/api/admin/activity/transcript/[id]/route")' does not satisfy the constraint 'RouteHandlerConfig<"/api/admin/activity/transcript/[id]">'.
+  Types of property 'GET' are incompatible.
+    Type '(req: NextRequest, context: { params: { id: string; }; }) => Promise<NextResponse<{ error: string; }> | NextResponse<{ id: any; question: any; answer: any; courseId: any; subtopic: any; createdAt: any; userEmail: string; }>>' is not assignable to type '(request: NextRequest, context: { params: Promise<{ id: string; }>; }) => void | Response | Promise<void | Response>'.
+      Types of parameters 'context' and 'context' are incompatible.
+        Type '{ params: Promise<{ id: string; }>; }' is not assignable to type '{ params: { id: string; }; }'.
+          Types of property 'params' are incompatible.
+            Property 'id' is missing in type 'Promise<{ id: string; }>' but required in type '{ id: string; }'.
+.next/types/validator.ts(792,31): error TS2344: Type 'typeof import("c:/Data/S2 Magister/Thesis/Media V3/src/app/api/debug/course-test/[id]/route")' does not satisfy the constraint 'RouteHandlerConfig<"/api/debug/course-test/[id]">'.
+  Types of property 'GET' are incompatible.
+    Type '(request: Request, { params }: { params: { id: string; }; }) => Promise<NextResponse<{ success: boolean; error: string; debug: { courseId: string; coursesFound: number; step: string; }; }> | NextResponse<...> | NextResponse<...>>' is not assignable to type '(request: NextRequest, context: { params: Promise<{ id: string; }>; }) => void | Response | Promise<void | Response>'.
+      Types of parameters '__1' and 'context' are incompatible.
+        Type '{ params: Promise<{ id: string; }>; }' is not assignable to type '{ params: { id: string; }; }'.
+          Types of property 'params' are incompatible.
+            Property 'id' is missing in type 'Promise<{ id: string; }>' but required in type '{ id: string; }'.
+src/app/admin/dashboard/page.tsx(214,38): error TS2322: Type '(v: number) => [number, string]' is not assignable to type 'Formatter<ValueType, NameType> & ((value: ValueType, name: NameType, item: TooltipPayloadEntry, index: number, payload: TooltipPayload) => ReactNode | [...])'.
+  Type '(v: number) => [number, string]' is not assignable to type 'Formatter<ValueType, NameType>'.
+    Types of parameters 'v' and 'value' are incompatible.
+      Type 'ValueType | undefined' is not assignable to type 'number'.
+        Type 'undefined' is not assignable to type 'number'.
+src/app/admin/discussions/page.tsx(585,37): error TS2551: Property 'admin_email' does not exist on type 'AdminAction'. Did you mean 'adminEmail'?
+src/app/admin/discussions/page.tsx(586,46): error TS2551: Property 'created_at' does not exist on type 'AdminAction'. Did you mean 'createdAt'?
+src/app/admin/discussions/page.tsx(610,45): error TS2551: Property 'created_at' does not exist on type 'DiscussionMessage'. Did you mean 'createdAt'?
+src/app/admin/insights/page.tsx(188,53): error TS2304: Cannot find name 'summary'.
+src/app/admin/insights/page.tsx(192,32): error TS2304: Cannot find name 'summary'.
+src/app/admin/insights/page.tsx(204,53): error TS2304: Cannot find name 'summary'.
+src/app/admin/insights/page.tsx(208,18): error TS2304: Cannot find name 'summary'.
+src/app/admin/insights/page.tsx(208,46): error TS2304: Cannot find name 'summary'.
+src/app/admin/insights/page.tsx(220,53): error TS2304: Cannot find name 'summary'.
+src/app/admin/insights/page.tsx(224,33): error TS2304: Cannot find name 'summary'.
+src/app/admin/insights/page.tsx(237,20): error TS2304: Cannot find name 'summary'.
+src/app/admin/insights/page.tsx(237,54): error TS2304: Cannot find name 'summary'.
+src/app/admin/insights/page.tsx(242,18): error TS2304: Cannot find name 'summary'.
+src/app/admin/insights/page.tsx(248,12): error TS2304: Cannot find name 'evolutionChart'.
+src/app/admin/insights/page.tsx(269,33): error TS2304: Cannot find name 'evolutionChart'.
+src/app/admin/insights/page.tsx(319,12): error TS2304: Cannot find name 'students'.
+src/app/admin/insights/page.tsx(333,20): error TS2304: Cannot find name 'students'.
+src/app/admin/insights/page.tsx(349,22): error TS2304: Cannot find name 'students'.
+src/app/admin/insights/page.tsx(349,36): error TS7006: Parameter 's' implicitly has an 'any' type.
+src/app/admin/insights/page.tsx(381,12): error TS2304: Cannot find name 'students'.
+src/app/api/admin/activity/analytics/route.ts(4,33): error TS2307: Cannot find module 'date-fns' or its corresponding type declarations.
+src/app/api/admin/activity/analytics/route.ts(23,20): error TS2554: Expected 0-1 arguments, but got 2.
+src/app/api/admin/activity/analytics/route.ts(24,8): error TS2339: Property 'gte' does not exist on type 'SupabaseQueryBuilder'.
+src/app/api/admin/activity/analytics/route.ts(83,5): error TS2322: Type '{ type: string; userId: string; message: string; }[]' is not assignable to type '{ type: "low_engagement" | "quiz_failure" | "no_activity"; userId: string; message: string; }[]'.
+  Type '{ type: string; userId: string; message: string; }' is not assignable to type '{ type: "low_engagement" | "quiz_failure" | "no_activity"; userId: string; message: string; }'.
+    Types of property 'type' are incompatible.
+      Type 'string' is not assignable to type '"low_engagement" | "quiz_failure" | "no_activity"'.
+src/app/api/admin/activity/search/route.ts(4,43): error TS2307: Cannot find module 'date-fns' or its corresponding type declarations.
+src/app/api/admin/activity/search/route.ts(76,25): error TS2304: Cannot find name 'ts'.
+src/app/api/admin/activity/transcript/[id]/route.ts(21,9): error TS2451: Cannot redeclare block-scoped variable 'transcript'.
+src/app/api/admin/activity/transcript/[id]/route.ts(46,10): error TS2552: Cannot find name 'transcripts'. Did you mean 'transcript'?
+src/app/api/admin/activity/transcript/[id]/route.ts(46,25): error TS2552: Cannot find name 'transcripts'. Did you mean 'transcript'?
+src/app/api/admin/activity/transcript/[id]/route.ts(53,11): error TS2451: Cannot redeclare block-scoped variable 'transcript'.
+src/app/api/admin/activity/transcript/[id]/route.ts(53,24): error TS2552: Cannot find name 'transcripts'. Did you mean 'transcript'?
+src/app/api/admin/discussions/[sessionId]/feedback/route.ts(54,19): error TS7006: Parameter 'item' implicitly has an 'any' type.
+src/app/api/admin/discussions/[sessionId]/feedback/route.ts(58,22): error TS7006: Parameter 'item' implicitly has an 'any' type.
+src/app/api/admin/discussions/analytics/route.ts(36,10): error TS2554: Expected 0-1 arguments, but got 2.
+src/app/api/admin/discussions/bulk/route.ts(29,14): error TS2339: Property 'eq' does not exist on type 'Promise<{ data: null; error: any; } | { data: any; error: null; }>'.
+src/app/api/admin/insights/route.ts(91,7): error TS2451: Cannot redeclare block-scoped variable 'quizzes'.
+src/app/api/admin/insights/route.ts(92,7): error TS2451: Cannot redeclare block-scoped variable 'journals'.
+src/app/api/admin/insights/route.ts(93,7): error TS2451: Cannot redeclare block-scoped variable 'challenges'.
+src/app/api/admin/insights/route.ts(115,17): error TS2304: Cannot find name 'promptQuery'.
+src/app/api/admin/insights/route.ts(115,31): error TS2304: Cannot find name 'promptQuery'.
+src/app/api/admin/insights/route.ts(116,19): error TS2304: Cannot find name 'promptQuery'.
+src/app/api/admin/insights/route.ts(116,33): error TS2304: Cannot find name 'promptQuery'.
+src/app/api/admin/insights/route.ts(144,9): error TS7053: Element implicitly has an 'any' type because expression of type 'any' can't be used to index type '{ SCP: number; SRP: number; MQP: number; Reflektif: number; }'.
+src/app/api/admin/insights/route.ts(144,37): error TS7053: Element implicitly has an 'any' type because expression of type 'any' can't be used to index type '{ SCP: number; SRP: number; MQP: number; Reflektif: number; }'.
+src/app/api/admin/insights/route.ts(207,19): error TS2451: Cannot redeclare block-scoped variable 'quizzes'.
+src/app/api/admin/insights/route.ts(227,19): error TS2451: Cannot redeclare block-scoped variable 'journals'.
+src/app/api/admin/insights/route.ts(265,19): error TS2451: Cannot redeclare block-scoped variable 'challenges'.
+src/app/api/auth/login/route.ts(58,65): error TS2339: Property 'password_hash' does not exist on type '{}'.
+src/app/api/auth/login/route.ts(68,20): error TS2339: Property 'id' does not exist on type '{}'.
+src/app/api/auth/login/route.ts(69,19): error TS2339: Property 'email' does not exist on type '{}'.
+src/app/api/auth/login/route.ts(70,18): error TS2339: Property 'role' does not exist on type '{}'.
+src/app/api/auth/login/route.ts(77,20): error TS2339: Property 'id' does not exist on type '{}'.
+src/app/api/auth/login/route.ts(78,19): error TS2339: Property 'email' does not exist on type '{}'.
+src/app/api/auth/login/route.ts(79,18): error TS2339: Property 'role' does not exist on type '{}'.
+src/app/api/auth/login/route.ts(83,54): error TS2339: Property 'id' does not exist on type '{}'.
+src/app/api/auth/login/route.ts(89,18): error TS2339: Property 'id' does not exist on type '{}'.
+src/app/api/auth/login/route.ts(90,21): error TS2339: Property 'email' does not exist on type '{}'.
+src/app/api/auth/login/route.ts(91,20): error TS2339: Property 'role' does not exist on type '{}'.
+src/app/api/auth/me/route.ts(48,13): error TS18046: 'user' is of type 'unknown'.
+src/app/api/auth/me/route.ts(49,16): error TS18046: 'user' is of type 'unknown'.
+src/app/api/auth/me/route.ts(50,15): error TS18046: 'user' is of type 'unknown'.
+src/app/api/auth/me/route.ts(51,15): error TS18046: 'user' is of type 'unknown'.
+src/app/api/courses/[id]/route.ts(77,9): error TS2698: Spread types may only be created from object types.
+src/app/api/courses/route.ts(35,29): error TS18046: 'user' is of type 'unknown'.
+src/app/api/courses/route.ts(43,11): error TS18046: 'course' is of type 'unknown'.
+src/app/api/courses/route.ts(44,14): error TS18046: 'course' is of type 'unknown'.
+src/app/api/courses/route.ts(45,14): error TS18046: 'course' is of type 'unknown'.
+src/app/api/debug/course-test/[id]/route.ts(52,36): error TS18046: 'subtopic' is of type 'unknown'.
+src/app/api/debug/course-test/[id]/route.ts(54,15): error TS18046: 'subtopic' is of type 'unknown'.
+src/app/api/debug/course-test/[id]/route.ts(55,18): error TS18046: 'subtopic' is of type 'unknown'.
+src/app/api/debug/course-test/[id]/route.ts(56,24): error TS18046: 'subtopic' is of type 'unknown'.
+src/app/api/debug/course-test/[id]/route.ts(62,23): error TS18046: 'subtopic' is of type 'unknown'.
+src/app/api/debug/course-test/[id]/route.ts(64,23): error TS18046: 'subtopic' is of type 'unknown'.
+src/app/api/debug/course-test/[id]/route.ts(74,30): error TS18046: 'subtopic' is of type 'unknown'.
+src/app/api/debug/course-test/[id]/route.ts(76,29): error TS18046: 'subtopic' is of type 'unknown'.
+src/app/api/debug/course-test/[id]/route.ts(80,35): error TS18046: 'subtopic' is of type 'unknown'.
+src/app/api/debug/course-test/[id]/route.ts(90,15): error TS18046: 'course' is of type 'unknown'.
+src/app/api/debug/course-test/[id]/route.ts(91,18): error TS18046: 'course' is of type 'unknown'.
+src/app/api/debug/course-test/[id]/route.ts(92,29): error TS18046: 'course' is of type 'unknown'.
+src/app/api/debug/course-test/[id]/route.ts(93,23): error TS18046: 'course' is of type 'unknown'.
+src/app/api/debug/users/route.ts(19,36): error TS18046: 'u' is of type 'unknown'.
+src/app/api/debug/users/route.ts(19,49): error TS18046: 'u' is of type 'unknown'.
+src/app/api/debug/users/route.ts(19,64): error TS18046: 'u' is of type 'unknown'.
+src/app/api/debug/users/route.ts(49,27): error TS2339: Property 'id' does not exist on type '{ email: string; password_hash: string; role: string; }'.
+src/app/api/discussion/module-status/route.ts(120,10): error TS2339: Property 'in' does not exist on type 'SupabaseQueryBuilder'.
+src/app/api/discussion/module-status/route.ts(171,31): error TS7006: Parameter 'row' implicitly has an 'any' type.
+src/app/api/discussion/module-status/route.ts(182,43): error TS7006: Parameter 'row' implicitly has an 'any' type.
+src/app/api/discussion/module-status/route.ts(190,10): error TS2339: Property 'in' does not exist on type 'SupabaseQueryBuilder'.
+src/app/api/discussion/respond/route.ts(47,67): error TS2339: Property 'message' does not exist on type '{}'.
+src/app/api/feedback/route.ts(111,41): error TS2339: Property 'title' does not exist on type '{}'.
+src/app/api/generate-course/log/route.ts(52,16): error TS18046: 'user' is of type 'unknown'.
+src/app/api/jurnal/save/route.ts(186,18): error TS2339: Property 'id' does not exist on type '{ user_id: any; course_id: string; content: string; type: string; reflection: string; }'.
+src/app/api/jurnal/save/route.ts(195,58): error TS2339: Property 'id' does not exist on type '{ user_id: any; course_id: string; content: string; type: string; reflection: string; }'.
+src/app/api/user-progress/route.ts(44,59): error TS2571: Object is of type 'unknown'.
+src/app/api/user-progress/route.ts(47,75): error TS2571: Object is of type 'unknown'.
+src/app/api/user-progress/route.ts(52,20): error TS2339: Property 'created_at' does not exist on type '{ id: string; user_id: any; course_id: any; module_index: any; subtopic_index: any; status: any; time_spent: any; completed_at: string | null; updated_at: string; }'.
+src/app/api/user-progress/route.ts(91,18): error TS2353: Object literal may only specify known properties, and 'updated_at' does not exist in type '{ column: string; ascending?: boolean | undefined; }'.
+src/app/api/user-progress/route.ts(97,49): error TS18046: 'p' is of type 'unknown'.
+src/app/api/user-progress/route.ts(98,51): error TS18046: 'p' is of type 'unknown'.
+src/app/api/user-progress/route.ts(99,60): error TS18046: 'p' is of type 'unknown'.
+src/app/course/[courseId]/discussion/[moduleIdx]/page.tsx(788,30): error TS2339: Property 'userHasCompletion' does not exist on type '{ key: string; title: string; generated: boolean; quizQuestionCount: number; answeredCount: number; quizCompleted: boolean; missingQuestions: string[]; }'.
+src/app/course/[courseId]/discussion/[moduleIdx]/page.tsx(796,47): error TS2339: Property 'userHasCompletion' does not exist on type '{ key: string; title: string; generated: boolean; quizQuestionCount: number; answeredCount: number; quizCompleted: boolean; missingQuestions: string[]; }'.
+src/app/course/[courseId]/discussion/[moduleIdx]/page.tsx(815,50): error TS2339: Property 'userHasCompletion' does not exist on type '{ key: string; title: string; generated: boolean; quizQuestionCount: number; answeredCount: number; quizCompleted: boolean; missingQuestions: string[]; }'.
+src/app/course/[courseId]/discussion/[moduleIdx]/page.tsx(821,33): error TS2339: Property 'userHasCompletion' does not exist on type '{ key: string; title: string; generated: boolean; quizQuestionCount: number; answeredCount: number; quizCompleted: boolean; missingQuestions: string[]; }'.
+src/app/course/[courseId]/layout.tsx(237,25): error TS2339: Property 'type' does not exist on type 'Subtopic'.
+src/app/course/[courseId]/layout.tsx(238,26): error TS2339: Property 'isDiscussion' does not exist on type 'Subtopic'.
+src/app/course/[courseId]/page.tsx(424,19): error TS2339: Property 'type' does not exist on type 'SubtopicSummary'.
+src/app/course/[courseId]/page.tsx(424,49): error TS2339: Property 'isDiscussion' does not exist on type 'SubtopicSummary'.
+src/components/NextSubtopics/NextSubtopics.tsx(47,16): error TS2339: Property 'type' does not exist on type '{ title: string; }'.
+src/components/NextSubtopics/NextSubtopics.tsx(47,47): error TS2339: Property 'isDiscussion' does not exist on type '{ title: string; }'.
+src/lib/activitySeed.ts(21,22): error TS2571: Object is of type 'unknown'.
+src/lib/activitySeed.ts(21,49): error TS2571: Object is of type 'unknown'.
+src/lib/activitySeed.ts(31,25): error TS2339: Property 'id' does not exist on type '{ email: string; password_hash: string; name: string; role: string; }'.
+src/lib/activitySeed.ts(43,24): error TS2571: Object is of type 'unknown'.
+src/lib/activitySeed.ts(43,53): error TS2571: Object is of type 'unknown'.
+src/lib/activitySeed.ts(54,29): error TS2339: Property 'id' does not exist on type '{ title: string; description: string; subject: string; difficulty_level: string; created_by: string; }'.
+src/lib/activitySeed.ts(171,32): error TS2339: Property 'id' does not exist on type '{}'.
+src/lib/activitySeed.ts(174,35): error TS2339: Property 'title' does not exist on type '{}'.
+src/lib/activitySeed.ts(190,13): error TS18046: 'module' is of type 'unknown'.
+src/lib/activitySeed.ts(193,35): error TS18046: 'module' is of type 'unknown'.
+src/lib/activitySeed.ts(228,34): error TS2339: Property 'id' does not exist on type '{}'.
+src/lib/activitySeed.ts(237,19): error TS2339: Property 'id' does not exist on type '{ course_id: string; subtopic_id: any; question: string; options: string[]; correct_answer: string; explanation: string; }'.
+src/lib/activitySeed.ts(294,34): error TS2339: Property 'id' does not exist on type '{}'.
+src/lib/activitySeed.ts(296,46): error TS2339: Property 'title' does not exist on type '{}'.
+src/lib/activitySeed.ts(303,34): error TS2339: Property 'id' does not exist on type '{}'.
+src/lib/activitySeed.ts(304,27): error TS2339: Property 'id' does not exist on type '{ course_id: string; subtopic_id: any; version: string; source: { subtopicTitle: any; }; template: { learning_goals: { id: string; description: string; thinkingSkill: { domain: string; indicator: string; }; }[]; phases: { ...; }[]; }; }'.
+src/lib/activitySeed.ts(311,25): error TS2339: Property 'id' does not exist on type '{ user_id: string; course_id: string; subtopic_id: any; template_id: any; status: string; phase: string; learning_goals: { id: string; description: string; thinkingSkill: { domain: string; indicator: string; }; }[]; }'.
+src/lib/activitySeed.ts(319,25): error TS2339: Property 'id' does not exist on type '{ user_id: string; course_id: string; subtopic_id: any; template_id: any; status: string; phase: string; learning_goals: { id: string; description: string; thinkingSkill: { domain: string; indicator: string; }; }[]; }'.
+src/lib/activitySeed.ts(329,25): error TS2339: Property 'id' does not exist on type '{ user_id: string; course_id: string; subtopic_id: any; template_id: any; status: string; phase: string; learning_goals: { id: string; description: string; thinkingSkill: { domain: string; indicator: string; }; }[]; }'.
+src/lib/discussion/resolveSubtopic.ts(39,8): error TS2339: Property 'ilike' does not exist on type 'SupabaseQueryBuilder'.
+src/types/discussion.ts(7,18): error TS2304: Cannot find name 'LearningGoal'.

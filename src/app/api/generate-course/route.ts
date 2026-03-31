@@ -21,11 +21,11 @@ interface UserRecord {
   email: string;
 }
 
-// Add CORS headers for API
+// Add CORS headers for API — restrict to same origin in production
 const corsHeaders = {
-  'Access-Control-Allow-Origin': '*',
+  'Access-Control-Allow-Origin': process.env.NEXT_PUBLIC_APP_URL || process.env.VERCEL_URL ? `https://${process.env.VERCEL_URL}` : '*',
   'Access-Control-Allow-Methods': 'POST, OPTIONS',
-  'Access-Control-Allow-Headers': 'Content-Type',
+  'Access-Control-Allow-Headers': 'Content-Type, Authorization',
 };
 
 // Handle OPTIONS request for CORS
@@ -235,12 +235,9 @@ Important: Write all titles and overviews in the same language as the user's inp
     outline = appendDiscussionNodes(outline);
 
     // 8. Save course to database
-    console.log(`[Generate Course] DEBUG: userId = ${userId}`);
-    console.log(`[Generate Course] DEBUG: outline length = ${outline?.length}`);
+    let createdCourse: any = null;
 
     if (actorIdentifier) {
-      console.log(`[Generate Course] Saving course to database for user: ${actorIdentifier}`);
-
       try {
         const userRecord =
           (await resolveUserByIdentifier(userId)) ||
@@ -252,28 +249,21 @@ Important: Write all titles and overviews in the same language as the user's inp
           throw new Error('Authenticated user could not be resolved from identifier');
         }
 
-        let createdCourse: any = null;
-        console.log(`[Generate Course] DEBUG: User found:`, { id: userRecord.id, email: userRecord.email });
-
         // Create course record
         const courseData = {
           title: topic,
           description: goal,
           subject: topic,
           difficulty_level: level,
-          estimated_duration: outline.length * 15, // 15 minutes per module estimate
+          estimated_duration: Math.max(outline.length * 15, 30), // min 30 minutes
           created_by: userRecord.id
         };
-
-        console.log(`[Generate Course] DEBUG: Course data to insert:`, courseData);
 
         const course = await DatabaseService.insertRecord('courses', courseData) as unknown as { id: string };
         createdCourse = course;
         console.log(`[Generate Course] Course created with ID: ${course.id}`);
-        console.log(`[Generate Course] DEBUG: Course created successfully:`, course);
 
         // Create subtopics for each module
-        console.log(`[Generate Course] DEBUG: Creating ${outline.length} subtopics`);
         for (let i = 0; i < outline.length; i++) {
           const outlineModule = outline[i];
           const subtopicData = {
@@ -283,9 +273,7 @@ Important: Write all titles and overviews in the same language as the user's inp
             order_index: i
           };
 
-          console.log(`[Generate Course] DEBUG: Creating subtopic ${i + 1}:`, subtopicData);
-          const subtopic = await DatabaseService.insertRecord('subtopics', subtopicData);
-          console.log(`[Generate Course] DEBUG: Subtopic created:`, subtopic);
+          await DatabaseService.insertRecord('subtopics', subtopicData);
         }
 
         console.log(`[Generate Course] Created ${outline.length} subtopics for course`);
@@ -316,9 +304,9 @@ Important: Write all titles and overviews in the same language as the user's inp
       console.warn('[Generate Course] No userId provided, course not saved');
     }
 
-    // 9. Kirim balik outline
+    // 9. Kirim balik outline + courseId
     console.log('[Generate Course] Returning outline to client');
-    return NextResponse.json({ outline }, { headers: corsHeaders });
+    return NextResponse.json({ outline, courseId: createdCourse?.id || null }, { headers: corsHeaders });
   } catch (err: any) {
     console.error('[Generate Course] Error generating course outline:', err);
     console.error('[Generate Course] Error details:', err.message);

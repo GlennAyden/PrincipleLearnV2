@@ -8,87 +8,40 @@ import {
 } from 'react-icons/fi'
 import { useAdmin } from '@/hooks/useAdmin'
 import styles from './page.module.scss'
-
-interface ResearchStats {
-    totalSessions: number
-    totalClassifications: number
-    totalIndicators: number
-    totalStudents: number
-    stageDistribution: {
-        SCP: number
-        SRP: number
-        MQP: number
-        REFLECTIVE: number
-    }
-}
+import { StageHeatmapChart, UserProgressionChart } from '@/components/admin/ResearchChart'
+import type { ResearchAnalytics } from '@/types/research'
 
 export default function ResearchDashboard() {
     const router = useRouter()
     const { admin, loading: authLoading } = useAdmin()
-    const [stats, setStats] = useState<ResearchStats>({
-        totalSessions: 0,
-        totalClassifications: 0,
-        totalIndicators: 0,
-        totalStudents: 0,
-        stageDistribution: { SCP: 0, SRP: 0, MQP: 0, REFLECTIVE: 0 }
-    })
+    const [analytics, setAnalytics] = useState<ResearchAnalytics | null>(null)
     const [loading, setLoading] = useState(true)
     const [error, setError] = useState<string | null>(null)
 
     useEffect(() => {
         if (!authLoading && admin) {
-            fetchStats()
+            fetchAnalytics()
         }
     }, [authLoading, admin])
 
-    const fetchStats = async () => {
+    const fetchAnalytics = async () => {
         try {
             setLoading(true)
             setError(null)
 
-            // Fetch sessions
-            const sessionsRes = await fetch('/api/admin/research/sessions?limit=1000', {
-                credentials: 'include'
-            })
-            const sessionsData = await sessionsRes.json()
+            // Single API call - analytics endpoint now provides all stats
+            const res = await fetch('/api/admin/research/analytics', { credentials: 'include' })
+            const data = await res.json()
 
-            // Fetch classifications
-            const classRes = await fetch('/api/admin/research/classifications?limit=1000', {
-                credentials: 'include'
-            })
-            const classData = await classRes.json()
+            if (!res.ok) {
+                throw new Error(data.error || 'Gagal memuat data')
+            }
 
-            // Fetch indicators
-            const indRes = await fetch('/api/admin/research/indicators?limit=1000', {
-                credentials: 'include'
-            })
-            const indData = await indRes.json()
-
-            // Calculate stats
-            const sessions = sessionsData.data || []
-            const classifications = classData.data || []
-            const indicators = indData.data || []
-
-            // Get unique students
-            const uniqueStudents = new Set(sessions.map((s: { user_id: string }) => s.user_id))
-
-            // Calculate stage distribution
-            const stageDistribution = { SCP: 0, SRP: 0, MQP: 0, REFLECTIVE: 0 }
-            classifications.forEach((c: { prompt_stage: string }) => {
-                if (c.prompt_stage in stageDistribution) {
-                    stageDistribution[c.prompt_stage as keyof typeof stageDistribution]++
-                }
-            })
-
-            setStats({
-                totalSessions: sessions.length,
-                totalClassifications: classifications.length,
-                totalIndicators: indicators.length,
-                totalStudents: uniqueStudents.size,
-                stageDistribution
-            })
+            if (data.data) {
+                setAnalytics(data.data)
+            }
         } catch (err) {
-            console.error('Error fetching stats:', err)
+            console.error('Error fetching analytics:', err)
             setError('Gagal memuat data statistik')
         } finally {
             setLoading(false)
@@ -99,7 +52,12 @@ export default function ResearchDashboard() {
         return <div className={styles.loading}>Memuat...</div>
     }
 
-    const totalPrompts = Object.values(stats.stageDistribution).reduce((a, b) => a + b, 0)
+    const totalSessions = analytics?.total_sessions || 0
+    const totalClassifications = analytics?.total_classifications || 0
+    const totalIndicators = analytics?.total_indicators || 0
+    const totalStudents = analytics?.total_students || 0
+    const stageDistribution = analytics?.stage_distribution || { SCP: 0, SRP: 0, MQP: 0, REFLECTIVE: 0 }
+    const totalPrompts = Object.values(stageDistribution).reduce((a, b) => a + b, 0)
 
     return (
         <div className={styles.page}>
@@ -128,7 +86,7 @@ export default function ResearchDashboard() {
                             <div className={styles.statHeader}>
                                 <div className={styles.statIconWrap}><FiCalendar /></div>
                             </div>
-                            <div className={styles.statValue}>{stats.totalSessions}</div>
+                            <div className={styles.statValue}>{totalSessions}</div>
                             <div className={styles.statLabel}>Total Sesi</div>
                         </div>
 
@@ -136,7 +94,7 @@ export default function ResearchDashboard() {
                             <div className={styles.statHeader}>
                                 <div className={styles.statIconWrap}><FiTag /></div>
                             </div>
-                            <div className={styles.statValue}>{stats.totalClassifications}</div>
+                            <div className={styles.statValue}>{totalClassifications}</div>
                             <div className={styles.statLabel}>Klasifikasi Prompt</div>
                         </div>
 
@@ -144,7 +102,7 @@ export default function ResearchDashboard() {
                             <div className={styles.statHeader}>
                                 <div className={styles.statIconWrap}><FiActivity /></div>
                             </div>
-                            <div className={styles.statValue}>{stats.totalIndicators}</div>
+                            <div className={styles.statValue}>{totalIndicators}</div>
                             <div className={styles.statLabel}>Penilaian Indikator</div>
                         </div>
 
@@ -152,7 +110,7 @@ export default function ResearchDashboard() {
                             <div className={styles.statHeader}>
                                 <div className={styles.statIconWrap}><FiUsers /></div>
                             </div>
-                            <div className={styles.statValue}>{stats.totalStudents}</div>
+                            <div className={styles.statValue}>{totalStudents}</div>
                             <div className={styles.statLabel}>Siswa Terlibat</div>
                         </div>
                     </div>
@@ -196,7 +154,7 @@ export default function ResearchDashboard() {
                             >
                                 <div className={styles.actionIcon}><FiDownload /></div>
                                 <div className={styles.actionLabel}>Export Data</div>
-                                <div className={styles.actionDesc}>JSON, CSV</div>
+                                <div className={styles.actionDesc}>JSON, CSV, SPSS</div>
                             </div>
                         </div>
                     </div>
@@ -209,39 +167,66 @@ export default function ResearchDashboard() {
                         <div className={styles.stageGrid}>
                             <div className={`${styles.stageCard} ${styles.stageSCP}`}>
                                 <div className={styles.stageLabel}>SCP</div>
-                                <div className={styles.stageValue}>{stats.stageDistribution.SCP}</div>
+                                <div className={styles.stageValue}>{stageDistribution.SCP}</div>
                                 <div className={styles.stagePercent}>
-                                    {totalPrompts > 0 ? Math.round((stats.stageDistribution.SCP / totalPrompts) * 100) : 0}%
+                                    {totalPrompts > 0 ? Math.round((stageDistribution.SCP / totalPrompts) * 100) : 0}%
                                 </div>
                             </div>
 
                             <div className={`${styles.stageCard} ${styles.stageSRP}`}>
                                 <div className={styles.stageLabel}>SRP</div>
-                                <div className={styles.stageValue}>{stats.stageDistribution.SRP}</div>
+                                <div className={styles.stageValue}>{stageDistribution.SRP}</div>
                                 <div className={styles.stagePercent}>
-                                    {totalPrompts > 0 ? Math.round((stats.stageDistribution.SRP / totalPrompts) * 100) : 0}%
+                                    {totalPrompts > 0 ? Math.round((stageDistribution.SRP / totalPrompts) * 100) : 0}%
                                 </div>
                             </div>
 
                             <div className={`${styles.stageCard} ${styles.stageMQP}`}>
                                 <div className={styles.stageLabel}>MQP</div>
-                                <div className={styles.stageValue}>{stats.stageDistribution.MQP}</div>
+                                <div className={styles.stageValue}>{stageDistribution.MQP}</div>
                                 <div className={styles.stagePercent}>
-                                    {totalPrompts > 0 ? Math.round((stats.stageDistribution.MQP / totalPrompts) * 100) : 0}%
+                                    {totalPrompts > 0 ? Math.round((stageDistribution.MQP / totalPrompts) * 100) : 0}%
                                 </div>
                             </div>
 
                             <div className={`${styles.stageCard} ${styles.stageREFLECTIVE}`}>
                                 <div className={styles.stageLabel}>Reflective</div>
-                                <div className={styles.stageValue}>{stats.stageDistribution.REFLECTIVE}</div>
+                                <div className={styles.stageValue}>{stageDistribution.REFLECTIVE}</div>
                                 <div className={styles.stagePercent}>
-                                    {totalPrompts > 0 ? Math.round((stats.stageDistribution.REFLECTIVE / totalPrompts) * 100) : 0}%
+                                    {totalPrompts > 0 ? Math.round((stageDistribution.REFLECTIVE / totalPrompts) * 100) : 0}%
                                 </div>
                             </div>
                         </div>
                     </div>
 
-                    {/* Info Section */}
+                    {/* Analytics Charts */}
+                    {analytics && (
+                        <div className={styles.analyticsSection}>
+                            <h3 className={styles.sectionTitle}>
+                                📊 Analytics & Progression
+                            </h3>
+                            <div className={styles.chartsGrid}>
+                                <div className={styles.chartCard}>
+                                    <h4>Stage Heatmap (RM2)</h4>
+                                    <StageHeatmapChart data={analytics.stage_heatmap} />
+                                </div>
+                                <div className={styles.chartCard}>
+                                    <h4>User Progression (Top 10)</h4>
+                                    <UserProgressionChart progression={analytics.user_progression} />
+                                </div>
+                            </div>
+                            <div className={styles.reliabilityCard}>
+                                <h4>Inter-Rater Reliability</h4>
+                                <div className={styles.reliabilityStats}>
+                                    <div>Kappa Prompt: {analytics.inter_rater_kappa.prompt_stage.toFixed(2)}</div>
+                                    <div>Kappa CT: {analytics.inter_rater_kappa.ct_indicators.toFixed(2)}</div>
+                                    <div>Status: <span className={styles.reliabilityStatus}>{analytics.inter_rater_kappa.reliability_status}</span></div>
+                                </div>
+                            </div>
+                        </div>
+                    )}
+
+                    {/* Panduan Tahap Prompt */}
                     <div className={styles.recentSection}>
                         <h3 className={styles.sectionTitle}>
                             <FiClipboard /> Panduan Tahap Prompt

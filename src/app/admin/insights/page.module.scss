@@ -212,6 +212,34 @@ $shadow-xl: 0 20px 40px -5px rgba(0, 0, 0, 0.1);
   animation: fadeInUp 0.5s ease-out 0.1s both;
 }
 
+.timeFilter {
+  display: flex;
+  gap: 0.25rem;
+}
+
+.timeBtn {
+  padding: 0.4rem 0.8rem;
+  border: 1.5px solid $gray-200;
+  background: white;
+  border-radius: $radius-md;
+  font-size: 0.8rem;
+  font-weight: 500;
+  color: $gray-600;
+  cursor: pointer;
+  transition: all 0.2s ease;
+
+  &:hover {
+    border-color: $primary-400;
+    background: $primary-50;
+  }
+
+  &.timeActive {
+    border-color: $primary-500;
+    background: $primary-500;
+    color: white;
+  }
+}
+
 .filterGroup {
   display: flex;
   flex-direction: column;
@@ -740,6 +768,64 @@ $shadow-xl: 0 20px 40px -5px rgba(0, 0, 0, 0.1);
 /* ========================================
    EMPTY STATE
    ======================================== */
+.researchBadges {
+  display: flex;
+  gap: 0.75rem;
+  align-items: center;
+  flex-wrap: wrap;
+  margin-bottom: 1.5rem;
+  padding: 1rem;
+  background: $gray-50;
+  border-radius: $radius-lg;
+}
+
+.researchBadge, .metaBadge {
+  display: flex;
+  align-items: center;
+  gap: 0.4rem;
+  padding: 0.4rem 0.8rem;
+  border-radius: $radius-full;
+  font-size: 0.8rem;
+  font-weight: 500;
+}
+
+.researchBadge {
+  &.researchActive {
+    background: linear-gradient(135deg, #10b981, #059669);
+    color: white;
+  }
+  &.researchFallback {
+    background: $gray-100;
+    color: $gray-600;
+  }
+}
+
+.metaBadge {
+  background: $primary-50;
+  color: $primary-700;
+  border: 1px solid $primary-100;
+}
+
+.exportBtn {
+  margin-left: auto;
+  padding: 0.5rem 1rem;
+  background: $primary-500;
+  color: white;
+  border: none;
+  border-radius: $radius-md;
+  font-weight: 500;
+  display: flex;
+  align-items: center;
+  gap: 0.4rem;
+  cursor: pointer;
+  transition: all 0.2s ease;
+
+  &:hover {
+    background: $primary-600;
+    transform: translateY(-1px);
+  }
+}
+
 .emptyState {
   display: flex;
   flex-direction: column;

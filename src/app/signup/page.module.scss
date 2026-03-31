@@ -32,6 +32,12 @@ $radius-full: 9999px;
 
 $shadow-xl: 0 25px 50px -12px rgba(0, 0, 0, 0.1);
 
+/* Strength colors */
+$strength-weak: #ef4444;
+$strength-fair: #f59e0b;
+$strength-good: #10b981;
+$strength-strong: #059669;
+
 /* ========================================
    KEYFRAMES
    ======================================== */
@@ -48,6 +54,11 @@ $shadow-xl: 0 25px 50px -12px rgba(0, 0, 0, 0.1);
 
 @keyframes spin {
   to { transform: rotate(360deg); }
+}
+
+@keyframes shimmer {
+  0% { background-position: -200% 0; }
+  100% { background-position: 200% 0; }
 }
 
 /* ========================================
@@ -215,6 +226,12 @@ $shadow-xl: 0 25px 50px -12px rgba(0, 0, 0, 0.1);
   margin-bottom: 0.4rem;
 }
 
+.optionalTag {
+  font-weight: 400;
+  color: $gray-400;
+  font-size: 0.8rem;
+}
+
 .inputWrap {
   position: relative;
   display: flex;
@@ -280,6 +297,51 @@ $shadow-xl: 0 25px 50px -12px rgba(0, 0, 0, 0.1);
     background: $gray-100;
   }
 }
+
+/* ========================================
+   PASSWORD STRENGTH INDICATOR
+   ======================================== */
+.strengthWrap {
+  display: flex;
+  align-items: center;
+  gap: 0.6rem;
+  margin-top: 0.5rem;
+}
+
+.strengthBar {
+  display: flex;
+  gap: 3px;
+  flex: 1;
+}
+
+.strengthSegment {
+  height: 4px;
+  flex: 1;
+  border-radius: 2px;
+  background: $gray-200;
+  transition: background 0.3s ease;
+}
+
+/* Active segment colors by score */
+.strength1 { background: $strength-weak; }
+.strength2 { background: $strength-fair; }
+.strength3 { background: $strength-good; }
+.strength4 { background: $strength-strong; }
+
+.strengthLabel {
+  font-size: 0.75rem;
+  font-weight: 600;
+  white-space: nowrap;
+  min-width: 3rem;
+  text-align: right;
+  color: $gray-400;
+  transition: color 0.3s ease;
+}
+
+.strengthText1 { color: $strength-weak; }
+.strengthText2 { color: $strength-fair; }
+.strengthText3 { color: $strength-good; }
+.strengthText4 { color: $strength-strong; }
 
 /* ========================================
    SUBMIT BUTTON
@@ -379,4 +441,60 @@ $shadow-xl: 0 25px 50px -12px rgba(0, 0, 0, 0.1);
     color: $primary-700;
     gap: 0.5rem;
   }
+}
+
+/* ========================================
+   LOADING SKELETON
+   ======================================== */
+.skeletonGroup {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 1rem;
+  padding: 1rem 0;
+}
+
+.skeletonLogo {
+  width: 36px;
+  height: 36px;
+  border-radius: $radius-sm;
+  background: linear-gradient(90deg, $gray-100 25%, $gray-200 50%, $gray-100 75%);
+  background-size: 200% 100%;
+  animation: shimmer 1.5s ease-in-out infinite;
+}
+
+.skeletonTitle {
+  width: 70%;
+  height: 24px;
+  border-radius: 6px;
+  background: linear-gradient(90deg, $gray-100 25%, $gray-200 50%, $gray-100 75%);
+  background-size: 200% 100%;
+  animation: shimmer 1.5s ease-in-out infinite;
+}
+
+.skeletonSubtitle {
+  width: 85%;
+  height: 16px;
+  border-radius: 4px;
+  background: linear-gradient(90deg, $gray-100 25%, $gray-200 50%, $gray-100 75%);
+  background-size: 200% 100%;
+  animation: shimmer 1.5s ease-in-out infinite;
+}
+
+.skeletonInput {
+  width: 100%;
+  height: 46px;
+  border-radius: $radius-md;
+  background: linear-gradient(90deg, $gray-100 25%, $gray-200 50%, $gray-100 75%);
+  background-size: 200% 100%;
+  animation: shimmer 1.5s ease-in-out infinite;
+}
+
+.skeletonButton {
+  width: 100%;
+  height: 48px;
+  border-radius: $radius-md;
+  background: linear-gradient(90deg, rgba($primary-200, 0.4) 25%, rgba($primary-200, 0.7) 50%, rgba($primary-200, 0.4) 75%);
+  background-size: 200% 100%;
+  animation: shimmer 1.5s ease-in-out infinite;
 }

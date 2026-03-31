@@ -2,41 +2,163 @@
 import { NextResponse } from 'next/server';
 import type { NextRequest } from 'next/server';
 import { adminDb } from '@/lib/database';
+import jwt from 'jsonwebtoken';
+import type { 
+  InsightsAPIResponse, 
+  InsightsSummary, 
+  EvolutionPoint, 
+  InsightsStudentRow, 
+  ResearchMetrics
+} from '@/types/insights';
+import type { CTBreakdown, CThBreakdown, TimeRange } from '@/types/dashboard';
+
+const JWT_SECRET = process.env.JWT_SECRET!;
+
+function verifyAdminFromCookie(request: NextRequest): { userId: string; email: string; role: string } | null {
+  const token = request.cookies.get('token')?.value
+  if (!token) return null
+
+  try {
+    const payload = jwt.verify(token, JWT_SECRET) as { userId: string; email: string; role: string }
+    if (payload.role?.toLowerCase() !== 'admin') return null
+    return payload
+  } catch {
+    return null
+  }
+}
+
+function getDateSince(range: TimeRange): Date | null {
+  if (range === 'all') return null
+  const now = new Date()
+  const days = range === '7d' ? 7 : range === '30d' ? 30 : 90
+  now.setDate(now.getDate() - days)
+  return now
+}
+
+async function safeQuery<T = any>(
+  tableName: string,
+  selectFields: string = '*',
+  filters?: Record<string, any>
+): Promise<T[]> {
+  try {
+    let query = adminDb.from(tableName).select(selectFields)
+    if (filters) {
+      for (const [key, value] of Object.entries(filters)) {
+        query = query.eq(key, value)
+      }
+    }
+    const { data, error } = await query
+    if (error) {
+      console.warn(`[Insights] Query ${tableName} failed:`, error.message || error)
+      return []
+    }
+    return Array.isArray(data) ? data : []
+  } catch (err) {
+    console.warn(`[Insights] Query ${tableName} exception:`, err)
+    return []
+  }
+}
 
 export async function GET(request: NextRequest) {
+  const startTime = Date.now()
+
   try {
+    // Auth Guard
+    const admin = verifyAdminFromCookie(request)
+    if (!admin) {
+      return NextResponse.json({ message: 'Unauthorized' }, { status: 401 })
+    }
+
     const { searchParams } = new URL(request.url);
     const userId = searchParams.get('userId') || '';
     const courseId = searchParams.get('courseId') || '';
+    const timeRange = (searchParams.get('range') || 'all') as TimeRange;
 
-    console.log('[Admin Insights] Fetching data with filters:', { userId, courseId });
+    console.log('[Admin Insights] Fetching data:', { userId, courseId, timeRange });
 
-    // ── 1. Prompt Evolution Data (RM2) ──
-    let promptQuery = adminDb
-      .from('ask_question_history')
-      .select('id, user_id, question, prompt_components, prompt_version, session_number, reasoning_note, created_at');
+    // Parallel Data Fetching with time filter
+    const dateSince = getDateSince(timeRange)
+    const filterByTime = <T extends { created_at?: string }>(items: T[]): T[] => {
+      if (!dateSince) return items
+      return items.filter(item => {
+        const d = item.created_at ? new Date(item.created_at) : null
+        return d && !isNaN(d.getTime()) && d >= dateSince
+      })
+    }
+
+    const [
+      prompts,
+      quizzes,
+      journals,
+      challenges,
+      discussions,
+      // Research tables
+      promptClassifications,
+      cognitiveIndicators
+    ] = await Promise.all([
+      safeQuery('ask_question_history', 'id, user_id, question, prompt_components, prompt_version, session_number, reasoning_note, created_at', userId ? { user_id: userId } : {}),
+      safeQuery('quiz_submissions', 'id, user_id, is_correct, reasoning_note, created_at', userId ? { user_id: userId } : {}),
+      safeQuery('jurnal', 'id, user_id, content, type, created_at', userId ? { user_id: userId } : {}),
+      safeQuery('challenge_responses', 'id, user_id, reasoning_note, created_at', userId ? { user_id: userId } : {}),
+      safeQuery('discussion_sessions', 'id, user_id, status, created_at'),
+      safeQuery('prompt_classifications', '*'),
+      safeQuery('cognitive_indicators', '*')
+    ]);
+
+    // Apply time filter
+    const filteredPrompts = filterByTime(prompts);
+    const filteredQuizzes = filterByTime(quizzes);
+    const filteredJournals = filterByTime(journals);
+    const filteredChallenges = filterByTime(challenges);
+    const filteredDiscussions = filterByTime(discussions);
 
     if (userId) promptQuery = promptQuery.eq('user_id', userId);
     if (courseId) promptQuery = promptQuery.eq('course_id', courseId);
 
-    const { data: prompts, error: promptError } = await promptQuery;
-    if (promptError) console.error('[Admin Insights] Prompt query error:', promptError);
-    console.log('[Admin Insights] Prompts fetched:', prompts?.length || 0);
-    const promptList = Array.isArray(prompts) ? prompts : [];
+    // ── RM2: Prompt Evolution (Research + Heuristic) ──
+    const hasResearchRM2 = promptClassifications.length > 0
+    let promptList = filteredPrompts
+    let avgComponentsUsed = 0
+    let stageDistribution = { SCP: 0, SRP: 0, MQP: 0, Reflektif: 0 }
+    let avgStageScore = 0
 
-    // Compute prompt complexity metrics
-    const promptsWithComponents = promptList.filter((p: any) => p.prompt_components);
-    const avgComponentsUsed = promptsWithComponents.length > 0
-      ? promptsWithComponents.reduce((sum: number, p: any) => {
-        const comps = typeof p.prompt_components === 'string'
-          ? JSON.parse(p.prompt_components) : p.prompt_components;
-        let count = 0;
-        if (comps?.tujuan) count++;
-        if (comps?.konteks) count++;
-        if (comps?.batasan) count++;
-        return sum + count;
-      }, 0) / promptsWithComponents.length
-      : 0;
+    if (hasResearchRM2) {
+      // Filter research data by time/user
+      const filteredPC = promptClassifications.filter((pc: any) => {
+        if (userId && pc.user_id !== userId) return false
+        if (dateSince) {
+          const d = new Date(pc.created_at)
+          if (isNaN(d.getTime()) || d < dateSince) return false
+        }
+        return true
+      })
+
+      promptList = filteredPC.map((pc: any) => ({
+        ...pc,
+        prompt_stage: pc.prompt_stage === 'REFLECTIVE' ? 'Reflektif' : pc.prompt_stage,
+        prompt_stage_score: pc.prompt_stage_score || 1
+      }))
+
+      filteredPC.forEach((pc: any) => {
+        const stage = pc.prompt_stage || 'SCP'
+        stageDistribution[stage] = (stageDistribution[stage] || 0) + 1
+        avgStageScore += pc.prompt_stage_score || 1
+      })
+      avgStageScore = filteredPC.length > 0 ? Math.round(avgStageScore * 10) / 10 : 0
+    } else {
+      // Heuristic fallback
+      const promptsWithComponents = promptList.filter((p: any) => p.prompt_components)
+      avgComponentsUsed = promptsWithComponents.length > 0
+        ? promptsWithComponents.reduce((sum: number, p: any) => {
+          const comps = typeof p.prompt_components === 'string' ? JSON.parse(p.prompt_components) : p.prompt_components
+          let count = 0
+          if (comps?.tujuan) count++
+          if (comps?.konteks) count++
+          if (comps?.batasan) count++
+          return sum + count
+        }, 0) / promptsWithComponents.length
+        : 0
+    }
 
     const promptsWithReasoning = promptList.filter((p: any) => p.reasoning_note?.trim());
     const reasoningRate = promptList.length > 0

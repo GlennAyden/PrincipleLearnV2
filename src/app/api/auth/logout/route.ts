@@ -1,7 +1,21 @@
 import { NextResponse } from 'next/server';
+import { cookies } from 'next/headers';
 
-export async function POST() {
+export async function POST(req: Request) {
   try {
+    // Optional CSRF validation for extra security
+    const csrfHeader = req.headers.get('x-csrf-token');
+    const cookieStore = await cookies();
+    const csrfCookie = cookieStore.get('csrf_token')?.value;
+
+    // If both CSRF token sources exist, validate they match
+    if (csrfHeader && csrfCookie && csrfHeader !== csrfCookie) {
+      return NextResponse.json(
+        { error: 'Invalid CSRF token' },
+        { status: 403 }
+      );
+    }
+
     const response = NextResponse.json({
       success: true,
       message: 'Logged out successfully'
@@ -20,4 +34,4 @@ export async function POST() {
       { status: 500 }
     );
   }
-} 
+}

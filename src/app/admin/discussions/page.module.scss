@@ -28,6 +28,129 @@
   align-items: center;
 }
 
+.searchInput {
+  padding: 0.6rem 0.9rem;
+  border-radius: 0.5rem;
+  border: 1px solid #cbd5f5;
+  background: #fff;
+  min-width: 220px;
+}
+
+.headerActions {
+  display: flex;
+  gap: 1.5rem;
+  align-items: center;
+}
+
+.analyticsCards {
+  display: flex;
+  gap: 1rem;
+}
+
+.statCard {
+  background: white;
+  border: 1px solid #e2e8f0;
+  padding: 0.5rem 0.75rem;
+  border-radius: 0.5rem;
+  font-size: 0.85rem;
+
+  .statLabel {
+    display: block;
+    color: #64748b;
+    font-size: 0.75rem;
+  }
+
+  .statValue {
+    font-weight: 600;
+    font-size: 1rem;
+  }
+}
+
+.listHeader {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 1rem;
+}
+
+.bulkActions {
+  display: flex;
+  gap: 0.5rem;
+}
+
+.buttonSmall {
+  padding: 0.4rem 0.8rem;
+  font-size: 0.85rem;
+}
+
+.bulkSelectLabel {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  cursor: pointer;
+  font-size: 0.9rem;
+  color: #475569;
+  padding: 0.5rem;
+  border-radius: 0.5rem;
+  
+  &:hover {
+    background: rgba(99, 102, 241, 0.05);
+  }
+}
+
+.sessionCheckbox {
+  margin-right: 0.75rem;
+}
+
+.checkboxWrapper {
+  display: flex;
+  align-items: flex-start;
+  flex-shrink: 0;
+}
+
+.sessionContent {
+  flex: 1;
+}
+
+.rightHeader {
+  display: flex;
+  gap: 0.5rem;
+  align-items: center;
+}
+
+.healthBadge {
+  padding: 0.2rem 0.5rem;
+  border-radius: 999px;
+  font-size: 0.75rem;
+  font-weight: 600;
+}
+
+.healthGreen {
+  background: rgba(34, 197, 94, 0.2);
+  color: #166534;
+}
+
+.healthYellow {
+  background: rgba(251, 191, 36, 0.2);
+  color: #92400e;
+}
+
+.healthRed {
+  background: rgba(239, 68, 68, 0.2);
+  color: #991b1b;
+}
+
+.sessionTags {
+  display: flex;
+  gap: 0.5rem;
+  align-items: center;
+}
+
+.selected {
+  background: rgba(99, 102, 241, 0.1) !important;
+  border-color: #6366f1 !important;
+}
+
 .select {
   padding: 0.6rem 0.9rem;
   border-radius: 0.5rem;

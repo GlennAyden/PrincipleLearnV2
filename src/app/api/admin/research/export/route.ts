@@ -1,8 +1,8 @@
 /**
  * API Route: Research Data Export
- * For exporting research data in various formats (JSON, CSV)
- * 
  * GET /api/admin/research/export - Export research data
+ * ?format=json|csv&spss=true|false&data_type=all|sessions|classifications|indicators|longitudinal
+ * ?anonymize=true|false&user_id=...&course_id=...
  */
 
 import { NextRequest, NextResponse } from 'next/server';
@@ -11,17 +11,14 @@ import jwt from 'jsonwebtoken';
 import type {
     LearningSession,
     PromptClassification,
-    CognitiveIndicators,
-    ResearchExportOptions
+    CognitiveIndicators
 } from '@/types/research';
 
 const JWT_SECRET = process.env.JWT_SECRET!;
 
-// Helper function to verify admin from cookie
 function verifyAdminFromCookie(request: NextRequest): { userId: string; role: string } | null {
     const token = request.cookies.get('token')?.value;
     if (!token) return null;
-
     try {
         const payload = jwt.verify(token, JWT_SECRET) as { userId: string; role: string };
         if (payload.role?.toLowerCase() !== 'admin') return null;
@@ -31,19 +28,106 @@ function verifyAdminFromCookie(request: NextRequest): { userId: string; role: st
     }
 }
 
+// SPSS Data Generator - async, fetches from DB
+async function generateSPSSData(userId?: string, courseId?: string): Promise<Record<string, unknown>[]> {
+    let query = adminDb
+        .from('learning_sessions')
+        .select('*')
+        .order('session_number', { ascending: true });
+
+    if (userId) query = query.eq('user_id', userId);
+    if (courseId) query = query.eq('course_id', courseId);
+
+    const { data: sessions, error } = await query;
+
+    if (error || !sessions || sessions.length === 0) {
+        return [];
+    }
+
+    // Fetch related classifications and indicators
+    const sessionIds = sessions.map((s: { id: string }) => s.id);
+
+    const { data: allClassifications } = await adminDb
+        .from('prompt_classifications')
+        .select('learning_session_id, prompt_stage_score');
+
+    const { data: allIndicators } = await adminDb
+        .from('cognitive_indicators')
+        .select('prompt_classification_id, ct_total_score, cth_total_score');
+
+    // Build maps
+    const classificationsBySession = new Map<string, { prompt_stage_score: number }[]>();
+    (allClassifications || []).forEach((c: { learning_session_id?: string; prompt_stage_score: number }) => {
+        if (c.learning_session_id && sessionIds.includes(c.learning_session_id)) {
+            const existing = classificationsBySession.get(c.learning_session_id) || [];
+            existing.push({ prompt_stage_score: c.prompt_stage_score || 0 });
+            classificationsBySession.set(c.learning_session_id, existing);
+        }
+    });
+
+    // Flatten for SPSS (one row per session with joined metrics)
+    const spssRows: Record<string, unknown>[] = sessions.map((session: Record<string, unknown>) => {
+        const classifications = classificationsBySession.get(session.id as string) || [];
+
+        const stageScores = classifications.map(c => c.prompt_stage_score);
+        const avgStageScore = stageScores.length > 0
+            ? stageScores.reduce((a, b) => a + b, 0) / stageScores.length
+            : 0;
+
+        return {
+            session_id: session.id,
+            session_number: session.session_number,
+            user_id: (session.user_id as string).substring(0, 8),
+            course_id: session.course_id,
+            created_at: session.created_at,
+            avg_prompt_stage_score: Math.round(avgStageScore * 100) / 100,
+            total_classifications: classifications.length
+        };
+    });
+
+    return spssRows;
+}
+
+// SPSS CSV Converter
+function convertSPSStoCSV(data: Record<string, unknown>[]): string {
+    if (!Array.isArray(data) || data.length === 0) {
+        return 'user_id,session_number,avg_prompt_stage_score,total_classifications\nNo data available';
+    }
+
+    const headers = [
+        'user_id',
+        'session_number',
+        'avg_prompt_stage_score',
+        'total_classifications'
+    ];
+
+    let csv = headers.join(',') + '\n';
+
+    data.forEach((row) => {
+        const values = headers.map(header => {
+            const value = row[header];
+            if (value === null || value === undefined) return '';
+            if (typeof value === 'number') return value.toFixed(3);
+            return `"${String(value).replace(/"/g, '""')}"`;
+        });
+        csv += values.join(',') + '\n';
+    });
+
+    return csv;
+}
+
 // GET: Export research data
 export async function GET(request: NextRequest) {
     try {
-        // Verify admin token from cookie
         const user = verifyAdminFromCookie(request);
         if (!user) {
             return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
         }
 
-        // Parse query parameters
         const { searchParams } = new URL(request.url);
         const format = searchParams.get('format') || 'json';
         const dataType = searchParams.get('data_type') || 'all';
+        const spssFormat = searchParams.get('spss') === 'true';
         const userId = searchParams.get('user_id');
         const courseId = searchParams.get('course_id');
         const anonymize = searchParams.get('anonymize') === 'true';
@@ -55,7 +139,42 @@ export async function GET(request: NextRequest) {
             }, { status: 400 });
         }
 
-        // Validate data_type
+        // SPSS Export
+        if (spssFormat) {
+            const spssData = await generateSPSSData(userId || undefined, courseId || undefined);
+
+            if (spssData.length === 0) {
+                if (format === 'csv') {
+                    return new NextResponse('No data available for SPSS export', {
+                        status: 200,
+                        headers: {
+                            'Content-Type': 'text/csv; charset=utf-8',
+                            'Content-Disposition': `attachment; filename="principlelearn_research_spss_empty.csv"`
+                        }
+                    });
+                }
+                return NextResponse.json({
+                    success: true,
+                    data: [],
+                    spss_ready: true,
+                    message: 'No data available for export'
+                });
+            }
+
+            if (format === 'csv') {
+                const csvContent = convertSPSStoCSV(spssData);
+                return new NextResponse(csvContent, {
+                    status: 200,
+                    headers: {
+                        'Content-Type': 'text/csv; charset=utf-8',
+                        'Content-Disposition': `attachment; filename="principlelearn_research_spss_${new Date().toISOString().split('T')[0]}.csv"`
+                    }
+                });
+            }
+            return NextResponse.json({ success: true, data: spssData, spss_ready: true });
+        }
+
+        // Regular export validation
         if (!['sessions', 'classifications', 'indicators', 'longitudinal', 'all'].includes(dataType)) {
             return NextResponse.json({
                 error: 'Invalid data_type. Must be one of: sessions, classifications, indicators, longitudinal, all'
@@ -72,7 +191,7 @@ export async function GET(request: NextRequest) {
             query = query.order('session_number', { ascending: true });
 
             const { data: sessions } = await query;
-            exportData.sessions = anonymize ? anonymizeData(sessions, 'sessions') : sessions;
+            exportData.sessions = anonymize ? anonymizeData(sessions, 'sessions') : (sessions || []);
         }
 
         if (dataType === 'classifications' || dataType === 'all' || dataType === 'longitudinal') {
@@ -82,7 +201,7 @@ export async function GET(request: NextRequest) {
             query = query.order('created_at', { ascending: true });
 
             const { data: classifications } = await query;
-            exportData.classifications = anonymize ? anonymizeData(classifications, 'classifications') : classifications;
+            exportData.classifications = anonymize ? anonymizeData(classifications, 'classifications') : (classifications || []);
         }
 
         if (dataType === 'indicators' || dataType === 'all' || dataType === 'longitudinal') {
@@ -91,7 +210,31 @@ export async function GET(request: NextRequest) {
             query = query.order('created_at', { ascending: true });
 
             const { data: indicators } = await query;
-            exportData.indicators = anonymize ? anonymizeData(indicators, 'indicators') : indicators;
+            exportData.indicators = anonymize ? anonymizeData(indicators, 'indicators') : (indicators || []);
+        }
+
+        // Check if there's any data
+        const totalRecords = countRecords(exportData);
+        if (totalRecords === 0) {
+            if (format === 'csv') {
+                return new NextResponse('No data available for export', {
+                    status: 200,
+                    headers: {
+                        'Content-Type': 'text/csv; charset=utf-8',
+                        'Content-Disposition': `attachment; filename="research_export_empty.csv"`
+                    }
+                });
+            }
+            return NextResponse.json({
+                success: true,
+                export_id: `export_${Date.now()}`,
+                format,
+                data_type: dataType,
+                record_count: 0,
+                data: exportData,
+                message: 'No data available for the selected criteria',
+                created_at: new Date().toISOString()
+            });
         }
 
         // For longitudinal analysis, compute additional metrics
@@ -109,7 +252,7 @@ export async function GET(request: NextRequest) {
             return new NextResponse(csvData, {
                 status: 200,
                 headers: {
-                    'Content-Type': 'text/csv',
+                    'Content-Type': 'text/csv; charset=utf-8',
                     'Content-Disposition': `attachment; filename="research_export_${dataType}_${new Date().toISOString().split('T')[0]}.csv"`
                 }
             });
@@ -120,7 +263,7 @@ export async function GET(request: NextRequest) {
             export_id: `export_${Date.now()}`,
             format,
             data_type: dataType,
-            record_count: countRecords(exportData),
+            record_count: totalRecords,
             data: exportData,
             created_at: new Date().toISOString()
         });
@@ -133,7 +276,7 @@ export async function GET(request: NextRequest) {
 
 // Helper: Anonymize data
 function anonymizeData(data: unknown[] | null, type: string): unknown[] {
-    if (!data) return [];
+    if (!data || data.length === 0) return [];
 
     const userIdMap = new Map<string, string>();
     let userCounter = 1;
@@ -142,7 +285,6 @@ function anonymizeData(data: unknown[] | null, type: string): unknown[] {
         const record = item as Record<string, unknown>;
         const anonymized = { ...record };
 
-        // Anonymize user_id
         if (anonymized.user_id) {
             const originalId = anonymized.user_id as string;
             if (!userIdMap.has(originalId)) {
@@ -151,7 +293,6 @@ function anonymizeData(data: unknown[] | null, type: string): unknown[] {
             anonymized.user_id = userIdMap.get(originalId);
         }
 
-        // Remove potentially identifying fields
         delete anonymized.researcher_notes;
         delete anonymized.evidence_text;
 
@@ -165,11 +306,10 @@ function computeLongitudinalAnalysis(
     classifications: PromptClassification[] | null,
     indicators: CognitiveIndicators[] | null
 ): Record<string, unknown> {
-    if (!sessions || !classifications || !indicators) {
-        return { error: 'Insufficient data for longitudinal analysis' };
+    if (!sessions?.length || !classifications?.length) {
+        return { error: 'Insufficient data for longitudinal analysis', total_users: 0 };
     }
 
-    // Group by user
     const userSessions = new Map<string, LearningSession[]>();
     sessions.forEach(s => {
         const existing = userSessions.get(s.user_id) || [];
@@ -185,37 +325,32 @@ function computeLongitudinalAnalysis(
     });
 
     const userIndicators = new Map<string, CognitiveIndicators[]>();
-    indicators.forEach(i => {
+    (indicators || []).forEach(i => {
         const existing = userIndicators.get(i.user_id) || [];
         existing.push(i);
         userIndicators.set(i.user_id, existing);
     });
 
-    // Compute per-user longitudinal metrics
     const userAnalysis: Record<string, unknown>[] = [];
 
     userSessions.forEach((userSessionList, userId) => {
         const userClassList = userClassifications.get(userId) || [];
         const userIndList = userIndicators.get(userId) || [];
 
-        // Sort sessions by number
         userSessionList.sort((a, b) => a.session_number - b.session_number);
 
-        // Calculate stage progression
         const stageProgression = userClassList.map(c => ({
             session: c.learning_session_id,
             stage: c.prompt_stage,
             score: c.prompt_stage_score
         }));
 
-        // Calculate CT/CTh progression
         const ctProgression = userIndList.map(i => ({
             ct_score: i.ct_total_score,
             cth_score: i.cth_total_score,
             depth: i.cognitive_depth_level
         }));
 
-        // Compute averages
         const avgCtScore = ctProgression.length > 0
             ? ctProgression.reduce((sum, p) => sum + p.ct_score, 0) / ctProgression.length
             : 0;
@@ -223,7 +358,6 @@ function computeLongitudinalAnalysis(
             ? ctProgression.reduce((sum, p) => sum + p.cth_score, 0) / ctProgression.length
             : 0;
 
-        // Determine overall transition
         const firstStage = stageProgression[0]?.score || 1;
         const lastStage = stageProgression[stageProgression.length - 1]?.score || 1;
         const overallTransition = lastStage - firstStage;
@@ -245,16 +379,13 @@ function computeLongitudinalAnalysis(
         total_users: userSessions.size,
         total_sessions: sessions.length,
         total_classifications: classifications.length,
-        total_indicators: indicators.length,
+        total_indicators: indicators?.length || 0,
         user_analysis: userAnalysis
     };
 }
 
 // Helper: Convert to CSV
 function convertToCSV(data: Record<string, unknown>, dataType: string): string {
-    const lines: string[] = [];
-
-    // Determine which data to convert
     let records: Record<string, unknown>[] = [];
 
     if (dataType === 'sessions' && data.sessions) {
@@ -264,9 +395,7 @@ function convertToCSV(data: Record<string, unknown>, dataType: string): string {
     } else if (dataType === 'indicators' && data.indicators) {
         records = data.indicators as Record<string, unknown>[];
     } else if (dataType === 'all' || dataType === 'longitudinal') {
-        // For 'all', combine all records with a type column
         const allRecords: Record<string, unknown>[] = [];
-
         if (data.sessions) {
             (data.sessions as Record<string, unknown>[]).forEach(s => {
                 allRecords.push({ record_type: 'session', ...s });
@@ -282,7 +411,6 @@ function convertToCSV(data: Record<string, unknown>, dataType: string): string {
                 allRecords.push({ record_type: 'indicator', ...i });
             });
         }
-
         records = allRecords;
     }
 
@@ -290,16 +418,14 @@ function convertToCSV(data: Record<string, unknown>, dataType: string): string {
         return 'No data to export';
     }
 
-    // Get all unique headers
     const headers = new Set<string>();
     records.forEach(record => {
         Object.keys(record).forEach(key => headers.add(key));
     });
 
     const headerArray = Array.from(headers);
-    lines.push(headerArray.join(','));
+    const lines: string[] = [headerArray.join(',')];
 
-    // Add data rows
     records.forEach(record => {
         const row = headerArray.map(header => {
             const value = record[header];

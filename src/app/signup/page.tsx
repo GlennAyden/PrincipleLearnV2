@@ -1,20 +1,42 @@
 // src/app/signup/page.tsx
 "use client";
 
-import { useState, FormEvent, useEffect } from "react";
+import { useState, FormEvent, useEffect, useMemo } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import styles from "./page.module.scss";
 import { useAuth } from "@/hooks/useAuth";
 
+// Password strength helper
+function getPasswordStrength(password: string) {
+  const checks = {
+    length: password.length >= 8,
+    uppercase: /[A-Z]/.test(password),
+    lowercase: /[a-z]/.test(password),
+    number: /[0-9]/.test(password),
+  };
+  const score = Object.values(checks).filter(Boolean).length;
+  const labels: Record<number, string> = {
+    0: '',
+    1: 'Weak',
+    2: 'Fair',
+    3: 'Good',
+    4: 'Strong',
+  };
+  return { score, label: labels[score] || '', checks };
+}
+
 export default function SignUpPage() {
+  const [name, setName] = useState("");
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [error, setError] = useState("");
   const [isLoading, setIsLoading] = useState(false);
   const [showPassword, setShowPassword] = useState(false);
   const router = useRouter();
-  const { isAuthenticated, login } = useAuth();
+  const { isAuthenticated, isLoading: authLoading, login } = useAuth();
+
+  const passwordStrength = useMemo(() => getPasswordStrength(password), [password]);
 
   // Redirect if already authenticated
   useEffect(() => {
@@ -32,6 +54,11 @@ export default function SignUpPage() {
       setError("Please fill both email and password.");
       return;
     }
+
+    if (password.length < 8) {
+      setError("Password must be at least 8 characters long.");
+      return;
+    }
     
     setIsLoading(true);
     
@@ -41,7 +68,7 @@ export default function SignUpPage() {
         headers: {
           'Content-Type': 'application/json',
         },
-        body: JSON.stringify({ email, password }),
+        body: JSON.stringify({ email, password, name: name.trim() || undefined }),
       });
       
       const data = await response.json();
@@ -70,6 +97,27 @@ export default function SignUpPage() {
       setIsLoading(false);
     }
   };
+
+  // Show loading skeleton while checking auth state
+  if (authLoading) {
+    return (
+      <div className={styles.page}>
+        <div className={styles.bgOrb1} />
+        <div className={styles.bgOrb2} />
+        <div className={styles.card}>
+          <div className={styles.skeletonGroup}>
+            <div className={styles.skeletonLogo} />
+            <div className={styles.skeletonTitle} />
+            <div className={styles.skeletonSubtitle} />
+            <div className={styles.skeletonInput} />
+            <div className={styles.skeletonInput} />
+            <div className={styles.skeletonInput} />
+            <div className={styles.skeletonButton} />
+          </div>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className={styles.page}>
@@ -117,6 +165,28 @@ export default function SignUpPage() {
         )}
 
         <form onSubmit={handleSignUp} className={styles.form}>
+          {/* Name field */}
+          <div className={styles.field}>
+            <label className={styles.label} htmlFor="signup-name">Full Name <span className={styles.optionalTag}>(optional)</span></label>
+            <div className={styles.inputWrap}>
+              <svg className={styles.inputIcon} width="18" height="18" viewBox="0 0 18 18" fill="none">
+                <circle cx="9" cy="6" r="3" stroke="currentColor" strokeWidth="1.5" fill="none" />
+                <path d="M3 16C3 13.24 5.69 11 9 11C12.31 11 15 13.24 15 16" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" />
+              </svg>
+              <input
+                id="signup-name"
+                type="text"
+                className={styles.input}
+                placeholder="Your full name"
+                value={name}
+                onChange={(e) => setName(e.currentTarget.value)}
+                disabled={isLoading}
+                autoComplete="name"
+              />
+            </div>
+          </div>
+
+          {/* Email field */}
           <div className={styles.field}>
             <label className={styles.label} htmlFor="signup-email">Email</label>
             <div className={styles.inputWrap}>
@@ -133,10 +203,12 @@ export default function SignUpPage() {
                 onChange={(e) => setEmail(e.currentTarget.value)}
                 required
                 disabled={isLoading}
+                autoComplete="email"
               />
             </div>
           </div>
 
+          {/* Password field */}
           <div className={styles.field}>
             <label className={styles.label} htmlFor="signup-password">Password</label>
             <div className={styles.inputWrap}>
@@ -153,6 +225,7 @@ export default function SignUpPage() {
                 onChange={(e) => setPassword(e.currentTarget.value)}
                 required
                 disabled={isLoading}
+                autoComplete="new-password"
               />
               <button
                 type="button"
@@ -174,6 +247,23 @@ export default function SignUpPage() {
                 )}
               </button>
             </div>
+
+            {/* Password strength indicator */}
+            {password.length > 0 && (
+              <div className={styles.strengthWrap}>
+                <div className={styles.strengthBar}>
+                  {[1, 2, 3, 4].map((level) => (
+                    <div
+                      key={level}
+                      className={`${styles.strengthSegment} ${passwordStrength.score >= level ? styles[`strength${passwordStrength.score}`] : ''}`}
+                    />
+                  ))}
+                </div>
+                <span className={`${styles.strengthLabel} ${styles[`strengthText${passwordStrength.score}`] || ''}`}>
+                  {passwordStrength.label}
+                </span>
+              </div>
+            )}
           </div>
 
           <button 

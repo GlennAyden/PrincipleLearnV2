@@ -8,7 +8,7 @@ interface User {
   id: string;
   email: string;
   role: string;
-  isVerified: boolean;
+  name: string | null;
 }
 
 interface AuthContextType {
@@ -35,7 +35,12 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         const res = await fetch('/api/auth/me');
         if (res.ok) {
           const data = await res.json();
-          setUser(data.user);
+          setUser({
+            id: data.user.id,
+            email: data.user.email,
+            role: data.user.role,
+            name: data.user.name || null,
+          });
         }
       } catch (error) {
         console.error('Auth check error:', error);
@@ -67,7 +72,12 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         localStorage.setItem('csrfToken', data.csrfToken);
       }
 
-      setUser(data.user);
+      setUser({
+        id: data.user.id,
+        email: data.user.email,
+        role: data.user.role,
+        name: data.user.name || null,
+      });
       return { success: true };
     } catch (error) {
       console.error('Login error:', error);
@@ -151,4 +161,4 @@ export function useAuth() {
     throw new Error('useAuth must be used within an AuthProvider');
   }
   return context;
-} 
+}

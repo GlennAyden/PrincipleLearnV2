@@ -592,3 +592,79 @@ $shadow-lg: 0 10px 25px -3px rgba(0, 0, 0, 0.08), 0 4px 6px -4px rgba(0, 0, 0, 0
     color: $gray-400;
     font-size: 0.9rem;
 }
+
+.analyticsSection {
+  margin: 2rem 0;
+  
+  h3 {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+    margin-bottom: 1.5rem;
+  }
+}
+
+.chartsGrid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 1.5rem;
+  margin-bottom: 1.5rem;
+
+  @media (max-width: 768px) {
+    grid-template-columns: 1fr;
+  }
+}
+
+.chartCard {
+  background: white;
+  border-radius: $radius-lg;
+  padding: 1.5rem;
+  box-shadow: $shadow-sm;
+  border: 1px solid $gray-100;
+  
+  h4 {
+    margin: 0 0 1rem 0;
+    font-size: 1.1rem;
+    font-weight: 600;
+    color: $gray-700;
+  }
+}
+
+.reliabilityCard {
+  background: linear-gradient(135deg, $gray-50 0%, white 100%);
+  border-radius: $radius-lg;
+  padding: 1.5rem;
+  border: 1px solid $gray-200;
+  
+  h4 {
+    margin: 0 0 1rem 0;
+    font-size: 1.1rem;
+    color: $gray-800;
+  }
+}
+
+.reliabilityStats {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+  gap: 1rem;
+  
+  div {
+    font-size: 0.95rem;
+    padding: 0.75rem 1rem;
+    background: white;
+    border-radius: $radius-md;
+    border-left: 4px solid $primary-500;
+    box-shadow: $shadow-sm;
+  }
+}
+
+.reliabilityStatus {
+  font-weight: 600;
+  text-transform: uppercase;
+  font-size: 0.85rem;
+  
+  &[data-status="excellent"] { color: $green-600; }
+  &[data-status="good"] { color: $amber-600; }
+  &[data-status="fair"] { color: $red-600; }
+  &[data-status="poor"] { color: $red-700; }
+}

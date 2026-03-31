@@ -19,7 +19,12 @@ export async function POST(req: Request) {
       );
     }
     
-    const { email, password, rememberMe = false } = await req.json();
+    const body = await req.json();
+    const password = body.password;
+    const rememberMe = body.rememberMe ?? false;
+    
+    // Normalize email: trim whitespace and convert to lowercase
+    const email = (body.email || '').trim().toLowerCase();
 
     // Validate email format
     const emailValidation = validateEmail(email);
@@ -82,9 +87,13 @@ export async function POST(req: Request) {
     // Log successful login
     console.log(`User logged in successfully: ${user.id}`);
     
-    // Create response
+    // Set CSRF token
+    const csrfToken = randomBytes(32).toString('hex');
+    
+    // Create response (include csrfToken in body for frontend localStorage)
     const response = NextResponse.json({
       success: true,
+      csrfToken,
       user: {
         id: user.id,
         email: user.email,
@@ -112,8 +121,6 @@ export async function POST(req: Request) {
       });
     }
     
-    // Set CSRF token
-    const csrfToken = randomBytes(32).toString('hex');
     response.cookies.set('csrf_token', csrfToken, {
       httpOnly: false, // Accessible from JavaScript
       secure: process.env.NODE_ENV === 'production',
@@ -122,8 +129,6 @@ export async function POST(req: Request) {
       path: '/'
     });
     
-    // Add CSRF token to response body
-
     return response;
   } catch (error: any) {
     console.error('Login error:', error);

@@ -24,10 +24,6 @@ interface Course {
 interface SessionWithRelations extends LearningSession {
     users?: { name: string; email: string }
     courses?: { title: string }
-    // Additional fields from database that may not be in base type
-    topic_focus?: string
-    duration_minutes?: number | null
-    status?: 'active' | 'completed' | 'paused'
 }
 
 interface SessionFormData {

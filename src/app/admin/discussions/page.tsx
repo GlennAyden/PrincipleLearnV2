@@ -5,6 +5,8 @@ import { useRouter } from 'next/navigation';
 import styles from './page.module.scss';
 import { useAdmin } from '@/hooks/useAdmin';
 
+import type { DiscussionSessionListItem, DiscussionMessage, AdminAction, ModulePrerequisiteDetails, ModulePrerequisiteSummary, ModulePrerequisiteItem } from '@/types/discussion';
+
 type LearningGoal = {
   id: string;
   description: string;
@@ -12,35 +14,11 @@ type LearningGoal = {
   rubric?: any;
 };
 
-type SessionListItem = {
-  id: string;
-  status: string;
-  phase: string;
-  learningGoals: LearningGoal[];
-  createdAt: string;
-  updatedAt: string;
-  user: { id: string; email: string | null };
-  course: { id: string; title: string | null };
-  subtopic: { id: string; title: string | null };
-};
+type SessionListItem = DiscussionSessionListItem;
 
-type DiscussionMessage = {
-  id: string;
-  role: 'agent' | 'student';
-  content: string;
-  metadata?: Record<string, any>;
-  step_key?: string | null;
-  created_at: string;
-};
+// Using imported DiscussionMessage type
 
-type AdminAction = {
-  id: string;
-  action: string;
-  payload: Record<string, any> | null;
-  created_at: string;
-  admin_id: string | null;
-  admin_email: string | null;
-};
+// Using imported AdminAction type
 
 type SessionDetail = {
   session: SessionListItem;
@@ -48,29 +26,11 @@ type SessionDetail = {
   adminActions: AdminAction[];
 };
 
-type ModulePrerequisiteSummary = {
-  expectedSubtopics: number;
-  generatedSubtopics: number;
-  totalQuizQuestions: number;
-  answeredQuizQuestions: number;
-  minQuestionsPerSubtopic: number;
-};
+// Using imported ModulePrerequisite* types
 
-type ModulePrerequisiteItem = {
-  key: string;
-  title: string;
-  generated: boolean;
-  quizQuestionCount: number;
-  answeredCount: number;
-  quizCompleted: boolean;
-  missingQuestions: string[];
-};
+// ...
 
-type ModulePrerequisiteDetails = {
-  ready: boolean;
-  summary: ModulePrerequisiteSummary;
-  subtopics: ModulePrerequisiteItem[];
-};
+// Using imported
 
 const STATUS_OPTIONS = [
   { value: 'all', label: 'Semua Status' },
@@ -232,7 +192,7 @@ export default function AdminDiscussionsPage() {
     let cancelled = false;
     setPrereqLoading(true);
     setPrereqError(null);
-    fetch(`/api/discussion/module-status?courseId=${courseId}&moduleId=${moduleId}`, {
+    fetch(`/api/admin/discussions/module-status?courseId=${courseId}&moduleId=${moduleId}`, {
       credentials: 'include',
     })
       .then(async (res) => {

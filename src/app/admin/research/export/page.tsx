@@ -9,7 +9,7 @@ import {
 import { useAdmin } from '@/hooks/useAdmin'
 import styles from './page.module.scss'
 
-type ExportType = 'sessions' | 'classifications' | 'indicators' | 'full'
+type ExportType = 'sessions' | 'classifications' | 'indicators' | 'spss' | 'full'
 type ExportFormat = 'json' | 'csv'
 
 interface ExportFilters {

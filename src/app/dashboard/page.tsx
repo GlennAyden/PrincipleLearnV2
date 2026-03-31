@@ -7,7 +7,7 @@ import Link from 'next/link';
 import { useAuth } from '@/hooks/useAuth';
 import styles from './page.module.scss';
 
-type Level = 'Beginner' | 'Intermediate' | 'Advance';
+type Level = 'Beginner' | 'Intermediate' | 'Advanced';
 
 interface Course {
   id:    string;
@@ -18,7 +18,7 @@ interface Course {
 const levelConfig: Record<Level, { color: string; icon: string }> = {
   Beginner:     { color: 'green',  icon: '🌱' },
   Intermediate: { color: 'blue',   icon: '📚' },
-  Advance:      { color: 'purple', icon: '🚀' },
+  Advanced:     { color: 'purple', icon: '🚀' },
 };
 
 export default function DashboardPage() {
@@ -26,6 +26,7 @@ export default function DashboardPage() {
   const { user, isLoading: authLoading, isAuthenticated, logout } = useAuth();
   const [courses, setCourses] = useState<Course[]>([]);
   const [loading, setLoading] = useState(true);
+  const [loadError, setLoadError] = useState<string | null>(null);
   const [deleteConfirm, setDeleteConfirm] = useState<string | null>(null);
 
   useEffect(() => {
@@ -36,18 +37,22 @@ export default function DashboardPage() {
 
   useEffect(() => {
     const loadCourses = async () => {
-      if (!user?.email || authLoading) {
+      if (!user?.id || authLoading) {
         setLoading(false);
         return;
       }
       try {
-        const response = await fetch(`/api/courses?userId=${encodeURIComponent(user.email)}`);
+        setLoadError(null);
+        const response = await fetch('/api/courses');
         const result = await response.json();
         if (result.success) {
           setCourses(result.courses);
+        } else {
+          setLoadError(result.error || 'Failed to load courses');
         }
       } catch (error) {
         console.error('[Dashboard] Error loading courses:', error);
+        setLoadError(error instanceof Error ? error.message : 'Failed to load courses. Please check your connection.');
       } finally {
         setLoading(false);
       }
@@ -89,7 +94,7 @@ export default function DashboardPage() {
     return 'Good evening';
   };
 
-  const userName = user?.email?.split('@')[0] || 'Learner';
+  const userName = user?.name || user?.email?.split('@')[0] || 'Learner';
 
   return (
     <div className={styles.page}>
@@ -177,6 +182,24 @@ export default function DashboardPage() {
             <div className={styles.loadingState}>
               <div className={styles.loadingSpinner} />
               <p>Loading courses...</p>
+            </div>
+          ) : loadError ? (
+            <div className={styles.errorState}>
+              <div className={styles.errorIcon}>
+                <svg width="48" height="48" viewBox="0 0 48 48" fill="none">
+                  <circle cx="24" cy="24" r="20" stroke="currentColor" strokeWidth="2" />
+                  <path d="M24 16V28" stroke="currentColor" strokeWidth="2" strokeLinecap="round" />
+                  <circle cx="24" cy="33" r="1.5" fill="currentColor" />
+                </svg>
+              </div>
+              <h3>Failed to load courses</h3>
+              <p>{loadError}</p>
+              <button
+                className={styles.retryBtn}
+                onClick={() => window.location.reload()}
+              >
+                Try Again
+              </button>
             </div>
           ) : courses.length > 0 ? (
             <div className={styles.courseGrid}>

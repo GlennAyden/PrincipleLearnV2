@@ -17,9 +17,11 @@ async function getHandler(request: NextRequest) {
 
     const { searchParams } = request.nextUrl;
     const status = searchParams.get('status');
+    const search = searchParams.get('search')?.toLowerCase() || '';
     const courseId = searchParams.get('courseId');
     const subtopicId = searchParams.get('subtopicId');
     const userId = searchParams.get('userId');
+    const sortBy = searchParams.get('sortBy') || 'updated_at';
     const limitParam = Number(searchParams.get('limit'));
     const limit = Number.isFinite(limitParam) && limitParam > 0 ? limitParam : DEFAULT_LIMIT;
 
@@ -38,10 +40,11 @@ async function getHandler(request: NextRequest) {
         subtopic_id,
         users:user_id(email),
         courses:course_id(title),
-        subtopics:subtopic_id(title)
+        subtopics:subtopic_id(title),
+        count_messages:discussion_messages(id)
       `
       )
-      .order('updated_at', { ascending: false })
+      .order(sortBy, { ascending: false })
       .limit(limit);
 
     if (status) {
@@ -56,7 +59,6 @@ async function getHandler(request: NextRequest) {
     if (userId) {
       query = query.eq('user_id', userId);
     }
-
     const { data, error } = await query;
 
     if (error) {
@@ -67,26 +69,54 @@ async function getHandler(request: NextRequest) {
       );
     }
 
-    const response = (data ?? []).map((item) => ({
-      id: item.id,
-      status: item.status,
-      phase: item.phase,
-      learningGoals: Array.isArray(item.learning_goals) ? item.learning_goals : [],
-      createdAt: item.created_at,
-      updatedAt: item.updated_at,
-      user: {
-        id: item.user_id,
-        email: (item as any)?.users?.email ?? null,
-      },
-      course: {
-        id: item.course_id,
-        title: (item as any)?.courses?.title ?? null,
-      },
-      subtopic: {
-        id: item.subtopic_id,
-        title: (item as any)?.subtopics?.title ?? null,
-      },
-    }));
+    if (error) {
+      console.error('[AdminDiscussions] Failed to fetch sessions', error);
+      return NextResponse.json(
+        { error: 'Failed to load discussions' },
+        { status: 500 }
+      );
+    }
+
+    const response: any[] = (data ?? []).map((item: any) => {
+      const messageCount = Number(item.count_messages || 0);
+      const goals = Array.isArray(item.learning_goals) ? item.learning_goals : [];
+      const goalPct = goals.length ? (goals.filter((g: any) => g.covered).length / goals.length) * 100 : 0;
+      const now = new Date();
+      const daysStalled = (now.getTime() - new Date(item.updated_at).getTime()) / (24 * 60 * 60 * 1000);
+      const score = Math.round((goalPct * 0.5) + (messageCount > 3 ? 0.3 : 0) + (daysStalled < 2 ? 0.2 : 0) * 100);
+      const color = score >= 80 ? 'green' : score >= 50 ? 'yellow' : 'red';
+      const reasons = [];
+      if (goalPct < 50) reasons.push('Low goal coverage');
+      if (messageCount <= 3) reasons.push('Low activity');
+      if (daysStalled > 2) reasons.push('Stalled');
+
+      return {
+        id: item.id,
+        status: item.status,
+        phase: item.phase,
+        learningGoals: goals,
+        createdAt: item.created_at,
+        updatedAt: item.updated_at,
+        user: {
+          id: item.user_id,
+          email: (item as any)?.users?.email ?? null,
+        },
+        course: {
+          id: item.course_id,
+          title: (item as any)?.courses?.title ?? null,
+        },
+        subtopic: {
+          id: item.subtopic_id,
+          title: (item as any)?.subtopics?.title ?? null,
+        },
+        healthScore: {
+          score,
+          color,
+          reasons,
+        },
+        messageCount,
+      };
+    });
 
     return NextResponse.json({ sessions: response });
   } catch (error) {

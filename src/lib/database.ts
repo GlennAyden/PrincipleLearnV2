@@ -215,7 +215,7 @@ export class DatabaseService {
 
 // Tables with JSONB columns that should NOT be stringified
 const JSONB_COLUMNS: Record<string, string[]> = {
-  subtopics: ['content'],
+  subtopics: [],
   quiz: ['options'],
   subtopic_cache: ['content'],
   discussion_templates: ['source', 'template'],
@@ -264,6 +264,7 @@ class SupabaseQueryBuilder {
   private selectFields: string = '*';
   private orderConfig: { column: string; ascending: boolean } | null = null;
   private limitCount: number | null = null;
+  private rangeConfig: { from: number; to: number } | null = null;
   private isSingle = false;
   private isMaybeSingle = false;
 
@@ -287,6 +288,21 @@ class SupabaseQueryBuilder {
     return this;
   }
 
+  is(column: string, value: null | boolean) {
+    this.filters.push({ method: 'is', args: [column, value] });
+    return this;
+  }
+
+  gte(column: string, value: any) {
+    this.filters.push({ method: 'gte', args: [column, value] });
+    return this;
+  }
+
+  lte(column: string, value: any) {
+    this.filters.push({ method: 'lte', args: [column, value] });
+    return this;
+  }
+
   contains(column: string, value: any) {
     this.filters.push({ method: 'contains', args: [column, value] });
     return this;
@@ -299,6 +315,11 @@ class SupabaseQueryBuilder {
 
   limit(count: number) {
     this.limitCount = count;
+    return this;
+  }
+
+  range(from: number, to: number) {
+    this.rangeConfig = { from, to };
     return this;
   }
 
@@ -428,8 +449,10 @@ class SupabaseQueryBuilder {
         });
       }
 
-      // Apply limit
-      if (this.limitCount) {
+      // Apply range (takes precedence over limit)
+      if (this.rangeConfig) {
+        query = query.range(this.rangeConfig.from, this.rangeConfig.to);
+      } else if (this.limitCount) {
         query = query.limit(this.limitCount);
       }
 

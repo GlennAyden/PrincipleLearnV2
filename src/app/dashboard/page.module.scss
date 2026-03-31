@@ -623,3 +623,55 @@ $shadow-lg: 0 10px 25px -3px rgba(0, 0, 0, 0.08), 0 4px 6px -4px rgba(0, 0, 0, 0
   color: $gray-400;
   padding: 2rem 0;
 }
+
+/* ========================================
+   ERROR STATE
+   ======================================== */
+.errorState {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  padding: 3rem 2rem;
+  text-align: center;
+  animation: fadeInUp 0.6s ease-out;
+
+  h3 {
+    font-size: 1.15rem;
+    font-weight: 600;
+    color: $gray-800;
+    margin-bottom: 0.4rem;
+  }
+
+  p {
+    font-size: 0.9rem;
+    color: $gray-400;
+    margin-bottom: 1.25rem;
+    max-width: 400px;
+  }
+}
+
+.errorIcon {
+  color: #ef4444;
+  margin-bottom: 1rem;
+}
+
+.retryBtn {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.4rem;
+  padding: 0.65rem 1.25rem;
+  background: $primary-50;
+  border: 1px solid rgba($primary-500, 0.2);
+  border-radius: $radius-md;
+  color: $primary-600;
+  font-size: 0.9rem;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.2s ease;
+
+  &:hover {
+    background: $primary-100;
+    color: $primary-700;
+  }
+}

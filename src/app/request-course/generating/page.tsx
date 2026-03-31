@@ -45,6 +45,9 @@ export default function GeneratingPage() {
   const [errorMsg, setErrorMsg] = useState('');
   const hasStarted = useRef(false);
 
+  // AbortController for cancelling long-running requests
+  const abortControllerRef = useRef<AbortController | null>(null);
+
   // Smooth percentage animation during AI wait
   const aiTimerRef = useRef<number | null>(null);
   const tipTimerRef = useRef<number | null>(null);
@@ -92,10 +95,18 @@ export default function GeneratingPage() {
   }, [authLoading, isAuthenticated, user]);
 
   const generateCourse = async () => {
+    const abortController = new AbortController();
+    abortControllerRef.current = abortController;
+
     try {
       // Stage 1: Sending
       setStage('sending');
       setPercent(5);
+
+      // Stage 2: Start AI progress tracking before fetch
+      setStage('ai-generating');
+      setPercent(STAGES['ai-generating'].basePercent);
+      startAiProgress();
 
       const res = await fetch('/api/generate-course', {
         method: 'POST',
@@ -108,13 +119,7 @@ export default function GeneratingPage() {
           userId: user!.id,
           userEmail: user!.email,
         }),
-        signal: (() => {
-          // Start AI progress as soon as fetch begins
-          setStage('ai-generating');
-          setPercent(STAGES['ai-generating'].basePercent);
-          startAiProgress();
-          return undefined;
-        })(),
+        signal: abortController.signal,
       });
 
       // Stage 3: Processing response
@@ -138,31 +143,12 @@ export default function GeneratingPage() {
       const data = await res.json();
       if (!res.ok) throw new Error(data.error || `API Error: ${res.status}`);
 
-      // Stage 4: Saving
+      // Stage 4: Saving (already saved by the API route, just updating UI)
       setStage('saving');
       setPercent(STAGES['saving'].basePercent);
 
-      // Log the generation
-      try {
-        await fetch('/api/generate-course/log', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({
-            userId: user!.id,
-            courseName: answers.topic,
-            parameter: JSON.stringify({
-              topic: answers.topic,
-              goal: answers.goal,
-              level: answers.level,
-              extraTopics: answers.extraTopics,
-              problem: answers.problem,
-              assumption: answers.assumption,
-            }),
-          }),
-        });
-      } catch (logErr) {
-        console.error('Error logging course generation:', logErr);
-      }
+      // Activity logging is handled by the generate-course API route directly
+      // No need to call /api/generate-course/log separately
 
       setPercent(90);
 
@@ -170,11 +156,16 @@ export default function GeneratingPage() {
       setStage('complete');
       setPercent(100);
 
-      setTimeout(() => router.push('/dashboard'), 1500);
-    } catch (err: any) {
+      setTimeout(() => router.push(data.courseId ? `/course/${data.courseId}` : '/dashboard'), 1500);
+    } catch (err: unknown) {
       stopAiProgress();
-      setStage('error');
-      setErrorMsg(err.message || 'An unexpected error occurred');
+      if (err instanceof Error && err.name === 'AbortError') {
+        setStage('error');
+        setErrorMsg('Course generation was cancelled.');
+      } else {
+        setStage('error');
+        setErrorMsg(err instanceof Error ? err.message : 'An unexpected error occurred');
+      }
     }
   };
 

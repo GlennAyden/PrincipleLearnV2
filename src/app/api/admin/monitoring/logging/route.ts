@@ -1,5 +1,8 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { adminDb } from '@/lib/database';
+import jwt from 'jsonwebtoken';
+
+const JWT_SECRET = process.env.JWT_SECRET!;
 
 const MONITORED_INPUT_PATHS = [
   '/api/generate-course',
@@ -39,6 +42,20 @@ function startsWithAny(path: string, patterns: readonly string[]) {
 
 export async function GET(request: NextRequest) {
   try {
+    // ── Auth Guard ──
+    const token = request.cookies.get('token')?.value;
+    if (!token) {
+      return NextResponse.json({ message: 'Unauthorized' }, { status: 401 });
+    }
+    try {
+      const payload = jwt.verify(token, JWT_SECRET) as { role?: string };
+      if (payload.role?.toLowerCase() !== 'admin') {
+        return NextResponse.json({ message: 'Forbidden' }, { status: 403 });
+      }
+    } catch {
+      return NextResponse.json({ message: 'Invalid token' }, { status: 401 });
+    }
+
     const { searchParams } = new URL(request.url);
     const daysRaw = Number(searchParams.get('days') || '7');
     const days = Number.isFinite(daysRaw) && daysRaw > 0 ? Math.min(daysRaw, 30) : 7;

@@ -257,39 +257,37 @@ export default function SubtopicPage() {
     }
     loadSubtopic();
 
-    // Background preload next subtopics for faster navigation
-    const preloadNextSubtopics = async () => {
-      if (!course?.outline || !data) return;
-      
-      const currentModule = course.outline[moduleIndex];
-      const nextSubtopicIndex = subtopicIndex + 1;
-      
-      // Preload next subtopic in same module
-      if (currentModule?.subtopics?.[nextSubtopicIndex]) {
-        const nextSubTitle = typeof currentModule.subtopics[nextSubtopicIndex] === 'string' 
-          ? currentModule.subtopics[nextSubtopicIndex] 
-          : currentModule.subtopics[nextSubtopicIndex].title;
-        
-        // Background fetch without blocking UI
-        setTimeout(() => {
-          fetch('/api/generate-subtopic', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ 
-              module: currentModule.module, 
-              subtopic: nextSubTitle,
-              courseId: courseId 
-            }),
-          }).catch(() => {}); // Silently handle errors
-        }, 3000); // Delay to not interfere with current loading
-      }
-    };
-
-    // Only preload after current content is loaded
-    if (data) {
-      preloadNextSubtopics();
-    }
   }, [course, moduleIndex, subtopicIndex, courseId, subtopicProgressKey]);
+
+  // Background preload next subtopics for faster navigation (separate effect to avoid race condition)
+  useEffect(() => {
+    if (!data || !course?.outline) return;
+
+    const currentModule = course.outline[moduleIndex];
+    const nextSubtopicIndex = subtopicIndex + 1;
+
+    // Preload next subtopic in same module
+    if (currentModule?.subtopics?.[nextSubtopicIndex]) {
+      const nextSubTitle = typeof currentModule.subtopics[nextSubtopicIndex] === 'string'
+        ? currentModule.subtopics[nextSubtopicIndex]
+        : currentModule.subtopics[nextSubtopicIndex].title;
+
+      // Background fetch without blocking UI
+      const timer = setTimeout(() => {
+        fetch('/api/generate-subtopic', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            module: currentModule.module,
+            subtopic: nextSubTitle,
+            courseId: courseId,
+          }),
+        }).catch(() => {}); // Silently handle errors
+      }, 3000); // Delay to not interfere with current loading
+
+      return () => clearTimeout(timer);
+    }
+  }, [data, course, moduleIndex, subtopicIndex, courseId]);
 
   // Initialize challenge question when opening the tab
   useEffect(() => {

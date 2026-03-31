@@ -159,6 +159,11 @@ export interface LearningSession {
     stage_transition?: number;  // -3 to +3
     transition_status?: TransitionStatus;
 
+    // Session context
+    topic_focus?: string;
+    duration_minutes?: number;
+    status?: 'active' | 'completed' | 'paused';
+
     // Quality gate
     is_valid_for_analysis: boolean;
     validity_note?: string;
@@ -362,6 +367,28 @@ export interface TriangulationRecord {
     updated_at: string;
 }
 
+export interface ResearchAnalytics {
+  total_sessions: number;
+  total_classifications: number;
+  total_indicators: number;
+  total_students: number;
+  stage_distribution: Record<PromptStage, number>;
+  stage_heatmap: Record<PromptStage, { sessions: number; avg_ct: number; avg_cth: number }>;
+  user_progression: Array<{
+    user_id: string;
+    sessions: number;
+    avg_stage_score: number;
+    stage_distribution: Record<PromptStage, number>;
+    ct_progression: number[];
+    cth_progression: number[];
+  }>;
+  inter_rater_kappa: {
+    prompt_stage: number;
+    ct_indicators: number;
+    reliability_status: 'excellent' | 'good' | 'fair' | 'poor';
+  };
+}
+
 /**
  * Inter-Rater Reliability - Reliabilitas antar-penilai
  */
@@ -409,6 +436,9 @@ export interface CreateLearningSessionInput {
     session_number: number;
     session_date: string;
     session_start?: string;
+    topic_focus?: string;
+    duration_minutes?: number;
+    status?: 'active' | 'completed' | 'paused';
     researcher_notes?: string;
 }
 
@@ -423,6 +453,9 @@ export interface UpdateLearningSessionInput {
     avg_cth_score?: number;
     stage_transition?: number;
     transition_status?: TransitionStatus;
+    topic_focus?: string;
+    duration_minutes?: number;
+    status?: 'active' | 'completed' | 'paused';
     is_valid_for_analysis?: boolean;
     validity_note?: string;
     researcher_notes?: string;
@@ -525,6 +558,28 @@ export interface CognitiveIndicatorsSummary {
         explanation: number;
         self_regulation: number;
     };
+}
+
+// ============================================
+// API RESPONSE TYPES (generic)
+// ============================================
+
+/**
+ * Paginated API response wrapper
+ */
+export interface ApiPaginatedResponse<T> {
+    data: T[];
+    total: number;
+    offset: number;
+    limit: number;
+}
+
+/**
+ * Standard API error response
+ */
+export interface ApiErrorResponse {
+    error: string;
+    details?: string;
 }
 
 // ============================================

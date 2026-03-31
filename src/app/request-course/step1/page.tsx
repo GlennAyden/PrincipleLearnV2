@@ -1,19 +1,28 @@
 // Path: src/app/request-course/step1/page.tsx
 'use client';
 
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 import Link from 'next/link';
 import { useRequestCourse } from '@/context/RequestCourseContext';
+import { useAuth } from '@/hooks/useAuth';
 import styles from './page.module.scss';
 
 export default function Step1() {
   const router = useRouter();
   const { answers, setPartial } = useRequestCourse();
+  const { isAuthenticated, isLoading: authLoading } = useAuth();
 
   const [topic, setTopic] = useState(answers.topic);
   const [goal, setGoal]   = useState(answers.goal);
   const [err, setErr]     = useState('');
+
+  // Auth guard: redirect to login if not authenticated
+  useEffect(() => {
+    if (!authLoading && !isAuthenticated) {
+      router.replace('/login');
+    }
+  }, [authLoading, isAuthenticated, router]);
 
   const continueToStep2 = () => {
     if (!topic.trim() || !goal.trim()) {

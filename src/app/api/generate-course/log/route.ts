@@ -1,6 +1,14 @@
 import { NextResponse } from 'next/server';
 import type { NextRequest } from 'next/server';
-import { DatabaseService } from '@/lib/database';
+
+/**
+ * DEPRECATED: This endpoint is no longer needed.
+ * Course generation activity is now logged directly in the main
+ * POST /api/generate-course route via the `course_generation_activity` table.
+ * 
+ * This endpoint is kept for backward compatibility but does NOT persist data.
+ * It will be removed in a future version.
+ */
 
 // Add CORS headers
 const corsHeaders = {
@@ -14,64 +22,33 @@ export async function OPTIONS() {
   return new NextResponse(null, { status: 200, headers: corsHeaders });
 }
 
-interface GenerateCourseLog {
-  userId: string; // Email user
-  courseName: string;
-  parameter: string;
-}
-
 export async function POST(req: NextRequest) {
   try {
-    const data: GenerateCourseLog = await req.json();
+    const data = await req.json();
     
-    // Validasi data
+    // Validate basic fields for backward compatibility
     if (!data.userId || !data.courseName) {
       return NextResponse.json(
-        { error: "Missing required fields" },
+        { error: 'Missing required fields' },
         { status: 400 }
       );
     }
 
-    // Find user in database
-    const users = await DatabaseService.getRecords('users', {
-      filter: { email: data.userId },
-      limit: 1
-    });
-
-    if (users.length === 0) {
-      return NextResponse.json(
-        { error: "User not found" },
-        { status: 404 }
-      );
-    }
-
-    const user = users[0];
-
-    // Create generate course log in database
-    const logData = {
-      user_id: user.id,
-      course_name: data.courseName,
-      parameters: data.parameter || '',
-      action_type: 'generate_course'
-    };
-
-    // Since we don't have a specific log table, we can create one or skip logging for now
-    // For now, just return success without saving log
-    const log = {
-      id: `course-log-${Date.now()}`,
-      userId: data.userId,
-      courseName: data.courseName,
-      parameter: data.parameter || '',
-      createdAt: new Date().toISOString()
-    };
-
-    console.log('Generate course log (not saved to DB yet):', log);
-    return NextResponse.json({ success: true, id: log.id }, { headers: corsHeaders });
-  } catch (error: any) {
-    console.error('Error saving generate course log:', error);
+    // Activity is already logged by the main generate-course route.
+    // This endpoint returns success for backward compatibility.
+    console.log('[Generate Course Log] DEPRECATED: Log request received but not persisted (already logged by main route)');
+    
+    return NextResponse.json({ 
+      success: true, 
+      id: `deprecated-${Date.now()}`,
+      message: 'Activity is logged by the main generate-course endpoint'
+    }, { headers: corsHeaders });
+  } catch (error: unknown) {
+    const errorMessage = error instanceof Error ? error.message : 'Failed to process log request';
+    console.error('[Generate Course Log] Error:', errorMessage);
     return NextResponse.json(
-      { error: error.message || "Failed to save generate course log" },
+      { error: errorMessage },
       { status: 500, headers: corsHeaders }
     );
   }
-} 
+}
