@@ -103,7 +103,12 @@ async function postHandler(req: NextRequest) {
       }
 
       // Backward-compatible fallback for environments using plural table naming.
-      transcript = await DatabaseService.insertRecord('transcripts', transcriptData);
+      try {
+        transcript = await DatabaseService.insertRecord('transcripts', transcriptData);
+      } catch (fallbackError) {
+        console.error('[Transcript] Both table names failed:', { primaryError: message, fallbackError });
+        throw primaryError; // throw original error for clearer diagnostics
+      }
     }
     
     console.log(`Transcript saved to database:`, {

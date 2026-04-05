@@ -1,7 +1,7 @@
 import { NextResponse } from 'next/server';
 import { registerRateLimiter } from '@/lib/rate-limit';
 import { RegisterSchema, parseBody } from '@/lib/schemas';
-import { DatabaseService } from '@/lib/database';
+import { DatabaseService, DatabaseError } from '@/lib/database';
 import { findUserByEmail, hashPassword } from '@/services/auth.service';
 
 export async function POST(req: Request) {
@@ -22,8 +22,11 @@ export async function POST(req: Request) {
     if (!parsed.success) return parsed.response;
     const { email, password, name } = parsed.data;
 
+    // Normalize email to prevent case-sensitivity duplicates
+    const normalizedEmail = email.toLowerCase().trim();
+
     // Check if user already exists
-    const existingUser = await findUserByEmail(email);
+    const existingUser = await findUserByEmail(normalizedEmail);
     if (existingUser) {
       return NextResponse.json(
         { error: 'User with this email already exists' },
@@ -35,7 +38,7 @@ export async function POST(req: Request) {
     const passwordHash = await hashPassword(password);
 
     const userData: Record<string, any> = {
-      email,
+      email: normalizedEmail,
       password_hash: passwordHash,
       role: 'user',
     };
@@ -44,8 +47,8 @@ export async function POST(req: Request) {
       userData.name = name;
     }
 
-    const newUser: any = await DatabaseService.insertRecord('users', userData);
-    console.log(`User created in database: ${email}`);
+    const newUser = await DatabaseService.insertRecord<{ id: string; email: string; role: string }>('users', userData);
+    console.log(`User created in database: ${normalizedEmail}`);
 
     // Return success without sensitive data
     return NextResponse.json({
@@ -58,6 +61,13 @@ export async function POST(req: Request) {
       message: 'Registration successful. You can now log in.'
     });
   } catch (error: any) {
+    // Handle race condition: another request created the same email between check and insert
+    if (error instanceof DatabaseError && error.isUniqueViolation) {
+      return NextResponse.json(
+        { error: 'User with this email already exists' },
+        { status: 409 }
+      );
+    }
     console.error('Registration error:', error);
     return NextResponse.json(
       { error: 'Failed to register user' },

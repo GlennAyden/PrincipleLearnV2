@@ -16,10 +16,10 @@ export async function POST(request: Request) {
 
     console.log(`[Admin Login] Attempting login for: ${email}`)
 
-    // Find user
-    const user = await findUserByEmail(email)
+    // Find user (normalize email)
+    const user = await findUserByEmail(email.toLowerCase().trim())
 
-    if (!user) {
+    if (!user || !user.password_hash) {
       console.log(`[Admin Login] User not found: ${email}`)
       return NextResponse.json(
         { error: 'Email atau password salah' },

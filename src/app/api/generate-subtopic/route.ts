@@ -40,7 +40,7 @@ export async function POST(request: Request) {
           .from('subtopic_cache')
           .select('content')
           .eq('cache_key', cacheKey)
-          .single();
+          .maybeSingle();
 
         if (cached?.content) {
           console.log('[GenerateSubtopic] Returning cached subtopic data');
@@ -284,30 +284,41 @@ export async function POST(request: Request) {
         const { adminDb } = await import('@/lib/database');
 
         const cacheKey = `${courseId}-${moduleTitle}-${subtopic}`;
-        await adminDb
+        const { error: cacheError } = await adminDb
           .from('subtopic_cache')
-          .upsert({
-            cache_key: cacheKey,
-            content: data,
-            created_at: new Date().toISOString(),
-            updated_at: new Date().toISOString()
-          });
+          .upsert(
+            {
+              cache_key: cacheKey,
+              content: data,
+              created_at: new Date().toISOString(),
+              updated_at: new Date().toISOString(),
+            },
+            { onConflict: 'cache_key' },
+          );
 
-        console.log('💾 Subtopic data cached successfully');
+        if (cacheError) {
+          console.warn('[GenerateSubtopic] Cache upsert failed:', cacheError);
+        } else {
+          console.log('[GenerateSubtopic] Subtopic data cached successfully');
+        }
 
         // Also save quiz questions to database for proper data structure
         if (data.quiz && Array.isArray(data.quiz) && data.quiz.length > 0) {
           try {
             // Find subtopic record by matching the module content, not the individual subtopic name
-            const { data: allSubtopics } = await adminDb
+            const { data: allSubtopics, error: subtopicsError } = await adminDb
               .from('subtopics')
               .select('id, title, content')
               .eq('course_id', courseId);
 
+            if (subtopicsError) {
+              console.warn('[GenerateSubtopic] Failed to load subtopics:', subtopicsError);
+            }
+
             let subtopicData = null;
 
             // Find the subtopic that contains this module in its content
-            if (allSubtopics) {
+            if (allSubtopics && Array.isArray(allSubtopics)) {
               for (const sub of allSubtopics) {
                 try {
                   const parsedContent = JSON.parse(sub.content);
@@ -334,7 +345,7 @@ export async function POST(request: Request) {
                 .select('id, title')
                 .eq('course_id', courseId)
                 .eq('title', subtopic)
-                .single();
+                .maybeSingle();
               subtopicData = fallbackData ?? undefined;
             }
 
@@ -507,7 +518,7 @@ async function syncQuizQuestions({
             .select('id, title')
             .eq('course_id', courseId)
             .eq('title', subtopicTitle)
-            .single();
+            .maybeSingle();
 
           if (fallbackSubtopic) {
             resolvedSubtopic = fallbackSubtopic;
@@ -719,7 +730,7 @@ async function assembleModuleDiscussionContext({
         .from('subtopic_cache')
         .select('content')
         .eq('cache_key', cacheKey)
-        .single();
+        .maybeSingle();
       cachedContent = cacheRow?.content ?? null;
     } catch (cacheError) {
       console.warn('[GenerateSubtopic] Failed to load cached content for module aggregation', {

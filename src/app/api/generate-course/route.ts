@@ -203,8 +203,8 @@ Important: Write all titles and overviews in the same language as the user's inp
           });
           console.log('[Generate Course] Logged course generation payload for admin activity');
         } catch (logError) {
+          // Log failure should not crash the request — the course was already created successfully
           console.error('[Generate Course] Failed to store course generation activity log:', logError);
-          throw logError;
         }
       } catch (error) {
         console.error('[Generate Course] Error saving to database:', error);

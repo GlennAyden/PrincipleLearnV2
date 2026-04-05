@@ -60,8 +60,9 @@ export async function resolveUserByIdentifier(
 }
 
 export async function findUserByEmail(email: string): Promise<UserRecord | null> {
+  const normalizedEmail = email.toLowerCase().trim();
   const users = await DatabaseService.getRecords<UserRecord>('users', {
-    filter: { email },
+    filter: { email: normalizedEmail },
     limit: 1,
   });
   return users.length > 0 ? users[0] : null;

@@ -51,7 +51,14 @@ export async function getCourseWithSubtopics(courseId: string) {
   return { ...course, subtopics };
 }
 
-export async function deleteCourse(courseId: string): Promise<void> {
+export async function deleteCourse(courseId: string, userId?: string, userRole?: string): Promise<void> {
+  if (userId) {
+    const course = await getCourseById(courseId);
+    if (!course) return; // already deleted or never existed
+    if (!canAccessCourse(course, userId, userRole)) {
+      throw new Error('Unauthorized: you do not own this course');
+    }
+  }
   await DatabaseService.deleteRecord('courses', courseId);
 }
 
@@ -86,13 +93,24 @@ export async function createCourseWithSubtopics(
     created_by: userId,
   })) as unknown as { id: string };
 
+  const errors: Array<{ index: number; error: unknown }> = [];
+
   for (let i = 0; i < modules.length; i++) {
-    await DatabaseService.insertRecord('subtopics', {
-      course_id: course.id,
-      title: modules[i].module || `Module ${i + 1}`,
-      content: JSON.stringify(modules[i]),
-      order_index: i,
-    });
+    try {
+      await DatabaseService.insertRecord('subtopics', {
+        course_id: course.id,
+        title: modules[i].module || `Module ${i + 1}`,
+        content: JSON.stringify(modules[i]),
+        order_index: i,
+      });
+    } catch (err) {
+      console.error(`[CourseService] Failed to insert subtopic ${i + 1}/${modules.length}:`, err);
+      errors.push({ index: i, error: err });
+    }
+  }
+
+  if (errors.length > 0) {
+    console.warn(`[CourseService] ${errors.length}/${modules.length} subtopics failed to insert for course ${course.id}`);
   }
 
   return course;

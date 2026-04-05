@@ -26,9 +26,9 @@ export async function POST(req: Request) {
     if (!parsed.success) return parsed.response;
     const { email, password, rememberMe } = parsed.data;
 
-    // Find user by email
-    const user = await findUserByEmail(email);
-    if (!user) {
+    // Find user by email (normalize to lowercase)
+    const user = await findUserByEmail(email.toLowerCase().trim());
+    if (!user || !user.password_hash) {
       return NextResponse.json(
         { error: 'Invalid credentials' },
         { status: 401 }

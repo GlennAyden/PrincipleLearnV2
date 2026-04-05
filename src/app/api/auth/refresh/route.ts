@@ -37,10 +37,10 @@ export async function POST(_req: Request) {
       return response;
     }
 
-    // Validate user still exists
+    // Validate user still exists and has required fields
     const user = await findUserById(payload.userId);
 
-    if (!user) {
+    if (!user || !user.id || !user.email || !user.role) {
       const response = NextResponse.json(
         { error: 'User no longer exists' },
         { status: 401 }

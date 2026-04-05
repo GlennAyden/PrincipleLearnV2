@@ -1,7 +1,7 @@
 // principle-learn/src/app/api/admin/register/route.ts
 
 import { NextResponse } from 'next/server'
-import { DatabaseService } from '@/lib/database'
+import { DatabaseService, DatabaseError } from '@/lib/database'
 import { verifyToken } from '@/lib/jwt'
 import { AdminRegisterSchema, parseBody } from '@/lib/schemas'
 import { findUserByEmail, hashPassword } from '@/services/auth.service'
@@ -35,10 +35,13 @@ export async function POST(request: Request) {
 
     console.log(`[Admin Register] Attempting to register admin: ${email}`);
 
+    // Normalize email
+    const normalizedEmail = email.toLowerCase().trim();
+
     // Check if admin already exists
-    const existingUser = await findUserByEmail(email)
+    const existingUser = await findUserByEmail(normalizedEmail)
     if (existingUser) {
-      console.log(`[Admin Register] Admin already exists: ${email}`);
+      console.log(`[Admin Register] Admin already exists: ${normalizedEmail}`);
       return NextResponse.json(
         { error: 'Admin sudah terdaftar dengan email ini' },
         { status: 409 }
@@ -46,50 +49,40 @@ export async function POST(request: Request) {
     }
 
     // Hash password
-    console.log(`[Admin Register] Hashing password for: ${email}`);
     const passwordHash = await hashPassword(password);
 
     // Create admin in database
-    console.log(`[Admin Register] Creating admin in database: ${email}`);
-    try {
-      const adminData = {
-        email,
-        password_hash: passwordHash,
-        name: 'Admin User',
-        role: 'admin',
-      };
+    const adminData = {
+      email: normalizedEmail,
+      password_hash: passwordHash,
+      name: 'Admin User',
+      role: 'admin',
+    };
 
-      const createdAdmin = await DatabaseService.insertRecord<{ id: string; email: string; role: string; created_at: string }>('users', adminData);
-      
-      console.log(`[Admin Register] Admin created successfully:`, {
-        id: createdAdmin.id,
-        email: createdAdmin.email,
-        role: createdAdmin.role
-      });
+    const createdAdmin = await DatabaseService.insertRecord<{ id: string; email: string; role: string; created_at: string }>('users', adminData);
 
-      // Return success response (without sensitive data)
-      return NextResponse.json(
-        { 
-          message: 'Admin berhasil didaftarkan', 
-          data: {
-            id: createdAdmin.id,
-            email: createdAdmin.email,
-            role: createdAdmin.role,
-            created_at: createdAdmin.created_at
-          }
-        },
-        { status: 201 }
-      );
+    console.log(`[Admin Register] Admin created successfully: ${createdAdmin.email}`);
 
-    } catch (insertError) {
-      console.error('[Admin Register] Error creating admin:', insertError);
-      return NextResponse.json(
-        { error: 'Gagal membuat akun admin' },
-        { status: 500 }
-      )
-    }
+    return NextResponse.json(
+      {
+        message: 'Admin berhasil didaftarkan',
+        data: {
+          id: createdAdmin.id,
+          email: createdAdmin.email,
+          role: createdAdmin.role,
+          created_at: createdAdmin.created_at
+        }
+      },
+      { status: 201 }
+    );
 
   } catch (err: any) {
+    if (err instanceof DatabaseError && err.isUniqueViolation) {
+      return NextResponse.json(
+        { error: 'Admin sudah terdaftar dengan email ini' },
+        { status: 409 }
+      )
+    }
     console.error('Error di /api/admin/register:', err)
     return NextResponse.json(
       { error: 'Internal server error' },
