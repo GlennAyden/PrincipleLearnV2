@@ -128,7 +128,7 @@ async function postHandler(request: NextRequest) {
   } catch (err: any) {
     console.error('[LearningProfile] POST error:', err);
     return NextResponse.json(
-      { error: err.message || 'Failed to save profile' },
+      { error: 'Failed to save profile' },
       { status: 500 }
     );
   }

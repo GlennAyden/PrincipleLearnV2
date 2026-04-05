@@ -43,17 +43,17 @@ function startsWithAny(path: string, patterns: readonly string[]) {
 export async function GET(request: NextRequest) {
   try {
     // ── Auth Guard ──
-    const token = request.cookies.get('token')?.value;
+    const token = request.cookies.get('access_token')?.value;
     if (!token) {
-      return NextResponse.json({ message: 'Unauthorized' }, { status: 401 });
+      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
     try {
       const payload = jwt.verify(token, JWT_SECRET) as { role?: string };
       if (payload.role?.toLowerCase() !== 'admin') {
-        return NextResponse.json({ message: 'Forbidden' }, { status: 403 });
+        return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
       }
     } catch {
-      return NextResponse.json({ message: 'Invalid token' }, { status: 401 });
+      return NextResponse.json({ error: 'Invalid token' }, { status: 401 });
     }
 
     const { searchParams } = new URL(request.url);

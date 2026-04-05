@@ -16,24 +16,19 @@ export class ApiError extends Error {
  * @returns NextResponse with appropriate status code and error message
  */
 export function handleApiError(error: unknown): NextResponse {
-  console.error('API Error:', error);
-  
   if (error instanceof ApiError) {
+    // Intentional API errors — safe to return the message
+    console.error(`API Error [${error.statusCode}]:`, error.message);
     return NextResponse.json(
       { error: error.message },
       { status: error.statusCode }
     );
   }
-  
-  if (error instanceof Error) {
-    return NextResponse.json(
-      { error: error.message },
-      { status: 500 }
-    );
-  }
-  
+
+  // Unexpected errors — log details server-side, return generic message to client
+  console.error('Internal server error:', error);
   return NextResponse.json(
-    { error: 'An unexpected error occurred' },
+    { error: 'Internal server error' },
     { status: 500 }
   );
 }

@@ -17,7 +17,7 @@ import type {
 const JWT_SECRET = process.env.JWT_SECRET!;
 
 function verifyAdminFromCookie(request: NextRequest): { userId: string; role: string } | null {
-    const token = request.cookies.get('token')?.value;
+    const token = request.cookies.get('access_token')?.value;
     if (!token) return null;
     try {
         const payload = jwt.verify(token, JWT_SECRET) as { userId: string; role: string };
@@ -50,10 +50,6 @@ async function generateSPSSData(userId?: string, courseId?: string): Promise<Rec
     const { data: allClassifications } = await adminDb
         .from('prompt_classifications')
         .select('learning_session_id, prompt_stage_score');
-
-    const { data: allIndicators } = await adminDb
-        .from('cognitive_indicators')
-        .select('prompt_classification_id, ct_total_score, cth_total_score');
 
     // Build maps
     const classificationsBySession = new Map<string, { prompt_stage_score: number }[]>();
@@ -275,7 +271,7 @@ export async function GET(request: NextRequest) {
 }
 
 // Helper: Anonymize data
-function anonymizeData(data: unknown[] | null, type: string): unknown[] {
+function anonymizeData(data: unknown[] | null, _type: string): unknown[] {
     if (!data || data.length === 0) return [];
 
     const userIdMap = new Map<string, string>();

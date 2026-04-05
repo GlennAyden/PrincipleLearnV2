@@ -4,31 +4,19 @@ import React, { useState, useEffect, useCallback } from 'react';
 import styles from './page.module.scss';
 import {
   BarChart, Bar, XAxis, YAxis, CartesianGrid,
-  Tooltip, ResponsiveContainer, Legend,
+  Tooltip, ResponsiveContainer,
 } from 'recharts';
 import {
   FiTrendingUp, FiTarget, FiMessageCircle, FiDownload,
-  FiStar, FiUsers, FiBarChart2, FiClock, FiDatabase,
+  FiStar, FiUsers, FiBarChart2, FiDatabase,
 } from 'react-icons/fi';
 import { useRouter } from 'next/navigation';
 import { useAdmin } from '@/hooks/useAdmin';
 import type {
   InsightsAPIResponse,
   InsightsSummary,
-  EvolutionPoint as InsightsEvolutionPoint,
-  InsightsStudentRow,
-  UserOption,
-  CourseOption,
-  ResearchMetrics
 } from '@/types/insights';
 import type { TimeRange } from '@/types/dashboard';
-
-interface LocalEvolutionPoint {
-  session: string;
-  totalPrompts: number;
-  avgComponents: number;
-  reasoningRate: number;
-}
 
 const CHART_COLORS = {
   prompts: '#6366f1',
@@ -88,6 +76,10 @@ export default function InsightsPage() {
       </div>
     );
   }
+
+  const summary = data?.summary ?? {} as InsightsSummary;
+  const evolutionChart = data?.evolution ?? [];
+  const students = data?.students ?? [];
 
   return (
     <div className={styles.page}>

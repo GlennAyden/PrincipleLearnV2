@@ -18,26 +18,18 @@
 import { TEST_STUDENT, TEST_STUDENT_2 } from '../../fixtures/users.fixture';
 import { TEST_COURSE, TEST_COURSE_ADVANCED } from '../../fixtures/courses.fixture';
 
-// Mock the database module
-const mockGetRecords = jest.fn();
-jest.mock('@/lib/database', () => ({
-    DatabaseService: {
-        getRecords: (...args: any[]) => mockGetRecords(...args),
-    },
+// Mock auth service — getCurrentUser and resolveUserByIdentifier
+const mockGetCurrentUser = jest.fn();
+const mockResolveUserByIdentifier = jest.fn();
+jest.mock('@/services/auth.service', () => ({
+    getCurrentUser: (...args: any[]) => mockGetCurrentUser(...args),
+    resolveUserByIdentifier: (...args: any[]) => mockResolveUserByIdentifier(...args),
 }));
 
-// Mock next/headers cookies
-const mockCookieGet = jest.fn();
-jest.mock('next/headers', () => ({
-    cookies: jest.fn(async () => ({
-        get: (name: string) => mockCookieGet(name),
-    })),
-}));
-
-// Mock jwt verification
-const mockVerifyToken = jest.fn();
-jest.mock('@/lib/jwt', () => ({
-    verifyToken: (...args: any[]) => mockVerifyToken(...args),
+// Mock course service — listUserCourses
+const mockListUserCourses = jest.fn();
+jest.mock('@/services/course.service', () => ({
+    listUserCourses: (...args: any[]) => mockListUserCourses(...args),
 }));
 
 import { GET } from '@/app/api/courses/route';
@@ -45,39 +37,27 @@ import { GET } from '@/app/api/courses/route';
 describe('GET /api/courses', () => {
     beforeEach(() => {
         jest.clearAllMocks();
-        mockCookieGet.mockReturnValue(undefined);
-        mockVerifyToken.mockReturnValue(null);
+        mockGetCurrentUser.mockResolvedValue(null);
+        mockResolveUserByIdentifier.mockResolvedValue(null);
+        mockListUserCourses.mockResolvedValue([]);
     });
 
     describe('Cookie-based Auth (Primary)', () => {
         it('should return courses when authenticated via cookie', async () => {
-            // Mock cookie auth
-            mockCookieGet.mockImplementation((name: string) => {
-                if (name === 'access_token') return { value: 'valid-token' };
-                return undefined;
+            // getCurrentUser returns authenticated user
+            mockGetCurrentUser.mockResolvedValue({
+                id: TEST_STUDENT.id,
+                email: TEST_STUDENT.email,
             });
-            mockVerifyToken.mockReturnValue({ userId: TEST_STUDENT.id, email: TEST_STUDENT.email, role: 'user' });
 
-            mockGetRecords.mockImplementation((table: string, opts: any) => {
-                if (table === 'users') {
-                    if (opts?.filter?.id === TEST_STUDENT.id) {
-                        return [{ id: TEST_STUDENT.id, email: TEST_STUDENT.email }];
-                    }
-                    return [];
-                }
-                if (table === 'courses') {
-                    return [
-                        {
-                            id: TEST_COURSE.id,
-                            title: TEST_COURSE.title,
-                            difficulty_level: TEST_COURSE.difficulty_level,
-                            created_by: TEST_STUDENT.id,
-                            created_at: '2026-01-01T00:00:00Z',
-                        },
-                    ];
-                }
-                return [];
-            });
+            // listUserCourses returns formatted courses
+            mockListUserCourses.mockResolvedValue([
+                {
+                    id: TEST_COURSE.id,
+                    title: TEST_COURSE.title,
+                    level: TEST_COURSE.difficulty_level,
+                },
+            ]);
 
             const request = new Request('http://localhost:3000/api/courses');
             const response = await GET(request);
@@ -96,20 +76,13 @@ describe('GET /api/courses', () => {
 
     describe('Header-based Auth (Fallback)', () => {
         it('should return courses when x-user-id header is present', async () => {
-            mockGetRecords.mockImplementation((table: string, opts: any) => {
-                if (table === 'courses') {
-                    return [
-                        {
-                            id: TEST_COURSE.id,
-                            title: TEST_COURSE.title,
-                            difficulty_level: TEST_COURSE.difficulty_level,
-                            created_by: TEST_STUDENT.id,
-                            created_at: '2026-01-01T00:00:00Z',
-                        },
-                    ];
-                }
-                return [];
-            });
+            mockListUserCourses.mockResolvedValue([
+                {
+                    id: TEST_COURSE.id,
+                    title: TEST_COURSE.title,
+                    level: TEST_COURSE.difficulty_level,
+                },
+            ]);
 
             const request = new Request('http://localhost:3000/api/courses', {
                 headers: { 'x-user-id': TEST_STUDENT.id },
@@ -126,23 +99,18 @@ describe('GET /api/courses', () => {
 
     describe('Legacy Query Params (Backward Compatibility)', () => {
         it('should return courses for a valid userId query param', async () => {
-            mockGetRecords.mockImplementation((table: string, opts: any) => {
-                if (table === 'users') {
-                    return [{ id: TEST_STUDENT.id, email: TEST_STUDENT.email }];
-                }
-                if (table === 'courses') {
-                    return [
-                        {
-                            id: TEST_COURSE.id,
-                            title: TEST_COURSE.title,
-                            difficulty_level: TEST_COURSE.difficulty_level,
-                            created_by: TEST_STUDENT.id,
-                            created_at: '2026-01-01T00:00:00Z',
-                        },
-                    ];
-                }
-                return [];
+            mockResolveUserByIdentifier.mockResolvedValue({
+                id: TEST_STUDENT.id,
+                email: TEST_STUDENT.email,
             });
+
+            mockListUserCourses.mockResolvedValue([
+                {
+                    id: TEST_COURSE.id,
+                    title: TEST_COURSE.title,
+                    level: TEST_COURSE.difficulty_level,
+                },
+            ]);
 
             const request = new Request(
                 `http://localhost:3000/api/courses?userId=${TEST_STUDENT.id}`
@@ -157,23 +125,18 @@ describe('GET /api/courses', () => {
         });
 
         it('should return courses for a valid userEmail query param (legacy)', async () => {
-            mockGetRecords.mockImplementation((table: string, opts: any) => {
-                if (table === 'users') {
-                    return [{ id: TEST_STUDENT.id, email: TEST_STUDENT.email }];
-                }
-                if (table === 'courses') {
-                    return [
-                        {
-                            id: TEST_COURSE.id,
-                            title: TEST_COURSE.title,
-                            difficulty_level: 'beginner',
-                            created_by: TEST_STUDENT.id,
-                            created_at: '2026-01-01T00:00:00Z',
-                        },
-                    ];
-                }
-                return [];
+            mockResolveUserByIdentifier.mockResolvedValue({
+                id: TEST_STUDENT.id,
+                email: TEST_STUDENT.email,
             });
+
+            mockListUserCourses.mockResolvedValue([
+                {
+                    id: TEST_COURSE.id,
+                    title: TEST_COURSE.title,
+                    level: 'beginner',
+                },
+            ]);
 
             const request = new Request(
                 `http://localhost:3000/api/courses?userEmail=${encodeURIComponent(TEST_STUDENT.email)}`
@@ -187,31 +150,24 @@ describe('GET /api/courses', () => {
             expect(data.courses).toHaveLength(1);
         });
 
-        it('should return multiple courses ordered by created_at desc', async () => {
-            mockGetRecords.mockImplementation((table: string) => {
-                if (table === 'users') {
-                    return [{ id: TEST_STUDENT.id, email: TEST_STUDENT.email }];
-                }
-                if (table === 'courses') {
-                    return [
-                        {
-                            id: TEST_COURSE_ADVANCED.id,
-                            title: TEST_COURSE_ADVANCED.title,
-                            difficulty_level: TEST_COURSE_ADVANCED.difficulty_level,
-                            created_by: TEST_STUDENT.id,
-                            created_at: '2026-02-01T00:00:00Z',
-                        },
-                        {
-                            id: TEST_COURSE.id,
-                            title: TEST_COURSE.title,
-                            difficulty_level: TEST_COURSE.difficulty_level,
-                            created_by: TEST_STUDENT.id,
-                            created_at: '2026-01-01T00:00:00Z',
-                        },
-                    ];
-                }
-                return [];
+        it('should return multiple courses', async () => {
+            mockResolveUserByIdentifier.mockResolvedValue({
+                id: TEST_STUDENT.id,
+                email: TEST_STUDENT.email,
             });
+
+            mockListUserCourses.mockResolvedValue([
+                {
+                    id: TEST_COURSE_ADVANCED.id,
+                    title: TEST_COURSE_ADVANCED.title,
+                    level: TEST_COURSE_ADVANCED.difficulty_level,
+                },
+                {
+                    id: TEST_COURSE.id,
+                    title: TEST_COURSE.title,
+                    level: TEST_COURSE.difficulty_level,
+                },
+            ]);
 
             const request = new Request(
                 `http://localhost:3000/api/courses?userId=${TEST_STUDENT.id}`
@@ -222,26 +178,15 @@ describe('GET /api/courses', () => {
 
             expect(response.status).toBe(200);
             expect(data.courses).toHaveLength(2);
-
-            // Verify getRecords was called with orderBy
-            const coursesCall = mockGetRecords.mock.calls.find(
-                (call: any[]) => call[0] === 'courses'
-            );
-            expect(coursesCall[1]).toMatchObject({
-                orderBy: { column: 'created_at', ascending: false },
-            });
         });
 
         it('should return empty array when user has no courses', async () => {
-            mockGetRecords.mockImplementation((table: string) => {
-                if (table === 'users') {
-                    return [{ id: TEST_STUDENT_2.id, email: TEST_STUDENT_2.email }];
-                }
-                if (table === 'courses') {
-                    return [];
-                }
-                return [];
+            mockResolveUserByIdentifier.mockResolvedValue({
+                id: TEST_STUDENT_2.id,
+                email: TEST_STUDENT_2.email,
             });
+
+            mockListUserCourses.mockResolvedValue([]);
 
             const request = new Request(
                 `http://localhost:3000/api/courses?userId=${TEST_STUDENT_2.id}`
@@ -256,23 +201,19 @@ describe('GET /api/courses', () => {
         });
 
         it('should default level to Beginner when difficulty_level is missing', async () => {
-            mockGetRecords.mockImplementation((table: string) => {
-                if (table === 'users') {
-                    return [{ id: TEST_STUDENT.id, email: TEST_STUDENT.email }];
-                }
-                if (table === 'courses') {
-                    return [
-                        {
-                            id: 'course-no-level',
-                            title: 'No Level Course',
-                            difficulty_level: null,
-                            created_by: TEST_STUDENT.id,
-                            created_at: '2026-01-01T00:00:00Z',
-                        },
-                    ];
-                }
-                return [];
+            mockResolveUserByIdentifier.mockResolvedValue({
+                id: TEST_STUDENT.id,
+                email: TEST_STUDENT.email,
             });
+
+            // listUserCourses already handles the default via course.service
+            mockListUserCourses.mockResolvedValue([
+                {
+                    id: 'course-no-level',
+                    title: 'No Level Course',
+                    level: 'Beginner', // course.service defaults null to 'Beginner'
+                },
+            ]);
 
             const request = new Request(
                 `http://localhost:3000/api/courses?userId=${TEST_STUDENT.id}`
@@ -299,7 +240,7 @@ describe('GET /api/courses', () => {
         });
 
         it('should return 404 when user is not found by userId', async () => {
-            mockGetRecords.mockResolvedValue([]);
+            mockResolveUserByIdentifier.mockResolvedValue(null);
 
             const request = new Request(
                 'http://localhost:3000/api/courses?userId=nonexistent-id'
@@ -314,7 +255,7 @@ describe('GET /api/courses', () => {
         });
 
         it('should return 404 when user is not found by userEmail', async () => {
-            mockGetRecords.mockResolvedValue([]);
+            mockResolveUserByIdentifier.mockResolvedValue(null);
 
             const request = new Request(
                 'http://localhost:3000/api/courses?userEmail=nobody@example.com'
@@ -331,7 +272,7 @@ describe('GET /api/courses', () => {
 
     describe('Database Errors', () => {
         it('should return 500 when database query fails', async () => {
-            mockGetRecords.mockRejectedValue(new Error('Database connection refused'));
+            mockResolveUserByIdentifier.mockRejectedValue(new Error('Database connection refused'));
 
             const request = new Request(
                 `http://localhost:3000/api/courses?userId=${TEST_STUDENT.id}`
@@ -345,39 +286,35 @@ describe('GET /api/courses', () => {
             expect(data.error).toBeDefined();
         });
 
-        it('should include error message in 500 response', async () => {
-            mockGetRecords.mockRejectedValue(new Error('Table not found'));
+        it('should return 500 when listUserCourses fails', async () => {
+            mockGetCurrentUser.mockResolvedValue({
+                id: TEST_STUDENT.id,
+                email: TEST_STUDENT.email,
+            });
+
+            mockListUserCourses.mockRejectedValue(new Error('Table not found'));
 
             const request = new Request(
-                `http://localhost:3000/api/courses?userId=${TEST_STUDENT.id}`
+                `http://localhost:3000/api/courses`
             );
 
             const response = await GET(request);
             const data = await response.json();
 
             expect(response.status).toBe(500);
-            expect(data.error).toBe('Table not found');
+            expect(data.success).toBe(false);
         });
     });
 
     describe('Edge Cases', () => {
         it('should prefer cookie auth over query params when both are available', async () => {
-            // Mock cookie auth
-            mockCookieGet.mockImplementation((name: string) => {
-                if (name === 'access_token') return { value: 'valid-token' };
-                return undefined;
+            // getCurrentUser returns authenticated user (cookie auth succeeds)
+            mockGetCurrentUser.mockResolvedValue({
+                id: TEST_STUDENT.id,
+                email: TEST_STUDENT.email,
             });
-            mockVerifyToken.mockReturnValue({ userId: TEST_STUDENT.id, email: TEST_STUDENT.email, role: 'user' });
 
-            mockGetRecords.mockImplementation((table: string, opts: any) => {
-                if (table === 'users') {
-                    return [{ id: TEST_STUDENT.id, email: TEST_STUDENT.email }];
-                }
-                if (table === 'courses') {
-                    return [];
-                }
-                return [];
-            });
+            mockListUserCourses.mockResolvedValue([]);
 
             // Even though userId is in query params, cookie auth should take priority
             const request = new Request(
@@ -389,11 +326,8 @@ describe('GET /api/courses', () => {
 
             expect(response.status).toBe(200);
 
-            // Verify courses were fetched for the cookie user, not the query param user
-            const coursesCall = mockGetRecords.mock.calls.find(
-                (call: any[]) => call[0] === 'courses'
-            );
-            expect(coursesCall[1].filter.created_by).toBe(TEST_STUDENT.id);
+            // Verify listUserCourses was called for the cookie user, not the query param user
+            expect(mockListUserCourses).toHaveBeenCalledWith(TEST_STUDENT.id);
         });
     });
 });

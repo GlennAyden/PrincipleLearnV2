@@ -2,6 +2,8 @@ import { NextResponse } from 'next/server';
 import type { NextRequest } from 'next/server';
 import { DatabaseService } from '@/lib/database';
 import { withApiLogging } from '@/lib/api-logger';
+import { FeedbackSchema, parseBody } from '@/lib/schemas';
+import { resolveUserByIdentifier } from '@/services/auth.service';
 
 function normalizeText(value: unknown) {
   return typeof value === 'string' ? value.trim() : '';
@@ -21,36 +23,15 @@ function parseRating(value: unknown) {
   return numeric;
 }
 
-async function resolveUserByIdentifier(identifier: string) {
-  const trimmed = identifier.trim();
-  if (!trimmed) return null;
-
-  const byId = await DatabaseService.getRecords<any>('users', {
-    filter: { id: trimmed },
-    limit: 1,
-  });
-  if (byId.length > 0) return byId[0];
-
-  const byEmail = await DatabaseService.getRecords<any>('users', {
-    filter: { email: trimmed },
-    limit: 1,
-  });
-  return byEmail[0] ?? null;
-}
-
 async function postHandler(req: NextRequest) {
   try {
+    // Validate request body
+    const parsed = parseBody(FeedbackSchema, await req.json());
+    if (!parsed.success) return parsed.response;
     const {
-      subtopicId,
-      subtopic,
-      moduleIndex,
-      subtopicIndex,
-      feedback,
-      comment,
-      rating,
-      userId,
-      courseId,
-    } = await req.json();
+      subtopicId, subtopic, moduleIndex, subtopicIndex,
+      feedback, comment, rating, userId, courseId,
+    } = parsed.data;
 
     const normalizedComment = normalizeText(comment ?? feedback);
     const normalizedUserId = normalizeText(userId);
@@ -60,21 +41,6 @@ async function postHandler(req: NextRequest) {
     const normalizedModuleIndex = parseIndex(moduleIndex);
     const normalizedSubtopicIndex = parseIndex(subtopicIndex);
     const normalizedRating = parseRating(rating);
-    
-    // Validasi data
-    if (!normalizedComment) {
-      return NextResponse.json(
-        { error: "Comment is required" },
-        { status: 400 }
-      );
-    }
-
-    if (!normalizedUserId || !normalizedCourseId) {
-      return NextResponse.json(
-        { error: 'userId and courseId are required' },
-        { status: 400 }
-      );
-    }
     
     // Save feedback to database
     try {
@@ -104,7 +70,7 @@ async function postHandler(req: NextRequest) {
       let subtopicTitle: string | null = null;
       if (normalizedSubtopicId) {
         try {
-          const subtopics = await DatabaseService.getRecords('subtopics', {
+          const subtopics = await DatabaseService.getRecords<{ id: string; title: string }>('subtopics', {
             filter: { id: normalizedSubtopicId },
             limit: 1,
           });
@@ -142,7 +108,7 @@ async function postHandler(req: NextRequest) {
     } catch (error) {
       console.error('Error saving feedback to database:', error);
       return NextResponse.json(
-        { error: error instanceof Error ? error.message : 'Failed to save feedback' },
+        { error: 'Failed to save feedback' },
         { status: 500 }
       );
     }
@@ -152,7 +118,7 @@ async function postHandler(req: NextRequest) {
   } catch (error: any) {
     console.error('Error saving feedback:', error);
     return NextResponse.json(
-      { error: error.message || "Failed to save feedback" },
+      { error: 'Failed to save feedback' },
       { status: 500 }
     );
   }

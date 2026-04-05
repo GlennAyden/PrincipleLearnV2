@@ -1,4 +1,5 @@
 // src/app/api/admin/activity/jurnal/route.ts
+// "jurnal" uses Indonesian spelling — matches the database table name.
 
 import { NextResponse } from 'next/server'
 import type { NextRequest } from 'next/server'

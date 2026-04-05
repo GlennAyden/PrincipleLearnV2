@@ -5,13 +5,6 @@ import type { NextConfig } from "next";
 loadEnv({ path: ".env", override: true });
 loadEnv({ path: ".env.local", override: true });
 
-const nextConfig: NextConfig = {
-  typescript: {
-    ignoreBuildErrors: true,
-  },
-  eslint: {
-    ignoreDuringBuilds: true,
-  },
-};
+const nextConfig: NextConfig = {};
 
 export default nextConfig;

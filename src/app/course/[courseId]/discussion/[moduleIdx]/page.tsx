@@ -78,6 +78,8 @@ interface ModulePrerequisiteDetails {
     answeredCount: number;
     quizCompleted: boolean;
     missingQuestions: string[];
+    userHasCompletion?: boolean;
+    completedUsers?: string[];
   }>;
 }
 
@@ -144,7 +146,7 @@ export default function DiscussionModulePage() {
   const queryTitle = searchParams.get('title') ?? '';
 
   const [course, setCourse] = useState<CourseData | null>(null);
-  const [courseLoading, setCourseLoading] = useState(true);
+  const [, setCourseLoading] = useState(true);
   const [courseError, setCourseError] = useState('');
 
   const [session, setSession] = useState<DiscussionSession | null>(null);

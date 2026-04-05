@@ -1,66 +1,42 @@
-import { NextRequest, NextResponse } from 'next/server';
-import bcrypt from 'bcryptjs';
-import { generateAccessToken, generateRefreshToken, getTokenExpiration } from '@/lib/jwt';
-import { validateEmail } from '@/lib/validation';
+import { NextResponse } from 'next/server';
 import { loginRateLimiter } from '@/lib/rate-limit';
-import { randomBytes } from 'crypto';
-import { DatabaseService } from '@/lib/database';
+import { LoginSchema, parseBody } from '@/lib/schemas';
+import {
+  findUserByEmail,
+  verifyPassword,
+  generateAuthTokens,
+  generateCsrfToken,
+} from '@/services/auth.service';
 
 export async function POST(req: Request) {
   try {
     // Get client IP for rate limiting
     const ip = req.headers.get('x-forwarded-for') || 'unknown';
-    
+
     // Check rate limiting
-    if (!loginRateLimiter.isAllowed(ip)) {
+    if (!(await loginRateLimiter.isAllowed(ip))) {
       return NextResponse.json(
         { error: 'Too many login attempts. Please try again later.' },
         { status: 429 }
       );
     }
-    
-    const body = await req.json();
-    const password = body.password;
-    const rememberMe = body.rememberMe ?? false;
-    
-    // Normalize email: trim whitespace and convert to lowercase
-    const email = (body.email || '').trim().toLowerCase();
 
-    // Validate email format
-    const emailValidation = validateEmail(email);
-    if (!emailValidation.valid) {
-      return NextResponse.json(
-        { error: emailValidation.message },
-        { status: 400 }
-      );
-    }
+    // Validate request body
+    const parsed = parseBody(LoginSchema, await req.json());
+    if (!parsed.success) return parsed.response;
+    const { email, password, rememberMe } = parsed.data;
 
-    // Validation for required fields
-    if (!password) {
-      return NextResponse.json(
-        { error: 'Password is required' },
-        { status: 400 }
-      );
-    }
-
-    // Find user by email in database
-    const users = await DatabaseService.getRecords('users', {
-      filter: { email },
-      limit: 1
-    });
-
-    const user = users.length > 0 ? users[0] : null;
-
-    // Check if user exists
+    // Find user by email
+    const user = await findUserByEmail(email);
     if (!user) {
       return NextResponse.json(
         { error: 'Invalid credentials' },
         { status: 401 }
       );
     }
-    
+
     // Password verification
-    const isPasswordValid = await bcrypt.compare(password, user.password_hash);
+    const isPasswordValid = await verifyPassword(password, user.password_hash);
     if (!isPasswordValid) {
       return NextResponse.json(
         { error: 'Invalid credentials' },
@@ -68,29 +44,16 @@ export async function POST(req: Request) {
       );
     }
 
-    // Reset failed login attempts on successful login
-    const refreshToken = generateRefreshToken({
-      userId: user.id,
-      email: user.email,
-      role: user.role
-    });
-    
-    const refreshTokenExpiration = getTokenExpiration(refreshToken);
-    
-    // Generate access token
-    const accessToken = generateAccessToken({
-      userId: user.id,
-      email: user.email,
-      role: user.role
-    });
-    
+    // Generate tokens
+    const { accessToken, refreshToken } = generateAuthTokens(user);
+
     // Log successful login
     console.log(`User logged in successfully: ${user.id}`);
-    
+
     // Set CSRF token
-    const csrfToken = randomBytes(32).toString('hex');
+    const csrfToken = generateCsrfToken();
     
-    // Create response (include csrfToken in body for frontend localStorage)
+    // Create response (csrfToken in body kept for API consumers; frontend reads from cookie)
     const response = NextResponse.json({
       success: true,
       csrfToken,
@@ -133,7 +96,7 @@ export async function POST(req: Request) {
   } catch (error: any) {
     console.error('Login error:', error);
     return NextResponse.json(
-      { error: error.message || 'Failed to login' },
+      { error: 'Failed to login' },
       { status: 500 }
     );
   }

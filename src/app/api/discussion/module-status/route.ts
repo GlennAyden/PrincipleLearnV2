@@ -168,7 +168,7 @@ async function getHandler(request: NextRequest) {
       string,
       { primaryId: string; ids: string[]; question: string }
     >();
-    (quizRows ?? []).forEach((row) => {
+    (quizRows ?? [] as Array<{ id: string; question: string }>).forEach((row: any) => {
       if (typeof row?.question === 'string') {
         const key = normalizeString(row.question);
         if (!quizRowsByKey.has(key)) {
@@ -179,7 +179,7 @@ async function getHandler(request: NextRequest) {
       }
     });
 
-    const quizIds = (quizRows ?? []).map((row) => row.id);
+    const quizIds = (quizRows ?? [] as Array<{ id: string }>).map((row: any) => row.id as string);
     let submissionRows: Array<{ quiz_id: string }> = [];
 
     if (quizIds.length > 0) {

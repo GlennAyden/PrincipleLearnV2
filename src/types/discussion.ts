@@ -1,5 +1,13 @@
 import type { Json } from './database';
 
+export interface LearningGoal {
+  id: string;
+  description: string;
+  covered: boolean;
+  rubric?: any;
+  thinkingSkill?: any;
+}
+
 export interface DiscussionSession {
   id: string;
   status: 'in_progress' | 'completed' | 'failed';
@@ -63,6 +71,8 @@ export interface ModulePrerequisiteItem {
   answeredCount: number;
   quizCompleted: boolean;
   missingQuestions: string[];
+  userHasCompletion?: boolean;
+  completedUsers?: string[];
 }
 
 export interface ModulePrerequisiteDetails {

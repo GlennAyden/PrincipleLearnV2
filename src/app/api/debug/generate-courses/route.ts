@@ -1,7 +1,10 @@
 import { NextResponse } from 'next/server';
 
-
 export async function GET() {
+  if (process.env.NODE_ENV === 'production') {
+    return NextResponse.json({ error: 'Not available' }, { status: 404 });
+  }
+
   console.log('[Debug API] Checking mock generate-course records');
 
   try {

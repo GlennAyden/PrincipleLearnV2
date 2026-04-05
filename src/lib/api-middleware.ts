@@ -68,8 +68,8 @@ export function withProtection(
       );
     }
     
-    // Check admin role if required
-    if (options.adminOnly && payload.role !== 'ADMIN') {
+    // Check admin role if required (normalize to lowercase for consistency)
+    if (options.adminOnly && payload.role?.toLowerCase() !== 'admin') {
       return NextResponse.json(
         { error: 'Unauthorized: Admin access required' },
         { status: 403 }
@@ -84,4 +84,19 @@ export function withProtection(
     // Call the handler
     return handler(req);
   };
+}
+
+/**
+ * Add Cache-Control headers to a NextResponse for short-lived caching.
+ * Use on read-only admin endpoints whose data changes infrequently.
+ *
+ * @param response The NextResponse to add headers to
+ * @param maxAgeSeconds Cache duration in seconds (default: 60)
+ */
+export function withCacheHeaders(response: NextResponse, maxAgeSeconds = 60): NextResponse {
+  response.headers.set(
+    'Cache-Control',
+    `private, s-maxage=${maxAgeSeconds}, stale-while-revalidate=${maxAgeSeconds * 2}`
+  );
+  return response;
 } 

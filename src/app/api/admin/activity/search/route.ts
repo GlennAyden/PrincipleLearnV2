@@ -1,7 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { adminDb } from '@/lib/database';
-import type { ActivitySearchParams, GlobalActivityItem, ActivityType } from '@/types/activity';
-import { format, subHours, subDays } from 'date-fns';
+import type { GlobalActivityItem, ActivityType } from '@/types/activity';
 
 const TABLES: Record<ActivityType, string> = {
   generate: 'course_generation_activity',
@@ -27,13 +26,31 @@ async function safeQuery(table: string): Promise<any[]> {
 function getDateFilter(timeRange: string): Date {
   const now = new Date();
   switch (timeRange) {
-    case '1h': return subHours(now, 1);
-    case '24h': return subDays(now, 1);
-    case '7d': return subDays(now, 7);
-    case '30d': return subDays(now, 30);
-    case '90d': return subDays(now, 90);
+    case '1h': {
+      const d = new Date(now); d.setHours(d.getHours() - 1); return d;
+    }
+    case '24h': {
+      const d = new Date(now); d.setDate(d.getDate() - 1); return d;
+    }
+    case '7d': {
+      const d = new Date(now); d.setDate(d.getDate() - 7); return d;
+    }
+    case '30d': {
+      const d = new Date(now); d.setDate(d.getDate() - 30); return d;
+    }
+    case '90d': {
+      const d = new Date(now); d.setDate(d.getDate() - 90); return d;
+    }
     default: return new Date(0);
   }
+}
+
+function formatTimestamp(date: Date): string {
+  const dd = String(date.getDate()).padStart(2, '0');
+  const mm = String(date.getMonth() + 1).padStart(2, '0');
+  const hh = String(date.getHours()).padStart(2, '0');
+  const min = String(date.getMinutes()).padStart(2, '0');
+  return `${dd}/${mm} ${hh}:${min}`;
 }
 
 function computeEngagement(type: ActivityType): number {
@@ -61,32 +78,37 @@ export async function GET(req: NextRequest) {
     if (types && !types.includes(type)) continue;
 
     const items = await safeQuery(table);
-    const filtered = items.filter(item => {
-      const ts = new Date(item.created_at || item.updated_at || '1970');
-      if (ts < dateFilter) return false;
-      if (userId && item.user_id !== userId) return false;
-      if (q) {
-        const fields = Object.values(item).join(' ').toLowerCase();
-        if (!fields.includes(q.toLowerCase())) return false;
-      }
-      return true;
-    }).map(item => ({
-      id: item.id,
-      type,
-      timestamp: format(ts, 'dd/MM HH:mm'),
-      userId: item.user_id || 'unknown',
-      userEmail: 'user@email.com', // From cache in prod
-      topic: item.subtopic_label || item.topic || item.title || 'N/A',
-      detail: item.question || item.content || item.answer || item.comment || 'Activity',
-      stage: (item.prompt_components ? 'SRP' : undefined) as any,
-      engagementScore: computeEngagement(type),
-      courseId: item.course_id
-    } as GlobalActivityItem));
+    const filtered = items
+      .filter(item => {
+        const ts = new Date(item.created_at || item.updated_at || '1970');
+        if (ts < dateFilter) return false;
+        if (userId && item.user_id !== userId) return false;
+        if (q) {
+          const fields = Object.values(item).join(' ').toLowerCase();
+          if (!fields.includes(q.toLowerCase())) return false;
+        }
+        return true;
+      })
+      .map(item => {
+        const ts = new Date(item.created_at || item.updated_at || '1970');
+        return {
+          id: item.id,
+          type,
+          timestamp: formatTimestamp(ts),
+          userId: item.user_id || 'unknown',
+          userEmail: 'user@email.com', // From cache in prod
+          topic: item.subtopic_label || item.topic || item.title || 'N/A',
+          detail: item.question || item.content || item.answer || item.comment || 'Activity',
+          stage: (item.prompt_components ? 'SRP' : undefined) as any,
+          engagementScore: computeEngagement(type),
+          courseId: item.course_id
+        } as GlobalActivityItem;
+      });
 
     allItems.push(...filtered);
   }
 
-  const sorted = allItems.sort((a, b) => 
+  const sorted = allItems.sort((a, b) =>
     new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime()
   ).slice((page - 1) * pageSize, page * pageSize);
 
@@ -98,4 +120,3 @@ export async function GET(req: NextRequest) {
     timeRange
   });
 }
-

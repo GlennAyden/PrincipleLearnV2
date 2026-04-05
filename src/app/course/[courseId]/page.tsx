@@ -11,6 +11,8 @@ import { Level } from '@/context/RequestCourseContext';
 interface SubtopicSummary {
   title: string;
   overview: string;
+  type?: string;
+  isDiscussion?: boolean;
 }
 interface ModuleOutline {
   id: string;
@@ -24,15 +26,6 @@ interface Course {
   level: Level;
   outline?: ModuleOutline[];
 }
-
-type DiscussionPhase =
-  | 'diagnosis'
-  | 'exploration'
-  | 'explanation'
-  | 'practice'
-  | 'synthesis'
-  | 'consolidation'
-  | 'completed';
 
 const PHASE_LABELS: Record<string, string> = {
   diagnosis: 'Diagnosis',

@@ -3,6 +3,7 @@
 import React, { useState } from 'react';
 import styles from './StructuredReflection.module.scss';
 import { useAuth } from '@/hooks/useAuth';
+import { apiFetch } from '@/lib/api-client';
 
 interface ReflectionData {
   understood: string;
@@ -89,9 +90,8 @@ export default function StructuredReflection({
 
     try {
       // Save structured reflection
-      const res = await fetch('/api/jurnal/save', {
+      const res = await apiFetch('/api/jurnal/save', {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           userId: user.id,
           courseId,
@@ -119,9 +119,8 @@ export default function StructuredReflection({
       // Save feedback to /api/feedback if rating or feedbackText is provided
       if (rating > 0 || feedbackText.trim()) {
         try {
-          await fetch('/api/feedback', {
+          await apiFetch('/api/feedback', {
             method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({
               subtopic: subtopic || null,
               moduleIndex,

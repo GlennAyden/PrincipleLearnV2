@@ -10,16 +10,8 @@ import {
   CartesianGrid,
   Tooltip,
   Legend,
-  Cell
 } from 'recharts';
 import type { PromptStage } from '@/types/research';
-
-const COLORS = {
-  SCP: '#3B82F6',
-  SRP: '#8B5CF6',
-  MQP: '#10B981',
-  REFLECTIVE: '#F59E0B'
-};
 
 interface StageHeatmapProps {
   data: Record<PromptStage, { sessions: number; avg_ct: number; avg_cth: number }>;

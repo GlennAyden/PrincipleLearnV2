@@ -25,8 +25,9 @@ export interface GlobalActivityItem {
   courseId?: string;
 }
 
-export type ActivityType = 
-  | 'generate' | 'ask' | 'challenge' | 'quiz' | 'feedback' 
+// "jurnal" uses Indonesian spelling to match the database table and API routes.
+export type ActivityType =
+  | 'generate' | 'ask' | 'challenge' | 'quiz' | 'feedback'
   | 'jurnal' | 'transcript' | 'learningProfile' | 'discussion';
 
 export interface ActivityAnalytics {

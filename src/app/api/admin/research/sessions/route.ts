@@ -25,7 +25,7 @@ function validateUUID(id: string): boolean {
 
 // Helper function to verify admin from cookie
 function verifyAdminFromCookie(request: NextRequest): { userId: string; role: string } | null {
-    const token = request.cookies.get('token')?.value;
+    const token = request.cookies.get('access_token')?.value;
     if (!token) return null;
 
     try {

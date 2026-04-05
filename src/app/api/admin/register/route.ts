@@ -1,77 +1,53 @@
 // principle-learn/src/app/api/admin/register/route.ts
 
 import { NextResponse } from 'next/server'
-import bcrypt from 'bcrypt'
 import { DatabaseService } from '@/lib/database'
-
-interface User {
-  id: string;
-  email: string;
-  password_hash: string;
-  name?: string;
-  role: string;
-  created_at: string;
-  updated_at: string;
-}
+import { verifyToken } from '@/lib/jwt'
+import { AdminRegisterSchema, parseBody } from '@/lib/schemas'
+import { findUserByEmail, hashPassword } from '@/services/auth.service'
 
 export async function POST(request: Request) {
   try {
-    const { email, password } = await request.json()
+    // Require existing admin authentication to create new admin accounts
+    const cookieHeader = request.headers.get('cookie') || '';
+    const accessTokenMatch = cookieHeader.match(/(?:^|;\s*)access_token=([^;]*)/);
+    const activeToken = accessTokenMatch?.[1];
 
-    // Validasi: email & password wajib diisi
-    if (!email || !password) {
+    if (!activeToken) {
       return NextResponse.json(
-        { message: 'Email dan password wajib diisi' },
-        { status: 400 }
+        { error: 'Authentication required. Only existing admins can register new admins.' },
+        { status: 401 }
       )
     }
 
-    // Validasi format email
-    const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/
-    if (!emailRegex.test(email)) {
+    const payload = verifyToken(activeToken);
+    if (!payload || payload.role?.toLowerCase() !== 'admin') {
       return NextResponse.json(
-        { message: 'Format email tidak valid' },
-        { status: 400 }
+        { error: 'Forbidden. Only admins can register new admin accounts.' },
+        { status: 403 }
       )
     }
 
-    // Validasi password minimal 6 karakter
-    if (password.length < 6) {
-      return NextResponse.json(
-        { message: 'Password minimal 6 karakter' },
-        { status: 400 }
-      )
-    }
+    // Validate request body — same password strength as user registration (fixes 6.1.2)
+    const parsed = parseBody(AdminRegisterSchema, await request.json())
+    if (!parsed.success) return parsed.response
+    const { email, password } = parsed.data
 
     console.log(`[Admin Register] Attempting to register admin: ${email}`);
 
-    // Check if admin already exists in database
-    let existingUsers: User[] = []
-    try {
-      existingUsers = await DatabaseService.getRecords<User>('users', {
-        filter: { email: email },
-        limit: 1
-      })
-    } catch (dbError) {
-      console.error('[Admin Register] Database error checking existing user:', dbError);
-      return NextResponse.json(
-        { message: 'Database connection error' },
-        { status: 500 }
-      )
-    }
-
-    if (existingUsers.length > 0) {
+    // Check if admin already exists
+    const existingUser = await findUserByEmail(email)
+    if (existingUser) {
       console.log(`[Admin Register] Admin already exists: ${email}`);
       return NextResponse.json(
-        { message: 'Admin sudah terdaftar dengan email ini' },
+        { error: 'Admin sudah terdaftar dengan email ini' },
         { status: 409 }
       )
     }
 
     // Hash password
     console.log(`[Admin Register] Hashing password for: ${email}`);
-    const saltRounds = 10;
-    const passwordHash = await bcrypt.hash(password, saltRounds);
+    const passwordHash = await hashPassword(password);
 
     // Create admin in database
     console.log(`[Admin Register] Creating admin in database: ${email}`);
@@ -83,7 +59,7 @@ export async function POST(request: Request) {
         role: 'admin',
       };
 
-      const createdAdmin = await DatabaseService.insertRecord<User>('users', adminData);
+      const createdAdmin = await DatabaseService.insertRecord<{ id: string; email: string; role: string; created_at: string }>('users', adminData);
       
       console.log(`[Admin Register] Admin created successfully:`, {
         id: createdAdmin.id,
@@ -108,7 +84,7 @@ export async function POST(request: Request) {
     } catch (insertError) {
       console.error('[Admin Register] Error creating admin:', insertError);
       return NextResponse.json(
-        { message: 'Gagal membuat akun admin' },
+        { error: 'Gagal membuat akun admin' },
         { status: 500 }
       )
     }
@@ -116,7 +92,7 @@ export async function POST(request: Request) {
   } catch (err: any) {
     console.error('Error di /api/admin/register:', err)
     return NextResponse.json(
-      { message: err.message || 'Internal Server Error' },
+      { error: 'Internal server error' },
       { status: 500 }
     )
   }

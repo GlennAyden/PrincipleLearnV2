@@ -5,6 +5,7 @@
 import { NextResponse } from 'next/server'
 import type { NextRequest } from 'next/server'
 import { adminDb } from '@/lib/database'
+import { withCacheHeaders } from '@/lib/api-middleware'
 import jwt from 'jsonwebtoken'
 import type { TimeRange, ActivityItem, DashboardAPIResponse } from '@/types/dashboard'
 
@@ -13,7 +14,7 @@ const JWT_SECRET = process.env.JWT_SECRET!
 // ── Auth Helper ──────────────────────────────────────────────────────────────
 
 function verifyAdminFromCookie(request: NextRequest): { userId: string; email: string; role: string } | null {
-  const token = request.cookies.get('token')?.value
+  const token = request.cookies.get('access_token')?.value
   if (!token) return null
 
   try {
@@ -126,7 +127,7 @@ export async function GET(request: NextRequest) {
     // ── Auth Guard ──
     const admin = verifyAdminFromCookie(request)
     if (!admin) {
-      return NextResponse.json({ message: 'Unauthorized' }, { status: 401 })
+      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
     }
 
     // ── Parse time range ──
@@ -180,7 +181,6 @@ export async function GET(request: NextRequest) {
     const journalsByUser = buildUserMap(journals)
     const challengesByUser = buildUserMap(challenges)
     const askByUser = buildUserMap(askHistory)
-    const feedbacksByUser = buildUserMap(feedbacks)
     const transcriptsByUser = buildUserMap(transcripts)
 
     // ── 1. KPI Calculations ─────────────────────────────────────────────────
@@ -548,11 +548,11 @@ export async function GET(request: NextRequest) {
       },
     }
 
-    return NextResponse.json(response)
+    return withCacheHeaders(NextResponse.json(response), 30)
   } catch (err: any) {
     console.error('[Admin Dashboard] Error:', err)
     return NextResponse.json(
-      { message: 'Internal Server Error', error: err.message },
+      { error: 'Internal server error' },
       { status: 500 }
     )
   }

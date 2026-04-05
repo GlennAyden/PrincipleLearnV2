@@ -1,10 +1,8 @@
 import { NextRequest, NextResponse } from 'next/server';
-import type { ActivitySearchParams } from '@/types/activity';
 
 export async function GET(req: NextRequest) {
   const { searchParams } = new URL(req.url);
   const format = searchParams.get('format') as 'csv' | 'json' || 'csv';
-  const types = searchParams.get('types')?.split(',') || [];
   
   // Mock data - integrate with search API
   const mockData = [

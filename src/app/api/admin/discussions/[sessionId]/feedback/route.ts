@@ -28,7 +28,7 @@ async function postHandler(
   context: { params: Promise<{ sessionId: string }> }
 ) {
   try {
-    const token = request.cookies.get('access_token')?.value ?? request.cookies.get('token')?.value;
+    const token = request.cookies.get('access_token')?.value;
     const payload = token ? verifyToken(token) : null;
     if (!payload || (payload.role ?? '').toLowerCase() !== 'admin') {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 403 });
@@ -51,11 +51,11 @@ async function postHandler(
       summary: body.summary.trim(),
       goals: Array.isArray(body.goals)
         ? body.goals
-            .map((item) => ({
+            .map((item: any) => ({
               id: typeof item?.id === 'string' ? item.id : undefined,
               note: typeof item?.note === 'string' ? item.note : '',
             }))
-            .filter((item) => item.note)
+            .filter((item: { id?: string; note: string }) => item.note)
         : undefined,
     };
 

@@ -5,7 +5,7 @@ import { withApiLogging } from '@/lib/api-logger';
 
 async function postHandler(request: NextRequest) {
   try {
-    const token = request.cookies.get('access_token')?.value ?? request.cookies.get('token')?.value;
+    const token = request.cookies.get('access_token')?.value;
     const payload = token ? verifyToken(token) : null;
     if (!payload || (payload.role ?? '').toLowerCase() !== 'admin') {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 403 });
@@ -23,10 +23,10 @@ async function postHandler(request: NextRequest) {
     for (const sessionId of sessionIds) {
       try {
         if (action === 'mark_completed') {
-          const { error } = await adminDb.from('discussion_sessions').update({ 
-            status: 'completed', 
-            updated_at: new Date().toISOString() 
-          }).eq('id', sessionId);
+          const { error } = await adminDb.from('discussion_sessions').eq('id', sessionId).update({
+            status: 'completed',
+            updated_at: new Date().toISOString()
+          });
 
           if (!error) {
             results.success++;

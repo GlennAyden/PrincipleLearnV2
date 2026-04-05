@@ -13,7 +13,6 @@ export function middleware(req: NextRequest) {
     '/login',
     '/signup',
     '/admin/login',
-    '/admin/register'
   ]
   
   // API routes that handle their own authentication
@@ -30,11 +29,8 @@ export function middleware(req: NextRequest) {
     return NextResponse.next()
   }
   
-  // Get token from cookies — check both 'token' (admin) and 'access_token' (user)
-  // Admin login sets 'token', user login sets 'access_token'
-  const adminToken = req.cookies.get('token')?.value
-  const userAccessToken = req.cookies.get('access_token')?.value
-  const activeToken = adminToken || userAccessToken || null
+  // Unified auth cookie — both admin and user login set 'access_token'
+  const activeToken = req.cookies.get('access_token')?.value || null
   
   // If no token exists, return appropriate response
   if (!activeToken) {
@@ -76,17 +72,15 @@ export function middleware(req: NextRequest) {
         { status: 401 }
       )
       response.cookies.delete('access_token')
-      response.cookies.delete('token')
       return response
     }
-    
+
     // For page routes, redirect to login
     const response = NextResponse.redirect(
       new URL(pathname.startsWith('/admin') ? '/admin/login' : '/login', req.url)
     )
-    
+
     response.cookies.delete('access_token')
-    response.cookies.delete('token')
     return response
   }
   

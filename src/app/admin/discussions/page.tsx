@@ -5,14 +5,7 @@ import { useRouter } from 'next/navigation';
 import styles from './page.module.scss';
 import { useAdmin } from '@/hooks/useAdmin';
 
-import type { DiscussionSessionListItem, DiscussionMessage, AdminAction, ModulePrerequisiteDetails, ModulePrerequisiteSummary, ModulePrerequisiteItem } from '@/types/discussion';
-
-type LearningGoal = {
-  id: string;
-  description: string;
-  covered: boolean;
-  rubric?: any;
-};
+import type { DiscussionSessionListItem, DiscussionMessage, AdminAction, ModulePrerequisiteDetails } from '@/types/discussion';
 
 type SessionListItem = DiscussionSessionListItem;
 
@@ -582,8 +575,8 @@ export default function AdminDiscussionsPage() {
                         {detail.adminActions.map((action) => (
                           <li key={action.id}>
                             <strong>{action.action}</strong> oleh{' '}
-                            {action.admin_email ?? 'admin'} pada{' '}
-                            {new Date(action.created_at).toLocaleString()}
+                            {action.adminEmail ?? 'admin'} pada{' '}
+                            {new Date(action.createdAt).toLocaleString()}
                           </li>
                         ))}
                       </ul>
@@ -607,7 +600,7 @@ export default function AdminDiscussionsPage() {
                       <div className={styles.messageHeader}>
                         <span>
                           {message.role === 'agent' ? 'Mentor' : 'Siswa'} ·{' '}
-                          {new Date(message.created_at).toLocaleTimeString()}
+                          {new Date(message.createdAt).toLocaleTimeString()}
                         </span>
                         <small>{getMessageTypeLabel(message)}</small>
                         {message.metadata?.phase && (

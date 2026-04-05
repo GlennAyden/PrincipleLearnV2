@@ -3,13 +3,11 @@ import { NextResponse } from 'next/server'
 import type { NextRequest } from 'next/server'
 import jwt from 'jsonwebtoken'
 import { adminDb } from '@/lib/database'
-import type { ExportFormat, ExportRequest, InsightsStudentRow } from '@/types/insights'
-import type { TimeRange } from '@/types/dashboard'
-
+import type { ExportFormat, InsightsStudentRow } from '@/types/insights'
 const JWT_SECRET = process.env.JWT_SECRET!
 
 function verifyAdminFromCookie(request: NextRequest): { userId: string; email: string; role: string } | null {
-  const token = request.cookies.get('token')?.value
+  const token = request.cookies.get('access_token')?.value
   if (!token) return null
 
   try {
@@ -19,14 +17,6 @@ function verifyAdminFromCookie(request: NextRequest): { userId: string; email: s
   } catch {
     return null
   }
-}
-
-function getDateSince(range: TimeRange): Date | null {
-  if (range === 'all') return null
-  const now = new Date()
-  const days = range === '7d' ? 7 : range === '30d' ? 30 : 90
-  now.setDate(now.getDate() - days)
-  return now
 }
 
 function generateCSV(students: InsightsStudentRow[]): string {
@@ -58,18 +48,13 @@ export async function GET(request: NextRequest) {
   try {
     const admin = verifyAdminFromCookie(request)
     if (!admin) {
-      return NextResponse.json({ message: 'Unauthorized' }, { status: 401 })
+      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
     }
 
     const { searchParams } = new URL(request.url)
     const format = (searchParams.get('format') || 'csv') as ExportFormat
-    const userIds = searchParams.get('userIds')?.split(',') || []
-    const timeRange = searchParams.get('range') as TimeRange || 'all'
 
     // Fetch student data (reuse insights logic, simplified)
-    const dateSince = getDateSince(timeRange)
-    const filters = userIds.length > 0 ? { id: userIds[0] } : { role: 'user' } // Simplified for demo
-
     const { data: users } = await adminDb
       .from('users')
       .select('id, email, created_at')
@@ -116,7 +101,7 @@ export async function GET(request: NextRequest) {
   } catch (err: any) {
     console.error('[Insights Export] Error:', err)
     return NextResponse.json(
-      { error: err.message || 'Export failed' },
+      { error: 'Export failed' },
       { status: 500 }
     )
   }

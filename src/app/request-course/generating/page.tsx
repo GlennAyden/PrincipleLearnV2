@@ -5,6 +5,7 @@ import { useState, useEffect, useRef, useCallback } from 'react';
 import { useRouter } from 'next/navigation';
 import { useRequestCourse } from '@/context/RequestCourseContext';
 import { useAuth } from '@/hooks/useAuth';
+import { apiFetch } from '@/lib/api-client';
 import styles from './page.module.scss';
 
 type Stage = 'sending' | 'ai-generating' | 'processing' | 'saving' | 'complete' | 'error';
@@ -91,7 +92,6 @@ export default function GeneratingPage() {
 
     hasStarted.current = true;
     generateCourse();
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [authLoading, isAuthenticated, user]);
 
   const generateCourse = async () => {
@@ -108,10 +108,9 @@ export default function GeneratingPage() {
       setPercent(STAGES['ai-generating'].basePercent);
       startAiProgress();
 
-      const res = await fetch('/api/generate-course', {
+      const res = await apiFetch('/api/generate-course', {
         method: 'POST',
         headers: {
-          'Content-Type': 'application/json',
           'Accept': 'application/json',
         },
         body: JSON.stringify({

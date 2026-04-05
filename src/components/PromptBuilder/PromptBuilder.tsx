@@ -2,6 +2,7 @@
 'use client';
 import React, { useState, useCallback } from 'react';
 import styles from './PromptBuilder.module.scss';
+import AILoadingIndicator from '@/components/AILoadingIndicator/AILoadingIndicator';
 
 export interface PromptComponents {
   tujuan: string;
@@ -184,6 +185,11 @@ export default function PromptBuilder({
               {loading ? '...' : 'Kirim'}
             </button>
           </div>
+          {loading && (
+            <AILoadingIndicator
+              messages={['Memproses pertanyaan...', 'Menyusun jawaban...', 'Hampir selesai...']}
+            />
+          )}
         </form>
       ) : showReasoning ? (
         /* ── Post-Submit Reasoning Step ── */
@@ -355,8 +361,13 @@ export default function PromptBuilder({
             onClick={handleGuidedSubmit}
             disabled={!canSubmitGuided || loading}
           >
-            {loading ? 'Mengirim...' : '🚀 Kirim Pertanyaan'}
+            {loading ? 'Mengirim...' : 'Kirim Pertanyaan'}
           </button>
+          {loading && (
+            <AILoadingIndicator
+              messages={['Memproses pertanyaan...', 'Menyusun jawaban...', 'Hampir selesai...']}
+            />
+          )}
         </div>
       )}
     </div>

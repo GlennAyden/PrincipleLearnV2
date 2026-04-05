@@ -1,6 +1,9 @@
 import jwt from 'jsonwebtoken';
 
-const JWT_SECRET = process.env.JWT_SECRET || 'your-secret-key-change-in-production';
+const JWT_SECRET = process.env.JWT_SECRET!;
+if (!JWT_SECRET) {
+  throw new Error('JWT_SECRET environment variable is required. Set it in .env.local');
+}
 const ACCESS_TOKEN_EXPIRY = '15m'; // 15 minutes
 const REFRESH_TOKEN_EXPIRY = '7d'; // 7 days
 
@@ -22,6 +25,8 @@ export function verifyToken(token: string): TokenPayload | null {
   try {
     return jwt.verify(token, JWT_SECRET) as TokenPayload;
   } catch (error) {
+    const message = (error as Error).message || 'Unknown verification error';
+    console.warn(`[JWT] Token verification failed: ${message}`);
     return null;
   }
 }
@@ -36,7 +41,7 @@ export function getTokenExpiration(token: string): Date | null {
       }
     }
     return null;
-  } catch (error) {
+  } catch {
     return null;
   }
 } 

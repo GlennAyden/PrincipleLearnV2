@@ -118,7 +118,7 @@ async function postHandler(req: NextRequest) {
   } catch (error: any) {
     console.error('Error saving transcript:', error);
     return NextResponse.json(
-      { error: error.message || "Failed to save transcript" },
+      { error: 'Failed to save transcript' },
       { status: 500 }
     );
   }

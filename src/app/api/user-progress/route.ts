@@ -17,17 +17,18 @@ export async function POST(req: NextRequest) {
     const progressId = `${courseId}_${moduleIndex}_${subtopicIndex}_${userId}`;
 
     // Check if progress record already exists
-    const existing = await DatabaseService.getRecords('user_progress', {
-      filter: { 
-        user_id: userId, 
-        course_id: courseId, 
-        module_index: moduleIndex, 
-        subtopic_index: subtopicIndex 
+    const existing = await DatabaseService.getRecords<{ id: string; completed_at: string | null }>('user_progress', {
+      filter: {
+        user_id: userId,
+        course_id: courseId,
+        module_index: moduleIndex,
+        subtopic_index: subtopicIndex
       },
       limit: 1
     });
 
-    const progressData = {
+    const now = new Date().toISOString();
+    const progressData: Record<string, any> = {
       id: progressId,
       user_id: userId,
       course_id: courseId,
@@ -35,8 +36,8 @@ export async function POST(req: NextRequest) {
       subtopic_index: subtopicIndex,
       status: status, // 'not_started', 'in_progress', 'completed'
       time_spent: timeSpent,
-      completed_at: status === 'completed' ? new Date().toISOString() : null,
-      updated_at: new Date().toISOString(),
+      completed_at: status === 'completed' ? now : null,
+      updated_at: now,
     };
 
     if (existing.length > 0) {
@@ -44,12 +45,12 @@ export async function POST(req: NextRequest) {
       await DatabaseService.updateRecord('user_progress', existing[0].id, {
         status: status,
         time_spent: timeSpent,
-        completed_at: status === 'completed' ? new Date().toISOString() : existing[0].completed_at,
-        updated_at: new Date().toISOString(),
+        completed_at: status === 'completed' ? now : existing[0].completed_at,
+        updated_at: now,
       });
     } else {
       // Insert new progress record
-      progressData.created_at = new Date().toISOString();
+      progressData.created_at = now;
       await DatabaseService.insertRecord('user_progress', progressData);
     }
 
@@ -86,16 +87,16 @@ export async function GET(req: NextRequest) {
     if (courseId) filter.course_id = courseId;
 
     // Get user progress from database
-    const progress = await DatabaseService.getRecords('user_progress', {
+    const progress = await DatabaseService.getRecords<{ status: string; time_spent: number | null }>('user_progress', {
       filter,
-      orderBy: { updated_at: 'desc' }
+      orderBy: { column: 'updated_at', ascending: false }
     });
 
     // Calculate statistics
     const stats = {
       total_subtopics: progress.length,
-      completed_subtopics: progress.filter(p => p.status === 'completed').length,
-      in_progress_subtopics: progress.filter(p => p.status === 'in_progress').length,
+      completed_subtopics: progress.filter((p) => p.status === 'completed').length,
+      in_progress_subtopics: progress.filter((p) => p.status === 'in_progress').length,
       total_time_spent: progress.reduce((sum, p) => sum + (p.time_spent || 0), 0),
     };
 

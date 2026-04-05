@@ -1,11 +1,10 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { verifyToken } from '@/lib/jwt';
-import { adminDb } from '@/lib/database';
 import { withApiLogging } from '@/lib/api-logger';
 
 // Proxy to secure the existing /api/discussion/module-status for admin use
 async function getHandler(request: NextRequest) {
-  const token = request.cookies.get('access_token')?.value ?? request.cookies.get('token')?.value;
+  const token = request.cookies.get('access_token')?.value;
   const payload = token ? verifyToken(token) : null;
   
   if (!payload || (payload.role ?? '').toLowerCase() !== 'admin') {

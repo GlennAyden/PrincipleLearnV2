@@ -28,7 +28,9 @@
       "WebFetch(domain:principle-learn-v2.vercel.app)",
       "Bash(rg:*)",
       "Bash(npm run lint)",
-      "Bash(grep:*)"
+      "Bash(grep:*)",
+      "Bash(npx eslint:*)",
+      "mcp__claude_ai_Supabase__execute_sql"
     ],
     "deny": []
   }

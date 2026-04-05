@@ -8,7 +8,9 @@ import {
 } from 'react-icons/fi'
 import { useAdmin } from '@/hooks/useAdmin'
 import styles from './page.module.scss'
-import { StageHeatmapChart, UserProgressionChart } from '@/components/admin/ResearchChart'
+import dynamic from 'next/dynamic'
+const StageHeatmapChart = dynamic(() => import('@/components/admin/ResearchChart').then(mod => ({ default: mod.StageHeatmapChart })), { ssr: false })
+const UserProgressionChart = dynamic(() => import('@/components/admin/ResearchChart').then(mod => ({ default: mod.UserProgressionChart })), { ssr: false })
 import type { ResearchAnalytics } from '@/types/research'
 
 export default function ResearchDashboard() {

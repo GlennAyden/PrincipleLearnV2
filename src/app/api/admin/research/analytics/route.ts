@@ -8,6 +8,7 @@
 
 import { NextRequest, NextResponse } from 'next/server';
 import { adminDb } from '@/lib/database';
+import { withCacheHeaders } from '@/lib/api-middleware';
 import jwt from 'jsonwebtoken';
 import type { PromptStage } from '@/types/research';
 import { PROMPT_STAGE_SCORES } from '@/types/research';
@@ -15,7 +16,7 @@ import { PROMPT_STAGE_SCORES } from '@/types/research';
 const JWT_SECRET = process.env.JWT_SECRET!;
 
 function verifyAdminFromCookie(request: NextRequest): { userId: string; role: string } | null {
-    const token = request.cookies.get('token')?.value;
+    const token = request.cookies.get('access_token')?.value;
     if (!token) return null;
     try {
         const payload = jwt.verify(token, JWT_SECRET) as { userId: string; role: string };
@@ -59,8 +60,8 @@ export async function GET(request: NextRequest) {
         }
 
         const { searchParams } = new URL(request.url);
-        const userId = searchParams.get('user_id');
-        const courseId = searchParams.get('course_id');
+        const _userId = searchParams.get('user_id');
+        const _courseId = searchParams.get('course_id');
 
         // 1. Efficient counts using select('id') instead of fetching full rows
         const [
@@ -292,7 +293,7 @@ export async function GET(request: NextRequest) {
             inter_rater_kappa: interRaterKappa
         };
 
-        return NextResponse.json({ success: true, data: response });
+        return withCacheHeaders(NextResponse.json({ success: true, data: response }), 60);
 
     } catch (error) {
         console.error('Analytics error:', error);

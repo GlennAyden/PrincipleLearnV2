@@ -5,6 +5,7 @@ import { useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import Link from 'next/link';
 import { useAuth } from '@/hooks/useAuth';
+import { apiFetch } from '@/lib/api-client';
 import styles from './page.module.scss';
 
 type Level = 'Beginner' | 'Intermediate' | 'Advanced';
@@ -43,7 +44,7 @@ export default function DashboardPage() {
       }
       try {
         setLoadError(null);
-        const response = await fetch('/api/courses');
+        const response = await apiFetch('/api/courses');
         const result = await response.json();
         if (result.success) {
           setCourses(result.courses);
@@ -74,7 +75,7 @@ export default function DashboardPage() {
 
   const handleDelete = async (id: string) => {
     try {
-      const response = await fetch(`/api/courses/${id}`, { method: 'DELETE' });
+      const response = await apiFetch(`/api/courses/${id}`, { method: 'DELETE' });
       const result = await response.json();
       if (!result.success) {
         alert('Failed to delete course: ' + result.error);

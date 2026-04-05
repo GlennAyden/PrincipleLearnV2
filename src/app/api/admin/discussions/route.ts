@@ -8,7 +8,7 @@ const DEFAULT_LIMIT = 100;
 
 async function getHandler(request: NextRequest) {
   try {
-    const accessToken = request.cookies.get('access_token')?.value ?? request.cookies.get('token')?.value;
+    const accessToken = request.cookies.get('access_token')?.value;
     const tokenPayload = accessToken ? verifyToken(accessToken) : null;
 
     if (!tokenPayload || (tokenPayload.role ?? '').toLowerCase() !== 'admin') {
@@ -17,7 +17,6 @@ async function getHandler(request: NextRequest) {
 
     const { searchParams } = request.nextUrl;
     const status = searchParams.get('status');
-    const search = searchParams.get('search')?.toLowerCase() || '';
     const courseId = searchParams.get('courseId');
     const subtopicId = searchParams.get('subtopicId');
     const userId = searchParams.get('userId');

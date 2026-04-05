@@ -11,6 +11,8 @@ import { Level } from '@/context/RequestCourseContext';
 interface Subtopic {
   title: string;
   overview: string;
+  type?: string;
+  isDiscussion?: boolean;
 }
 
 interface ModuleOutline {
@@ -67,7 +69,7 @@ export default function CourseLayout({ children }: { children: ReactNode }) {
             let content;
             try {
               content = JSON.parse(subtopic.content);
-            } catch (parseError) {
+            } catch {
               content = { module: subtopic.title, subtopics: [] };
             }
             

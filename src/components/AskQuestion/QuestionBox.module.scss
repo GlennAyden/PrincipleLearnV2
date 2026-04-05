@@ -66,6 +66,19 @@ $transition: 0.25s cubic-bezier(0.4, 0, 0.2, 1);
   &:disabled { opacity: 0.5; cursor: not-allowed; }
 }
 
+.streamingAnswer {
+  padding: 0.85rem 1rem;
+  margin-bottom: 0.75rem;
+  background: $primary-50;
+  border: 1px solid $primary-200;
+  border-radius: $radius-md;
+  font-size: 0.9rem;
+  line-height: 1.6;
+  color: $gray-700;
+  white-space: pre-wrap;
+  word-break: break-word;
+}
+
 @media (max-width: 640px) {
   .inputContainer { flex-direction: column; }
   .enterButton { width: 100%; padding: 0.65rem; }

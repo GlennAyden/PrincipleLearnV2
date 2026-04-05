@@ -3,8 +3,6 @@
  * PrincipleLearn V3 - Admin Dashboard Optimization
  */
 
-import type { PromptStage } from './research';
-
 // ── Tab & Filter Types ──
 
 /** Tab identifiers for dashboard sections */

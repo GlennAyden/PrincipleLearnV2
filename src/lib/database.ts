@@ -22,7 +22,13 @@ function isOptionalMissingTableError(error: any): boolean {
 // ─── Supabase Client Initialization (lazy) ───────────────────────────────────
 
 let _supabase: SupabaseClient | null = null;
+let _supabaseAnon: SupabaseClient | null = null;
 
+/**
+ * Service-role client — bypasses RLS, full database access.
+ * Used for most operations because we use custom JWT auth (not Supabase Auth),
+ * so RLS policies that rely on auth.uid() cannot identify our users.
+ */
 function getSupabaseClient(): SupabaseClient {
   if (_supabase) return _supabase;
 
@@ -45,12 +51,93 @@ function getSupabaseClient(): SupabaseClient {
   return _supabase;
 }
 
+/**
+ * Anon-key client — respects RLS policies.
+ * Use for read-only access to shared/public content (subtopic_cache, discussion_templates)
+ * where RLS policies use `USING (true)` for authenticated role.
+ * Follows the principle of least privilege: no elevated access needed for public reads.
+ */
+function getAnonClient(): SupabaseClient {
+  if (_supabaseAnon) return _supabaseAnon;
+
+  const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
+  const anonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
+
+  if (!supabaseUrl || !anonKey) {
+    // Fall back to service-role if anon key is not configured
+    return getSupabaseClient();
+  }
+
+  _supabaseAnon = createClient(supabaseUrl, anonKey, {
+    auth: {
+      autoRefreshToken: false,
+      persistSession: false,
+    },
+  });
+
+  return _supabaseAnon;
+}
+
 // ─── Database Error ───────────────────────────────────────────────────────────
 
+/** Shape of a Supabase PostgREST error (the most common originalError type). */
+export interface PostgrestErrorLike {
+  message: string;
+  code: string;
+  details?: string | null;
+  hint?: string | null;
+}
+
+/** Common Postgres/PostgREST error codes for programmatic handling. */
+export const DB_ERROR_CODES = {
+  UNIQUE_VIOLATION: '23505',
+  FOREIGN_KEY_VIOLATION: '23503',
+  NOT_NULL_VIOLATION: '23502',
+  CHECK_VIOLATION: '23514',
+  TABLE_NOT_FOUND: 'PGRST205',
+  PERMISSION_DENIED: '42501',
+  CONNECTION_FAILURE: '08000',
+} as const;
+
 export class DatabaseError extends Error {
-  constructor(message: string, public originalError?: any) {
+  public readonly originalError?: PostgrestErrorLike | Error;
+
+  constructor(message: string, originalError?: unknown) {
     super(message);
     this.name = 'DatabaseError';
+
+    // Normalize the original error into a typed shape
+    if (originalError && typeof originalError === 'object') {
+      const err = originalError as Record<string, unknown>;
+      if ('code' in err && 'message' in err) {
+        this.originalError = err as unknown as PostgrestErrorLike;
+      } else if (originalError instanceof Error) {
+        this.originalError = originalError;
+      }
+    }
+  }
+
+  /** The PostgREST / Postgres error code, if available. */
+  get code(): string | undefined {
+    if (this.originalError && 'code' in this.originalError) {
+      return (this.originalError as PostgrestErrorLike).code;
+    }
+    return undefined;
+  }
+
+  /** Check whether this error matches a specific DB error code. */
+  is(errorCode: string): boolean {
+    return this.code === errorCode;
+  }
+
+  /** True if the error is a unique constraint violation (e.g. duplicate email). */
+  get isUniqueViolation(): boolean {
+    return this.code === DB_ERROR_CODES.UNIQUE_VIOLATION;
+  }
+
+  /** True if the error is a foreign key constraint violation. */
+  get isForeignKeyViolation(): boolean {
+    return this.code === DB_ERROR_CODES.FOREIGN_KEY_VIOLATION;
   }
 }
 
@@ -132,9 +219,12 @@ export class DatabaseService {
   static async insertRecord<T>(
     tableName: string,
     data: Partial<T>,
-    options?: { useServiceRole?: boolean },
+    _options?: { useServiceRole?: boolean },
   ): Promise<T> {
     try {
+      // Ensure JSONB column mapping is loaded (no-op after first call)
+      await detectJsonbColumns();
+
       // Stringify any nested objects/arrays for non-JSONB text columns
       const sanitized = sanitizeForInsert(tableName, data as Record<string, any>);
 
@@ -163,7 +253,7 @@ export class DatabaseService {
     id: string | number,
     data: Partial<T>,
     idColumn: string = 'id',
-    options?: { useServiceRole?: boolean },
+    _options?: { useServiceRole?: boolean },
   ): Promise<T> {
     try {
       const sanitized = sanitizeForInsert(tableName, data as Record<string, any>);
@@ -193,7 +283,7 @@ export class DatabaseService {
     tableName: string,
     id: string | number,
     idColumn: string = 'id',
-    options?: { useServiceRole?: boolean },
+    _options?: { useServiceRole?: boolean },
   ): Promise<void> {
     try {
       const { error } = await getSupabaseClient()
@@ -214,20 +304,65 @@ export class DatabaseService {
 // ─── Sanitize Helper ──────────────────────────────────────────────────────────
 
 // Tables with JSONB columns that should NOT be stringified
-const JSONB_COLUMNS: Record<string, string[]> = {
-  subtopics: [],
+/**
+ * Fallback JSONB column mapping — used until auto-detection completes.
+ * Kept in sync manually as a safety net; auto-detection overwrites this on first use.
+ */
+const JSONB_COLUMNS_FALLBACK: Record<string, string[]> = {
+  subtopics: ['content'],
   quiz: ['options'],
   subtopic_cache: ['content'],
   discussion_templates: ['source', 'template'],
   discussion_sessions: ['learning_goals'],
   discussion_messages: ['metadata'],
+  discussion_admin_actions: ['payload'],
   api_logs: ['metadata'],
   course_generation_activity: ['request_payload', 'outline'],
   ask_question_history: ['prompt_components'],
 };
 
+/** Auto-detected JSONB columns (populated lazily from database schema). */
+let _jsonbColumns: Record<string, string[]> | null = null;
+let _jsonbDetectionAttempted = false;
+
+/**
+ * Auto-detect JSONB columns from the database schema via get_jsonb_columns() RPC.
+ * Called lazily on first insert; result is cached for the process lifetime.
+ */
+async function detectJsonbColumns(): Promise<Record<string, string[]>> {
+  if (_jsonbColumns) return _jsonbColumns;
+  if (_jsonbDetectionAttempted) return JSONB_COLUMNS_FALLBACK;
+
+  _jsonbDetectionAttempted = true;
+  try {
+    const { data, error } = await getSupabaseClient().rpc('get_jsonb_columns');
+    if (error || !data) {
+      console.warn('[Database] JSONB auto-detection failed, using fallback:', error?.message);
+      return JSONB_COLUMNS_FALLBACK;
+    }
+
+    const mapping: Record<string, string[]> = {};
+    for (const row of data as { table_name: string; column_name: string }[]) {
+      if (!mapping[row.table_name]) mapping[row.table_name] = [];
+      mapping[row.table_name].push(row.column_name);
+    }
+
+    _jsonbColumns = mapping;
+    return mapping;
+  } catch {
+    console.warn('[Database] JSONB auto-detection threw, using fallback');
+    return JSONB_COLUMNS_FALLBACK;
+  }
+}
+
+/** Synchronous lookup — returns cached result or fallback. */
+function getJsonbColumnsSync(tableName: string): string[] {
+  const source = _jsonbColumns ?? JSONB_COLUMNS_FALLBACK;
+  return source[tableName] || [];
+}
+
 function sanitizeForInsert(tableName: string, data: Record<string, any>): Record<string, any> {
-  const jsonbCols = JSONB_COLUMNS[tableName] || [];
+  const jsonbCols = getJsonbColumnsSync(tableName);
   const sanitized: Record<string, any> = {};
 
   for (const [key, value] of Object.entries(data)) {
@@ -305,6 +440,16 @@ class SupabaseQueryBuilder {
 
   contains(column: string, value: any) {
     this.filters.push({ method: 'contains', args: [column, value] });
+    return this;
+  }
+
+  in(column: string, values: any[]) {
+    this.filters.push({ method: 'in', args: [column, values] });
+    return this;
+  }
+
+  ilike(column: string, pattern: string) {
+    this.filters.push({ method: 'ilike', args: [column, pattern] });
     return this;
   }
 
@@ -490,9 +635,28 @@ class SupabaseQueryBuilder {
 
 // ─── adminDb export (keeps the same interface) ───────────────────────────────
 
+/**
+ * Service-role database client — bypasses RLS, full access.
+ * Use for user-scoped queries, admin operations, and all writes.
+ */
 export const adminDb = {
   from(tableName: string) {
     return new SupabaseQueryBuilder(tableName, getSupabaseClient());
+  },
+  /** Call a Postgres function via Supabase RPC. */
+  rpc(functionName: string, params?: Record<string, unknown>) {
+    return getSupabaseClient().rpc(functionName, params);
+  },
+};
+
+/**
+ * Anon-key database client — respects RLS policies.
+ * Use for read-only access to shared content (subtopic_cache, discussion_templates).
+ * Falls back to service-role if NEXT_PUBLIC_SUPABASE_ANON_KEY is not set.
+ */
+export const publicDb = {
+  from(tableName: string) {
+    return new SupabaseQueryBuilder(tableName, getAnonClient());
   },
 };
 

@@ -109,7 +109,7 @@ describe('Middleware — API Route JSON 401 Responses', () => {
     mockVerifyToken.mockReturnValue(null);
 
     const req = createRequest('/api/admin/insights', {
-      cookies: { token: 'bad-admin-token' },
+      cookies: { access_token: 'bad-admin-token' },
     });
     const res = middleware(req);
 
@@ -204,7 +204,7 @@ describe('Middleware — API Route JSON 401 Responses', () => {
     });
 
     const req = createRequest('/api/admin/dashboard', {
-      cookies: { token: 'valid-admin-token' },
+      cookies: { access_token: 'valid-admin-token' },
     });
     const res = middleware(req);
 

@@ -7,7 +7,7 @@ import styles from './NextSubtopics.module.scss';
 
 export interface NextSubtopicsProps {
   /** List subtopic titles or objects with title */
-  items?: Array<string | { title: string }>;
+  items?: Array<string | { title: string; type?: string; isDiscussion?: boolean }>;
   /** Index modul saat ini */
   moduleIndex: number;
   /** ID modul (subtopic record) untuk query params diskusi */

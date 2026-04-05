@@ -4,10 +4,10 @@ import { adminDb } from '@/lib/database'
 
 export async function GET(
   req: NextRequest,
-  context: { params: { id: string } }
+  context: { params: Promise<{ id: string }> }
 ) {
   try {
-    const id = context.params.id
+    const { id } = await context.params
 
     if (!id) {
       return NextResponse.json(
@@ -17,40 +17,8 @@ export async function GET(
     }
 
     // Fetch transcript by ID using adminDb
-    // Note: 'transcript' table might be named differently in Notion
-    let transcript: any = null;
-    let error: any = null;
-
-    ({ data: transcript, error } = await adminDb
-      .from('transcript')
-      .select('*')
-      .eq('id', id)
-      .single());
-
-    if (error && String(error?.message || '').includes("public.transcript")) {
-      ({ data: transcript, error } = await adminDb
-        .from('transcripts')
-        .select('*')
-        .eq('id', id)
-        .single());
-    }
-
-    if (error) {
-      console.error('Error fetching transcript:', error)
-      return NextResponse.json(
-        { error: 'Failed to fetch transcript' },
-        { status: 500 }
-      )
-    }
-
-    if (!transcripts || transcripts.length === 0) {
-      return NextResponse.json(
-        { error: 'Transcript not found' },
-        { status: 404 }
-      )
-    }
-
-    const transcript = transcripts[0] as {
+    // Try 'transcript' table first, then fall back to 'transcripts'
+    let transcriptData: {
       id: string;
       question: string;
       answer: string;
@@ -58,25 +26,60 @@ export async function GET(
       subtopic: string;
       created_at: string;
       user_id: string;
+    } | null = null;
+    let fetchError: any = null;
+
+    const result1 = await adminDb
+      .from('transcript')
+      .select('*')
+      .eq('id', id)
+      .single();
+
+    if (result1.error && String(result1.error?.message || '').includes("public.transcript")) {
+      const result2 = await adminDb
+        .from('transcripts')
+        .select('*')
+        .eq('id', id)
+        .single();
+      transcriptData = result2.data;
+      fetchError = result2.error;
+    } else {
+      transcriptData = result1.data;
+      fetchError = result1.error;
+    }
+
+    if (fetchError) {
+      console.error('Error fetching transcript:', fetchError)
+      return NextResponse.json(
+        { error: 'Failed to fetch transcript' },
+        { status: 500 }
+      )
+    }
+
+    if (!transcriptData) {
+      return NextResponse.json(
+        { error: 'Transcript not found' },
+        { status: 404 }
+      )
     }
 
     // Fetch user email
     const { data: users } = await adminDb
       .from('users')
       .select('email')
-      .eq('id', transcript.user_id)
+      .eq('id', transcriptData.user_id)
       .limit(1)
 
     const userEmail = users && users.length > 0 ? (users[0] as { email: string }).email : 'Unknown'
 
     // Format the response
     const response = {
-      id: transcript.id,
-      question: transcript.question,
-      answer: transcript.answer,
-      courseId: transcript.course_id,
-      subtopic: transcript.subtopic,
-      createdAt: transcript.created_at,
+      id: transcriptData.id,
+      question: transcriptData.question,
+      answer: transcriptData.answer,
+      courseId: transcriptData.course_id,
+      subtopic: transcriptData.subtopic,
+      createdAt: transcriptData.created_at,
       userEmail
     }
 

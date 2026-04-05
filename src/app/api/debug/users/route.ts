@@ -1,17 +1,27 @@
 import { NextResponse } from 'next/server';
 import { DatabaseService } from '@/lib/database';
 
+function guardProduction() {
+  if (process.env.NODE_ENV === 'production') {
+    return NextResponse.json({ error: 'Not available' }, { status: 404 });
+  }
+  return null;
+}
+
 export async function GET() {
+  const blocked = guardProduction();
+  if (blocked) return blocked;
+
   try {
     console.log('Debug: Testing users table access');
     
     // Test basic query
-    const users = await DatabaseService.getRecords('users', {
+    const users = await DatabaseService.getRecords<{ id: string; email: string; role: string }>('users', {
       limit: 5
     });
-    
+
     console.log('Debug: Found users:', users);
-    
+
     return NextResponse.json({
       success: true,
       message: 'Users table accessible',
@@ -29,6 +39,9 @@ export async function GET() {
 }
 
 export async function POST() {
+  const blocked = guardProduction();
+  if (blocked) return blocked;
+
   try {
     console.log('Debug: Testing user creation');
     
@@ -39,10 +52,10 @@ export async function POST() {
       role: 'user'
     };
     
-    const newUser = await DatabaseService.insertRecord('users', testUser);
-    
+    const newUser = await DatabaseService.insertRecord<{ id: string; email: string; role: string }>('users', testUser as any);
+
     console.log('Debug: User created:', newUser);
-    
+
     return NextResponse.json({
       success: true,
       message: 'Test user created successfully',

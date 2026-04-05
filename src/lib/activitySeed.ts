@@ -11,8 +11,16 @@ type DemoEntities = {
 const DEMO_EMAIL = 'activity.demo@principlelearn.ai';
 const DEMO_COURSE_TITLE = 'Activity Monitoring Demo Course';
 
+// Helper: insertRecord typed to return a record with at least an `id` field
+async function insert<T extends Record<string, any>>(
+  table: string,
+  data: Record<string, any>,
+): Promise<T & { id: string }> {
+  return DatabaseService.insertRecord<T & { id: string }>(table, data as any);
+}
+
 async function ensureDemoUser(): Promise<{ userId: string; userEmail: string }> {
-  const existing = await DatabaseService.getRecords('users', {
+  const existing = await DatabaseService.getRecords<{ id: string; email: string }>('users', {
     filter: { email: DEMO_EMAIL },
     limit: 1,
   });
@@ -21,7 +29,7 @@ async function ensureDemoUser(): Promise<{ userId: string; userEmail: string }> 
     return { userId: existing[0].id, userEmail: existing[0].email };
   }
 
-  const user = await DatabaseService.insertRecord('users', {
+  const user = await insert<{ email: string }>('users', {
     email: DEMO_EMAIL,
     password_hash: 'demo-seeded-hash',
     name: 'Activity Demo User',
@@ -34,7 +42,7 @@ async function ensureDemoUser(): Promise<{ userId: string; userEmail: string }> 
 async function ensureDemoCourse(
   userId: string,
 ): Promise<{ courseId: string; courseTitle: string }> {
-  const existing = await DatabaseService.getRecords('courses', {
+  const existing = await DatabaseService.getRecords<{ id: string; title: string }>('courses', {
     filter: { title: DEMO_COURSE_TITLE },
     limit: 1,
   });
@@ -43,7 +51,7 @@ async function ensureDemoCourse(
     return { courseId: existing[0].id, courseTitle: existing[0].title };
   }
 
-  const course = await DatabaseService.insertRecord('courses', {
+  const course = await insert<{ title: string }>('courses', {
     title: DEMO_COURSE_TITLE,
     description: 'Sample course to showcase activity monitoring features.',
     subject: 'Learning Science',
@@ -60,13 +68,13 @@ async function ensureDemoEntities(): Promise<DemoEntities> {
   return { userId, userEmail, courseId, courseTitle };
 }
 
-async function ensureDemoSubtopics(courseId: string) {
-  const existing = await DatabaseService.getRecords('subtopics', {
+async function ensureDemoSubtopics(courseId: string): Promise<Array<{ id: string; title: string; content?: string }>> {
+  const existing = await DatabaseService.getRecords<{ id: string; title: string }>('subtopics', {
     filter: { course_id: courseId },
     limit: 1,
   });
   if (existing.length > 0) {
-    return DatabaseService.getRecords('subtopics', {
+    return DatabaseService.getRecords<{ id: string; title: string; content?: string }>('subtopics', {
       filter: { course_id: courseId },
       orderBy: { column: 'order_index', ascending: true },
     });
@@ -101,27 +109,27 @@ async function ensureDemoSubtopics(courseId: string) {
     },
   ];
 
-  const inserted = [];
+  const inserted: Array<{ id: string; title: string; content?: string }> = [];
   for (let i = 0; i < modules.length; i++) {
-    const record = await DatabaseService.insertRecord('subtopics', {
+    const record = await insert('subtopics', {
       course_id: courseId,
       title: modules[i].module,
       content: JSON.stringify(modules[i]),
       order_index: i,
     });
-    inserted.push(record);
+    inserted.push(record as { id: string; title: string; content?: string });
   }
   return inserted;
 }
 
 export async function ensureAskQuestionHistorySeeded() {
-  const existing = await DatabaseService.getRecords('ask_question_history', {
+  const existing = await DatabaseService.getRecords<{ id: string }>('ask_question_history', {
     limit: 1,
   });
   if (existing.length > 0) return;
 
   const { userId, courseId } = await ensureDemoEntities();
-  await DatabaseService.insertRecord('ask_question_history', {
+  await insert('ask_question_history', {
     user_id: userId,
     course_id: courseId,
     module_index: 0,
@@ -135,13 +143,13 @@ export async function ensureAskQuestionHistorySeeded() {
 }
 
 export async function ensureChallengeResponsesSeeded() {
-  const existing = await DatabaseService.getRecords('challenge_responses', {
+  const existing = await DatabaseService.getRecords<{ id: string }>('challenge_responses', {
     limit: 1,
   });
   if (existing.length > 0) return;
 
   const { userId, courseId } = await ensureDemoEntities();
-  await DatabaseService.insertRecord('challenge_responses', {
+  await insert('challenge_responses', {
     id: randomUUID(),
     user_id: userId,
     course_id: courseId,
@@ -158,14 +166,14 @@ export async function ensureChallengeResponsesSeeded() {
 }
 
 export async function ensureFeedbackSeeded() {
-  const existing = await DatabaseService.getRecords('feedback', {
+  const existing = await DatabaseService.getRecords<{ id: string }>('feedback', {
     limit: 1,
   });
   if (existing.length > 0) return;
 
   const { userId, courseId } = await ensureDemoEntities();
   const subtopics = await ensureDemoSubtopics(courseId);
-  await DatabaseService.insertRecord('feedback', {
+  await insert('feedback', {
     user_id: userId,
     course_id: courseId,
     subtopic_id: subtopics[0]?.id ?? null,
@@ -179,7 +187,7 @@ export async function ensureFeedbackSeeded() {
 }
 
 export async function ensureCourseGenerationActivitySeeded() {
-  const existing = await DatabaseService.getRecords('course_generation_activity', {
+  const existing = await DatabaseService.getRecords<{ id: string }>('course_generation_activity', {
     limit: 1,
   });
   if (existing.length > 0) return;
@@ -198,7 +206,7 @@ export async function ensureCourseGenerationActivitySeeded() {
     })(),
   }));
 
-  await DatabaseService.insertRecord('course_generation_activity', {
+  await insert('course_generation_activity', {
     user_id: userId,
     course_id: courseId,
     request_payload: {
@@ -214,7 +222,7 @@ export async function ensureCourseGenerationActivitySeeded() {
 }
 
 export async function ensureQuizSeeded() {
-  const existing = await DatabaseService.getRecords('quiz_submissions', {
+  const existing = await DatabaseService.getRecords<{ id: string }>('quiz_submissions', {
     limit: 1,
   });
   if (existing.length > 0) return;
@@ -223,7 +231,7 @@ export async function ensureQuizSeeded() {
   const subtopics = await ensureDemoSubtopics(courseId);
   const targetSubtopic = subtopics[0];
 
-  const quiz = await DatabaseService.insertRecord('quiz', {
+  const quiz = await insert('quiz', {
     course_id: courseId,
     subtopic_id: targetSubtopic?.id ?? null,
     question: 'Langkah pertama yang tepat untuk menghindari bias konfirmasi adalah?',
@@ -232,7 +240,7 @@ export async function ensureQuizSeeded() {
     explanation: 'Bias konfirmasi dikurangi dengan sengaja mengecek bukti berlawanan.',
   });
 
-  await DatabaseService.insertRecord('quiz_submissions', {
+  await insert('quiz_submissions', {
     user_id: userId,
     quiz_id: quiz.id,
     answer: 'B',
@@ -241,7 +249,7 @@ export async function ensureQuizSeeded() {
 }
 
 export async function ensureDiscussionSessionSeeded() {
-  const existing = await DatabaseService.getRecords('discussion_sessions', {
+  const existing = await DatabaseService.getRecords<{ id: string }>('discussion_sessions', {
     limit: 1,
   });
   if (existing.length > 0) return;
@@ -289,7 +297,7 @@ export async function ensureDiscussionSessionSeeded() {
     ],
   };
 
-  const template = await DatabaseService.insertRecord('discussion_templates', {
+  const template = await insert('discussion_templates', {
     course_id: courseId,
     subtopic_id: targetSubtopic?.id ?? null,
     version: 'v1-demo',
@@ -297,7 +305,7 @@ export async function ensureDiscussionSessionSeeded() {
     template: templatePayload,
   });
 
-  const session = await DatabaseService.insertRecord('discussion_sessions', {
+  const session = await insert('discussion_sessions', {
     user_id: userId,
     course_id: courseId,
     subtopic_id: targetSubtopic?.id ?? null,
@@ -307,7 +315,7 @@ export async function ensureDiscussionSessionSeeded() {
     learning_goals: templatePayload.learning_goals,
   });
 
-  await DatabaseService.insertRecord('discussion_messages', {
+  await insert('discussion_messages', {
     session_id: session.id,
     role: 'agent',
     content: 'Bagikan asumsi awalmu tentang situasi pengambilan keputusan terakhir.',
@@ -315,7 +323,7 @@ export async function ensureDiscussionSessionSeeded() {
     metadata: { phase: 'opening' },
   });
 
-  await DatabaseService.insertRecord('discussion_messages', {
+  await insert('discussion_messages', {
     session_id: session.id,
     role: 'student',
     content: 'Saya berasumsi data market tahun lalu sudah cukup relevan.',
@@ -325,7 +333,7 @@ export async function ensureDiscussionSessionSeeded() {
     },
   });
 
-  await DatabaseService.insertRecord('discussion_messages', {
+  await insert('discussion_messages', {
     session_id: session.id,
     role: 'agent',
     content: 'Pertanyaan apa yang bisa memastikan asumsi tersebut valid?',

@@ -23,7 +23,7 @@ async function getHandler(
   context: { params: Promise<{ sessionId: string }> }
 ) {
   try {
-    const token = request.cookies.get('access_token')?.value ?? request.cookies.get('token')?.value;
+    const token = request.cookies.get('access_token')?.value;
     const payload = token ? verifyToken(token) : null;
     if (!payload || (payload.role ?? '').toLowerCase() !== 'admin') {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 403 });
@@ -143,7 +143,7 @@ async function postHandler(
   context: { params: Promise<{ sessionId: string }> }
 ) {
   try {
-    const token = request.cookies.get('access_token')?.value ?? request.cookies.get('token')?.value;
+    const token = request.cookies.get('access_token')?.value;
     const payload = token ? verifyToken(token) : null;
     if (!payload || (payload.role ?? '').toLowerCase() !== 'admin') {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 403 });

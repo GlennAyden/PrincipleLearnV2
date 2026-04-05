@@ -19,7 +19,7 @@ function validateUUID(id: string): boolean {
 }
 
 function verifyAdminFromCookie(request: NextRequest): { userId: string; role: string } | null {
-    const token = request.cookies.get('token')?.value;
+    const token = request.cookies.get('access_token')?.value;
     if (!token) return null;
     try {
         const payload = jwt.verify(token, JWT_SECRET) as { userId: string; role: string };

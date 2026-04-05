@@ -8,30 +8,45 @@
  * - Saves course to database when userId is provided
  * - Does not save course when no userId is provided
  * - Logs course generation activity after saving
- * - Handles OpenAI API failure gracefully (500)
+ * - Handles AI service failure gracefully (500)
  * - Handles database save failure gracefully (500)
  * - Appends discussion nodes to each module
- * - Retries OpenAI calls up to 3 times
  * - Returns CORS headers in response
  */
 
 import { NextRequest } from 'next/server';
 import { TEST_STUDENT } from '../../fixtures/users.fixture';
 
-// Mock OpenAI
-const mockChatCreate = jest.fn();
-jest.mock('@/lib/openai', () => ({
-    openai: {
-        chat: {
-            completions: {
-                create: (...args: any[]) => mockChatCreate(...args),
-            },
-        },
-    },
-    defaultOpenAIModel: 'gpt-4o-mini',
+// Mock schemas — the route uses parseBody + GenerateCourseSchema
+const mockParseBody = jest.fn();
+jest.mock('@/lib/schemas', () => ({
+    GenerateCourseSchema: {},
+    parseBody: (...args: any[]) => mockParseBody(...args),
 }));
 
-// Mock the database module
+// Mock AI service — the route uses chatCompletionWithRetry + parseAndValidateAIResponse
+const mockChatCompletionWithRetry = jest.fn();
+const mockParseAndValidateAIResponse = jest.fn();
+jest.mock('@/services/ai.service', () => ({
+    chatCompletionWithRetry: (...args: any[]) => mockChatCompletionWithRetry(...args),
+    parseAndValidateAIResponse: (...args: any[]) => mockParseAndValidateAIResponse(...args),
+    CourseOutlineResponseSchema: {},
+    sanitizePromptInput: (input: string) => input,
+}));
+
+// Mock auth service — the route uses resolveUserByIdentifier
+const mockResolveUserByIdentifier = jest.fn();
+jest.mock('@/services/auth.service', () => ({
+    resolveUserByIdentifier: (...args: any[]) => mockResolveUserByIdentifier(...args),
+}));
+
+// Mock course service — the route uses createCourseWithSubtopics
+const mockCreateCourseWithSubtopics = jest.fn();
+jest.mock('@/services/course.service', () => ({
+    createCourseWithSubtopics: (...args: any[]) => mockCreateCourseWithSubtopics(...args),
+}));
+
+// Mock the database module (still used for insertRecord on course_generation_activity)
 const mockGetRecords = jest.fn();
 const mockInsertRecord = jest.fn();
 jest.mock('@/lib/database', () => ({
@@ -47,7 +62,6 @@ jest.mock('@/lib/api-logger', () => ({
 }));
 
 // We need to import POST after mocks are set up
-// The route exports POST = withApiLogging(postHandler, ...) so we need the mock above
 import { POST } from '@/app/api/generate-course/route';
 
 // Helper to create a NextRequest with JSON body
@@ -82,42 +96,54 @@ const MOCK_OUTLINE = [
     },
 ];
 
-function mockOpenAISuccess(outline = MOCK_OUTLINE) {
-    mockChatCreate.mockResolvedValue({
-        choices: [
-            {
-                finish_reason: 'stop',
-                message: {
-                    role: 'assistant',
-                    content: JSON.stringify(outline),
-                    refusal: null,
-                },
-            },
-        ],
-        model: 'gpt-4o-mini',
-        usage: { prompt_tokens: 100, completion_tokens: 200, total_tokens: 300 },
-    });
-}
-
 describe('POST /api/generate-course', () => {
     beforeEach(() => {
         jest.clearAllMocks();
-        // Default: resolve user and insert records successfully
-        mockGetRecords.mockResolvedValue([]);
-        mockInsertRecord.mockImplementation(async (table: string, data: any) => {
-            if (table === 'courses') return { id: 'generated-course-id', ...data };
-            return { id: `record-${Date.now()}`, ...data };
+
+        // Default: parseBody returns success with the request body
+        mockParseBody.mockImplementation((_schema: any, body: any) => ({
+            success: true,
+            data: body,
+        }));
+
+        // Default: AI service returns a valid response
+        mockChatCompletionWithRetry.mockResolvedValue({
+            choices: [
+                {
+                    finish_reason: 'stop',
+                    message: {
+                        role: 'assistant',
+                        content: JSON.stringify(MOCK_OUTLINE),
+                        refusal: null,
+                    },
+                },
+            ],
+            model: 'gpt-4o-mini',
+            usage: { prompt_tokens: 100, completion_tokens: 200, total_tokens: 300 },
         });
+
+        // Default: parseAndValidateAIResponse returns the validated outline
+        mockParseAndValidateAIResponse.mockReturnValue(MOCK_OUTLINE);
+
+        // Default: user resolution and DB operations
+        mockResolveUserByIdentifier.mockResolvedValue(null);
+        mockCreateCourseWithSubtopics.mockResolvedValue({ id: 'generated-course-id' });
+        mockGetRecords.mockResolvedValue([]);
+        mockInsertRecord.mockResolvedValue({ id: `record-${Date.now()}` });
     });
 
     describe('Validation Errors', () => {
         it('should return 400 when required fields are missing', async () => {
+            const { NextResponse } = require('next/server');
+            mockParseBody.mockReturnValue({
+                success: false,
+                response: NextResponse.json({ error: 'Missing required fields: goal, level' }, { status: 400 }),
+            });
+
             const request = createGenerateRequest({
                 topic: 'Machine Learning',
                 // missing goal and level
             });
-
-            mockOpenAISuccess(); // Won't be reached
 
             const response = await POST(request);
             const data = await response.json();
@@ -127,6 +153,12 @@ describe('POST /api/generate-course', () => {
         });
 
         it('should return 400 when topic is missing', async () => {
+            const { NextResponse } = require('next/server');
+            mockParseBody.mockReturnValue({
+                success: false,
+                response: NextResponse.json({ error: 'Missing required fields: topic' }, { status: 400 }),
+            });
+
             const request = createGenerateRequest({
                 goal: 'Learn basics',
                 level: 'Beginner',
@@ -140,6 +172,12 @@ describe('POST /api/generate-course', () => {
         });
 
         it('should return 400 when goal is missing', async () => {
+            const { NextResponse } = require('next/server');
+            mockParseBody.mockReturnValue({
+                success: false,
+                response: NextResponse.json({ error: 'Goal is required' }, { status: 400 }),
+            });
+
             const request = createGenerateRequest({
                 topic: 'ML',
                 level: 'Beginner',
@@ -152,6 +190,12 @@ describe('POST /api/generate-course', () => {
         });
 
         it('should return 400 when level is missing', async () => {
+            const { NextResponse } = require('next/server');
+            mockParseBody.mockReturnValue({
+                success: false,
+                response: NextResponse.json({ error: 'Level is required' }, { status: 400 }),
+            });
+
             const request = createGenerateRequest({
                 topic: 'ML',
                 goal: 'Learn basics',
@@ -166,8 +210,6 @@ describe('POST /api/generate-course', () => {
 
     describe('Successful Generation (anonymous — no userId)', () => {
         it('should generate outline without saving to database', async () => {
-            mockOpenAISuccess();
-
             const request = createGenerateRequest({
                 topic: 'Machine Learning',
                 goal: 'Understand fundamentals',
@@ -186,12 +228,11 @@ describe('POST /api/generate-course', () => {
             expect(data.courseId).toBeNull();
 
             // Should NOT save to database (no userId)
+            expect(mockCreateCourseWithSubtopics).not.toHaveBeenCalled();
             expect(mockInsertRecord).not.toHaveBeenCalled();
         });
 
         it('should append discussion nodes to each module', async () => {
-            mockOpenAISuccess();
-
             const request = createGenerateRequest({
                 topic: 'Machine Learning',
                 goal: 'Understand fundamentals',
@@ -215,11 +256,9 @@ describe('POST /api/generate-course', () => {
 
     describe('Successful Generation (authenticated — with userId)', () => {
         it('should return courseId in response when authenticated', async () => {
-            mockOpenAISuccess();
-
-            mockGetRecords.mockImplementation((table: string) => {
-                if (table === 'users') return [{ id: TEST_STUDENT.id, email: TEST_STUDENT.email }];
-                return [];
+            mockResolveUserByIdentifier.mockResolvedValue({
+                id: TEST_STUDENT.id,
+                email: TEST_STUDENT.email,
             });
 
             const request = createGenerateRequest({
@@ -237,14 +276,10 @@ describe('POST /api/generate-course', () => {
         });
 
         it('should save course and subtopics to database', async () => {
-            mockOpenAISuccess();
-
             // User exists
-            mockGetRecords.mockImplementation((table: string, opts: any) => {
-                if (table === 'users') {
-                    return [{ id: TEST_STUDENT.id, email: TEST_STUDENT.email }];
-                }
-                return [];
+            mockResolveUserByIdentifier.mockResolvedValue({
+                id: TEST_STUDENT.id,
+                email: TEST_STUDENT.email,
             });
 
             const request = createGenerateRequest({
@@ -260,23 +295,16 @@ describe('POST /api/generate-course', () => {
             expect(response.status).toBe(200);
             expect(data.outline).toBeDefined();
 
-            // Should have inserted course record
-            const courseInsert = mockInsertRecord.mock.calls.find(
-                (call: any[]) => call[0] === 'courses'
-            );
-            expect(courseInsert).toBeDefined();
-            expect(courseInsert![1]).toMatchObject({
+            // Should have called createCourseWithSubtopics
+            expect(mockCreateCourseWithSubtopics).toHaveBeenCalledTimes(1);
+            const [courseData, userId, outline] = mockCreateCourseWithSubtopics.mock.calls[0];
+            expect(courseData).toMatchObject({
                 title: 'Machine Learning',
                 description: 'Understand fundamentals',
                 difficulty_level: 'Beginner',
-                created_by: TEST_STUDENT.id,
             });
-
-            // Should have inserted subtopics (one per module)
-            const subtopicInserts = mockInsertRecord.mock.calls.filter(
-                (call: any[]) => call[0] === 'subtopics'
-            );
-            expect(subtopicInserts.length).toBe(MOCK_OUTLINE.length);
+            expect(userId).toBe(TEST_STUDENT.id);
+            expect(Array.isArray(outline)).toBe(true);
 
             // Should have logged activity
             const activityInsert = mockInsertRecord.mock.calls.find(
@@ -291,24 +319,28 @@ describe('POST /api/generate-course', () => {
 
         it('should set estimated_duration to at least 30 minutes', async () => {
             // Single module outline
-            mockChatCreate.mockResolvedValue({
+            const singleModuleOutline = [{
+                module: '1. Quick Module',
+                subtopics: [{ title: '1.1 Overview', overview: 'Quick overview.' }],
+            }];
+
+            mockChatCompletionWithRetry.mockResolvedValue({
                 choices: [{
                     finish_reason: 'stop',
                     message: {
                         role: 'assistant',
-                        content: JSON.stringify([{
-                            module: '1. Quick Module',
-                            subtopics: [{ title: '1.1 Overview', overview: 'Quick overview.' }],
-                        }]),
+                        content: JSON.stringify(singleModuleOutline),
+                        refusal: null,
                     },
                 }],
                 model: 'gpt-4o-mini',
                 usage: {},
             });
+            mockParseAndValidateAIResponse.mockReturnValue(singleModuleOutline);
 
-            mockGetRecords.mockImplementation((table: string) => {
-                if (table === 'users') return [{ id: TEST_STUDENT.id, email: TEST_STUDENT.email }];
-                return [];
+            mockResolveUserByIdentifier.mockResolvedValue({
+                id: TEST_STUDENT.id,
+                email: TEST_STUDENT.email,
             });
 
             const request = createGenerateRequest({
@@ -321,17 +353,18 @@ describe('POST /api/generate-course', () => {
             const response = await POST(request);
             expect(response.status).toBe(200);
 
-            const courseInsert = mockInsertRecord.mock.calls.find(
-                (call: any[]) => call[0] === 'courses'
-            );
+            // Check that createCourseWithSubtopics was called with estimated_duration >= 30
+            const [courseData] = mockCreateCourseWithSubtopics.mock.calls[0];
             // 1 module * 15 = 15, but Math.max(15, 30) = 30
-            expect(courseInsert![1].estimated_duration).toBeGreaterThanOrEqual(30);
+            expect(courseData.estimated_duration).toBeGreaterThanOrEqual(30);
         });
     });
 
-    describe('OpenAI API Errors', () => {
-        it('should return 500 when OpenAI fails after all retries', async () => {
-            mockChatCreate.mockRejectedValue(new Error('Rate limit exceeded'));
+    describe('AI Service Errors', () => {
+        it('should return 500 when AI service fails', async () => {
+            mockChatCompletionWithRetry.mockRejectedValue(
+                new Error('OpenAI API failed after 3 attempts: Rate limit exceeded')
+            );
 
             const request = createGenerateRequest({
                 topic: 'Machine Learning',
@@ -343,14 +376,11 @@ describe('POST /api/generate-course', () => {
             const data = await response.json();
 
             expect(response.status).toBe(500);
-            expect(data.error).toContain('failed after');
+            expect(data.error).toContain('Failed to generate outline');
+        });
 
-            // Should have been called 3 times (max retries)
-            expect(mockChatCreate).toHaveBeenCalledTimes(3);
-        }, 30000); // Longer timeout due to retry delays
-
-        it('should return 500 when OpenAI returns empty content', async () => {
-            mockChatCreate.mockResolvedValue({
+        it('should return 500 when AI returns empty content', async () => {
+            mockChatCompletionWithRetry.mockResolvedValue({
                 choices: [{
                     finish_reason: 'stop',
                     message: { role: 'assistant', content: '' },
@@ -367,11 +397,11 @@ describe('POST /api/generate-course', () => {
             const data = await response.json();
 
             expect(response.status).toBe(500);
-            expect(data.error).toContain('Empty response');
+            expect(data.error).toContain('Failed to generate outline');
         });
 
-        it('should return 500 when OpenAI returns invalid JSON', async () => {
-            mockChatCreate.mockResolvedValue({
+        it('should return 500 when AI returns invalid JSON', async () => {
+            mockChatCompletionWithRetry.mockResolvedValue({
                 choices: [{
                     finish_reason: 'stop',
                     message: {
@@ -379,6 +409,11 @@ describe('POST /api/generate-course', () => {
                         content: 'This is not valid JSON at all',
                     },
                 }],
+            });
+
+            // parseAndValidateAIResponse throws on invalid JSON
+            mockParseAndValidateAIResponse.mockImplementation(() => {
+                throw new Error('Invalid JSON');
             });
 
             const request = createGenerateRequest({
@@ -391,16 +426,14 @@ describe('POST /api/generate-course', () => {
             const data = await response.json();
 
             expect(response.status).toBe(500);
-            expect(data.error).toContain('Invalid JSON');
+            expect(data.error).toContain('Failed to generate outline');
         });
     });
 
     describe('Database Save Errors', () => {
         it('should return 500 when user cannot be resolved', async () => {
-            mockOpenAISuccess();
-
-            // User NOT found in database
-            mockGetRecords.mockResolvedValue([]);
+            // User NOT found — resolveUserByIdentifier returns null
+            mockResolveUserByIdentifier.mockResolvedValue(null);
 
             const request = createGenerateRequest({
                 topic: 'Machine Learning',
@@ -413,18 +446,16 @@ describe('POST /api/generate-course', () => {
             const data = await response.json();
 
             expect(response.status).toBe(500);
-            expect(data.error).toContain('could not be resolved');
+            expect(data.error).toContain('Failed to generate outline');
         });
 
-        it('should return 500 when course insert fails', async () => {
-            mockOpenAISuccess();
-
-            mockGetRecords.mockImplementation((table: string) => {
-                if (table === 'users') return [{ id: TEST_STUDENT.id, email: TEST_STUDENT.email }];
-                return [];
+        it('should return 500 when course creation fails', async () => {
+            mockResolveUserByIdentifier.mockResolvedValue({
+                id: TEST_STUDENT.id,
+                email: TEST_STUDENT.email,
             });
 
-            mockInsertRecord.mockRejectedValue(new Error('Insert failed'));
+            mockCreateCourseWithSubtopics.mockRejectedValue(new Error('Insert failed'));
 
             const request = createGenerateRequest({
                 topic: 'Machine Learning',
@@ -443,8 +474,6 @@ describe('POST /api/generate-course', () => {
 
     describe('CORS Headers', () => {
         it('should include CORS headers in successful response', async () => {
-            mockOpenAISuccess();
-
             const request = createGenerateRequest({
                 topic: 'Machine Learning',
                 goal: 'Understand fundamentals',
@@ -457,6 +486,12 @@ describe('POST /api/generate-course', () => {
         });
 
         it('should include CORS headers in error response', async () => {
+            const { NextResponse } = require('next/server');
+            mockParseBody.mockReturnValue({
+                success: false,
+                response: NextResponse.json({ error: 'Missing required fields' }, { status: 400 }),
+            });
+
             const request = createGenerateRequest({
                 topic: 'ML',
                 // missing goal and level
@@ -464,25 +499,26 @@ describe('POST /api/generate-course', () => {
 
             const response = await POST(request);
 
-            // 400 errors don't have CORS headers (they return before the try/catch that adds them)
-            // But 500 errors should
+            // 400 errors from parseBody don't have CORS headers (they return the response directly)
             expect(response.status).toBe(400);
         });
     });
 
     describe('Edge Cases', () => {
-        it('should strip markdown code fences from OpenAI response', async () => {
-            mockChatCreate.mockResolvedValue({
+        it('should strip markdown code fences from AI response via parseAIJsonResponse', async () => {
+            const rawContent = '```json\n' + JSON.stringify(MOCK_OUTLINE) + '\n```';
+            mockChatCompletionWithRetry.mockResolvedValue({
                 choices: [{
                     finish_reason: 'stop',
                     message: {
                         role: 'assistant',
-                        content: '```json\n' + JSON.stringify(MOCK_OUTLINE) + '\n```',
+                        content: rawContent,
                     },
                 }],
                 model: 'gpt-4o-mini',
                 usage: {},
             });
+            mockParseAndValidateAIResponse.mockReturnValue(MOCK_OUTLINE);
 
             const request = createGenerateRequest({
                 topic: 'Machine Learning',
@@ -496,23 +532,20 @@ describe('POST /api/generate-course', () => {
             expect(response.status).toBe(200);
             expect(data.outline).toBeDefined();
             expect(Array.isArray(data.outline)).toBe(true);
+
+            // Verify parseAndValidateAIResponse was called with the raw content
+            expect(mockParseAndValidateAIResponse).toHaveBeenCalledWith(
+                rawContent,
+                expect.anything(), // CourseOutlineResponseSchema
+                'Generate Course',
+            );
         });
 
         it('should resolve user by email when userId lookup fails', async () => {
-            mockOpenAISuccess();
-
-            let callCount = 0;
-            mockGetRecords.mockImplementation((table: string, opts: any) => {
-                if (table === 'users') {
-                    callCount++;
-                    // First call (by id) — not found
-                    if (opts.filter.id) return [];
-                    // Second call (by email) — found
-                    if (opts.filter.email) return [{ id: TEST_STUDENT.id, email: TEST_STUDENT.email }];
-                    return [];
-                }
-                return [];
-            });
+            // First call with 'wrong-id' returns null, second call with email returns user
+            mockResolveUserByIdentifier
+                .mockResolvedValueOnce(null)  // userId lookup fails
+                .mockResolvedValueOnce({ id: TEST_STUDENT.id, email: TEST_STUDENT.email }); // email lookup succeeds
 
             const request = createGenerateRequest({
                 topic: 'Machine Learning',
@@ -540,7 +573,7 @@ describe('POST /api/generate-course', () => {
                 },
             ];
 
-            mockChatCreate.mockResolvedValue({
+            mockChatCompletionWithRetry.mockResolvedValue({
                 choices: [{
                     finish_reason: 'stop',
                     message: {
@@ -551,6 +584,7 @@ describe('POST /api/generate-course', () => {
                 model: 'gpt-4o-mini',
                 usage: {},
             });
+            mockParseAndValidateAIResponse.mockReturnValue(outlineWithDiscussion);
 
             const request = createGenerateRequest({
                 topic: 'Test',

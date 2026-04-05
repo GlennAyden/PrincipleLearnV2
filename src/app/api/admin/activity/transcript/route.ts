@@ -26,11 +26,6 @@ interface User {
   email: string;
 }
 
-interface Course {
-  id: string;
-  title: string;
-}
-
 interface Subtopic {
   id: string;
   title: string;
@@ -114,12 +109,6 @@ export async function GET(req: NextRequest) {
           limit: 1
         });
         
-        // Get course info
-        const courses: Course[] = await DatabaseService.getRecords<Course>('courses', {
-          filter: { id: transcript.course_id },
-          limit: 1
-        });
-        
         // Get subtopic info
         const subtopics: Subtopic[] = transcript.subtopic_id
           ? await DatabaseService.getRecords<Subtopic>('subtopics', {
@@ -129,7 +118,6 @@ export async function GET(req: NextRequest) {
           : [];
         
         const user = users.length > 0 ? users[0] : null;
-        const courseData = courses.length > 0 ? courses[0] : null;
         const subtopic = subtopics.length > 0 ? subtopics[0] : null;
         
         // Parse subtopic content to get topic name
@@ -138,7 +126,7 @@ export async function GET(req: NextRequest) {
           try {
             const subtopicContent = JSON.parse(subtopic.content);
             topicName = subtopicContent.module || subtopic.title || 'Unknown Topic';
-          } catch (parseError) {
+          } catch {
             topicName = subtopic.title || 'Unknown Topic';
           }
         } else {

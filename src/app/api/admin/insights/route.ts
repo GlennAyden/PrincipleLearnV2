@@ -2,20 +2,14 @@
 import { NextResponse } from 'next/server';
 import type { NextRequest } from 'next/server';
 import { adminDb } from '@/lib/database';
+import { withCacheHeaders } from '@/lib/api-middleware';
 import jwt from 'jsonwebtoken';
-import type { 
-  InsightsAPIResponse, 
-  InsightsSummary, 
-  EvolutionPoint, 
-  InsightsStudentRow, 
-  ResearchMetrics
-} from '@/types/insights';
-import type { CTBreakdown, CThBreakdown, TimeRange } from '@/types/dashboard';
+import type { TimeRange } from '@/types/dashboard';
 
 const JWT_SECRET = process.env.JWT_SECRET!;
 
 function verifyAdminFromCookie(request: NextRequest): { userId: string; email: string; role: string } | null {
-  const token = request.cookies.get('token')?.value
+  const token = request.cookies.get('access_token')?.value
   if (!token) return null
 
   try {
@@ -60,13 +54,11 @@ async function safeQuery<T = any>(
 }
 
 export async function GET(request: NextRequest) {
-  const startTime = Date.now()
-
   try {
     // Auth Guard
     const admin = verifyAdminFromCookie(request)
     if (!admin) {
-      return NextResponse.json({ message: 'Unauthorized' }, { status: 401 })
+      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
     }
 
     const { searchParams } = new URL(request.url);
@@ -91,10 +83,9 @@ export async function GET(request: NextRequest) {
       quizzes,
       journals,
       challenges,
-      discussions,
+      _discussions,
       // Research tables
       promptClassifications,
-      cognitiveIndicators
     ] = await Promise.all([
       safeQuery('ask_question_history', 'id, user_id, question, prompt_components, prompt_version, session_number, reasoning_note, created_at', userId ? { user_id: userId } : {}),
       safeQuery('quiz_submissions', 'id, user_id, is_correct, reasoning_note, created_at', userId ? { user_id: userId } : {}),
@@ -102,25 +93,16 @@ export async function GET(request: NextRequest) {
       safeQuery('challenge_responses', 'id, user_id, reasoning_note, created_at', userId ? { user_id: userId } : {}),
       safeQuery('discussion_sessions', 'id, user_id, status, created_at'),
       safeQuery('prompt_classifications', '*'),
-      safeQuery('cognitive_indicators', '*')
     ]);
 
     // Apply time filter
     const filteredPrompts = filterByTime(prompts);
-    const filteredQuizzes = filterByTime(quizzes);
-    const filteredJournals = filterByTime(journals);
-    const filteredChallenges = filterByTime(challenges);
-    const filteredDiscussions = filterByTime(discussions);
-
-    if (userId) promptQuery = promptQuery.eq('user_id', userId);
-    if (courseId) promptQuery = promptQuery.eq('course_id', courseId);
 
     // ── RM2: Prompt Evolution (Research + Heuristic) ──
     const hasResearchRM2 = promptClassifications.length > 0
     let promptList = filteredPrompts
     let avgComponentsUsed = 0
-    let stageDistribution = { SCP: 0, SRP: 0, MQP: 0, Reflektif: 0 }
-    let avgStageScore = 0
+    const stageDistribution: Record<string, number> = { SCP: 0, SRP: 0, MQP: 0, Reflektif: 0 }
 
     if (hasResearchRM2) {
       // Filter research data by time/user
@@ -142,9 +124,7 @@ export async function GET(request: NextRequest) {
       filteredPC.forEach((pc: any) => {
         const stage = pc.prompt_stage || 'SCP'
         stageDistribution[stage] = (stageDistribution[stage] || 0) + 1
-        avgStageScore += pc.prompt_stage_score || 1
       })
-      avgStageScore = filteredPC.length > 0 ? Math.round(avgStageScore * 10) / 10 : 0
     } else {
       // Heuristic fallback
       const promptsWithComponents = promptList.filter((p: any) => p.prompt_components)
@@ -198,19 +178,10 @@ export async function GET(request: NextRequest) {
       .sort((a, b) => parseInt(a.session.replace('Sesi ', '')) - parseInt(b.session.replace('Sesi ', '')));
 
     // ── 2. Quiz Performance (RM3) ──
-    let quizQuery = adminDb
-      .from('quiz_submissions')
-      .select('id, user_id, is_correct, reasoning_note, created_at');
-
-    if (userId) quizQuery = quizQuery.eq('user_id', userId);
-
-    const { data: quizzes } = await quizQuery;
-    const quizList = Array.isArray(quizzes)
-      ? quizzes.map((item: any) => ({
-        ...item,
-        submitted_at: item.created_at ?? null,
-      }))
-      : [];
+    const quizList = quizzes.map((item: any) => ({
+      ...item,
+      submitted_at: item.created_at ?? null,
+    }));
 
     const quizCorrect = quizList.filter((q: any) => q.is_correct).length;
     const quizAccuracy = quizList.length > 0
@@ -218,16 +189,8 @@ export async function GET(request: NextRequest) {
     const quizWithReasoning = quizList.filter((q: any) => q.reasoning_note?.trim()).length;
 
     // ── 3. Reflection Data (RM3) ──
-    let reflectionQuery = adminDb
-      .from('jurnal')
-      .select('id, user_id, content, type, created_at');
-
-    if (userId) reflectionQuery = reflectionQuery.eq('user_id', userId);
-
-    const { data: journals } = await reflectionQuery;
-    const journalList = Array.isArray(journals) ? journals : [];
+    const journalList = journals;
     const structuredReflections = journalList.filter((j: any) => j.type === 'structured_reflection');
-    const freeTextReflections = journalList.filter((j: any) => j.type !== 'structured_reflection');
 
     // Parse content ratings from structured reflections
     const ratings: number[] = [];
@@ -237,7 +200,7 @@ export async function GET(request: NextRequest) {
         if (parsed?.contentRating && parsed.contentRating > 0) {
           ratings.push(parsed.contentRating);
         }
-      } catch { }
+      } catch { /* ignore parse errors */ }
     });
     const avgContentRating = ratings.length > 0
       ? Math.round((ratings.reduce((s, r) => s + r, 0) / ratings.length) * 10) / 10
@@ -252,18 +215,11 @@ export async function GET(request: NextRequest) {
         if (parsed?.confused?.trim()) ctIndicators++;
         if (parsed?.strategy?.trim()) ctIndicators++;
         if (parsed?.promptEvolution?.trim()) ctIndicators++;
-      } catch { }
+      } catch { /* ignore parse errors */ }
     });
 
     // ── 4. Challenge Responses ──
-    let challengeQuery = adminDb
-      .from('challenge_responses')
-      .select('id, user_id, reasoning_note, created_at');
-
-    if (userId) challengeQuery = challengeQuery.eq('user_id', userId);
-
-    const { data: challenges } = await challengeQuery;
-    const challengeList = Array.isArray(challenges) ? challenges : [];
+    const challengeList = challenges;
     const challengesWithReasoning = challengeList.filter((c: any) => c.reasoning_note?.trim()).length;
 
     // ── 5. Per-student summary ──
@@ -307,7 +263,7 @@ export async function GET(request: NextRequest) {
       .from('courses')
       .select('id, title');
 
-    return NextResponse.json({
+    return withCacheHeaders(NextResponse.json({
       // Summary cards
       summary: {
         totalPrompts: promptList.length,
@@ -330,11 +286,11 @@ export async function GET(request: NextRequest) {
       // Filter options
       users: Array.isArray(userOptions) ? userOptions : [],
       courses: Array.isArray(courseOptions) ? courseOptions : [],
-    });
+    }), 60);
   } catch (err: any) {
     console.error('[Admin Insights] Error:', err);
     return NextResponse.json(
-      { error: err.message || 'Failed to load insights' },
+      { error: 'Failed to load insights' },
       { status: 500 }
     );
   }

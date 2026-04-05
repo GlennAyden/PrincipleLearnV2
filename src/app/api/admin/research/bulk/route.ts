@@ -10,7 +10,7 @@ import jwt from 'jsonwebtoken';
 const JWT_SECRET = process.env.JWT_SECRET!;
 
 function verifyAdmin(request: NextRequest) {
-  const token = request.cookies.get('token')?.value;
+  const token = request.cookies.get('access_token')?.value;
   if (!token) return null;
   try {
     const payload = jwt.verify(token, JWT_SECRET!) as { userId: string; role: string };

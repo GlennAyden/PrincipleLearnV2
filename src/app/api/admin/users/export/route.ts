@@ -9,8 +9,7 @@ import { verifyToken } from '@/lib/jwt'
 
 function requireAdmin(request: NextRequest) {
   const token =
-    request.cookies.get('access_token')?.value ??
-    request.cookies.get('token')?.value
+    request.cookies.get('access_token')?.value
   const payload = token ? verifyToken(token) : null
   if (!payload || (payload.role ?? '').toLowerCase() !== 'admin') return null
   return payload

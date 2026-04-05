@@ -9,8 +9,7 @@ import { verifyToken } from '@/lib/jwt'
 
 function requireAdmin(request: NextRequest) {
   const token =
-    request.cookies.get('access_token')?.value ??
-    request.cookies.get('token')?.value
+    request.cookies.get('access_token')?.value
   const payload = token ? verifyToken(token) : null
   if (!payload || (payload.role ?? '').toLowerCase() !== 'admin') return null
   return payload
@@ -61,12 +60,12 @@ export async function GET(
     // Auth guard
     const admin = requireAdmin(request)
     if (!admin) {
-      return NextResponse.json({ message: 'Unauthorized' }, { status: 401 })
+      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
     }
 
     const { id: userId } = await context.params
     if (!userId) {
-      return NextResponse.json({ message: 'User ID is required' }, { status: 400 })
+      return NextResponse.json({ error: 'User ID is required' }, { status: 400 })
     }
 
     // ── Verify user exists ────────────────────────────────────────────
@@ -77,7 +76,7 @@ export async function GET(
       .maybeSingle()
 
     if (userError || !userRecord) {
-      return NextResponse.json({ message: 'User not found' }, { status: 404 })
+      return NextResponse.json({ error: 'User not found' }, { status: 404 })
     }
 
     const user = userRecord as any
@@ -364,7 +363,7 @@ export async function GET(
   } catch (error) {
     console.error('[Student Detail] Unexpected error:', error)
     return NextResponse.json(
-      { message: 'Failed to load student detail' },
+      { error: 'Failed to load student detail' },
       { status: 500 }
     )
   }

@@ -44,7 +44,8 @@ async function insertDiscussionMessage(payload: {
 }) {
   const { error } = await adminDb.from('discussion_messages').insert(payload);
   if (error) {
-    throw new Error(`Failed to insert discussion message: ${error.message}`);
+    const msg = (error as any)?.message ?? String(error);
+    throw new Error(`Failed to insert discussion message: ${msg}`);
   }
 }
 

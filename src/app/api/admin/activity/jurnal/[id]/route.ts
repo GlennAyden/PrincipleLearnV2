@@ -1,6 +1,6 @@
 import { NextResponse } from 'next/server'
 import type { NextRequest } from 'next/server'
-import { adminDb, DatabaseService } from '@/lib/database'
+import { adminDb } from '@/lib/database'
 
 export async function GET(req: NextRequest) {
   try {

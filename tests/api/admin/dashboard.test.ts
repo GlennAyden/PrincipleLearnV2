@@ -8,69 +8,153 @@
  * - Student summary
  * - Edge cases (empty data, DB errors)
  *
- * NOTE: This route does NOT have auth middleware — it returns data for any request.
- * Auth checks should be added at the middleware or route level if needed.
+ * The route now requires admin authentication via access_token cookie + jwt verify.
+ * It uses adminDb (Supabase-style) queries, not DatabaseService.getRecords.
  */
 
-import { createMockNextRequest } from '../../setup/test-utils';
+import { NextRequest } from 'next/server';
+import { sign } from 'jsonwebtoken';
 
-// Mock the database module — named export DatabaseService with static methods
-const mockGetRecords = jest.fn();
+const JWT_SECRET = process.env.JWT_SECRET || 'test-jwt-secret-key-for-testing-purposes-only';
+
+// Table data storage for mock adminDb queries
+let tableData: Record<string, any[]> = {};
+
+// Mock adminDb — safeQuery uses adminDb.from(table).select(...).eq(...).gte(...).order(...).limit(...)
+const mockQueryChain = () => {
+    let currentTable = '';
+    let currentFilters: Record<string, any> = {};
+    const chain: any = {
+        select: jest.fn().mockReturnThis(),
+        eq: jest.fn((key: string, value: any) => {
+            currentFilters[key] = value;
+            return chain;
+        }),
+        gte: jest.fn().mockReturnThis(),
+        order: jest.fn().mockReturnThis(),
+        limit: jest.fn().mockReturnThis(),
+    };
+
+    // Resolve based on table name and filters
+    Object.defineProperty(chain, 'then', {
+        get() {
+            return (resolve: any) => {
+                let data = tableData[currentTable] || [];
+                // Apply eq filters
+                for (const [key, value] of Object.entries(currentFilters)) {
+                    data = data.filter((item: any) => item[key] === value);
+                }
+                resolve({ data, error: null });
+            };
+        },
+    });
+
+    // Store table setter
+    chain._setTable = (table: string) => {
+        currentTable = table;
+        currentFilters = {};
+    };
+
+    return chain;
+};
+
+const mockFrom = jest.fn((table: string) => {
+    const chain = mockQueryChain();
+    chain._setTable(table);
+    return chain;
+});
+
 jest.mock('@/lib/database', () => ({
-    DatabaseService: {
-        getRecords: (...args: any[]) => mockGetRecords(...args),
-    },
     adminDb: {
-        from: jest.fn(() => ({
-            select: jest.fn().mockReturnThis(),
-            eq: jest.fn().mockReturnThis(),
-            limit: jest.fn().mockReturnThis(),
-            single: jest.fn().mockReturnThis(),
-        })),
+        from: (...args: any[]) => mockFrom(...args),
     },
-    DatabaseError: class DatabaseError extends Error {
-        constructor(message: string, public originalError?: any) {
-            super(message);
-            this.name = 'DatabaseError';
-        }
-    },
+}));
+
+// Mock api-middleware — withCacheHeaders is just a passthrough
+jest.mock('@/lib/api-middleware', () => ({
+    withCacheHeaders: (response: any) => response,
 }));
 
 import { GET } from '@/app/api/admin/dashboard/route';
 
-/**
- * Helper: set up mockGetRecords to return data based on table name
- */
-function setupMockDatabase(tableData: Record<string, any[]>) {
-    mockGetRecords.mockImplementation((table: string) => {
-        return Promise.resolve(tableData[table] || []);
+// Helper to create an admin-authenticated NextRequest
+function createAdminRequest(url = '/api/admin/dashboard'): NextRequest {
+    const token = sign(
+        { userId: 'admin-1', email: 'admin@example.com', role: 'admin' },
+        JWT_SECRET,
+        { expiresIn: '15m' }
+    );
+
+    const fullUrl = url.startsWith('http') ? url : `http://localhost:3000${url}`;
+    const req = new NextRequest(fullUrl, {
+        method: 'GET',
+        headers: { Cookie: `access_token=${token}` },
     });
+
+    return req;
+}
+
+// Helper to set up mock data for all tables
+function setupMockDatabase(data: Record<string, any[]>) {
+    tableData = { ...data };
 }
 
 describe('GET /api/admin/dashboard', () => {
     beforeEach(() => {
         jest.clearAllMocks();
+        tableData = {};
+    });
+
+    describe('Authentication', () => {
+        it('should return 401 when no access_token cookie is present', async () => {
+            const req = new NextRequest('http://localhost:3000/api/admin/dashboard');
+
+            const response = await GET(req);
+            const data = await response.json();
+
+            expect(response.status).toBe(401);
+            expect(data.error).toBe('Unauthorized');
+        });
+
+        it('should return 401 when token has non-admin role', async () => {
+            const token = sign(
+                { userId: 'user-1', email: 'user@example.com', role: 'user' },
+                JWT_SECRET,
+                { expiresIn: '15m' }
+            );
+
+            const req = new NextRequest('http://localhost:3000/api/admin/dashboard', {
+                method: 'GET',
+                headers: { Cookie: `access_token=${token}` },
+            });
+
+            const response = await GET(req);
+            const data = await response.json();
+
+            expect(response.status).toBe(401);
+            expect(data.error).toBe('Unauthorized');
+        });
     });
 
     describe('Successful Dashboard Access', () => {
         it('should return dashboard stats with all KPI fields', async () => {
             setupMockDatabase({
                 users: [
-                    { id: 'user-1', email: 'student1@example.com', role: 'USER' },
-                    { id: 'user-2', email: 'student2@example.com', role: 'USER' },
+                    { id: 'user-1', email: 'student1@example.com', role: 'user' },
+                    { id: 'user-2', email: 'student2@example.com', role: 'user' },
                 ],
                 courses: [
-                    { id: 'course-1', title: 'Course 1', user_id: 'user-1', created_at: new Date().toISOString() },
+                    { id: 'course-1', title: 'Course 1', created_by: 'user-1', created_at: new Date().toISOString() },
                 ],
                 quiz_submissions: [
-                    { id: 'quiz-1', user_id: 'user-1', is_correct: true, submitted_at: new Date().toISOString() },
-                    { id: 'quiz-2', user_id: 'user-1', is_correct: false, submitted_at: new Date().toISOString() },
+                    { id: 'quiz-1', user_id: 'user-1', is_correct: true, created_at: new Date().toISOString() },
+                    { id: 'quiz-2', user_id: 'user-1', is_correct: false, created_at: new Date().toISOString() },
                 ],
                 discussion_sessions: [
-                    { id: 'disc-1', user_id: 'user-1', status: 'completed', learning_goals: [] },
+                    { id: 'disc-1', user_id: 'user-1', status: 'completed', learning_goals: [], created_at: new Date().toISOString() },
                 ],
                 jurnal: [
-                    { id: 'journal-1', user_id: 'user-1' },
+                    { id: 'journal-1', user_id: 'user-1', created_at: new Date().toISOString() },
                 ],
                 challenge_responses: [
                     { id: 'challenge-1', user_id: 'user-1', question: 'Test challenge', created_at: new Date().toISOString() },
@@ -79,13 +163,16 @@ describe('GET /api/admin/dashboard', () => {
                     { id: 'ask-1', user_id: 'user-1', question: 'What is X?', created_at: new Date().toISOString() },
                 ],
                 feedback: [
-                    { id: 'fb-1', user_id: 'user-1', rating: 4 },
-                    { id: 'fb-2', user_id: 'user-2', rating: 5 },
+                    { id: 'fb-1', user_id: 'user-1', rating: 4, created_at: new Date().toISOString() },
+                    { id: 'fb-2', user_id: 'user-2', rating: 5, created_at: new Date().toISOString() },
                 ],
-                course_generation_activity: [],
+                transcript: [],
+                learning_profiles: [],
+                prompt_classifications: [],
+                cognitive_indicators: [],
             });
 
-            const request = createMockNextRequest('GET', '/api/admin/dashboard');
+            const request = createAdminRequest();
 
             const response = await GET(request);
             const data = await response.json();
@@ -109,10 +196,10 @@ describe('GET /api/admin/dashboard', () => {
         it('should return student summary for each user', async () => {
             setupMockDatabase({
                 users: [
-                    { id: 'user-1', email: 'student1@example.com', role: 'USER' },
+                    { id: 'user-1', email: 'student1@example.com', role: 'user', created_at: new Date().toISOString() },
                 ],
                 courses: [
-                    { id: 'course-1', title: 'Course 1', user_id: 'user-1', created_at: new Date().toISOString() },
+                    { id: 'course-1', title: 'Course 1', created_by: 'user-1', created_at: new Date().toISOString() },
                 ],
                 quiz_submissions: [],
                 discussion_sessions: [],
@@ -120,10 +207,13 @@ describe('GET /api/admin/dashboard', () => {
                 challenge_responses: [],
                 ask_question_history: [],
                 feedback: [],
-                course_generation_activity: [],
+                transcript: [],
+                learning_profiles: [],
+                prompt_classifications: [],
+                cognitive_indicators: [],
             });
 
-            const request = createMockNextRequest('GET', '/api/admin/dashboard');
+            const request = createAdminRequest();
 
             const response = await GET(request);
             const data = await response.json();
@@ -144,31 +234,30 @@ describe('GET /api/admin/dashboard', () => {
                 discussion_sessions: [],
                 jurnal: [],
                 challenge_responses: [],
-                ask_question_history: [],
-                feedback: [],
-                course_generation_activity: [
+                ask_question_history: [
                     {
-                        id: 'log-1',
+                        id: 'ask-1',
                         user_id: 'user-1',
-                        steps: {
-                            step1: { topic: 'Math', goal: 'Learn algebra' },
-                            step2: { level: 'beginner', extraTopics: '' },
-                            step3: { problem: '', assumption: '' },
-                        },
+                        question: 'What?',
+                        prompt_components: { tujuan: 'test' },
+                        created_at: new Date().toISOString(),
                     },
                     {
-                        id: 'log-2',
+                        id: 'ask-2',
                         user_id: 'user-2',
-                        steps: {
-                            step1: { topic: 'Science', goal: 'Learn physics' },
-                            step2: { level: 'intermediate', extraTopics: 'Quantum' },
-                            step3: { problem: 'Understanding waves', assumption: 'Basic math knowledge' },
-                        },
+                        question: 'How?',
+                        prompt_components: { tujuan: 'test', konteks: 'context', batasan: 'limits' },
+                        created_at: new Date().toISOString(),
                     },
                 ],
+                feedback: [],
+                transcript: [],
+                learning_profiles: [],
+                prompt_classifications: [],
+                cognitive_indicators: [],
             });
 
-            const request = createMockNextRequest('GET', '/api/admin/dashboard');
+            const request = createAdminRequest();
 
             const response = await GET(request);
             const data = await response.json();
@@ -184,8 +273,8 @@ describe('GET /api/admin/dashboard', () => {
                 users: [],
                 courses: [],
                 quiz_submissions: [
-                    { id: 'q1', user_id: 'u1', is_correct: true },
-                    { id: 'q2', user_id: 'u1', is_correct: true },
+                    { id: 'q1', user_id: 'u1', is_correct: true, created_at: new Date().toISOString() },
+                    { id: 'q2', user_id: 'u1', is_correct: true, created_at: new Date().toISOString() },
                 ],
                 discussion_sessions: [
                     {
@@ -196,6 +285,7 @@ describe('GET /api/admin/dashboard', () => {
                             { name: 'Goal 1', covered: true },
                             { name: 'Goal 2', covered: false },
                         ],
+                        created_at: new Date().toISOString(),
                     },
                 ],
                 jurnal: [],
@@ -204,10 +294,13 @@ describe('GET /api/admin/dashboard', () => {
                 ],
                 ask_question_history: [],
                 feedback: [],
-                course_generation_activity: [],
+                transcript: [],
+                learning_profiles: [],
+                prompt_classifications: [],
+                cognitive_indicators: [],
             });
 
-            const request = createMockNextRequest('GET', '/api/admin/dashboard');
+            const request = createAdminRequest();
 
             const response = await GET(request);
             const data = await response.json();
@@ -224,13 +317,13 @@ describe('GET /api/admin/dashboard', () => {
             const now = new Date().toISOString();
             setupMockDatabase({
                 users: [
-                    { id: 'user-1', email: 'student@example.com', role: 'USER' },
+                    { id: 'user-1', email: 'student@example.com', role: 'user', created_at: now },
                 ],
                 courses: [
-                    { id: 'c1', title: 'Course 1', user_id: 'user-1', created_at: now },
+                    { id: 'c1', title: 'Course 1', created_by: 'user-1', created_at: now },
                 ],
                 quiz_submissions: [
-                    { id: 'q1', user_id: 'user-1', is_correct: true, submitted_at: now },
+                    { id: 'q1', user_id: 'user-1', is_correct: true, created_at: now },
                 ],
                 discussion_sessions: [],
                 jurnal: [],
@@ -241,10 +334,13 @@ describe('GET /api/admin/dashboard', () => {
                     { id: 'a1', user_id: 'user-1', question: 'Ask Q', created_at: now },
                 ],
                 feedback: [],
-                course_generation_activity: [],
+                transcript: [],
+                learning_profiles: [],
+                prompt_classifications: [],
+                cognitive_indicators: [],
             });
 
-            const request = createMockNextRequest('GET', '/api/admin/dashboard');
+            const request = createAdminRequest();
 
             const response = await GET(request);
             const data = await response.json();
@@ -253,7 +349,7 @@ describe('GET /api/admin/dashboard', () => {
             expect(data.recentActivity).toBeDefined();
             expect(Array.isArray(data.recentActivity)).toBe(true);
             expect(data.recentActivity.length).toBeGreaterThan(0);
-            expect(data.recentActivity.length).toBeLessThanOrEqual(10);
+            expect(data.recentActivity.length).toBeLessThanOrEqual(15);
         });
     });
 
@@ -268,10 +364,13 @@ describe('GET /api/admin/dashboard', () => {
                 challenge_responses: [],
                 ask_question_history: [],
                 feedback: [],
-                course_generation_activity: [],
+                transcript: [],
+                learning_profiles: [],
+                prompt_classifications: [],
+                cognitive_indicators: [],
             });
 
-            const request = createMockNextRequest('GET', '/api/admin/dashboard');
+            const request = createAdminRequest();
 
             const response = await GET(request);
             const data = await response.json();
@@ -288,15 +387,23 @@ describe('GET /api/admin/dashboard', () => {
 
     describe('Edge Cases', () => {
         it('should handle database errors gracefully', async () => {
-            mockGetRecords.mockRejectedValue(new Error('Database connection failed'));
+            // Make adminDb.from throw — safeQuery catches exceptions and returns []
+            // so the route returns 200 with empty data rather than 500
+            mockFrom.mockImplementation(() => {
+                throw new Error('Database connection failed');
+            });
 
-            const request = createMockNextRequest('GET', '/api/admin/dashboard');
+            const request = createAdminRequest();
 
             const response = await GET(request);
             const data = await response.json();
 
-            expect(response.status).toBe(500);
-            expect(data.message).toBeDefined();
+            // safeQuery is resilient — returns empty arrays on failure
+            // so the dashboard still renders with zero counts
+            expect(response.status).toBe(200);
+            expect(data.kpi).toBeDefined();
+            expect(data.kpi.activeStudents).toBe(0);
+            expect(data.kpi.totalCourses).toBe(0);
         });
     });
 });

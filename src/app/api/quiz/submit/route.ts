@@ -2,28 +2,8 @@ import { NextResponse } from 'next/server';
 import type { NextRequest } from 'next/server';
 import { DatabaseService, DatabaseError, adminDb } from '@/lib/database';
 import { withApiLogging } from '@/lib/api-logger';
-
-interface QuizAnswer {
-  question: string;
-  options: string[];
-  userAnswer: string;
-  isCorrect: boolean;
-  questionIndex: number;
-  reasoningNote?: string;
-}
-
-interface QuizSubmission {
-  userId: string; // User id or email
-  courseId: string;
-  moduleTitle?: string;
-  subtopic: string;
-  subtopicTitle?: string; // Actual subtopic title from database
-  moduleIndex?: number;
-  subtopicIndex?: number;
-  score: number;
-  answers: QuizAnswer[];
-  reasoningNotes?: string[];
-}
+import { QuizSubmitSchema, parseBody } from '@/lib/schemas';
+import { resolveUserByIdentifier } from '@/services/auth.service';
 
 function normalizeText(value: unknown) {
   return typeof value === 'string' ? value.trim() : '';
@@ -38,43 +18,12 @@ function normalizeIndex(value: unknown) {
   return null;
 }
 
-async function resolveUserByIdentifier(identifier: string) {
-  const trimmed = identifier.trim();
-  if (!trimmed) return null;
-
-  const byId = await DatabaseService.getRecords<{ id: string }>('users', {
-    filter: { id: trimmed },
-    limit: 1,
-  });
-  if (byId.length > 0) return byId[0];
-
-  const byEmail = await DatabaseService.getRecords<{ id: string }>('users', {
-    filter: { email: trimmed },
-    limit: 1,
-  });
-  return byEmail[0] ?? null;
-}
-
 async function postHandler(req: NextRequest) {
   try {
-    const data: QuizSubmission = await req.json();
-    const normalizedSubtopic = normalizeText(data.subtopic);
-    const answers = Array.isArray(data.answers) ? data.answers : [];
-    
-    // Validasi data
-    if (!data.userId || !data.courseId || !normalizedSubtopic) {
-      return NextResponse.json(
-        { error: "Missing required fields" },
-        { status: 400 }
-      );
-    }
-
-    if (answers.length === 0) {
-      return NextResponse.json(
-        { error: 'Quiz answers are required' },
-        { status: 400 }
-      );
-    }
+    const parsed = parseBody(QuizSubmitSchema, await req.json());
+    if (!parsed.success) return parsed.response;
+    const data = parsed.data;
+    const answers = data.answers;
 
     // Find user in database (accept both user id and email)
     const user = await resolveUserByIdentifier(data.userId);
@@ -316,7 +265,7 @@ async function postHandler(req: NextRequest) {
   } catch (error: any) {
     console.error('Error saving quiz attempt:', error);
     return NextResponse.json(
-      { error: error.message || "Failed to save quiz attempt" },
+      { error: 'Failed to save quiz attempt' },
       { status: 500 }
     );
   }

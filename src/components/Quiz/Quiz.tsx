@@ -1,7 +1,8 @@
 // src/components/Quiz/Quiz.tsx
-import React, { useState } from 'react';
+import React, { useState, useCallback } from 'react';
 import styles from './Quiz.module.scss';
 import { useAuth } from '@/hooks/useAuth';
+import { apiFetch } from '@/lib/api-client';
 import ReasoningNote from '@/components/ReasoningNote/ReasoningNote';
 
 export interface QuizItem {
@@ -49,18 +50,22 @@ export default function Quiz({
   const [submitted, setSubmitted] = useState(false);
   const [loading, setLoading] = useState(false);
 
-  const handleSelect = (qIndex: number, optIndex: number) => {
+  const handleSelect = useCallback((qIndex: number, optIndex: number) => {
     if (showResults) return;
-    const updated = [...selectedAnswers];
-    updated[qIndex] = optIndex;
-    setSelectedAnswers(updated);
-  };
+    setSelectedAnswers(prev => {
+      const updated = [...prev];
+      updated[qIndex] = optIndex;
+      return updated;
+    });
+  }, [showResults]);
 
-  const handleReasoningChange = (qIndex: number, value: string) => {
-    const updated = [...reasoningNotes];
-    updated[qIndex] = value;
-    setReasoningNotes(updated);
-  };
+  const handleReasoningChange = useCallback((qIndex: number, value: string) => {
+    setReasoningNotes(prev => {
+      const updated = [...prev];
+      updated[qIndex] = value;
+      return updated;
+    });
+  }, []);
 
   const handleCheck = async () => {
     setShowResults(true);
@@ -88,16 +93,13 @@ export default function Quiz({
     }
   };
   
-  const submitQuizToServer = async (answers: any[], score: number) => {
+  const submitQuizToServer = useCallback(async (answers: any[], score: number) => {
     if (submitted || !user?.id) return;
-    
+
     try {
       setLoading(true);
-      const response = await fetch('/api/quiz/submit', {
+      const response = await apiFetch('/api/quiz/submit', {
         method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
         body: JSON.stringify({
           userId: user.id,
           userEmail: user.email,
@@ -112,7 +114,7 @@ export default function Quiz({
           reasoningNotes,
         }),
       });
-      
+
       if (response.ok) {
         const result = await response.json();
         setSubmitted(true);
@@ -126,7 +128,7 @@ export default function Quiz({
     } finally {
       setLoading(false);
     }
-  };
+  }, [submitted, user, courseId, moduleTitle, subtopic, subtopicTitle, moduleIndex, subtopicIndex, reasoningNotes]);
 
   if (!safeItems.length) {
     return (

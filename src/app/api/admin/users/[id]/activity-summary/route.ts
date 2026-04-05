@@ -8,7 +8,7 @@ import { verifyToken } from '@/lib/jwt'
 // ─── Auth ─────────────────────────────────────────────────────────────────────
 
 function unauthorized(message = 'Unauthorized access') {
-  return NextResponse.json({ message }, { status: 401 })
+  return NextResponse.json({ error: message }, { status: 401 })
 }
 
 // ─── Safe query helper ────────────────────────────────────────────────────────
@@ -45,8 +45,7 @@ export async function GET(
   try {
     // Auth guard
     const token =
-      request.cookies.get('access_token')?.value ??
-      request.cookies.get('token')?.value
+      request.cookies.get('access_token')?.value
     const payload = token ? verifyToken(token) : null
     if (!payload || (payload.role ?? '').toLowerCase() !== 'admin') {
       return unauthorized()
@@ -54,7 +53,7 @@ export async function GET(
 
     const { id: userId } = await context.params
     if (!userId) {
-      return NextResponse.json({ message: 'User ID is required' }, { status: 400 })
+      return NextResponse.json({ error: 'User ID is required' }, { status: 400 })
     }
 
     // Verify user exists
@@ -65,7 +64,7 @@ export async function GET(
       .maybeSingle()
 
     if (userError || !userRecord) {
-      return NextResponse.json({ message: 'User not found' }, { status: 404 })
+      return NextResponse.json({ error: 'User not found' }, { status: 404 })
     }
 
     // ── Parallel queries for all activity types ───────────────────────────
@@ -77,7 +76,7 @@ export async function GET(
       challengeRows,
       quizRows,
       feedbackRows,
-      courseRows,
+      _courseRows,
       // Count queries
       discussionCountRows,
       journalCountRows,
@@ -311,7 +310,7 @@ export async function GET(
   } catch (error) {
     console.error('[Admin Activity Summary] Unexpected error:', error)
     return NextResponse.json(
-      { message: 'Failed to load activity data' },
+      { error: 'Failed to load activity data' },
       { status: 500 }
     )
   }

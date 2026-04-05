@@ -13,7 +13,7 @@ async function authFetch(path: string, options: RequestInit = {}) {
     const url = `${BASE_URL}${path}`;
     const headers: Record<string, string> = {
         'Content-Type': 'application/json',
-        'Cookie': `token=${ADMIN_TOKEN}`,
+        'Cookie': `access_token=${ADMIN_TOKEN}`,
         ...(options.headers as Record<string, string> || {})
     };
 
@@ -314,7 +314,7 @@ describe('Research API - Export', () => {
     it('GET /api/admin/research/export - CSV format should return text', async () => {
         const url = `${BASE_URL}/api/admin/research/export?format=csv&data_type=sessions`;
         const res = await fetch(url, {
-            headers: { 'Cookie': `token=${ADMIN_TOKEN}` }
+            headers: { 'Cookie': `access_token=${ADMIN_TOKEN}` }
         });
         expect(res.status).toBe(200);
         const contentType = res.headers.get('content-type');

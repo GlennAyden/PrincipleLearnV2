@@ -2,21 +2,27 @@
 'use client';
 
 import React, { useState, useEffect } from 'react';
+import dynamic from 'next/dynamic';
 import { useRouter, useParams, useSearchParams } from 'next/navigation';
 import { useLocalStorage } from '@/hooks/useLocalStorage';
+import { useSessionStorage } from '@/hooks/useSessionStorage';
 import { useAuth } from '@/hooks/useAuth';
-import QuestionBox from '@/components/AskQuestion/QuestionBox';
+import { apiFetch, readStream } from '@/lib/api-client';
 import AnswerList from '@/components/AskQuestion/AnswerList';
 import ChallengeBox from '@/components/ChallengeThinking/ChallengeBox';
 import FeedbackList from '@/components/ChallengeThinking/FeedbackList';
 import ExampleList from '@/components/Examples/ExampleList';
 import KeyTakeaways from '@/components/KeyTakeaways/KeyTakeaways';
-import Quiz from '@/components/Quiz/Quiz';
 import WhatNext from '@/components/WhatNext/WhatNext';
 import NextSubtopics from '@/components/NextSubtopics/NextSubtopics';
-import StructuredReflection from '@/components/StructuredReflection/StructuredReflection';
-import PromptTimeline from '@/components/PromptTimeline/PromptTimeline';
+import AILoadingIndicator from '@/components/AILoadingIndicator/AILoadingIndicator';
 import styles from './page.module.scss';
+
+// Dynamic imports for heavy interactive components
+const Quiz = dynamic(() => import('@/components/Quiz/Quiz'));
+const QuestionBox = dynamic(() => import('@/components/AskQuestion/QuestionBox'));
+const StructuredReflection = dynamic(() => import('@/components/StructuredReflection/StructuredReflection'));
+const PromptTimeline = dynamic(() => import('@/components/PromptTimeline/PromptTimeline'));
 
 interface SubtopicResponse {
   objectives: string[];
@@ -96,23 +102,23 @@ export default function SubtopicPage() {
   );
   const subtopicProgressKey = `${courseId}:${moduleIndex}:${subtopicIndex}`;
 
-  const [askData, setAskData] = useLocalStorage<{ question: string; answer: string }[]>(
+  const [askData, setAskData] = useSessionStorage<{ question: string; answer: string }[]>(
     `${keyBase}-ask`,
     []
   );
-  
-  // Replace single question/feedback with an array of challenges
-  const [challengeData, setChallengeData] = useLocalStorage<ChallengeItem[]>(
+
+  // Session-scoped challenge history (cleared on tab close)
+  const [challengeData, setChallengeData] = useSessionStorage<ChallengeItem[]>(
     `${keyBase}-challenge-data`,
     []
   );
   const [challengeQ, setChallengeQ] = useState<string>('');
   const [challengeAnswer, setChallengeAnswer] = useState<string>('');
   const [challengeReasoning, setChallengeReasoning] = useState<string>('');
-  const [challengeFeedback, setChallengeFeedback] = useState<string>('');
+  const [, setChallengeFeedback] = useState<string>('');
   const [activeChallengeIndex, setActiveChallengeIndex] = useState<number>(-1);
 
-  const [examplesData, setExamplesData] = useLocalStorage<string[]>(
+  const [examplesData, setExamplesData] = useSessionStorage<string[]>(
     `${keyBase}-examples`,
     []
   );
@@ -150,7 +156,7 @@ export default function SubtopicPage() {
       setCourseLoading(true);
       
       try {
-        const response = await fetch(`/api/courses/${courseId}`);
+        const response = await apiFetch(`/api/courses/${courseId}`);
         const result = await response.json();
         
         if (result.success && result.course) {
@@ -159,7 +165,7 @@ export default function SubtopicPage() {
             let content;
             try {
               content = JSON.parse(subtopic.content);
-            } catch (parseError) {
+            } catch {
               content = { module: subtopic.title, subtopics: [] };
             }
             
@@ -218,13 +224,12 @@ export default function SubtopicPage() {
       setLoading(true);
       setError('');
       try {
-        const res = await fetch('/api/generate-subtopic', {
+        const res = await apiFetch('/api/generate-subtopic', {
           method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ 
-            module: moduleTitle, 
+          body: JSON.stringify({
+            module: moduleTitle,
             subtopic: subTitle,
-            courseId: courseId 
+            courseId: courseId
           }),
         });
         if (!res.ok) throw new Error('Failed to load subtopic');
@@ -274,9 +279,8 @@ export default function SubtopicPage() {
 
       // Background fetch without blocking UI
       const timer = setTimeout(() => {
-        fetch('/api/generate-subtopic', {
+        apiFetch('/api/generate-subtopic', {
           method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({
             module: currentModule.module,
             subtopic: nextSubTitle,
@@ -302,7 +306,7 @@ export default function SubtopicPage() {
       if (!user?.id) return;
 
       try {
-        const response = await fetch(
+        const response = await apiFetch(
           `/api/challenge-response?userId=${encodeURIComponent(user.id)}&courseId=${courseId}&moduleIndex=${moduleIndex}&subtopicIndex=${subtopicIndex}&pageNumber=${pageNumber}`
         );
         
@@ -375,21 +379,23 @@ export default function SubtopicPage() {
     setActiveChallengeIndex(-1);
     
     try {
-      const response = await fetch('/api/challenge-thinking', {
+      const response = await apiFetch('/api/challenge-thinking', {
         method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
         body: JSON.stringify({
           context: data.pages[pageNumber].paragraphs.join(' '),
           level: course.level || 'intermediate',
         }),
       });
-      
+
       if (!response.ok) throw new Error('Failed to fetch challenge question');
-      
-      const responseData = await response.json();
-      setChallengeQ(responseData.question);
+
+      const contentType = response.headers.get('content-type') || '';
+      if (contentType.includes('text/plain') && response.body) {
+        await readStream(response, setChallengeQ);
+      } else {
+        const responseData = await response.json();
+        setChallengeQ(responseData.question);
+      }
     } catch (error) {
       console.error('Error fetching challenge question:', error);
     } finally {
@@ -408,11 +414,8 @@ export default function SubtopicPage() {
     setLoadingChallenge(true);
     
     try {
-      const response = await fetch('/api/challenge-feedback', {
+      const response = await apiFetch('/api/challenge-feedback', {
         method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
         body: JSON.stringify({
           question: challengeQ,
           answer: challengeAnswer,
@@ -438,9 +441,8 @@ export default function SubtopicPage() {
       
       // Save to database via API
       try {
-        const saveResponse = await fetch('/api/challenge-response', {
+        const saveResponse = await apiFetch('/api/challenge-response', {
           method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({
             userId: user?.id,
             courseId: courseId,
@@ -472,9 +474,8 @@ export default function SubtopicPage() {
   const fetchExamples = async () => {
     setLoadingExamples(true);
     try {
-      const res = await fetch('/api/generate-examples', {
+      const res = await apiFetch('/api/generate-examples', {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           context: data.pages[pageNumber].paragraphs.join(' '),
         }),
@@ -709,7 +710,9 @@ export default function SubtopicPage() {
                         ) : (
                           <div className={styles.loadingContainer}>
                             {loadingChallenge ? (
-                              <span className={styles.loadingMessage}>Sedang menyiapkan pertanyaan...</span>
+                              <AILoadingIndicator
+                                messages={['Menyiapkan pertanyaan...', 'Menganalisis materi...', 'Hampir siap...']}
+                              />
                             ) : (
                               <>
                                 {challengeData.length > 0 ? (

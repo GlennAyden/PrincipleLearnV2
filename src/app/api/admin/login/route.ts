@@ -1,116 +1,58 @@
 // src/app/api/admin/login/route.ts
 import { NextResponse } from 'next/server'
-import bcrypt from 'bcrypt'
-import jwt from 'jsonwebtoken'
-import { DatabaseService } from '@/lib/database'
-
-const JWT_SECRET = process.env.JWT_SECRET!
-if (!JWT_SECRET) {
-  throw new Error('JWT_SECRET belum di‐set di env')
-}
-
-interface User {
-  id: string;
-  email: string;
-  password_hash: string;
-  name?: string;
-  role: string;
-}
+import { AdminLoginSchema, parseBody } from '@/lib/schemas'
+import {
+  findUserByEmail,
+  verifyPassword,
+  generateAuthTokens,
+} from '@/services/auth.service'
 
 export async function POST(request: Request) {
   try {
-    const { email, password } = await request.json()
-
-    if (!email || !password) {
-      return NextResponse.json(
-        { message: 'Email dan password wajib diisi' },
-        { status: 400 }
-      )
-    }
-
-    // Validate email format
-    const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/
-    if (!emailRegex.test(email)) {
-      return NextResponse.json(
-        { message: 'Format email tidak valid' },
-        { status: 400 }
-      )
-    }
+    // Validate request body
+    const parsed = parseBody(AdminLoginSchema, await request.json())
+    if (!parsed.success) return parsed.response
+    const { email, password } = parsed.data
 
     console.log(`[Admin Login] Attempting login for: ${email}`)
 
-    // Get user from database
-    let users: User[] = []
-    try {
-      users = await DatabaseService.getRecords<User>('users', {
-        filter: { email: email },
-        limit: 1
-      })
-    } catch (dbError) {
-      console.error('[Admin Login] Database error:', dbError)
-      return NextResponse.json(
-        { message: 'Database connection error' },
-        { status: 500 }
-      )
-    }
+    // Find user
+    const user = await findUserByEmail(email)
 
-    if (users.length === 0) {
+    if (!user) {
       console.log(`[Admin Login] User not found: ${email}`)
       return NextResponse.json(
-        { message: 'Email atau password salah' },
+        { error: 'Email atau password salah' },
         { status: 401 }
       )
     }
 
-    const user = users[0]
     console.log(`[Admin Login] User found: ${user.email}, Role: ${user.role}`)
 
     // Check if user has admin role
-    if (user.role !== 'admin') {
+    if (user.role?.toLowerCase() !== 'admin') {
       console.log(`[Admin Login] Access denied - user role: ${user.role}`)
       return NextResponse.json(
-        { message: 'Akses ditolak. Hanya admin yang dapat login.' },
+        { error: 'Akses ditolak. Hanya admin yang dapat login.' },
         { status: 403 }
       )
     }
 
     // Validate password
-    console.log(`[Admin Login] Comparing password for: ${email}`)
-
-    
-    let isValid = false
-    try {
-      isValid = await bcrypt.compare(password, user.password_hash)
-      console.log(`[Admin Login] Password comparison result: ${isValid}`)
-    } catch (bcryptError) {
-      console.error('[Admin Login] Bcrypt error:', bcryptError)
-      return NextResponse.json(
-        { message: 'Password validation error' },
-        { status: 500 }
-      )
-    }
+    const isValid = await verifyPassword(password, user.password_hash)
 
     if (!isValid) {
       console.log(`[Admin Login] Invalid password for: ${email}`)
       return NextResponse.json(
-
-        { message: 'Email atau password salah' },
+        { error: 'Email atau password salah' },
         { status: 401 }
       )
     }
 
     console.log(`[Admin Login] Login successful for: ${email}`)
 
-    // Generate JWT token
-    const token = jwt.sign(
-      { 
-        userId: user.id, 
-        email: user.email,
-        role: user.role 
-      },
-      JWT_SECRET,
-      { expiresIn: '2h' }
-    )
+    // Generate tokens via service
+    const { accessToken: token } = generateAuthTokens(user)
 
     // Send response with cookie and user data
     const response = NextResponse.json(
@@ -125,16 +67,7 @@ export async function POST(request: Request) {
       { status: 200 }
     )
     
-    // Set primary admin cookie ('token') — used by admin routes & useAdmin hook
-    response.cookies.set('token', token, {
-      httpOnly: true,
-      secure: process.env.NODE_ENV === 'production',
-      sameSite: 'lax',
-      path: '/',
-      maxAge: 2 * 60 * 60, // 2 hours
-    })
-
-    // Also set 'access_token' for middleware compatibility (middleware checks both)
+    // Unified access_token cookie for both admin and user auth
     response.cookies.set('access_token', token, {
       httpOnly: true,
       secure: process.env.NODE_ENV === 'production',
@@ -149,7 +82,7 @@ export async function POST(request: Request) {
   } catch (err: any) {
     console.error('Error di /api/admin/login:', err)
     return NextResponse.json(
-      { message: err.message || 'Internal Server Error' },
+      { error: 'Internal server error' },
       { status: 500 }
     )
   }

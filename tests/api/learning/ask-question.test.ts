@@ -5,7 +5,7 @@
  * - Successful question and answer
  * - Authentication checks
  * - Validation errors
- * - OpenAI integration
+ * - AI service integration
  * - Edge cases
  */
 
@@ -39,17 +39,34 @@ jest.mock('@/lib/database', () => ({
     },
 }));
 
-// Mock OpenAI — the route uses openai.chat.completions.create()
-const mockCreate = jest.fn();
-jest.mock('@/lib/openai', () => ({
-    openai: {
-        chat: {
-            completions: {
-                create: (...args: any[]) => mockCreate(...args),
+// Mock schemas — the route uses parseBody + AskQuestionSchema
+const mockParseBody = jest.fn();
+jest.mock('@/lib/schemas', () => ({
+    AskQuestionSchema: {},
+    parseBody: (...args: any[]) => mockParseBody(...args),
+}));
+
+// Mock AI service — the route streams via chatCompletionStream
+const mockChatCompletionStream = jest.fn();
+jest.mock('@/services/ai.service', () => ({
+    chatCompletionStream: (...args: any[]) => mockChatCompletionStream(...args),
+    openAIStreamToReadable: (stream: AsyncIterable<any>, opts?: { onComplete?: (t: string) => any; cancelTimeout?: () => void }) => {
+        const enc = new TextEncoder();
+        let text = '';
+        return new ReadableStream({
+            async start(ctrl) {
+                for await (const chunk of stream) {
+                    const d = (chunk as any).choices?.[0]?.delta?.content;
+                    if (d) { text += d; ctrl.enqueue(enc.encode(d)); }
+                }
+                if (opts?.onComplete) await opts.onComplete(text);
+                ctrl.close();
+                opts?.cancelTimeout?.();
             },
-        },
+        });
     },
-    defaultOpenAIModel: 'gpt-4-test',
+    STREAM_HEADERS: { 'Content-Type': 'text/plain; charset=utf-8', 'Cache-Control': 'no-cache', 'X-Content-Type-Options': 'nosniff' },
+    sanitizePromptInput: (input: string) => input,
 }));
 
 // Mock JWT — verifyToken
@@ -72,14 +89,19 @@ describe('POST /api/ask-question', () => {
     beforeEach(() => {
         jest.clearAllMocks();
 
-        // Default: OpenAI returns a valid response
-        mockCreate.mockResolvedValue({
-            choices: [{
-                message: {
-                    content: 'This is a mock answer about software testing.',
-                },
-            }],
-        });
+        // Default: parseBody returns success with the request body
+        mockParseBody.mockImplementation((_schema: any, body: any) => ({
+            success: true,
+            data: body,
+        }));
+
+        // Default: chatCompletionStream returns a streaming response
+        mockChatCompletionStream.mockImplementation(() => Promise.resolve({
+            stream: (async function* () {
+                yield { choices: [{ delta: { content: 'This is a mock answer about software testing.' } }] };
+            })(),
+            cancelTimeout: jest.fn(),
+        }));
 
         // Default: DB insert succeeds
         mockInsert.mockResolvedValue({ data: null, error: null });
@@ -106,12 +128,10 @@ describe('POST /api/ask-question', () => {
             });
 
             const response = await POST(request);
-            const data = await response.json();
+            const text = await response.text();
 
             expect(response.status).toBe(200);
-            expect(data.answer).toBeDefined();
-            expect(typeof data.answer).toBe('string');
-            expect(data.answer.length).toBeGreaterThan(0);
+            expect(text).toBe('This is a mock answer about software testing.');
         });
 
         it('should log question history to database', async () => {
@@ -126,7 +146,8 @@ describe('POST /api/ask-question', () => {
                 cookies: { access_token: token },
             });
 
-            await POST(request);
+            const response = await POST(request);
+            await response.text(); // consume stream to trigger onComplete DB save
 
             // Should have called adminDb.from('ask_question_history')
             expect(mockFrom).toHaveBeenCalledWith('ask_question_history');
@@ -151,7 +172,8 @@ describe('POST /api/ask-question', () => {
                 cookies: { access_token: token },
             });
 
-            await POST(request);
+            const response = await POST(request);
+            await response.text(); // consume stream to trigger onComplete
 
             expect(mockInsert).toHaveBeenCalled();
             const insertData = mockInsert.mock.calls[0][0];
@@ -222,6 +244,13 @@ describe('POST /api/ask-question', () => {
 
     describe('Validation Errors', () => {
         it('should return 400 for missing question', async () => {
+            // parseBody returns failure for invalid body
+            const { NextResponse } = require('next/server');
+            mockParseBody.mockReturnValue({
+                success: false,
+                response: NextResponse.json({ error: 'Question is required' }, { status: 400 }),
+            });
+
             const token = generateJWT({
                 userId: TEST_STUDENT.id,
                 email: TEST_STUDENT.email,
@@ -245,6 +274,12 @@ describe('POST /api/ask-question', () => {
         });
 
         it('should return 400 for missing context', async () => {
+            const { NextResponse } = require('next/server');
+            mockParseBody.mockReturnValue({
+                success: false,
+                response: NextResponse.json({ error: 'Context is required' }, { status: 400 }),
+            });
+
             const token = generateJWT({
                 userId: TEST_STUDENT.id,
                 email: TEST_STUDENT.email,
@@ -268,6 +303,12 @@ describe('POST /api/ask-question', () => {
         });
 
         it('should return 400 for missing courseId', async () => {
+            const { NextResponse } = require('next/server');
+            mockParseBody.mockReturnValue({
+                success: false,
+                response: NextResponse.json({ error: 'Course ID is required' }, { status: 400 }),
+            });
+
             const token = generateJWT({
                 userId: TEST_STUDENT.id,
                 email: TEST_STUDENT.email,
@@ -291,6 +332,12 @@ describe('POST /api/ask-question', () => {
         });
 
         it('should return 400 for empty question string', async () => {
+            const { NextResponse } = require('next/server');
+            mockParseBody.mockReturnValue({
+                success: false,
+                response: NextResponse.json({ error: 'Question is required' }, { status: 400 }),
+            });
+
             const token = generateJWT({
                 userId: TEST_STUDENT.id,
                 email: TEST_STUDENT.email,
@@ -315,8 +362,8 @@ describe('POST /api/ask-question', () => {
         });
     });
 
-    describe('OpenAI Integration', () => {
-        it('should pass correct parameters to OpenAI', async () => {
+    describe('AI Service Integration', () => {
+        it('should call chatCompletionStream with correct parameters', async () => {
             const token = generateJWT({
                 userId: TEST_STUDENT.id,
                 email: TEST_STUDENT.email,
@@ -330,18 +377,18 @@ describe('POST /api/ask-question', () => {
 
             await POST(request);
 
-            expect(mockCreate).toHaveBeenCalledTimes(1);
-            const callArgs = mockCreate.mock.calls[0][0];
-            expect(callArgs.model).toBe('gpt-4-test');
+            expect(mockChatCompletionStream).toHaveBeenCalledTimes(1);
+            const callArgs = mockChatCompletionStream.mock.calls[0][0];
             expect(callArgs.messages).toBeDefined();
             expect(callArgs.messages.length).toBe(2);
             expect(callArgs.messages[0].role).toBe('system');
             expect(callArgs.messages[1].role).toBe('user');
             expect(callArgs.messages[1].content).toContain(ASK_QUESTION_REQUEST.valid.question);
+            expect(callArgs.maxTokens).toBe(2000);
         });
 
-        it('should handle OpenAI API errors gracefully', async () => {
-            mockCreate.mockRejectedValue(new Error('OpenAI API rate limit exceeded'));
+        it('should handle AI service errors gracefully', async () => {
+            mockChatCompletionStream.mockRejectedValue(new Error('OpenAI API rate limit exceeded'));
 
             const token = generateJWT({
                 userId: TEST_STUDENT.id,
@@ -359,14 +406,13 @@ describe('POST /api/ask-question', () => {
             expect(response.status).toBe(500);
         });
 
-        it('should handle empty OpenAI response', async () => {
-            mockCreate.mockResolvedValue({
-                choices: [{
-                    message: {
-                        content: '',
-                    },
-                }],
-            });
+        it('should handle empty AI response', async () => {
+            mockChatCompletionStream.mockImplementation(() => Promise.resolve({
+                stream: (async function* () {
+                    yield { choices: [{ delta: { content: '' } }] };
+                })(),
+                cancelTimeout: jest.fn(),
+            }));
 
             const token = generateJWT({
                 userId: TEST_STUDENT.id,
@@ -380,10 +426,10 @@ describe('POST /api/ask-question', () => {
             });
 
             const response = await POST(request);
-            const data = await response.json();
+            const text = await response.text();
 
             expect(response.status).toBe(200);
-            expect(data.answer).toBeDefined();
+            expect(text).toBe('');
         });
     });
 
@@ -406,9 +452,10 @@ describe('POST /api/ask-question', () => {
             });
 
             const response = await POST(request);
+            await response.text(); // consume the stream to trigger onComplete
 
-            // Route throws DatabaseError when insert fails, so expect 500
-            expect(response.status).toBe(500);
+            // With streaming, DB errors are logged but don't affect the response
+            expect(response.status).toBe(200);
         });
 
         it('should handle very long questions', async () => {

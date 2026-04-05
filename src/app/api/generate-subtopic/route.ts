@@ -1,47 +1,48 @@
 // src/app/api/generate-subtopic/route.ts
 
 import { NextResponse } from 'next/server';
-import { openai, defaultOpenAIModel } from '@/lib/openai';
 import { generateDiscussionTemplate, generateModuleDiscussionTemplate } from '@/services/discussion/generateDiscussionTemplate';
+import { aiRateLimiter } from '@/lib/rate-limit';
+import { GenerateSubtopicSchema, parseBody } from '@/lib/schemas';
+import { chatCompletion } from '@/services/ai.service';
 import type { ChatCompletionMessageParam } from 'openai/resources/chat/completions';
-
-// OpenAI client and model are centralized in src/lib/openai
 
 export async function POST(request: Request) {
   try {
-    const payload = await request.json().catch(() => null);
-    if (!payload) {
+    // Rate limit AI calls per user
+    const userId = request.headers.get('x-user-id') || request.headers.get('x-forwarded-for') || 'unknown';
+    if (!(await aiRateLimiter.isAllowed(userId))) {
+      return NextResponse.json(
+        { error: 'Too many requests. Please try again later.' },
+        { status: 429 }
+      );
+    }
+
+    const rawPayload = await request.json().catch(() => null);
+    if (!rawPayload) {
       return NextResponse.json(
         { error: 'Invalid JSON payload' },
         { status: 400 }
       );
     }
-    const { module: moduleTitle, subtopic, courseId } = payload;
-    if (!moduleTitle || !subtopic) {
-      return NextResponse.json(
-        { error: 'module and subtopic are required' },
-        { status: 400 }
-      );
-    }
+    const parsed = parseBody(GenerateSubtopicSchema, rawPayload);
+    if (!parsed.success) return parsed.response;
+    const { module: moduleTitle, subtopic, courseId } = parsed.data;
 
-    let existingCacheContent: any = null;
-    let computedCacheKey: string | null = null;
     // Database caching for performance optimization
     if (courseId) {
       try {
-        // Use adminDb (Notion-backed) instead of direct Supabase
-        const { adminDb } = await import('@/lib/database');
+        const { adminDb, publicDb } = await import('@/lib/database');
 
-        // Check cache first
+        // Check cache first (read-only — use anon client for least privilege)
         const cacheKey = `${courseId}-${moduleTitle}-${subtopic}`;
-        const { data: cached } = await adminDb
+        const { data: cached } = await publicDb
           .from('subtopic_cache')
           .select('content')
           .eq('cache_key', cacheKey)
           .single();
 
         if (cached?.content) {
-          existingCacheContent = cached.content;
           console.log('[GenerateSubtopic] Returning cached subtopic data');
           try {
             await syncQuizQuestions({
@@ -100,10 +101,9 @@ export async function POST(request: Request) {
       ].join(' ')
     };
 
-    const resp = await openai.chat.completions.create({
-      model: defaultOpenAIModel,
+    const resp = await chatCompletion({
       messages: [systemMessage, userMessage],
-      max_completion_tokens: 4000,
+      maxTokens: 4000,
     });
 
     const raw = resp.choices?.[0]?.message?.content ?? '';
@@ -315,7 +315,7 @@ export async function POST(request: Request) {
                     subtopicData = sub;
                     break;
                   }
-                } catch (parseError) {
+                } catch {
                   // If content is not valid JSON, try direct title match
                   if (sub.title === moduleTitle) {
                     subtopicData = sub;
@@ -442,7 +442,7 @@ export async function POST(request: Request) {
   } catch (err: any) {
     console.error('Error generating subtopic:', err);
     return NextResponse.json(
-      { error: err.message },
+      { error: 'Failed to generate subtopic' },
       { status: 500 }
     );
   }

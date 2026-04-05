@@ -10,9 +10,12 @@ import type { NextRequest } from 'next/server';
  * It will be removed in a future version.
  */
 
-// Add CORS headers
+// Add CORS headers — restrict to same origin (no wildcard)
+const allowedOrigin = process.env.NEXT_PUBLIC_APP_URL
+  || (process.env.VERCEL_URL ? `https://${process.env.VERCEL_URL}` : '');
+
 const corsHeaders = {
-  'Access-Control-Allow-Origin': '*',
+  'Access-Control-Allow-Origin': allowedOrigin,
   'Access-Control-Allow-Methods': 'POST, OPTIONS',
   'Access-Control-Allow-Headers': 'Content-Type',
 };

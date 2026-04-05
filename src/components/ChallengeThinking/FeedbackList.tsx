@@ -19,7 +19,7 @@ export default function FeedbackList({ feedback }: FeedbackListProps) {
 
     // Split the text into paragraphs
     const paragraphs = text.split('\n');
-    let result: React.ReactNode[] = [];
+    const result: React.ReactNode[] = [];
 
     paragraphs.forEach((paragraph, index) => {
       // Skip empty paragraphs

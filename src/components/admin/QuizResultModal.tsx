@@ -53,7 +53,7 @@ export default function QuizResultModal({ isOpen, quizLog, onClose }: QuizResult
 
   if (!isOpen || !quizLog) return null
 
-  const { id: quizId } = quizLog
+  const { id: _quizId } = quizLog
 
   return (
     <div className={styles.modalOverlay} onClick={onClose}>

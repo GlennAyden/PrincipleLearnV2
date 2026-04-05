@@ -7,6 +7,13 @@
  * - Edge cases
  */
 
+// Mock next/headers cookies() — the route calls `await cookies()` to read CSRF cookie
+jest.mock('next/headers', () => ({
+    cookies: jest.fn(async () => ({
+        get: jest.fn(() => undefined),
+    })),
+}));
+
 import { POST } from '@/app/api/auth/logout/route';
 
 describe('POST /api/auth/logout', () => {
@@ -14,9 +21,17 @@ describe('POST /api/auth/logout', () => {
         jest.clearAllMocks();
     });
 
+    // Helper to create a minimal Request for POST
+    function createLogoutRequest(headers?: Record<string, string>): Request {
+        return new Request('http://localhost:3000/api/auth/logout', {
+            method: 'POST',
+            headers: headers || {},
+        });
+    }
+
     describe('Successful Logout', () => {
         it('should return success response', async () => {
-            const response = await POST();
+            const response = await POST(createLogoutRequest());
             const data = await response.json();
 
             expect(response.status).toBe(200);
@@ -25,7 +40,7 @@ describe('POST /api/auth/logout', () => {
         });
 
         it('should clear access_token cookie', async () => {
-            const response = await POST();
+            const response = await POST(createLogoutRequest());
 
             const setCookieHeaders = response.headers.getSetCookie();
             const accessTokenCookie = setCookieHeaders.find((c: string) =>
@@ -48,7 +63,7 @@ describe('POST /api/auth/logout', () => {
         });
 
         it('should clear all auth cookies', async () => {
-            const response = await POST();
+            const response = await POST(createLogoutRequest());
 
             const setCookieHeaders = response.headers.getSetCookie();
 
@@ -62,8 +77,7 @@ describe('POST /api/auth/logout', () => {
 
     describe('Edge Cases', () => {
         it('should work even when not logged in (no cookies set)', async () => {
-            // POST() takes no arguments, so calling it without any auth should still work
-            const response = await POST();
+            const response = await POST(createLogoutRequest());
             const data = await response.json();
 
             expect(response.status).toBe(200);
@@ -71,7 +85,7 @@ describe('POST /api/auth/logout', () => {
         });
 
         it('should not return any user information', async () => {
-            const response = await POST();
+            const response = await POST(createLogoutRequest());
             const data = await response.json();
 
             expect(data.user).toBeUndefined();
@@ -80,8 +94,8 @@ describe('POST /api/auth/logout', () => {
         });
 
         it('should be idempotent (calling multiple times is safe)', async () => {
-            const response1 = await POST();
-            const response2 = await POST();
+            const response1 = await POST(createLogoutRequest());
+            const response2 = await POST(createLogoutRequest());
 
             expect(response1.status).toBe(200);
             expect(response2.status).toBe(200);
@@ -90,7 +104,7 @@ describe('POST /api/auth/logout', () => {
 
     describe('Security', () => {
         it('should not leak user info in response', async () => {
-            const response = await POST();
+            const response = await POST(createLogoutRequest());
             const data = await response.json();
 
             expect(data.success).toBe(true);
@@ -104,7 +118,7 @@ describe('POST /api/auth/logout', () => {
         });
 
         it('should set httpOnly and secure attributes on cleared cookies', async () => {
-            const response = await POST();
+            const response = await POST(createLogoutRequest());
             const setCookieHeaders = response.headers.getSetCookie();
 
             // At minimum, cookies should exist for clearing

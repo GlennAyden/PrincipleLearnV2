@@ -126,7 +126,7 @@ async function fetchLatestSession(userId: string, courseId: string, subtopicId: 
   }
 
   if (data && data[0]) {
-    const { created_at, ...rest } = data[0] as any;
+    const { created_at: _created_at, ...rest } = data[0] as any;
     return rest;
   }
 

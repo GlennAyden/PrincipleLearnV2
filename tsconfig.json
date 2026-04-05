@@ -17,10 +17,9 @@
     "incremental": true,
     "plugins": [{ "name": "next" }],
 
-    // Base URL and paths for Next.js aliasing
-    "baseUrl": ".",
+    // Paths for Next.js aliasing
     "paths": {
-      "@/*": ["src/*"]
+      "@/*": ["./src/*"]
     },
 
     // Only look for type definitions in node_modules/@types

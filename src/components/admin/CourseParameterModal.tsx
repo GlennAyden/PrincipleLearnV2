@@ -2,7 +2,7 @@
 
 import React from 'react'
 import styles from './CourseParameterModal.module.scss'
-import { FiX, FiFileText, FiCalendar, FiUser } from 'react-icons/fi'
+import { FiX, FiFileText, FiCalendar } from 'react-icons/fi'
 
 export interface CourseParameterModalProps {
   isOpen: boolean

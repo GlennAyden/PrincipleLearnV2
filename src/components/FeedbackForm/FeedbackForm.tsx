@@ -4,6 +4,7 @@
 import React, { useState } from 'react';
 import styles from './FeedbackForm.module.scss';
 import { useAuth } from '@/hooks/useAuth';
+import { apiFetch } from '@/lib/api-client';
 
 export interface FeedbackFormProps {
   /** ID subtopik untuk attribut feedback */
@@ -34,9 +35,8 @@ export default function FeedbackForm({
     setLoading(true);
     setError(null);
     try {
-      await fetch('/api/feedback', {
+      await apiFetch('/api/feedback', {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           subtopicId,
           moduleIndex,

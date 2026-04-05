@@ -1,5 +1,4 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { adminDb } from '@/lib/database';
 import type { ActivityActionRequest } from '@/types/activity';
 
 export async function POST(req: NextRequest) {
@@ -17,7 +16,7 @@ export async function POST(req: NextRequest) {
     };
     
     return NextResponse.json({ success: true, message: responses[body.action] });
-  } catch (error) {
+  } catch {
     return NextResponse.json({ error: 'Action failed' }, { status: 500 });
   }
 }

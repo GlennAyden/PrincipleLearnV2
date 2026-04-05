@@ -6,7 +6,7 @@ import type { DiscussionAnalytics, SessionHealthScore } from '@/types/discussion
 
 async function getHandler(request: NextRequest) {
   try {
-    const token = request.cookies.get('access_token')?.value ?? request.cookies.get('token')?.value;
+    const token = request.cookies.get('access_token')?.value;
     const payload = token ? verifyToken(token) : null;
     if (!payload || (payload.role ?? '').toLowerCase() !== 'admin') {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 403 });
@@ -33,7 +33,7 @@ async function getHandler(request: NextRequest) {
         courses:course_id(title),
         subtopics:subtopic_id(title),
         count_messages:discussion_messages(id)
-      `, { count: 'exact' })
+      `)
       .order('updated_at', { ascending: false })
       .limit(limit);
 

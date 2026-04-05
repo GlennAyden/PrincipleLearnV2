@@ -1,16 +1,19 @@
+// "jurnal" uses Indonesian spelling — matches the database table name.
 import { NextResponse } from 'next/server';
 import type { NextRequest } from 'next/server';
 import { DatabaseService } from '@/lib/database';
 import { withApiLogging } from '@/lib/api-logger';
+import { JurnalSchema, parseBody } from '@/lib/schemas';
+import { resolveUserByIdentifier } from '@/services/auth.service';
 
 interface JurnalSubmission {
-  userId: string; // User id or email
+  userId: string;
   courseId: string;
   subtopic?: string;
-  moduleIndex?: number;
-  subtopicIndex?: number;
+  moduleIndex?: number | string | null;
+  subtopicIndex?: number | string | null;
   content: string | Record<string, unknown>;
-  type?: string; // 'free_text' | 'structured_reflection'
+  type?: string;
   understood?: string;
   confused?: string;
   strategy?: string;
@@ -83,38 +86,16 @@ function parseStructuredContent(data: JurnalSubmission) {
   };
 }
 
-async function resolveUserByIdentifier(identifier: string) {
-  const trimmed = identifier.trim();
-  if (!trimmed) return null;
-
-  const byId = await DatabaseService.getRecords<any>('users', {
-    filter: { id: trimmed },
-    limit: 1,
-  });
-  if (byId.length > 0) return byId[0];
-
-  const byEmail = await DatabaseService.getRecords<any>('users', {
-    filter: { email: trimmed },
-    limit: 1,
-  });
-  return byEmail[0] ?? null;
-}
-
 async function postHandler(req: NextRequest) {
   try {
-    const data: JurnalSubmission = await req.json();
+    // Validate request body
+    const parsed = parseBody(JurnalSchema, await req.json());
+    if (!parsed.success) return parsed.response;
+    const data = parsed.data as JurnalSubmission;
     const subtopic = normalizeText(data.subtopic);
     const type = normalizeText(data.type) || 'free_text';
     const moduleIndex = normalizeIndex(data.moduleIndex);
     const subtopicIndex = normalizeIndex(data.subtopicIndex);
-    
-    // Validasi data
-    if (!data.userId || !data.courseId || !data.content) {
-      return NextResponse.json(
-        { error: "Missing required fields" },
-        { status: 400 }
-      );
-    }
 
     // Find user in database (accept both user id and email)
     const user = await resolveUserByIdentifier(data.userId);
@@ -180,7 +161,7 @@ async function postHandler(req: NextRequest) {
       reflection: JSON.stringify(reflectionContext),
     };
 
-    const jurnal = await DatabaseService.insertRecord('jurnal', jurnalData);
+    const jurnal = await DatabaseService.insertRecord<{ id: string } & Record<string, any>>('jurnal', jurnalData as any);
     
     console.log(`Journal saved to database:`, {
       id: jurnal.id,
@@ -196,7 +177,7 @@ async function postHandler(req: NextRequest) {
   } catch (error: any) {
     console.error('Error saving jurnal refleksi:', error);
     return NextResponse.json(
-      { error: error.message || "Failed to save jurnal refleksi" },
+      { error: 'Failed to save jurnal refleksi' },
       { status: 500 }
     );
   }

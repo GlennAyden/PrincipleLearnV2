@@ -12,41 +12,34 @@
  * - Handles database errors gracefully
  */
 
-import { createMockNextRequest, generateJWT } from '../../setup/test-utils';
 import { TEST_STUDENT, TEST_ADMIN } from '../../fixtures/users.fixture';
 
-// Mock the database module
-const mockGetRecords = jest.fn();
-jest.mock('@/lib/database', () => ({
-    DatabaseService: {
-        getRecords: (...args: any[]) => mockGetRecords(...args),
-    },
-    DatabaseError: class DatabaseError extends Error {
-        constructor(message: string, public originalError?: any) {
-            super(message);
-            this.name = 'DatabaseError';
-        }
-    },
+// Mock next/headers cookies() — the route uses `await cookies()` to read refresh_token
+const mockCookieGet = jest.fn();
+jest.mock('next/headers', () => ({
+    cookies: jest.fn(async () => ({
+        get: (name: string) => mockCookieGet(name),
+    })),
 }));
 
-// Mock JWT module
+// Mock JWT module — verifyToken is still imported directly in the route
 const mockVerifyToken = jest.fn();
-const mockGenerateAccessToken = jest.fn(() => 'mock-new-access-token');
-const mockGetTokenExpiration = jest.fn(() => new Date(Date.now() + 7 * 24 * 60 * 60 * 1000));
-
 jest.mock('@/lib/jwt', () => ({
     verifyToken: (...args: any[]) => mockVerifyToken(...args),
-    generateAccessToken: (...args: any[]) => mockGenerateAccessToken(...args),
-    generateRefreshToken: jest.fn(() => 'mock-refresh-token'),
-    getTokenExpiration: (...args: any[]) => mockGetTokenExpiration(...args),
 }));
 
-// Mock crypto for CSRF token generation
-jest.mock('crypto', () => ({
-    ...jest.requireActual('crypto'),
-    randomBytes: jest.fn(() => ({
-        toString: jest.fn(() => 'mock-csrf-token-hex-string'),
-    })),
+// Mock auth service — findUserById, generateAuthTokens, generateCsrfToken
+const mockFindUserById = jest.fn();
+const mockGenerateAuthTokens = jest.fn(() => ({
+    accessToken: 'mock-new-access-token',
+    refreshToken: 'mock-new-refresh-token',
+}));
+const mockGenerateCsrfToken = jest.fn(() => 'mock-csrf-token-hex-string');
+
+jest.mock('@/services/auth.service', () => ({
+    findUserById: (...args: any[]) => mockFindUserById(...args),
+    generateAuthTokens: (...args: any[]) => mockGenerateAuthTokens(...args),
+    generateCsrfToken: (...args: any[]) => mockGenerateCsrfToken(...args),
 }));
 
 import { POST } from '@/app/api/auth/refresh/route';
@@ -54,30 +47,39 @@ import { POST } from '@/app/api/auth/refresh/route';
 describe('POST /api/auth/refresh', () => {
     beforeEach(() => {
         jest.clearAllMocks();
+        // Default: no cookies
+        mockCookieGet.mockReturnValue(undefined);
     });
+
+    // Helper to create a minimal Request for POST (route reads cookies from next/headers, not request)
+    function createRefreshRequest(): Request {
+        return new Request('http://localhost:3000/api/auth/refresh', { method: 'POST' });
+    }
 
     describe('Successful Token Refresh', () => {
         it('should refresh token successfully with valid refresh token and existing user', async () => {
-            // Setup: valid refresh token payload
+            // Cookie returns refresh_token
+            mockCookieGet.mockImplementation((name: string) => {
+                if (name === 'refresh_token') return { value: 'valid-refresh-token' };
+                return undefined;
+            });
+
+            // verifyToken returns valid payload
             mockVerifyToken.mockReturnValue({
                 userId: TEST_STUDENT.id,
                 email: TEST_STUDENT.email,
                 role: 'user',
             });
 
-            // Setup: user exists in database
-            mockGetRecords.mockResolvedValue([{
+            // findUserById returns user
+            mockFindUserById.mockResolvedValue({
                 id: TEST_STUDENT.id,
                 email: TEST_STUDENT.email,
                 role: 'user',
                 name: TEST_STUDENT.name,
-            }]);
-
-            const request = createMockNextRequest('POST', '/api/auth/refresh', {
-                cookies: { refresh_token: 'valid-refresh-token' },
             });
 
-            const response = await POST(request);
+            const response = await POST(createRefreshRequest());
             const data = await response.json();
 
             expect(response.status).toBe(200);
@@ -86,77 +88,81 @@ describe('POST /api/auth/refresh', () => {
         });
 
         it('should refresh token successfully for admin user', async () => {
+            mockCookieGet.mockImplementation((name: string) => {
+                if (name === 'refresh_token') return { value: 'valid-admin-refresh-token' };
+                return undefined;
+            });
+
             mockVerifyToken.mockReturnValue({
                 userId: TEST_ADMIN.id,
                 email: TEST_ADMIN.email,
                 role: 'ADMIN',
             });
 
-            mockGetRecords.mockResolvedValue([{
+            mockFindUserById.mockResolvedValue({
                 id: TEST_ADMIN.id,
                 email: TEST_ADMIN.email,
                 role: 'ADMIN',
                 name: TEST_ADMIN.name,
-            }]);
-
-            const request = createMockNextRequest('POST', '/api/auth/refresh', {
-                cookies: { refresh_token: 'valid-admin-refresh-token' },
             });
 
-            const response = await POST(request);
+            const response = await POST(createRefreshRequest());
             const data = await response.json();
 
             expect(response.status).toBe(200);
             expect(data.success).toBe(true);
         });
 
-        it('should generate new access token with correct user data', async () => {
+        it('should generate new auth tokens with correct user data', async () => {
+            mockCookieGet.mockImplementation((name: string) => {
+                if (name === 'refresh_token') return { value: 'valid-refresh-token' };
+                return undefined;
+            });
+
             mockVerifyToken.mockReturnValue({
                 userId: TEST_STUDENT.id,
                 email: TEST_STUDENT.email,
                 role: 'user',
             });
 
-            mockGetRecords.mockResolvedValue([{
+            mockFindUserById.mockResolvedValue({
                 id: TEST_STUDENT.id,
                 email: TEST_STUDENT.email,
                 role: 'user',
                 name: TEST_STUDENT.name,
-            }]);
-
-            const request = createMockNextRequest('POST', '/api/auth/refresh', {
-                cookies: { refresh_token: 'valid-refresh-token' },
             });
 
-            await POST(request);
+            await POST(createRefreshRequest());
 
-            // Verify generateAccessToken was called with correct user data from DB
-            expect(mockGenerateAccessToken).toHaveBeenCalledWith({
-                userId: TEST_STUDENT.id,
+            // Verify generateAuthTokens was called with the user record from DB
+            expect(mockGenerateAuthTokens).toHaveBeenCalledWith({
+                id: TEST_STUDENT.id,
                 email: TEST_STUDENT.email,
                 role: 'user',
+                name: TEST_STUDENT.name,
             });
         });
 
         it('should set access_token and csrf_token cookies on success', async () => {
+            mockCookieGet.mockImplementation((name: string) => {
+                if (name === 'refresh_token') return { value: 'valid-refresh-token' };
+                return undefined;
+            });
+
             mockVerifyToken.mockReturnValue({
                 userId: TEST_STUDENT.id,
                 email: TEST_STUDENT.email,
                 role: 'user',
             });
 
-            mockGetRecords.mockResolvedValue([{
+            mockFindUserById.mockResolvedValue({
                 id: TEST_STUDENT.id,
                 email: TEST_STUDENT.email,
                 role: 'user',
                 name: TEST_STUDENT.name,
-            }]);
-
-            const request = createMockNextRequest('POST', '/api/auth/refresh', {
-                cookies: { refresh_token: 'valid-refresh-token' },
             });
 
-            const response = await POST(request);
+            const response = await POST(createRefreshRequest());
 
             expect(response.status).toBe(200);
 
@@ -172,61 +178,58 @@ describe('POST /api/auth/refresh', () => {
         });
 
         it('should include CSRF token in response body', async () => {
+            mockCookieGet.mockImplementation((name: string) => {
+                if (name === 'refresh_token') return { value: 'valid-refresh-token' };
+                return undefined;
+            });
+
             mockVerifyToken.mockReturnValue({
                 userId: TEST_STUDENT.id,
                 email: TEST_STUDENT.email,
                 role: 'user',
             });
 
-            mockGetRecords.mockResolvedValue([{
+            mockFindUserById.mockResolvedValue({
                 id: TEST_STUDENT.id,
                 email: TEST_STUDENT.email,
                 role: 'user',
-            }]);
-
-            const request = createMockNextRequest('POST', '/api/auth/refresh', {
-                cookies: { refresh_token: 'valid-refresh-token' },
             });
 
-            const response = await POST(request);
+            const response = await POST(createRefreshRequest());
             const data = await response.json();
 
             expect(data.csrfToken).toBe('mock-csrf-token-hex-string');
         });
 
-        it('should query database with correct userId from token payload', async () => {
+        it('should query findUserById with correct userId from token payload', async () => {
+            mockCookieGet.mockImplementation((name: string) => {
+                if (name === 'refresh_token') return { value: 'valid-refresh-token' };
+                return undefined;
+            });
+
             mockVerifyToken.mockReturnValue({
                 userId: 'specific-user-id-123',
                 email: 'specific@example.com',
                 role: 'user',
             });
 
-            mockGetRecords.mockResolvedValue([{
+            mockFindUserById.mockResolvedValue({
                 id: 'specific-user-id-123',
                 email: 'specific@example.com',
                 role: 'user',
-            }]);
-
-            const request = createMockNextRequest('POST', '/api/auth/refresh', {
-                cookies: { refresh_token: 'valid-refresh-token' },
             });
 
-            await POST(request);
+            await POST(createRefreshRequest());
 
-            expect(mockGetRecords).toHaveBeenCalledWith('users', {
-                filter: { id: 'specific-user-id-123' },
-                limit: 1,
-            });
+            expect(mockFindUserById).toHaveBeenCalledWith('specific-user-id-123');
         });
     });
 
     describe('Missing Refresh Token', () => {
         it('should return 401 when no refresh token cookie is provided', async () => {
-            const request = createMockNextRequest('POST', '/api/auth/refresh', {
-                cookies: {},
-            });
+            // mockCookieGet returns undefined by default
 
-            const response = await POST(request);
+            const response = await POST(createRefreshRequest());
             const data = await response.json();
 
             expect(response.status).toBe(401);
@@ -234,10 +237,8 @@ describe('POST /api/auth/refresh', () => {
             expect(data.error).toContain('No refresh token');
         });
 
-        it('should return 401 when cookies object is empty', async () => {
-            const request = createMockNextRequest('POST', '/api/auth/refresh');
-
-            const response = await POST(request);
+        it('should return 401 when cookies object has no refresh_token', async () => {
+            const response = await POST(createRefreshRequest());
             const data = await response.json();
 
             expect(response.status).toBe(401);
@@ -247,13 +248,14 @@ describe('POST /api/auth/refresh', () => {
 
     describe('Invalid or Expired Refresh Token', () => {
         it('should return 401 when refresh token is invalid', async () => {
-            mockVerifyToken.mockReturnValue(null);
-
-            const request = createMockNextRequest('POST', '/api/auth/refresh', {
-                cookies: { refresh_token: 'invalid-token' },
+            mockCookieGet.mockImplementation((name: string) => {
+                if (name === 'refresh_token') return { value: 'invalid-token' };
+                return undefined;
             });
 
-            const response = await POST(request);
+            mockVerifyToken.mockReturnValue(null);
+
+            const response = await POST(createRefreshRequest());
             const data = await response.json();
 
             expect(response.status).toBe(401);
@@ -261,13 +263,14 @@ describe('POST /api/auth/refresh', () => {
         });
 
         it('should clear all auth cookies when refresh token is invalid', async () => {
-            mockVerifyToken.mockReturnValue(null);
-
-            const request = createMockNextRequest('POST', '/api/auth/refresh', {
-                cookies: { refresh_token: 'expired-token' },
+            mockCookieGet.mockImplementation((name: string) => {
+                if (name === 'refresh_token') return { value: 'expired-token' };
+                return undefined;
             });
 
-            const response = await POST(request);
+            mockVerifyToken.mockReturnValue(null);
+
+            const response = await POST(createRefreshRequest());
 
             expect(response.status).toBe(401);
 
@@ -291,20 +294,26 @@ describe('POST /api/auth/refresh', () => {
         });
 
         it('should not query database when token is invalid', async () => {
-            mockVerifyToken.mockReturnValue(null);
-
-            const request = createMockNextRequest('POST', '/api/auth/refresh', {
-                cookies: { refresh_token: 'invalid-token' },
+            mockCookieGet.mockImplementation((name: string) => {
+                if (name === 'refresh_token') return { value: 'invalid-token' };
+                return undefined;
             });
 
-            await POST(request);
+            mockVerifyToken.mockReturnValue(null);
 
-            expect(mockGetRecords).not.toHaveBeenCalled();
+            await POST(createRefreshRequest());
+
+            expect(mockFindUserById).not.toHaveBeenCalled();
         });
     });
 
     describe('User No Longer Exists (Admin Deleted)', () => {
         it('should return 401 when user no longer exists in database', async () => {
+            mockCookieGet.mockImplementation((name: string) => {
+                if (name === 'refresh_token') return { value: 'valid-token-for-deleted-user' };
+                return undefined;
+            });
+
             mockVerifyToken.mockReturnValue({
                 userId: 'deleted-user-id',
                 email: 'deleted@example.com',
@@ -312,13 +321,9 @@ describe('POST /api/auth/refresh', () => {
             });
 
             // User not found in database
-            mockGetRecords.mockResolvedValue([]);
+            mockFindUserById.mockResolvedValue(null);
 
-            const request = createMockNextRequest('POST', '/api/auth/refresh', {
-                cookies: { refresh_token: 'valid-token-for-deleted-user' },
-            });
-
-            const response = await POST(request);
+            const response = await POST(createRefreshRequest());
             const data = await response.json();
 
             expect(response.status).toBe(401);
@@ -326,19 +331,20 @@ describe('POST /api/auth/refresh', () => {
         });
 
         it('should clear all cookies when user no longer exists', async () => {
+            mockCookieGet.mockImplementation((name: string) => {
+                if (name === 'refresh_token') return { value: 'valid-token-for-deleted-user' };
+                return undefined;
+            });
+
             mockVerifyToken.mockReturnValue({
                 userId: 'deleted-user-id',
                 email: 'deleted@example.com',
                 role: 'user',
             });
 
-            mockGetRecords.mockResolvedValue([]);
+            mockFindUserById.mockResolvedValue(null);
 
-            const request = createMockNextRequest('POST', '/api/auth/refresh', {
-                cookies: { refresh_token: 'valid-token-for-deleted-user' },
-            });
-
-            const response = await POST(request);
+            const response = await POST(createRefreshRequest());
 
             expect(response.status).toBe(401);
 
@@ -353,19 +359,20 @@ describe('POST /api/auth/refresh', () => {
 
     describe('Database Errors', () => {
         it('should return 500 when database query fails', async () => {
+            mockCookieGet.mockImplementation((name: string) => {
+                if (name === 'refresh_token') return { value: 'valid-refresh-token' };
+                return undefined;
+            });
+
             mockVerifyToken.mockReturnValue({
                 userId: TEST_STUDENT.id,
                 email: TEST_STUDENT.email,
                 role: 'user',
             });
 
-            mockGetRecords.mockRejectedValue(new Error('Database connection failed'));
+            mockFindUserById.mockRejectedValue(new Error('Database connection failed'));
 
-            const request = createMockNextRequest('POST', '/api/auth/refresh', {
-                cookies: { refresh_token: 'valid-refresh-token' },
-            });
-
-            const response = await POST(request);
+            const response = await POST(createRefreshRequest());
             const data = await response.json();
 
             expect(response.status).toBe(500);
@@ -373,41 +380,48 @@ describe('POST /api/auth/refresh', () => {
         });
 
         it('should not generate new tokens when database fails', async () => {
+            mockCookieGet.mockImplementation((name: string) => {
+                if (name === 'refresh_token') return { value: 'valid-refresh-token' };
+                return undefined;
+            });
+
             mockVerifyToken.mockReturnValue({
                 userId: TEST_STUDENT.id,
                 email: TEST_STUDENT.email,
                 role: 'user',
             });
 
-            mockGetRecords.mockRejectedValue(new Error('Database timeout'));
+            mockFindUserById.mockRejectedValue(new Error('Database timeout'));
 
-            const request = createMockNextRequest('POST', '/api/auth/refresh', {
-                cookies: { refresh_token: 'valid-refresh-token' },
-            });
+            await POST(createRefreshRequest());
 
-            await POST(request);
-
-            expect(mockGenerateAccessToken).not.toHaveBeenCalled();
+            expect(mockGenerateAuthTokens).not.toHaveBeenCalled();
         });
     });
 
     describe('Edge Cases', () => {
         it('should handle verifyToken throwing an exception', async () => {
+            mockCookieGet.mockImplementation((name: string) => {
+                if (name === 'refresh_token') return { value: 'malformed-token' };
+                return undefined;
+            });
+
             mockVerifyToken.mockImplementation(() => {
                 throw new Error('JWT malformed');
             });
 
-            const request = createMockNextRequest('POST', '/api/auth/refresh', {
-                cookies: { refresh_token: 'malformed-token' },
-            });
-
-            const response = await POST(request);
+            const response = await POST(createRefreshRequest());
 
             // Should return 500 since the error is thrown (not returned as null)
             expect(response.status).toBe(500);
         });
 
         it('should use real user data from database, not token payload', async () => {
+            mockCookieGet.mockImplementation((name: string) => {
+                if (name === 'refresh_token') return { value: 'valid-refresh-token' };
+                return undefined;
+            });
+
             // Token has old email, but database has updated email
             mockVerifyToken.mockReturnValue({
                 userId: TEST_STUDENT.id,
@@ -415,24 +429,21 @@ describe('POST /api/auth/refresh', () => {
                 role: 'user',
             });
 
-            mockGetRecords.mockResolvedValue([{
+            mockFindUserById.mockResolvedValue({
                 id: TEST_STUDENT.id,
                 email: 'new-email@example.com',  // Updated in DB
                 role: 'ADMIN',                     // Role changed in DB
                 name: TEST_STUDENT.name,
-            }]);
-
-            const request = createMockNextRequest('POST', '/api/auth/refresh', {
-                cookies: { refresh_token: 'valid-refresh-token' },
             });
 
-            await POST(request);
+            await POST(createRefreshRequest());
 
-            // Should use DB data, not token payload
-            expect(mockGenerateAccessToken).toHaveBeenCalledWith({
-                userId: TEST_STUDENT.id,
+            // Should use DB data, not token payload — generateAuthTokens receives the full user record
+            expect(mockGenerateAuthTokens).toHaveBeenCalledWith({
+                id: TEST_STUDENT.id,
                 email: 'new-email@example.com',
                 role: 'ADMIN',
+                name: TEST_STUDENT.name,
             });
         });
     });

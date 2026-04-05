@@ -6,8 +6,8 @@ export async function POST() {
   // Buat response JSON
   const response = NextResponse.json({ ok: true }, { status: 200 })
 
-  // Hapus cookie 'token' dengan path '/'
-  response.cookies.delete({ name: 'token', path: '/' })
+  // Clear auth cookie
+  response.cookies.delete({ name: 'access_token', path: '/' })
 
   return response
 }

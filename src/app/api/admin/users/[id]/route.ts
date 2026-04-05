@@ -13,8 +13,7 @@ function unauthorized(message = 'Unauthorized') {
 
 function requireAdmin(request: NextRequest) {
   const token =
-    request.cookies.get('access_token')?.value ??
-    request.cookies.get('token')?.value
+    request.cookies.get('access_token')?.value
   if (!token) return null
   const payload = verifyToken(token)
   if (!payload || (payload.role ?? '').toLowerCase() !== 'admin') return null
@@ -213,8 +212,7 @@ export async function DELETE(
     console.error('[Admin Delete User] Unexpected error:', error)
     return NextResponse.json(
       {
-        error: error instanceof Error ? error.message : 'Failed to delete user',
-        details: String(error),
+        error: 'Failed to delete user',
       },
       { status: 500 }
     )

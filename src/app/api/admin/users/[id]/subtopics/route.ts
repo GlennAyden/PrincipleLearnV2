@@ -4,11 +4,11 @@ import { DatabaseService } from '@/lib/database';
 import { verifyToken } from '@/lib/jwt';
 
 function unauthorized() {
-  return NextResponse.json({ message: 'Unauthorized' }, { status: 401 });
+  return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
 }
 
 async function requireAdmin(request: NextRequest) {
-  const token = request.cookies.get('access_token')?.value ?? request.cookies.get('token')?.value;
+  const token = request.cookies.get('access_token')?.value;
   if (!token) return null;
   const payload = verifyToken(token);
   if (!payload || (payload.role ?? '').toUpperCase() !== 'ADMIN') {
@@ -27,7 +27,7 @@ export async function GET(
 
     const { id: userId } = await context.params;
     if (!userId) {
-      return NextResponse.json({ message: 'userId required' }, { status: 400 });
+      return NextResponse.json({ error: 'userId required' }, { status: 400 });
     }
 
     const courses = await DatabaseService.getRecords<any>('courses', {
@@ -61,7 +61,7 @@ export async function GET(
     });
   } catch (error) {
     console.error('[Admin Users][Subtopics] Failed to load subtopics', error);
-    return NextResponse.json({ message: 'Failed to load subtopic data' }, { status: 500 });
+    return NextResponse.json({ error: 'Failed to load subtopic data' }, { status: 500 });
   }
 }
 
@@ -79,7 +79,7 @@ export async function POST(
 
     if (!userId || !courseId || !subtopicId) {
       return NextResponse.json(
-        { message: 'courseId and subtopicId are required' },
+        { error: 'courseId and subtopicId are required' },
         { status: 400 }
       );
     }
@@ -89,7 +89,7 @@ export async function POST(
       limit: 1,
     });
     if (!course || course.created_by !== userId) {
-      return NextResponse.json({ message: 'Course not found for user' }, { status: 404 });
+      return NextResponse.json({ error: 'Course not found for user' }, { status: 404 });
     }
 
     const [subtopic] = await DatabaseService.getRecords<any>('subtopics', {
@@ -114,6 +114,6 @@ export async function POST(
     );
   } catch (error) {
     console.error('[Admin Users][Subtopics] Failed to log delete action', error);
-    return NextResponse.json({ message: 'Failed to log delete action' }, { status: 500 });
+    return NextResponse.json({ error: 'Failed to log delete action' }, { status: 500 });
   }
 }
