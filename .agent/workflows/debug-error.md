@@ -25,22 +25,21 @@ Lihat terminal untuk server-side errors, browser console untuk client-side.
 npm run lint
 ```
 
+### Type Error?
+```bash
+npx tsc --noEmit
+```
+
 ## 2. Cari Error di Codebase
 
 ### Cari berdasarkan error message
 ```bash
-# Ganti "error message" dengan pesan error yang muncul
 grep -rn "error message" src/
 ```
 
 ### Cari console.error statements
 ```bash
 grep -rn "console.error" src/
-```
-
-### Cari throw statements
-```bash
-grep -rn "throw new" src/
 ```
 
 ## 3. Common Fixes
@@ -55,31 +54,24 @@ grep -rn "throw new" src/
 2. Pastikan file exists
 3. Restart dev server
 
-### Notion API Error
-Jalankan workflow: `/notion-debug`
+### Database Error
+- Check Supabase URL/keys di `.env.local`
+- Test koneksi: `curl http://localhost:3000/api/test-db`
+- Check RLS policies jika permission denied
 
 ## 4. Add Debug Logging
 
 Tambahkan logging sementara:
 ```typescript
 console.log('[DEBUG] variable:', variable);
-console.log('[DEBUG] Before:', { state });
-// ... code
-console.log('[DEBUG] After:', { result });
 ```
 
 ## 5. Verify Fix
 
-// turbo
-### Run build check
-```bash
-npm run build
-```
-
-// turbo
-### Run lint check
 ```bash
 npm run lint
+npm run build
+npm test
 ```
 
 ## 6. Cleanup

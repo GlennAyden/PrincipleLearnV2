@@ -1,37 +1,42 @@
 # API Reference
 
-Dokumentasi lengkap semua API endpoints PrincipleLearn V3.
+Complete endpoint reference for PrincipleLearn V3.
+
+> **Source of truth**: each endpoint maps to a `route.ts` file under `src/app/api/`.
+> All protected endpoints use `withProtection()` (JWT + CSRF validation).
+> Request bodies are validated with Zod schemas via `parseBody()` — see `src/lib/schemas.ts`.
 
 ---
 
-## 📋 Overview
+## Overview
 
 ### Base URL
 - **Development**: `http://localhost:3000/api`
-- **Production**: `https://your-domain.com/api`
+- **Production**: `https://your-domain.vercel.app/api`
 
 ### Authentication
-Sebagian besar endpoint memerlukan autentikasi via JWT token yang disimpan di HttpOnly cookie.
+Most endpoints require a valid `access_token` cookie (JWT, HttpOnly).
+State-changing requests (POST/PUT/DELETE) also require `x-csrf-token` header matching the `csrf_token` cookie.
 
 ### Response Format
-Semua response dalam format JSON:
+JSON responses:
 
 ```json
-{
-  "success": true,
-  "data": { ... },
-  "message": "Optional message"
-}
+{ "data": { ... } }
 ```
 
 Error response:
 ```json
-{
-  "success": false,
-  "error": "Error message",
-  "code": "ERROR_CODE"
-}
+{ "error": "Error message" }
 ```
+
+### Streaming Responses
+`/api/ask-question` and `/api/challenge-thinking` return `text/plain` streaming responses (not JSON).
+Frontend should use `readStream()` from `src/lib/api-client.ts` to consume them.
+
+### Rate Limits
+- Auth endpoints: 5 requests / 15 min (login), 3 / 15 min (register)
+- AI endpoints: 10 requests / min per user
 
 ---
 
@@ -762,7 +767,7 @@ Test database connection.
 ```json
 {
   "status": "connected",
-  "database": "notion",
+  "database": "supabase",
   "timestamp": "2026-02-04T10:00:00Z"
 }
 ```

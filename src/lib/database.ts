@@ -1,8 +1,8 @@
 /**
  * Database Service - Supabase PostgreSQL Implementation
  * 
- * Replaces the Notion-based DatabaseService with Supabase PostgreSQL.
- * All existing API routes work without changes since they use DatabaseService / adminDb.
+ * Provides generic CRUD operations and a chainable query builder via Supabase PostgreSQL.
+ * All API routes use DatabaseService (static methods) or adminDb (chainable queries).
  */
 
 import { createClient, SupabaseClient } from '@supabase/supabase-js';
@@ -158,8 +158,8 @@ export async function testConnection(): Promise<boolean> {
 /**
  * DatabaseService — Supabase PostgreSQL Implementation
  *
- * Drop-in replacement for the Notion-based DatabaseService.
- * All existing API routes continue to work without changes.
+ * Static methods for common CRUD operations via Supabase.
+ * Used by API routes for simple database interactions.
  */
 export class DatabaseService {
 
@@ -388,7 +388,7 @@ function sanitizeForInsert(tableName: string, data: Record<string, any>): Record
 
 /**
  * SupabaseQueryBuilder wraps the real Supabase client to provide a
- * chainable interface identical to the old NotionQueryBuilder.
+ * chainable interface for Supabase queries.
  *
  * Usage remains the same: adminDb.from('table').select().eq().single()
  */

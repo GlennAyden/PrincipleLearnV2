@@ -280,7 +280,7 @@ export async function POST(request: Request) {
     // Save to cache for next time
     if (courseId && data) {
       try {
-        // Use adminDb (Notion-backed) instead of direct Supabase
+        // Use adminDb for elevated (service-role) database access
         const { adminDb } = await import('@/lib/database');
 
         const cacheKey = `${courseId}-${moduleTitle}-${subtopic}`;

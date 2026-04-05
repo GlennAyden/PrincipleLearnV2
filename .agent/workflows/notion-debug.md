@@ -1,28 +1,20 @@
 ---
-description: Debug masalah Notion API
+description: Debug masalah database Supabase
 ---
 
-# Debug Notion API Issues
+# Debug Database Issues
 
-Panduan troubleshooting untuk masalah Notion database.
+Panduan troubleshooting untuk masalah Supabase database.
 
 ## 1. Check Connection
-
-// turbo
-Test koneksi database:
 
 ```bash
 curl http://localhost:3000/api/test-db
 ```
 
-Atau buka di browser: http://localhost:3000/api/test-db
-
 Expected response:
 ```json
-{
-  "status": "connected",
-  "database": "notion"
-}
+{ "status": "connected" }
 ```
 
 ## 2. Verifikasi Environment Variables
@@ -30,60 +22,27 @@ Expected response:
 Pastikan di `.env.local`:
 
 ```
-NOTION_TOKEN_1=secret_xxx
-NOTION_TOKEN_2=secret_yyy
-NOTION_TOKEN_3=secret_zzz
+NEXT_PUBLIC_SUPABASE_URL=https://your-project.supabase.co
+NEXT_PUBLIC_SUPABASE_ANON_KEY=your-anon-key
+SUPABASE_SERVICE_ROLE_KEY=your-service-role-key
 ```
 
-- Token harus valid (belum expired)
-- Token harus punya akses ke database yang dibutuhkan
+## 3. Common Errors
 
-## 3. Check Rate Limit (429 Error)
+### "relation does not exist"
+- Table belum dibuat di Supabase
+- Check SQL migrations di `docs/sql/`
 
-### Gejala:
-- Error 429 Too Many Requests
-- Response lambat
-- Data tidak konsisten
+### "permission denied for table"
+- RLS policy blocking access
+- Check apakah menggunakan `adminDb` (service role) atau `publicDb` (anon)
+- Review policies di `docs/sql/add_rls_policies_all_tables.sql`
 
-### Solusi:
-1. Tunggu beberapa menit
-2. Pastikan menggunakan 3 token berbeda
-3. Tambahkan delay untuk batch operations:
+### "JWT expired" / "Invalid API key"
+- Supabase keys expired atau salah
+- Re-copy dari Supabase dashboard → Settings → API
 
-```typescript
-for (const item of items) {
-  await processItem(item);
-  await new Promise(r => setTimeout(r, 500)); // 500ms delay
-}
-```
-
-## 4. Check Database ID
-
-Verifikasi database ID di `src/lib/database.ts`:
-
-1. Buka Notion database di browser
-2. Copy ID dari URL: `notion.so/xxx?v=yyy` → ID adalah `xxx`
-3. Pastikan ID sama dengan yang di TABLE_MAPPING
-
-## 5. Check Property Names
-
-Notion property names case-sensitive!
-
-- Pastikan column names di code sama persis dengan di Notion
-- Gunakan Title Case jika itu yang ada di Notion
-
-## 6. Clear Cache
-
-Restart dev server untuk clear cache:
-
-```bash
-# Stop server (Ctrl+C)
-npm run dev
-```
-
-## 7. Debug Query
-
-Tambahkan logging untuk debug:
+## 4. Debug Query
 
 ```typescript
 console.log('Query:', { table, filter });
@@ -94,28 +53,10 @@ const { data, error } = await adminDb
 console.log('Result:', { data, error });
 ```
 
-## 8. Common Errors
+## 5. Check Supabase Dashboard
 
-### "Could not find database"
-- Database ID salah
-- Token tidak punya akses ke database
-
-### "Property not found"
-- Nama kolom salah (case-sensitive)
-- Kolom belum dibuat di Notion
-
-### "Rate limited"
-- Terlalu banyak request
-- Tunggu dan retry
-
-### "Unauthorized"
-- Token expired atau invalid
-- Regenerate token di Notion Integrations
-
-## 9. Regenerate Notion Token
-
-1. Buka https://www.notion.so/my-integrations
-2. Pilih integration yang digunakan
-3. Copy token baru
-4. Update di `.env.local`
-5. Restart dev server
+1. Buka https://supabase.com/dashboard
+2. Pilih project
+3. Table Editor → verifikasi data
+4. SQL Editor → test query manual
+5. Logs → check error logs

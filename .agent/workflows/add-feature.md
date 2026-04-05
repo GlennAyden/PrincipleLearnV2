@@ -13,40 +13,30 @@ Tentukan apa yang dibutuhkan:
 - [ ] Database table baru?
 - [ ] API endpoint baru?
 - [ ] UI component baru?
-- [ ] Modifikasi komponenexisting?
+- [ ] Modifikasi komponen existing?
 
 ## 2. Jika Butuh Database Table Baru
 
-### 2.1 Buat Notion database baru
+### 2.1 Buat table di Supabase
 
-1. Buka Notion
-2. Buat database baru di page PrincipleLearn
-3. Buat properti sesuai schema yang dibutuhkan
-4. Copy database ID dari URL
+1. Buka Supabase Dashboard → Table Editor
+2. Buat table baru dengan schema yang dibutuhkan
+3. Tambahkan RLS policies jika diperlukan
+4. Simpan SQL migration di `docs/sql/`
 
-### 2.2 Update database.ts
-
-Edit `src/lib/database.ts`:
+### 2.2 Gunakan adminDb untuk akses
 
 ```typescript
-// Tambahkan di NOTION_DATABASE_IDS
-const NOTION_DATABASE_IDS = {
-  // ... existing
-  NEW_TABLE: process.env.NOTION_NEW_TABLE_DB_ID || 'database-id-here',
-};
+import { adminDb } from '@/lib/database';
 
-// Tambahkan di TABLE_MAPPING
-const TABLE_MAPPING = {
-  // ... existing
-  'new_table': NOTION_DATABASE_IDS.NEW_TABLE,
-};
+const { data, error } = await adminDb
+  .from('new_table')
+  .select('*');
 ```
 
-### 2.3 Update .env.local
+### 2.3 Update environment (jika perlu)
 
-```
-NOTION_NEW_TABLE_DB_ID=database-id-here
-```
+Supabase tables otomatis tersedia via `adminDb.from('table_name')` — tidak perlu mapping manual.
 
 ## 3. Jika Butuh API Endpoint
 
@@ -76,8 +66,6 @@ interface FeatureNameProps {
 }
 
 export function FeatureName({ }: FeatureNameProps) {
-  // state, effects, handlers
-  
   return (
     <div className={styles.container}>
       {/* content */}
@@ -86,43 +74,20 @@ export function FeatureName({ }: FeatureNameProps) {
 }
 ```
 
-### 4.3 Buat styling
-
-```scss
-// FeatureName.module.scss
-.container {
-  // styles
-}
-```
-
-### 4.4 Import di page yang membutuhkan
-
-```typescript
-import { FeatureName } from '@/components/FeatureName/FeatureName';
-```
-
 ## 5. Testing
 
-// turbo
-### 5.1 Jalankan dev server
-
 ```bash
-npm run dev
+npm run dev    # Test manually
+npm test       # Run tests
+npm run build  # Verify build
 ```
-
-### 5.2 Test fitur baru
-
-- Test semua use case normal
-- Test error handling
-- Test dengan user biasa dan admin
 
 ## 6. Update Dokumentasi
 
 Jika fitur signifikan, update:
 
-- `docs/PAGE_CATALOG.md` - jika ada halaman baru
+- `docs/ARCHITECTURE.md` - jika ada perubahan arsitektur
 - `docs/API_REFERENCE.md` - jika ada API baru
-- `docs/DATABASE_SCHEMA.md` - jika ada table baru
 
 ## Checklist Selesai
 

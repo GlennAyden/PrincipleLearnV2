@@ -422,7 +422,7 @@ describe('POST /api/quiz/submit', () => {
         it('should return 500 when getRecords throws for courses', async () => {
             mockGetRecords
                 .mockReset()
-                .mockRejectedValueOnce(new Error('Notion API timeout'));
+                .mockRejectedValueOnce(new Error('Database timeout'));
 
             const request = createMockNextRequest('POST', '/api/quiz/submit', {
                 body: validBody,

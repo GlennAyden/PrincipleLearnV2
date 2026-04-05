@@ -15,7 +15,9 @@ npm install
 
 Copy `.env.example` ke `.env.local` jika belum ada, lalu isi dengan nilai yang benar:
 
-- `NOTION_TOKEN_1`, `NOTION_TOKEN_2`, `NOTION_TOKEN_3` - Notion API tokens
+- `NEXT_PUBLIC_SUPABASE_URL` - Supabase project URL
+- `NEXT_PUBLIC_SUPABASE_ANON_KEY` - Supabase anon key
+- `SUPABASE_SERVICE_ROLE_KEY` - Supabase service role key
 - `JWT_SECRET` - Secret untuk JWT
 - `OPENAI_API_KEY` - API key OpenAI
 
@@ -43,7 +45,7 @@ npx kill-port 3000
 npm run dev
 ```
 
-### Notion connection error
+### Database connection error
 
-- Periksa NOTION_TOKEN di .env.local
+- Periksa Supabase URL dan keys di `.env.local`
 - Test koneksi: GET http://localhost:3000/api/test-db

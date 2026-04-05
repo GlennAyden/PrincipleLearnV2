@@ -298,7 +298,7 @@ const response = completion.choices[0].message.content;
 
 ## ❌ Avoid
 
-1. **Direct Notion API calls** - Always use `adminDb`
+1. **Direct Supabase client calls** - Always use `adminDb`
 2. **Any types** - Define proper interfaces
 3. **console.log in production** - Use proper logging
 4. **Hardcoded IDs** - Use environment variables
