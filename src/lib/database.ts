@@ -258,9 +258,14 @@ export class DatabaseService {
     try {
       const sanitized = sanitizeForInsert(tableName, data as Record<string, any>);
 
+      const TABLES_WITHOUT_UPDATED_AT = ['rate_limits', 'api_logs', 'quiz_submissions'];
+      const payload = TABLES_WITHOUT_UPDATED_AT.includes(tableName)
+        ? sanitized
+        : { ...sanitized, updated_at: new Date().toISOString() };
+
       const { data: result, error } = await getSupabaseClient()
         .from(tableName)
-        .update({ ...sanitized, updated_at: new Date().toISOString() })
+        .update(payload)
         .eq(idColumn, id)
         .select()
         .single();
@@ -503,10 +508,13 @@ class SupabaseQueryBuilder {
 
   async update(data: Record<string, any>) {
     try {
-      const sanitized = sanitizeForInsert(this.tableName, {
-        ...data,
-        updated_at: new Date().toISOString(),
-      });
+      // Only inject updated_at if the caller didn't already provide it
+      // and the table likely has the column (skip for known tables without it)
+      const TABLES_WITHOUT_UPDATED_AT = ['rate_limits', 'api_logs', 'quiz_submissions'];
+      const payload = TABLES_WITHOUT_UPDATED_AT.includes(this.tableName)
+        ? data
+        : { ...data, updated_at: new Date().toISOString() };
+      const sanitized = sanitizeForInsert(this.tableName, payload);
 
       let query: any = this.client.from(this.tableName).update(sanitized);
       for (const filter of this.filters) {
