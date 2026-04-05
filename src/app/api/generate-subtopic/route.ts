@@ -104,6 +104,7 @@ export async function POST(request: Request) {
     const resp = await chatCompletion({
       messages: [systemMessage, userMessage],
       maxTokens: 4000,
+      timeoutMs: 60000, // 60s — subtopic generation produces large content
     });
 
     const raw = resp.choices?.[0]?.message?.content ?? '';
