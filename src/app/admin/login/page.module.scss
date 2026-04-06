@@ -86,3 +86,13 @@
   background: #2a3242;
   border-color: #2a3242;
 }
+
+@media (max-width: 640px) {
+  .form { padding: 24px; }
+  .title { font-size: 1.5rem; margin-bottom: 24px; }
+  .button { min-height: 44px; width: 100%; }
+}
+
+@media (max-width: 480px) {
+  .form { padding: 16px 12px; }
+}

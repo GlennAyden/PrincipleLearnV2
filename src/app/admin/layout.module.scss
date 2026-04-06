@@ -365,6 +365,40 @@ $shadow-xl: 0 20px 40px -5px rgba(0, 0, 0, 0.1);
 }
 
 /* ========================================
+   MOBILE HEADER (hidden on desktop)
+   ======================================== */
+.mobileHeader {
+  display: none;
+}
+
+.hamburgerBtn {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 44px;
+  height: 44px;
+  border: none;
+  background: transparent;
+  color: $gray-700;
+  font-size: 1.35rem;
+  cursor: pointer;
+  border-radius: $radius-sm;
+  transition: background 0.2s;
+
+  &:hover { background: $gray-100; }
+}
+
+.mobileTitle {
+  font-size: 1rem;
+  font-weight: 600;
+  color: $gray-800;
+}
+
+.overlay {
+  display: none;
+}
+
+/* ========================================
    RESPONSIVE
    ======================================== */
 @media (max-width: 1024px) {
@@ -379,57 +413,48 @@ $shadow-xl: 0 20px 40px -5px rgba(0, 0, 0, 0.1);
 }
 
 @media (max-width: 768px) {
+  .mobileHeader {
+    display: flex;
+    align-items: center;
+    gap: 0.75rem;
+    padding: 0.5rem 1rem;
+    background: white;
+    border-bottom: 1px solid $gray-200;
+    position: sticky;
+    top: 0;
+    z-index: 100;
+  }
+
   .adminLayout {
     flex-direction: column;
   }
 
   .sidebar {
+    position: fixed;
+    top: 0;
+    left: 0;
+    width: 260px;
+    min-width: 260px;
+    height: 100vh;
+    transform: translateX(-100%);
+    transition: transform 0.3s ease;
+    z-index: 110;
+  }
+
+  .sidebarVisible {
+    transform: translateX(0);
+  }
+
+  .overlay {
+    display: block;
+    position: fixed;
+    top: 0;
+    left: 0;
     width: 100%;
-    min-width: 100%;
-    height: auto;
-    position: relative;
-
-    &::before,
-    &::after {
-      display: none;
-    }
-  }
-
-  .nav {
-    padding: 0.75rem;
-  }
-
-  .navList {
-    flex-direction: row;
-    flex-wrap: wrap;
-    gap: 0.5rem;
-  }
-
-  .navItem {
-    flex: 1;
-    min-width: 100px;
-    justify-content: center;
-    padding: 0.75rem;
-
-    span {
-      display: none;
-    }
-
-    &::before {
-      display: none;
-    }
-  }
-
-  .sidebarFooter {
-    padding: 0.75rem;
-  }
-
-  .logoutBtn {
-    justify-content: center;
-
-    span {
-      display: none;
-    }
+    height: 100%;
+    background: rgba(0, 0, 0, 0.3);
+    backdrop-filter: blur(2px);
+    z-index: 105;
   }
 
   .mainContent {

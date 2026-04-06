@@ -564,11 +564,15 @@ $transition: 0.25s cubic-bezier(0.4, 0, 0.2, 1);
 @media (max-width: 640px) {
   .initialButtons { flex-direction: column; }
   .tabNav { overflow-x: auto; }
-  .tab { font-size: 0.78rem; padding: 0.5rem 0.75rem; }
+  .tab { font-size: 0.78rem; padding: 0.6rem 0.85rem; min-height: 44px; }
+  .closeBtn { width: 36px; height: 36px; }
   .skeletonButtonsContainer {
     flex-direction: column;
     align-items: stretch;
   }
   .skeletonButton { max-width: none; }
   .topicTitle { font-size: 1.25rem; }
+  .sectionContainer { padding: 1rem; }
+  .cardContainer { padding: 1rem; }
+  .initialBtn { min-height: 44px; }
 }

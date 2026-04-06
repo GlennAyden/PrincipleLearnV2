@@ -764,4 +764,9 @@ $transition: 0.25s cubic-bezier(0.4, 0, 0.2, 1);
   .title { font-size: 1.2rem; }
   .thread { padding: 1rem; max-height: 50vh; }
   .responseWrapper { padding: 0.5rem; }
+  .optionItem { min-height: 44px; }
+  .preparationButton { min-height: 44px; }
+  .primaryButton { min-height: 44px; }
+  .mcqSubmit { min-height: 44px; }
+  .threadSection { padding: 1.25rem 1rem; }
 }

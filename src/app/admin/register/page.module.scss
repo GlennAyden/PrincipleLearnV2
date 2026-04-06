@@ -60,4 +60,8 @@
     text-decoration: underline;
     font-size: 1rem;
   }
-  
+
+  @media (max-width: 640px) {
+    .title { font-size: 1.4rem; }
+    .button { min-height: 44px; width: 100%; }
+  }

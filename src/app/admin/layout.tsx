@@ -1,12 +1,12 @@
 // src/app/admin/layout.tsx
 'use client'
 
-import React from 'react'
+import React, { useState, useEffect } from 'react'
 import { useRouter, usePathname } from 'next/navigation'
 import {
   FiGrid, FiUsers, FiActivity,
   FiBarChart2, FiMessageCircle,
-  FiLogOut, FiClipboard
+  FiLogOut, FiClipboard, FiMenu, FiX
 } from 'react-icons/fi'
 import styles from './layout.module.scss'
 
@@ -26,9 +26,15 @@ const NAV_ITEMS = [
 export default function AdminLayout({ children }: AdminLayoutProps) {
   const router = useRouter()
   const pathname = usePathname()
+  const [showMobileMenu, setShowMobileMenu] = useState(false)
 
   // Don't show sidebar on login/register pages
   const isAuthPage = pathname === '/admin/login' || pathname === '/admin/register'
+
+  // Close mobile menu on route change
+  useEffect(() => {
+    setShowMobileMenu(false)
+  }, [pathname])
 
   const handleLogout = async () => {
     await fetch('/api/admin/logout', { method: 'POST', credentials: 'include' })
@@ -41,7 +47,27 @@ export default function AdminLayout({ children }: AdminLayoutProps) {
 
   return (
     <div className={styles.adminLayout}>
-      <aside className={styles.sidebar}>
+      {/* Mobile header bar */}
+      <div className={styles.mobileHeader}>
+        <button
+          className={styles.hamburgerBtn}
+          onClick={() => setShowMobileMenu(!showMobileMenu)}
+          aria-label={showMobileMenu ? 'Close menu' : 'Open menu'}
+        >
+          {showMobileMenu ? <FiX /> : <FiMenu />}
+        </button>
+        <span className={styles.mobileTitle}>PrincipleLearn Admin</span>
+      </div>
+
+      {/* Overlay */}
+      {showMobileMenu && (
+        <div
+          className={styles.overlay}
+          onClick={() => setShowMobileMenu(false)}
+        />
+      )}
+
+      <aside className={`${styles.sidebar} ${showMobileMenu ? styles.sidebarVisible : ''}`}>
         <div className={styles.sidebarHeader}>
           <div className={styles.logo}>
             <div className={styles.logoIcon}>

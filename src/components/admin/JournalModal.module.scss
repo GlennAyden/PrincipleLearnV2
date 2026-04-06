@@ -73,3 +73,11 @@
   line-height: 1.6;
   color: #333;
 }
+
+@media (max-width: 640px) {
+  .modal { width: 95%; }
+  .modalHeader { padding: 12px 16px; }
+  .modalTitle { font-size: 1.2rem; }
+  .closeBtn { min-height: 44px; padding: 0.5rem 1rem; }
+  .content { padding: 12px 16px; }
+}

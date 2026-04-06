@@ -40,3 +40,7 @@ $radius-md: 10px;
   color: $primary-600;
   line-height: 1.65;
 }
+
+@media (max-width: 480px) {
+  .whatNextSection { padding: 1rem; }
+}

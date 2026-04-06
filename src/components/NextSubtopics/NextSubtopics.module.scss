@@ -82,3 +82,8 @@ $transition: 0.25s cubic-bezier(0.4, 0, 0.2, 1);
   border: 1px solid rgba($green-500, 0.3);
   font-weight: 500;
 }
+
+@media (max-width: 640px) {
+  .wrapper { padding: 1rem; }
+  .button { min-height: 44px; padding: 0.75rem 1rem; }
+}

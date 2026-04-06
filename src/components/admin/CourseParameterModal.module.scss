@@ -140,4 +140,13 @@
   overflow: auto;
   white-space: pre-wrap;
   border: 1px solid #e0e0e0;
-} 
+}
+
+@media (max-width: 640px) {
+  .modalHeader { padding: 12px 16px; }
+  .modalTitle { font-size: 1.2rem; }
+  .closeBtn { min-height: 44px; padding: 0.5rem 1rem; }
+  .content { padding: 16px; }
+  .parameterItem { padding: 10px; }
+  .jsonValue { font-size: 0.8rem; }
+}

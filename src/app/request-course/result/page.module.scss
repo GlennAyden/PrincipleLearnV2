@@ -35,4 +35,14 @@
   .button:hover {
     transform: translateY(-2px);
   }
-  
+
+  @media (max-width: 640px) {
+    .card { padding: 1.5rem; margin: 1.5rem auto; }
+    .message { font-size: 1.35rem; }
+  }
+
+  @media (max-width: 480px) {
+    .card { padding: 1.25rem; }
+    .message { font-size: 1.15rem; margin-bottom: 1.5rem; }
+    .button { font-size: 1rem; }
+  }

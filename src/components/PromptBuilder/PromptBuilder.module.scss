@@ -377,3 +377,13 @@
     cursor: not-allowed;
   }
 }
+
+@media (max-width: 640px) {
+  .modeButton { min-height: 44px; }
+  .simpleInputContainer { flex-direction: column; }
+  .submitButton { min-height: 44px; width: 100%; }
+  .skipButton { min-height: 44px; }
+  .guidedSubmitButton { min-height: 44px; }
+  .expandToggle { min-height: 44px; }
+  .chip { padding: 0.4rem 0.75rem; min-height: 36px; }
+}

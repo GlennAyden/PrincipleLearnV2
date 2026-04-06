@@ -201,3 +201,10 @@
 .reasoningIcon {
   flex-shrink: 0;
 }
+
+@media (max-width: 640px) {
+  .container { padding: 1rem; }
+  .sessionHeader { flex-wrap: wrap; }
+  .entryContent { padding: 0.6rem; }
+  .componentChip { max-width: 150px; }
+}

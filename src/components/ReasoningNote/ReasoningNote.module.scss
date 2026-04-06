@@ -120,3 +120,8 @@
     transform: translateY(0);
   }
 }
+
+@media (max-width: 640px) {
+  .toggleButton { min-height: 44px; }
+  .contentArea { padding: 0 0.65rem 0.65rem; }
+}

@@ -101,3 +101,13 @@
 .optionsList li {
   margin-bottom: 4px;
 }
+
+@media (max-width: 640px) {
+  .modalHeader { padding: 12px 16px; }
+  .modalTitle { font-size: 1.2rem; }
+  .closeBtn { min-height: 44px; padding: 0.5rem 1rem; }
+  .tableWrapper { padding: 12px; }
+  .modalTable { table-layout: auto; }
+  .modalTable th,
+  .modalTable td { padding: 8px 4px; font-size: 0.85rem; }
+}

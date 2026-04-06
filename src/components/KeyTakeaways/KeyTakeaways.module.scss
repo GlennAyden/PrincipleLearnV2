@@ -53,3 +53,7 @@ $radius-md: 10px;
     border-radius: 50%;
   }
 }
+
+@media (max-width: 480px) {
+  .takeawaysSection { padding: 1rem; }
+}
