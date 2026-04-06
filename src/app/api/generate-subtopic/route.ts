@@ -1,6 +1,6 @@
 // src/app/api/generate-subtopic/route.ts
 
-import { NextResponse } from 'next/server';
+import { NextResponse, after } from 'next/server';
 import { generateDiscussionTemplate, generateModuleDiscussionTemplate } from '@/services/discussion/generateDiscussionTemplate';
 import { aiRateLimiter } from '@/lib/rate-limit';
 import { GenerateSubtopicSchema, parseBody } from '@/lib/schemas';
@@ -363,36 +363,39 @@ export async function POST(request: Request) {
                 subtopicData,
               });
 
-              try {
-                const templateResult = await generateDiscussionTemplate({
-                  courseId,
-                  subtopicId,
-                  moduleTitle,
-                  subtopicTitle: subtopic,
-                  learningObjectives: Array.isArray(data.objectives) ? data.objectives : [],
-                  summary: buildDiscussionSummary(data),
-                  keyTakeaways: Array.isArray(data.keyTakeaways) ? data.keyTakeaways : [],
-                  misconceptions: extractMisconceptions(data),
-                });
-
-                if (templateResult) {
-                  console.log('[GenerateSubtopic] Discussion template stored', {
+              // Defer discussion template generation to after response is sent
+              // This prevents Vercel timeout since these OpenAI calls can take 15-30s
+              after(async () => {
+                try {
+                  const { adminDb: bgAdminDb } = await import('@/lib/database');
+                  const templateResult = await generateDiscussionTemplate({
+                    courseId,
                     subtopicId,
-                    templateId: templateResult.templateId,
-                    version: templateResult.templateVersion,
+                    moduleTitle,
+                    subtopicTitle: subtopic,
+                    learningObjectives: Array.isArray(data.objectives) ? data.objectives : [],
+                    summary: buildDiscussionSummary(data),
+                    keyTakeaways: Array.isArray(data.keyTakeaways) ? data.keyTakeaways : [],
+                    misconceptions: extractMisconceptions(data),
                   });
-                } else {
-                  console.warn('[GenerateSubtopic] Discussion template generation skipped');
-                }
 
-                if (
-                  moduleRecord?.id &&
-                  courseId &&
-                  isDiscussionLabel(subtopic)
-                ) {
-                  try {
+                  if (templateResult) {
+                    console.log('[GenerateSubtopic] Discussion template stored (background)', {
+                      subtopicId,
+                      templateId: templateResult.templateId,
+                      version: templateResult.templateVersion,
+                    });
+                  } else {
+                    console.warn('[GenerateSubtopic] Discussion template generation skipped');
+                  }
+
+                  if (
+                    moduleRecord?.id &&
+                    courseId &&
+                    isDiscussionLabel(subtopic)
+                  ) {
                     const moduleContext = await assembleModuleDiscussionContext({
-                      adminDb,
+                      adminDb: bgAdminDb,
                       courseId,
                       moduleTitle,
                       moduleRecord,
@@ -411,27 +414,18 @@ export async function POST(request: Request) {
                       });
 
                       if (moduleTemplateResult) {
-                        console.log('[GenerateSubtopic] Module-level discussion template stored', {
+                        console.log('[GenerateSubtopic] Module-level discussion template stored (background)', {
                           moduleId: moduleContext.moduleId,
                           templateId: moduleTemplateResult.templateId,
                           version: moduleTemplateResult.templateVersion,
                         });
-                      } else {
-                        console.warn('[GenerateSubtopic] Module-level discussion template generation skipped');
                       }
-                    } else {
-                      console.warn('[GenerateSubtopic] Module discussion context incomplete, skipping generation', {
-                        courseId,
-                        moduleTitle,
-                      });
                     }
-                  } catch (moduleTemplateError) {
-                    console.error('[GenerateSubtopic] Failed to generate module-level discussion template', moduleTemplateError);
                   }
+                } catch (discussionError) {
+                  console.error('[GenerateSubtopic] Background discussion template generation failed', discussionError);
                 }
-              } catch (discussionError) {
-                console.error('[GenerateSubtopic] Failed to generate discussion template', discussionError);
-              }
+              });
             } else {
               console.warn('Subtopic not found for quiz saving:', {
                 courseId,
