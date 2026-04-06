@@ -222,9 +222,9 @@ export default function LoginPage() {
               />
               <span className={styles.rememberText}>Remember me</span>
             </label>
-            <Link href="/forgot-password" className={styles.forgotLink}>
+            <span className={styles.forgotLink} style={{ opacity: 0.5, cursor: 'default' }}>
               Forgot password?
-            </Link>
+            </span>
           </div>
 
           <button 

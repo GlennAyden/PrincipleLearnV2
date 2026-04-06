@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 
 import { verifyToken } from '@/lib/jwt';
-import { adminDb } from '@/lib/database';
+import { adminDb, publicDb } from '@/lib/database';
 import { withApiLogging } from '@/lib/api-logger';
 import { resolveDiscussionSubtopicId } from '@/lib/discussion/resolveSubtopic';
 import {
@@ -206,7 +206,7 @@ async function fetchLatestTemplate(params: {
 }): Promise<TemplateRecord | null> {
   const { subtopicId, courseId, subtopicTitle } = params;
 
-  const { data, error } = await adminDb
+  const { data, error } = await publicDb
     .from('discussion_templates')
     .select('id, version, template, source')
     .eq('subtopic_id', subtopicId)
@@ -218,7 +218,7 @@ async function fetchLatestTemplate(params: {
   }
 
   if (courseId && subtopicTitle) {
-    const { data: fallback, error: fallbackError } = await adminDb
+    const { data: fallback, error: fallbackError } = await publicDb
       .from('discussion_templates')
       .select('id, version, template, source')
       .eq('course_id', courseId)
@@ -375,7 +375,7 @@ async function tryRegenerateTemplate({
     }
 
     const cacheKey = `${courseId}-${moduleName}-${focusTitle}`;
-    const { data: cacheRow, error: cacheError } = await adminDb
+    const { data: cacheRow, error: cacheError } = await publicDb
       .from('subtopic_cache')
       .select('content')
       .eq('cache_key', cacheKey)
@@ -653,7 +653,7 @@ async function assembleModuleDiscussionContextFromDb({
     }
 
     const cacheKey = `${courseId}-${moduleTitle}-${candidateTitle}`;
-    const { data: cacheRow, error: cacheError } = await adminDb
+    const { data: cacheRow, error: cacheError } = await publicDb
       .from('subtopic_cache')
       .select('content')
       .eq('cache_key', cacheKey)

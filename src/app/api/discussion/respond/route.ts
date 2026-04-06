@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 
 import { verifyToken } from '@/lib/jwt';
-import { adminDb } from '@/lib/database';
+import { adminDb, publicDb } from '@/lib/database';
 import { openai, defaultOpenAIModel } from '@/lib/openai';
 import { withApiLogging } from '@/lib/api-logger';
 import {
@@ -311,7 +311,7 @@ async function fetchSession(sessionId: string): Promise<SessionRecord | null> {
 
 async function fetchTemplate(session: SessionRecord): Promise<TemplateRecord | null> {
   if (session.template_id) {
-    const { data, error } = await adminDb
+    const { data, error } = await publicDb
       .from('discussion_templates')
       .select('id, template, version, source')
       .eq('id', session.template_id)
@@ -322,7 +322,7 @@ async function fetchTemplate(session: SessionRecord): Promise<TemplateRecord | n
     }
   }
 
-  const { data, error } = await adminDb
+  const { data, error } = await publicDb
     .from('discussion_templates')
     .select('id, template, version, source')
     .eq('subtopic_id', session.subtopic_id)

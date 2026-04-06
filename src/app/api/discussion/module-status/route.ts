@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 
 import { verifyToken } from '@/lib/jwt';
-import { adminDb } from '@/lib/database';
+import { adminDb, publicDb } from '@/lib/database';
 import { withApiLogging } from '@/lib/api-logger';
 
 interface SubtopicNode {
@@ -127,7 +127,7 @@ async function getHandler(request: NextRequest) {
 
     let cacheEntries: Array<{ cache_key: string; content: CacheContent | null }> = [];
     if (cacheKeys.length > 0) {
-      const { data: cacheData, error: cacheError } = await adminDb
+      const { data: cacheData, error: cacheError } = await publicDb
         .from('subtopic_cache')
         .select('cache_key, content')
         .in('cache_key', cacheKeys);
@@ -144,7 +144,7 @@ async function getHandler(request: NextRequest) {
       cacheMap.set(entry.cache_key, entry.content);
     });
 
-    const { data: templateRows, error: templateError } = await adminDb
+    const { data: templateRows, error: templateError } = await publicDb
       .from('discussion_templates')
       .select('id, source, generated_by')
       .eq('course_id', courseId)

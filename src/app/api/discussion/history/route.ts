@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 
 import { verifyToken } from '@/lib/jwt';
-import { adminDb } from '@/lib/database';
+import { adminDb, publicDb } from '@/lib/database';
 import { withApiLogging } from '@/lib/api-logger';
 import { resolveDiscussionSubtopicId } from '@/lib/discussion/resolveSubtopic';
 
@@ -163,7 +163,7 @@ async function fetchLatestSession(userId: string, courseId: string, subtopicId: 
 
 async function fetchTemplate(session: SessionRecord): Promise<TemplateRecord | null> {
   if (session.template_id) {
-    const { data, error } = await adminDb
+    const { data, error } = await publicDb
       .from('discussion_templates')
       .select('id, template, version')
       .eq('id', session.template_id)
