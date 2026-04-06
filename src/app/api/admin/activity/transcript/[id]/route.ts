@@ -20,10 +20,10 @@ export async function GET(
     // Try 'transcript' table first, then fall back to 'transcripts'
     let transcriptData: {
       id: string;
-      question: string;
-      answer: string;
+      content: string;
+      notes: string;
       course_id: string;
-      subtopic: string;
+      subtopic_id: string;
       created_at: string;
       user_id: string;
     } | null = null;
@@ -75,10 +75,10 @@ export async function GET(
     // Format the response
     const response = {
       id: transcriptData.id,
-      question: transcriptData.question,
-      answer: transcriptData.answer,
+      content: transcriptData.content,
+      notes: transcriptData.notes,
       courseId: transcriptData.course_id,
-      subtopic: transcriptData.subtopic,
+      subtopicId: transcriptData.subtopic_id,
       createdAt: transcriptData.created_at,
       userEmail
     }

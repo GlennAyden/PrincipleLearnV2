@@ -8,14 +8,14 @@ import { verifyToken } from '@/lib/jwt'
 // ── Row Interfaces ──
 interface UserExportRow { id: string; email: string; name?: string; role: string; created_at: string }
 interface CourseExportRow { id: string; created_by: string; title: string; created_at: string }
-interface QuizExportRow { id: string; user_id: string; is_correct: boolean; submitted_at?: string; created_at: string }
+interface QuizExportRow { id: string; user_id: string; is_correct: boolean; created_at: string }
 interface JournalExportRow { id: string; user_id: string; created_at: string }
 interface TranscriptExportRow { id: string; user_id: string; created_at: string }
 interface AskExportRow { id: string; user_id: string; created_at: string }
 interface ChallengeExportRow { id: string; user_id: string; created_at: string }
 interface DiscussionExportRow { id: string; user_id: string; updated_at?: string; created_at: string }
 interface FeedbackExportRow { id: string; user_id: string; rating: number; created_at: string }
-interface ProgressExportRow { user_id: string; subtopic_id: string; completed: boolean }
+interface ProgressExportRow { user_id: string; subtopic_id: string; is_completed: boolean }
 
 // ─── Auth ─────────────────────────────────────────────────────────────────────
 
@@ -131,7 +131,7 @@ export async function GET(request: NextRequest) {
         'courses', []
       ),
       safeQuery<QuizExportRow[]>(
-        adminDb.from('quiz_submissions').select('id, user_id, is_correct, submitted_at, created_at'),
+        adminDb.from('quiz_submissions').select('id, user_id, is_correct, created_at'),
         'quiz_submissions', []
       ),
       safeQuery<JournalExportRow[]>(
@@ -159,7 +159,7 @@ export async function GET(request: NextRequest) {
         'feedbacks', []
       ),
       safeQuery<ProgressExportRow[]>(
-        adminDb.from('user_progress').select('user_id, subtopic_id, completed'),
+        adminDb.from('user_progress').select('user_id, subtopic_id, is_completed'),
         'user_progress', []
       ),
     ])
@@ -191,7 +191,7 @@ export async function GET(request: NextRequest) {
       const feedbacks = feedbackByUser[uid] || []
       const progress = progressByUser[uid] || []
 
-      const completedCount = progress.filter(p => p.completed).length
+      const completedCount = progress.filter(p => p.is_completed).length
       const totalProgressEntries = progress.length
       const completionRate = totalProgressEntries > 0
         ? Math.round((completedCount / totalProgressEntries) * 100)
@@ -223,7 +223,7 @@ export async function GET(request: NextRequest) {
       // Last activity
       const allDates = [
         ...courses.map(c => parseValidDate(c.created_at)),
-        ...quizzes.map(q => parseValidDate(q.submitted_at ?? q.created_at)),
+        ...quizzes.map(q => parseValidDate(q.created_at)),
         ...journals.map(j => parseValidDate(j.created_at)),
         ...transcripts.map(t => parseValidDate(t.created_at)),
         ...asks.map(a => parseValidDate(a.created_at)),

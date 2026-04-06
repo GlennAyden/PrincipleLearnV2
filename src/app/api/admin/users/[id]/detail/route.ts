@@ -8,14 +8,14 @@ import { verifyToken } from '@/lib/jwt'
 // ── Row Interfaces ──
 interface UserDetailRow { id: string; email: string; name?: string; role: string; created_at: string; updated_at?: string }
 interface CourseDetailRow { id: string; title: string; created_at: string }
-interface QuizDetailRow { id: string; quiz_id: string; course_id: string; subtopic_id: string; answer: string; is_correct: boolean; reasoning_note?: string; submitted_at?: string; created_at: string }
-interface JournalDetailRow { id: string; content: unknown; reflection?: string; course_id: string; subtopic_id: string; created_at: string }
-interface TranscriptDetailRow { id: string; title?: string; created_at: string }
-interface AskDetailRow { id: string; question: string; course_id: string; subtopic_id: string; created_at: string }
-interface ChallengeDetailRow { id: string; challenge_type?: string; course_id: string; subtopic_id: string; created_at: string }
+interface QuizDetailRow { id: string; quiz_id: string; course_id: string; subtopic_id: string; answer: string; is_correct: boolean; reasoning_note?: string; created_at: string }
+interface JournalDetailRow { id: string; content: unknown; reflection?: string; course_id: string; created_at: string }
+interface TranscriptDetailRow { id: string; content?: string; created_at: string }
+interface AskDetailRow { id: string; question: string; course_id: string; subtopic_label: string; created_at: string }
+interface ChallengeDetailRow { id: string; question?: string; module_index?: number; course_id: string; created_at: string }
 interface DiscussionDetailRow { id: string; status: string; phase?: string; learning_goals: unknown; updated_at: string; created_at: string }
 interface FeedbackDetailRow { id: string; rating?: number; comment?: string; created_at: string }
-interface ProgressDetailRow { id: string; subtopic_id: string; completed: boolean; created_at: string }
+interface ProgressDetailRow { id: string; subtopic_id: string; is_completed: boolean; created_at: string }
 interface SubtopicDetailRow { id: string; course_id: string; title: string; order_index?: number }
 interface LearningProfileRow { display_name?: string; displayName?: string; programming_experience?: string; programmingExperience?: string; learning_style?: string; learningStyle?: string; learning_goals?: string; learningGoals?: string; challenges?: string; [key: string]: unknown }
 
@@ -114,23 +114,23 @@ export async function GET(
         'courses', []
       ),
       safeQuery<QuizDetailRow[]>(
-        adminDb.from('quiz_submissions').select('id, quiz_id, course_id, subtopic_id, answer, is_correct, reasoning_note, submitted_at, created_at').eq('user_id', userId).order('created_at', { ascending: false }),
+        adminDb.from('quiz_submissions').select('id, quiz_id, course_id, subtopic_id, answer, is_correct, reasoning_note, created_at').eq('user_id', userId).order('created_at', { ascending: false }),
         'quiz_submissions', []
       ),
       safeQuery<JournalDetailRow[]>(
-        adminDb.from('jurnal').select('id, content, reflection, course_id, subtopic_id, created_at').eq('user_id', userId).order('created_at', { ascending: false }),
+        adminDb.from('jurnal').select('id, content, reflection, course_id, created_at').eq('user_id', userId).order('created_at', { ascending: false }),
         'journals', []
       ),
       safeQuery<TranscriptDetailRow[]>(
-        adminDb.from('transcript').select('id, title, created_at').eq('user_id', userId).order('created_at', { ascending: false }),
+        adminDb.from('transcript').select('id, content, created_at').eq('user_id', userId).order('created_at', { ascending: false }),
         'transcripts', []
       ),
       safeQuery<AskDetailRow[]>(
-        adminDb.from('ask_question_history').select('id, question, course_id, subtopic_id, created_at').eq('user_id', userId).order('created_at', { ascending: false }),
+        adminDb.from('ask_question_history').select('id, question, course_id, subtopic_label, created_at').eq('user_id', userId).order('created_at', { ascending: false }),
         'ask_questions', []
       ),
       safeQuery<ChallengeDetailRow[]>(
-        adminDb.from('challenge_responses').select('id, challenge_type, course_id, subtopic_id, created_at').eq('user_id', userId).order('created_at', { ascending: false }),
+        adminDb.from('challenge_responses').select('id, question, module_index, course_id, created_at').eq('user_id', userId).order('created_at', { ascending: false }),
         'challenges', []
       ),
       safeQuery<DiscussionDetailRow[]>(
@@ -142,7 +142,7 @@ export async function GET(
         'feedbacks', []
       ),
       safeQuery<ProgressDetailRow[]>(
-        adminDb.from('user_progress').select('id, subtopic_id, completed, created_at').eq('user_id', userId),
+        adminDb.from('user_progress').select('id, subtopic_id, is_completed, created_at').eq('user_id', userId),
         'user_progress', []
       ),
       safeQuery<LearningProfileRow | null>(
@@ -185,7 +185,7 @@ export async function GET(
 
     // Completed subtopics
     const completedSubtopicIds = new Set(
-      userProgress.filter(p => p.completed).map(p => p.subtopic_id)
+      userProgress.filter(p => p.is_completed).map(p => p.subtopic_id)
     )
 
     // Build courses array
@@ -235,7 +235,7 @@ export async function GET(
     // ── Last activity ─────────────────────────────────────────────────
     const allDates = [
       ...courses.map(c => parseValidDate(c.created_at)),
-      ...quizSubmissions.map(q => parseValidDate(q.submitted_at ?? q.created_at)),
+      ...quizSubmissions.map(q => parseValidDate(q.created_at)),
       ...journals.map(j => parseValidDate(j.created_at)),
       ...transcripts.map(t => parseValidDate(t.created_at)),
       ...askQuestions.map(a => parseValidDate(a.created_at)),
@@ -265,7 +265,7 @@ export async function GET(
         id: q.id, type: 'quiz',
         title: `Quiz attempt — ${q.is_correct ? 'Correct' : 'Incorrect'}`,
         detail: q.reasoning_note ? q.reasoning_note.slice(0, 120) : '',
-        timestamp: q.submitted_at ?? q.created_at,
+        timestamp: q.created_at,
       })
     }
     for (const j of journals.slice(0, 5)) {
@@ -279,7 +279,7 @@ export async function GET(
     for (const t of transcripts.slice(0, 5)) {
       recentActivity.push({
         id: t.id, type: 'transcript',
-        title: t.title || 'Transcript',
+        title: t.content ? (typeof t.content === 'string' ? t.content.slice(0, 80) : 'Transcript') : 'Transcript',
         detail: '',
         timestamp: t.created_at,
       })
@@ -295,7 +295,7 @@ export async function GET(
     for (const ch of challenges.slice(0, 5)) {
       recentActivity.push({
         id: ch.id, type: 'challenge',
-        title: `Challenge — ${ch.challenge_type ?? 'General'}`,
+        title: `Challenge — Module ${ch.module_index ?? 'N/A'}`,
         detail: '',
         timestamp: ch.created_at,
       })

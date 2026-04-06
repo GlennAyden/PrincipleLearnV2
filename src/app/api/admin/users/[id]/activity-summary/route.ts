@@ -8,10 +8,10 @@ import { verifyToken } from '@/lib/jwt'
 // ── Row Interfaces ──
 interface DiscussionSummaryRow { id: string; status: string; phase?: string; updated_at: string; learning_goals: unknown }
 interface JournalSummaryRow { id: string; content: string; reflection?: string; created_at: string }
-interface TranscriptSummaryRow { id: string; title?: string; created_at: string }
+interface TranscriptSummaryRow { id: string; content?: string; created_at: string }
 interface AskSummaryRow { id: string; question: string; created_at: string }
-interface ChallengeSummaryRow { id: string; challenge_type?: string; created_at: string }
-interface QuizSummaryRow { id: string; is_correct: boolean; submitted_at?: string; created_at: string }
+interface ChallengeSummaryRow { id: string; question?: string; created_at: string }
+interface QuizSummaryRow { id: string; is_correct: boolean; created_at: string }
 interface FeedbackSummaryRow { id: string; rating?: number; created_at: string }
 interface IdRow { id: string }
 interface UserRecordRow { id: string; email: string }
@@ -123,7 +123,7 @@ export async function GET(
       safeQuery<TranscriptSummaryRow[]>(
         adminDb
           .from('transcript')
-          .select('id, title, created_at')
+          .select('id, content, created_at')
           .eq('user_id', userId)
           .order('created_at', { ascending: false })
           .limit(1),
@@ -143,7 +143,7 @@ export async function GET(
       safeQuery<ChallengeSummaryRow[]>(
         adminDb
           .from('challenge_responses')
-          .select('id, challenge_type, created_at')
+          .select('id, question, created_at')
           .eq('user_id', userId)
           .order('created_at', { ascending: false })
           .limit(1),
@@ -153,7 +153,7 @@ export async function GET(
       safeQuery<QuizSummaryRow[]>(
         adminDb
           .from('quiz_submissions')
-          .select('id, is_correct, submitted_at, created_at')
+          .select('id, is_correct, created_at')
           .eq('user_id', userId)
           .order('created_at', { ascending: false })
           .limit(1),
@@ -267,7 +267,7 @@ export async function GET(
       recentTranscript: recentTranscript
         ? {
             id: recentTranscript.id,
-            title: recentTranscript.title ?? 'Untitled',
+            title: recentTranscript.content ? (typeof recentTranscript.content === 'string' ? recentTranscript.content.slice(0, 80) : 'Untitled') : 'Untitled',
             createdAt: recentTranscript.created_at,
           }
         : null,
@@ -286,7 +286,7 @@ export async function GET(
       recentChallenge: recentChallenge
         ? {
             id: recentChallenge.id,
-            challengeType: recentChallenge.challenge_type ?? null,
+            question: recentChallenge.question ? (typeof recentChallenge.question === 'string' ? recentChallenge.question.slice(0, 200) : null) : null,
             createdAt: recentChallenge.created_at,
           }
         : null,
@@ -295,7 +295,7 @@ export async function GET(
         ? {
             id: recentQuiz.id,
             isCorrect: recentQuiz.is_correct ?? false,
-            createdAt: recentQuiz.submitted_at ?? recentQuiz.created_at,
+            createdAt: recentQuiz.created_at,
           }
         : null,
 

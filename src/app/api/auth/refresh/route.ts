@@ -1,6 +1,6 @@
 import { NextResponse } from 'next/server';
 import { cookies } from 'next/headers';
-import { verifyToken } from '@/lib/jwt';
+import { verifyRefreshToken } from '@/lib/jwt';
 import {
   findUserById,
   generateAuthTokens,
@@ -21,7 +21,7 @@ export async function POST(_req: Request) {
     }
 
     // Verify the refresh token
-    const payload = verifyToken(oldRefreshToken);
+    const payload = verifyRefreshToken(oldRefreshToken);
 
     // If token is invalid or expired, return unauthorized
     if (!payload) {

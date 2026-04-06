@@ -586,32 +586,40 @@ async function evaluateStepResponse({
       },
     } as const;
 
-    const completion = await openai.chat.completions.create({
-      model: defaultOpenAIModel,
-      response_format: evaluationSchema,
-      max_completion_tokens: 700,
-      messages: [
-        {
-          role: 'system',
-          content:
-            'You are a learning facilitator evaluating a learner’s response. Use the rubric to judge whether each goal is satisfied. Respond only with JSON that matches the required schema.',
-        },
-        {
-          role: 'user',
-          content: [
-            contextBlock ? contextBlock : 'Ringkasan tidak tersedia.',
-            '',
-            'Goals yang dinilai:',
-            goalsBlock,
-            '',
-            `Pertanyaan/Penugasan: ${step?.prompt ?? '-'}`,
-            `Jawaban peserta: ${responseText}`,
-            '',
-            'Nilailah setiap goal dengan menandai satisfied true/false dan cantumkan catatan singkat. Buat juga coachFeedback ringkas (2-3 kalimat) dalam bahasa yang sama dengan materi.',
-          ].join('\n'),
-        },
-      ],
-    });
+    const evaluationAbort = new AbortController();
+    const evaluationTimeout = setTimeout(() => evaluationAbort.abort(), 30000);
+
+    const completion = await openai.chat.completions.create(
+      {
+        model: defaultOpenAIModel,
+        response_format: evaluationSchema,
+        max_completion_tokens: 700,
+        messages: [
+          {
+            role: "system",
+            content:
+              "You are a learning facilitator evaluating a learner’s response. Use the rubric to judge whether each goal is satisfied. Respond only with JSON that matches the required schema.",
+          },
+          {
+            role: "user",
+            content: [
+              contextBlock ? contextBlock : "Ringkasan tidak tersedia.",
+              "",
+              "Goals yang dinilai:",
+              goalsBlock,
+              "",
+              `Pertanyaan/Penugasan: ${step?.prompt ?? "-"}`,
+              `Jawaban peserta: ${responseText}`,
+              "",
+              "Nilailah setiap goal dengan menandai satisfied true/false dan cantumkan catatan singkat. Buat juga coachFeedback ringkas (2-3 kalimat) dalam bahasa yang sama dengan materi.",
+            ].join("\n"),
+          },
+        ],
+      },
+      { signal: evaluationAbort.signal },
+    );
+
+    clearTimeout(evaluationTimeout);
 
     const raw = completion.choices?.[0]?.message?.content ?? '';
     const parsed = JSON.parse(raw.trim() || '{}');
@@ -636,17 +644,17 @@ async function evaluateStepResponse({
       evaluator: 'llm',
     };
   } catch (error) {
-    console.warn('[DiscussionRespond] Evaluation fallback triggered', error);
+    console.warn("[DiscussionRespond] Evaluation fallback triggered", error);
     return {
       coveredGoals: [],
       assessments: goalRefs.map((goalId) => ({
         goalId,
         satisfied: false,
-        notes: 'Evaluation fallback: tidak dapat menilai secara otomatis.',
+        notes: "Evaluation fallback: tidak dapat menilai secara otomatis.",
       })),
       coachFeedback:
-        'Terima kasih atas jawabanmu. Mari kita ulas kembali poin pentingnya dan pastikan sudah sesuai dengan tujuan.',
-      evaluator: 'fallback',
+        "Terima kasih atas jawabanmu. Mari kita ulas kembali poin pentingnya dan pastikan sudah sesuai dengan tujuan.",
+      evaluator: "fallback",
     };
   }
 }
@@ -663,21 +671,21 @@ function buildDefaultClosingMessage(goals: DiscussionGoalState[]) {
 
   if (pending) {
     return [
-      'Terima kasih untuk tanggapanmu. Ada beberapa poin yang masih bisa kamu perdalam:',
-      pending ? `Fokuskan ulang pada:\n${pending}` : '',
-      'Silakan tinjau kembali materi di atas sebelum melanjutkan, lalu kembali ke sesi diskusi kapan saja untuk menyempurnakan pemahamanmu.',
+      "Terima kasih untuk tanggapanmu. Ada beberapa poin yang masih bisa kamu perdalam:",
+      pending ? `Fokuskan ulang pada:\n${pending}` : "",
+      "Silakan tinjau kembali materi di atas sebelum melanjutkan, lalu kembali ke sesi diskusi kapan saja untuk menyempurnakan pemahamanmu.",
     ]
       .filter(Boolean)
-      .join('\n\n');
+      .join("\n\n");
   }
 
   return [
-    'Hebat! Kamu sudah menuntaskan seluruh tujuan diskusi untuk subtopik ini.',
-    accomplished ? `Poin yang sudah kamu kuasai:\n${accomplished}` : '',
-    'Jika ingin memperdalam lagi, kamu bisa mencoba menerapkan konsep ini pada situasi nyata atau melanjutkan ke materi berikutnya.',
+    "Hebat! Kamu sudah menuntaskan seluruh tujuan diskusi untuk subtopik ini.",
+    accomplished ? `Poin yang sudah kamu kuasai:\n${accomplished}` : "",
+    "Jika ingin memperdalam lagi, kamu bisa mencoba menerapkan konsep ini pada situasi nyata atau melanjutkan ke materi berikutnya.",
   ]
     .filter(Boolean)
-    .join('\n\n');
+    .join("\n\n");
 }
 
 async function ensureProgressRecord(userId: string, courseId: string, subtopicId: string) {
@@ -738,7 +746,7 @@ async function markProgressCompleted(userId: string, courseId: string, subtopicI
           course_id: courseId,
           subtopic_id: subtopicId,
           is_completed: true,
-          completion_date: now,
+          completed_at: now,
         });
 
       if (insertError) {
@@ -750,7 +758,7 @@ async function markProgressCompleted(userId: string, courseId: string, subtopicI
         .eq('id', data[0].id)
         .update({
           is_completed: true,
-          completion_date: now,
+          completed_at: now,
         });
 
       if (updateError) {

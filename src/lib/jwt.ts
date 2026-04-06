@@ -11,22 +11,45 @@ interface TokenPayload {
   userId: string;
   email: string;
   role: string;
+  type?: 'access' | 'refresh';
 }
 
 export function generateAccessToken(payload: TokenPayload): string {
-  return jwt.sign(payload, JWT_SECRET, { expiresIn: ACCESS_TOKEN_EXPIRY });
+  return jwt.sign({ ...payload, type: 'access' }, JWT_SECRET, { expiresIn: ACCESS_TOKEN_EXPIRY });
 }
 
 export function generateRefreshToken(payload: TokenPayload): string {
-  return jwt.sign(payload, JWT_SECRET, { expiresIn: REFRESH_TOKEN_EXPIRY });
+  return jwt.sign({ ...payload, type: 'refresh' }, JWT_SECRET, { expiresIn: REFRESH_TOKEN_EXPIRY });
 }
 
 export function verifyToken(token: string): TokenPayload | null {
   try {
-    return jwt.verify(token, JWT_SECRET) as TokenPayload;
+    const payload = jwt.verify(token, JWT_SECRET) as TokenPayload;
+    // Reject refresh tokens — accept access or legacy tokens without a type claim
+    if (payload.type === 'refresh') {
+      console.warn('[JWT] Refresh token rejected by verifyToken()');
+      return null;
+    }
+    return payload;
   } catch (error) {
     const message = (error as Error).message || 'Unknown verification error';
     console.warn(`[JWT] Token verification failed: ${message}`);
+    return null;
+  }
+}
+
+export function verifyRefreshToken(token: string): TokenPayload | null {
+  try {
+    const payload = jwt.verify(token, JWT_SECRET) as TokenPayload;
+    // Reject access tokens — accept refresh or legacy tokens without a type claim
+    if (payload.type === 'access') {
+      console.warn('[JWT] Access token rejected by verifyRefreshToken()');
+      return null;
+    }
+    return payload;
+  } catch (error) {
+    const message = (error as Error).message || 'Unknown verification error';
+    console.warn(`[JWT] Refresh token verification failed: ${message}`);
     return null;
   }
 }

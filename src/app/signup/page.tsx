@@ -82,11 +82,12 @@ export default function SignUpPage() {
         return;
       }
       
-      // Auto-login after successful registration
-      const loginResult = await login(email, password);
-      
+      // Auto-login after successful registration (with rememberMe to set refresh token)
+      const loginResult = await login(email, password, true);
+
       if (loginResult.success) {
-        router.push("/request-course/step1");
+        // Redirect to onboarding first (consistent with login flow)
+        router.push("/onboarding");
       } else {
         setError("Registration successful, but auto-login failed. Please sign in manually.");
       }

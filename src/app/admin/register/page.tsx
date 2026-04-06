@@ -27,7 +27,7 @@ export default function AdminRegisterPage() {
         router.push('/admin/login')
       } else {
         const data = await res.json()
-        setError(data.message || 'Registration failed')
+        setError(data.error || 'Registration failed')
       }
     } catch {
       setError('An unexpected error occurred.')

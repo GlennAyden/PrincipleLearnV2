@@ -70,8 +70,8 @@ export default function SessionsPage() {
         try {
             const res = await fetch('/api/admin/users?limit=100', { credentials: 'include' })
             const data = await res.json()
-            if (res.ok && data.users) {
-                setUsers(data.users)
+            if (res.ok && Array.isArray(data)) {
+                setUsers(data)
             }
         } catch (err) {
             console.error('Error fetching users:', err)
@@ -83,8 +83,8 @@ export default function SessionsPage() {
         try {
             const res = await fetch('/api/courses?limit=100', { credentials: 'include' })
             const data = await res.json()
-            if (res.ok && data.courses) {
-                setCourses(data.courses)
+            if (res.ok && Array.isArray(data)) {
+                setCourses(data)
             }
         } catch (err) {
             console.error('Error fetching courses:', err)
