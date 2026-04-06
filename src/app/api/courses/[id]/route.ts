@@ -17,7 +17,6 @@ export async function DELETE(
     const currentUser = await getCurrentUser();
     if (!currentUser) {
       return NextResponse.json({
-        success: false,
         error: 'Authentication required',
       }, { status: 401 });
     }
@@ -25,14 +24,12 @@ export async function DELETE(
     const course = await getCourseById(courseId);
     if (!course) {
       return NextResponse.json({
-        success: false,
         error: 'Course not found',
       }, { status: 404 });
     }
 
     if (!canAccessCourse(course, currentUser.id, currentUser.role)) {
       return NextResponse.json({
-        success: false,
         error: 'You do not have permission to delete this course',
       }, { status: 403 });
     }
@@ -46,7 +43,6 @@ export async function DELETE(
   } catch (error) {
     console.error('[Delete Course] Error deleting course:', error);
     return NextResponse.json({
-      success: false,
       error: 'Failed to delete course',
     }, { status: 500 });
   }
@@ -62,7 +58,6 @@ export async function GET(
     const currentUser = await getCurrentUser();
     if (!currentUser) {
       return NextResponse.json({
-        success: false,
         error: 'Authentication required',
       }, { status: 401 });
     }
@@ -70,14 +65,12 @@ export async function GET(
     const courseWithSubtopics = await getCourseWithSubtopics(courseId);
     if (!courseWithSubtopics) {
       return NextResponse.json({
-        success: false,
         error: 'Course not found',
       }, { status: 404 });
     }
 
     if (!canAccessCourse(courseWithSubtopics, currentUser.id, currentUser.role)) {
       return NextResponse.json({
-        success: false,
         error: 'You do not have permission to view this course',
       }, { status: 403 });
     }
@@ -89,7 +82,6 @@ export async function GET(
   } catch (error) {
     console.error('[Get Course] Error fetching course:', error);
     return NextResponse.json({
-      success: false,
       error: 'Failed to fetch course',
     }, { status: 500 });
   }

@@ -101,12 +101,27 @@ export function middleware(req: NextRequest) {
   }
 
   
+  // CSRF validation for mutation requests (POST, PUT, DELETE, PATCH)
+  const mutationMethods = ['POST', 'PUT', 'DELETE', 'PATCH']
+  if (pathname.startsWith('/api/') && mutationMethods.includes(req.method)) {
+    const csrfCookie = req.cookies.get('csrf_token')?.value
+    const csrfHeader = req.headers.get('x-csrf-token')
+
+    // Only enforce CSRF if the cookie exists (admin login doesn't set one)
+    if (csrfCookie && csrfCookie !== csrfHeader) {
+      return NextResponse.json(
+        { error: 'CSRF token mismatch' },
+        { status: 403 }
+      )
+    }
+  }
+
   // Add user info to request headers for use in API routes
   const requestHeaders = new Headers(req.headers)
   requestHeaders.set('x-user-id', payload.userId)
   requestHeaders.set('x-user-email', payload.email)
   requestHeaders.set('x-user-role', payload.role)
-  
+
   // Continue with the request
   return NextResponse.next({
     request: {

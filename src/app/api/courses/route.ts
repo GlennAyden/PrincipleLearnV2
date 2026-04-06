@@ -23,7 +23,6 @@ export async function GET(request: Request) {
 
         if (!identifier) {
           return NextResponse.json({
-            success: false,
             error: 'Authentication required',
           }, { status: 401 });
         }
@@ -31,7 +30,6 @@ export async function GET(request: Request) {
         const user = await resolveUserByIdentifier(identifier);
         if (!user) {
           return NextResponse.json({
-            success: false,
             error: 'User not found',
           }, { status: 404 });
         }
@@ -50,7 +48,6 @@ export async function GET(request: Request) {
   } catch (error) {
     console.error('[Get Courses] Error fetching courses:', error);
     return NextResponse.json({
-      success: false,
       error: 'Failed to fetch courses',
     }, { status: 500 });
   }

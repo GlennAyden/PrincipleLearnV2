@@ -12,7 +12,7 @@ async function getHandler(request: NextRequest) {
     const tokenPayload = accessToken ? verifyToken(accessToken) : null;
 
     if (!tokenPayload || (tokenPayload.role ?? '').toLowerCase() !== 'admin') {
-      return NextResponse.json({ error: 'Unauthorized' }, { status: 403 });
+      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
 
     const { searchParams } = request.nextUrl;

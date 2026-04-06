@@ -3,11 +3,18 @@
 import { NextResponse } from 'next/server'
 
 export async function POST() {
-  // Buat response JSON
-  const response = NextResponse.json({ ok: true }, { status: 200 })
+  try {
+    const response = NextResponse.json({ ok: true }, { status: 200 })
 
-  // Clear auth cookie
-  response.cookies.delete({ name: 'access_token', path: '/' })
+    // Clear auth cookie
+    response.cookies.delete({ name: 'access_token', path: '/' })
 
-  return response
+    return response
+  } catch (error) {
+    console.error('[Admin Logout] Error:', error)
+    return NextResponse.json(
+      { error: 'Failed to logout' },
+      { status: 500 }
+    )
+  }
 }

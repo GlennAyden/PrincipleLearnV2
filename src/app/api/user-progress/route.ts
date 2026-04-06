@@ -64,10 +64,9 @@ export async function POST(req: NextRequest) {
     });
 
   } catch (error: unknown) {
-    const message = error instanceof Error ? error.message : 'Unknown error';
     console.error('Error updating user progress:', error);
     return NextResponse.json(
-      { error: 'Failed to update user progress: ' + message },
+      { error: 'Failed to update progress' },
       { status: 500 }
     );
   }
@@ -111,10 +110,9 @@ export async function GET(req: NextRequest) {
     });
 
   } catch (error: unknown) {
-    const message = error instanceof Error ? error.message : 'Unknown error';
     console.error('Error retrieving user progress:', error);
     return NextResponse.json(
-      { error: 'Failed to retrieve user progress: ' + message },
+      { error: 'Failed to retrieve progress' },
       { status: 500 }
     );
   }

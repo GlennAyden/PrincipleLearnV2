@@ -1,4 +1,4 @@
-import type { Json } from './database';
+type Json = string | number | boolean | null | { [key: string]: Json | undefined } | Json[];
 
 export interface LearningGoal {
   id: string;

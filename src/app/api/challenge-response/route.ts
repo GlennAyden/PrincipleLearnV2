@@ -93,12 +93,7 @@ async function postHandler(req: NextRequest) {
       console.error('[Challenge Response] Database error:', message, originalError);
 
       return NextResponse.json(
-        {
-          success: false,
-          challengeId,
-          error: 'Failed to persist challenge response',
-          details: message
-        },
+        { error: 'Failed to persist challenge response' },
         { status: 500 }
       );
     }
@@ -106,7 +101,7 @@ async function postHandler(req: NextRequest) {
   } catch (error: unknown) {
     console.error('Error in challenge response API:', error);
     return NextResponse.json(
-      { error: 'Failed to process challenge response: ' + (error instanceof Error ? error.message : 'Unknown error') },
+      { error: 'Failed to process challenge response' },
       { status: 500 }
     );
   }
@@ -198,12 +193,7 @@ export async function GET(req: NextRequest) {
       console.error('[Challenge Response] Database error:', message, originalError);
 
       return NextResponse.json(
-        {
-          success: false,
-          responses: [],
-          error: 'Failed to load challenge responses',
-          details: message
-        },
+        { error: 'Failed to load challenge responses' },
         { status: 500 }
       );
     }
@@ -211,7 +201,7 @@ export async function GET(req: NextRequest) {
   } catch (error: unknown) {
     console.error('Error retrieving challenge responses:', error);
     return NextResponse.json(
-      { error: 'Failed to retrieve challenge responses: ' + (error instanceof Error ? error.message : 'Unknown error') },
+      { error: 'Failed to retrieve challenge responses' },
       { status: 500 }
     );
   }
