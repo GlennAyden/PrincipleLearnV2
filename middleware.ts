@@ -15,12 +15,14 @@ export function middleware(req: NextRequest) {
     '/admin/login',
   ]
   
-  // API routes that handle their own authentication
+  // API routes that handle their own authentication (no token required)
   const apiAuthRoutes = [
     '/api/auth/login',
     '/api/auth/register',
     '/api/auth/refresh',
-    '/api/auth/logout'
+    '/api/auth/logout',
+    '/api/admin/login',
+    '/api/admin/register',
   ]
   
   // Check if the current route is public or an auth API route
@@ -84,9 +86,17 @@ export function middleware(req: NextRequest) {
     return response
   }
   
-  // For admin routes, check if the user has admin role
+  // For admin routes (pages AND API), check if the user has admin role
   // Support both 'ADMIN' and 'admin' (admin login stores lowercase)
-  if (pathname.startsWith('/admin') && payload.role?.toLowerCase() !== 'admin') {
+  const isAdminPage = pathname.startsWith('/admin')
+  const isAdminApi = pathname.startsWith('/api/admin')
+  if ((isAdminPage || isAdminApi) && payload.role?.toLowerCase() !== 'admin') {
+    if (isAdminApi) {
+      return NextResponse.json(
+        { error: 'Forbidden: admin role required' },
+        { status: 403 }
+      )
+    }
     return NextResponse.redirect(new URL('/', req.url))
   }
 

@@ -3,12 +3,21 @@ import { DatabaseService } from '@/lib/database';
 
 export async function POST(req: NextRequest) {
   try {
-    const body = await req.json();
-    const { userId, courseId, moduleIndex, subtopicIndex, status = 'in_progress', timeSpent = 0 } = body;
-
-    if (!userId || !courseId || moduleIndex === undefined || subtopicIndex === undefined) {
+    // Use middleware-injected user ID from verified JWT (prevents IDOR)
+    const userId = req.headers.get('x-user-id');
+    if (!userId) {
       return NextResponse.json(
-        { error: 'Missing required fields: userId, courseId, moduleIndex, subtopicIndex' },
+        { error: 'Authentication required' },
+        { status: 401 }
+      );
+    }
+
+    const body = await req.json();
+    const { courseId, moduleIndex, subtopicIndex, status = 'in_progress', timeSpent = 0 } = body;
+
+    if (!courseId || moduleIndex === undefined || subtopicIndex === undefined) {
+      return NextResponse.json(
+        { error: 'Missing required fields: courseId, moduleIndex, subtopicIndex' },
         { status: 400 }
       );
     }
@@ -72,16 +81,17 @@ export async function POST(req: NextRequest) {
 
 export async function GET(req: NextRequest) {
   try {
-    const { searchParams } = new URL(req.url);
-    const userId = searchParams.get('userId');
-    const courseId = searchParams.get('courseId');
-
+    // Use middleware-injected user ID from verified JWT (prevents IDOR)
+    const userId = req.headers.get('x-user-id');
     if (!userId) {
       return NextResponse.json(
-        { error: 'userId parameter is required' },
-        { status: 400 }
+        { error: 'Authentication required' },
+        { status: 401 }
       );
     }
+
+    const { searchParams } = new URL(req.url);
+    const courseId = searchParams.get('courseId');
 
     // Build filter conditions
     const filter: Record<string, string> = { user_id: userId };

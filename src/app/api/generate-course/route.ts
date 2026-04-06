@@ -44,9 +44,10 @@ async function postHandler(req: NextRequest) {
     if (!parsed.success) return parsed.response;
     const { topic, goal, level, extraTopics, problem, assumption, userId, userEmail } = parsed.data;
 
+    // Use middleware-injected user ID from verified JWT as authoritative source (prevents IDOR)
     const headerUserId = req.headers.get('x-user-id');
     const headerUserEmail = req.headers.get('x-user-email');
-    const actorIdentifier = userId || userEmail || headerUserId || headerUserEmail || null;
+    const actorIdentifier = headerUserId || headerUserEmail || userId || userEmail || null;
 
     // Rate limit AI calls per user
     const rateLimitKey = headerUserId || actorIdentifier || req.headers.get('x-forwarded-for') || 'unknown';
@@ -167,10 +168,10 @@ Important: Write all titles and overviews in the same language as the user's inp
     if (actorIdentifier) {
       try {
         const userRecord =
-          (userId ? await resolveUserByIdentifier(userId) : null) ||
-          (userEmail ? await resolveUserByIdentifier(userEmail) : null) ||
           (headerUserId ? await resolveUserByIdentifier(headerUserId) : null) ||
-          (headerUserEmail ? await resolveUserByIdentifier(headerUserEmail) : null);
+          (headerUserEmail ? await resolveUserByIdentifier(headerUserEmail) : null) ||
+          (userId ? await resolveUserByIdentifier(userId) : null) ||
+          (userEmail ? await resolveUserByIdentifier(userEmail) : null);
 
         if (!userRecord) {
           throw new Error('Authenticated user could not be resolved from identifier');

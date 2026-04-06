@@ -20,13 +20,22 @@ function normalizeIndex(value: unknown) {
 
 async function postHandler(req: NextRequest) {
   try {
+    // Use middleware-injected user ID from verified JWT (prevents IDOR)
+    const headerUserId = req.headers.get('x-user-id');
+    if (!headerUserId) {
+      return NextResponse.json(
+        { error: 'Authentication required' },
+        { status: 401 }
+      );
+    }
+
     const parsed = parseBody(QuizSubmitSchema, await req.json());
     if (!parsed.success) return parsed.response;
     const data = parsed.data;
     const answers = data.answers;
 
-    // Find user in database (accept both user id and email)
-    const user = await resolveUserByIdentifier(data.userId);
+    // Find user in database using authenticated user ID from JWT
+    const user = await resolveUserByIdentifier(headerUserId);
 
     if (!user) {
       return NextResponse.json(

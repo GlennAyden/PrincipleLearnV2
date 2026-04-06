@@ -25,16 +25,25 @@ function parseRating(value: unknown) {
 
 async function postHandler(req: NextRequest) {
   try {
+    // Use middleware-injected user ID from verified JWT (prevents IDOR)
+    const headerUserId = req.headers.get('x-user-id');
+    if (!headerUserId) {
+      return NextResponse.json(
+        { error: 'Authentication required' },
+        { status: 401 }
+      );
+    }
+
     // Validate request body
     const parsed = parseBody(FeedbackSchema, await req.json());
     if (!parsed.success) return parsed.response;
     const {
       subtopicId, subtopic, moduleIndex, subtopicIndex,
-      feedback, comment, rating, userId, courseId,
+      feedback, comment, rating, courseId,
     } = parsed.data;
 
     const normalizedComment = normalizeText(comment ?? feedback);
-    const normalizedUserId = normalizeText(userId);
+    const normalizedUserId = normalizeText(headerUserId);
     const normalizedCourseId = normalizeText(courseId);
     const normalizedSubtopicId = normalizeText(subtopicId);
     const normalizedSubtopicLabel = normalizeText(subtopic);

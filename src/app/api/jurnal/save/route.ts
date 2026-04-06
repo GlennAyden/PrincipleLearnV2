@@ -88,6 +88,15 @@ function parseStructuredContent(data: JurnalSubmission) {
 
 async function postHandler(req: NextRequest) {
   try {
+    // Use middleware-injected user ID from verified JWT (prevents IDOR)
+    const headerUserId = req.headers.get('x-user-id');
+    if (!headerUserId) {
+      return NextResponse.json(
+        { error: 'Authentication required' },
+        { status: 401 }
+      );
+    }
+
     // Validate request body
     const parsed = parseBody(JurnalSchema, await req.json());
     if (!parsed.success) return parsed.response;
@@ -97,8 +106,8 @@ async function postHandler(req: NextRequest) {
     const moduleIndex = normalizeIndex(data.moduleIndex);
     const subtopicIndex = normalizeIndex(data.subtopicIndex);
 
-    // Find user in database (accept both user id and email)
-    const user = await resolveUserByIdentifier(data.userId);
+    // Find user in database using authenticated user ID from JWT
+    const user = await resolveUserByIdentifier(headerUserId);
     if (!user) {
       return NextResponse.json(
         { error: "User not found" },

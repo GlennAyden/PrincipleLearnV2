@@ -49,8 +49,17 @@ async function resolveUserByIdentifier(identifier: string) {
 
 async function postHandler(req: NextRequest) {
   try {
+    // Use middleware-injected user ID from verified JWT (prevents IDOR)
+    const headerUserId = req.headers.get('x-user-id');
+    if (!headerUserId) {
+      return NextResponse.json(
+        { error: 'Authentication required' },
+        { status: 401 }
+      );
+    }
+
     const data: TranscriptSubmission = await req.json();
-    
+
     // Validasi data
     if (!data.userId || !data.courseId || !data.subtopic || !data.question || !data.answer) {
       return NextResponse.json(
@@ -59,8 +68,8 @@ async function postHandler(req: NextRequest) {
       );
     }
 
-    // Find user in database (accept both user id and email)
-    const user = await resolveUserByIdentifier(data.userId);
+    // Find user in database using authenticated user ID from JWT
+    const user = await resolveUserByIdentifier(headerUserId);
 
     if (!user) {
       return NextResponse.json(
