@@ -37,7 +37,7 @@ export async function POST(req: Request) {
     // Hash password and create user
     const passwordHash = await hashPassword(password);
 
-    const userData: Record<string, any> = {
+    const userData: Record<string, string> = {
       email: normalizedEmail,
       password_hash: passwordHash,
       role: 'user',
@@ -60,7 +60,7 @@ export async function POST(req: Request) {
       },
       message: 'Registration successful. You can now log in.'
     });
-  } catch (error: any) {
+  } catch (error: unknown) {
     // Handle race condition: another request created the same email between check and insert
     if (error instanceof DatabaseError && error.isUniqueViolation) {
       return NextResponse.json(

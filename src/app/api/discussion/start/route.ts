@@ -13,18 +13,47 @@ import {
   generateModuleDiscussionTemplate,
 } from '@/services/discussion/generateDiscussionTemplate';
 
+interface DiscussionStep {
+  key: string;
+  prompt: string;
+  expected_type?: string;
+  options?: string[];
+  goal_refs?: string[];
+}
+
+interface DiscussionTemplate {
+  phases?: Array<{
+    id?: string;
+    steps?: Array<DiscussionStep>;
+  }>;
+  closing_message?: string;
+  learning_goals?: Array<{
+    id?: string;
+    description?: string;
+    rubric?: GoalRubric;
+    thinking_skill?: unknown;
+    thinkingSkill?: unknown;
+  }>;
+}
+
+interface GoalRubric {
+  success_summary?: string;
+  checklist?: string[];
+  failure_signals?: string[];
+}
+
 type TemplateRecord = {
   id: string;
   version: string;
-  template: any;
-  source?: any;
+  template: DiscussionTemplate;
+  source?: Record<string, unknown>;
 };
 
 type SessionRecord = {
   id: string;
   status: string;
   phase: string;
-  learning_goals: any;
+  learning_goals: unknown;
   template_id: string;
   course_id: string;
   subtopic_id: string;
@@ -33,9 +62,28 @@ type SessionRecord = {
 interface DiscussionSessionGoal {
   id: string;
   description: string;
-  rubric?: any;
+  rubric?: GoalRubric | null;
   thinkingSkill?: ThinkingSkillMeta | null;
   covered: boolean;
+}
+
+interface DiscussionMessage {
+  id: string;
+  role: string;
+  content: string;
+  step_key: string | null;
+  metadata: Record<string, unknown> | null;
+  created_at: string;
+}
+
+interface SubtopicCacheContent {
+  objectives?: string[];
+  keyTakeaways?: string[];
+  commonPitfalls?: string[];
+  misconceptions?: string[];
+  whatNext?: { summary?: string };
+  pages?: Array<{ paragraphs?: string[] }>;
+  [key: string]: unknown;
 }
 
 async function postHandler(request: NextRequest) {
@@ -342,7 +390,7 @@ async function tryRegenerateTemplate({
       return false;
     }
 
-    const cacheContent = cacheRow?.content ?? null;
+    const cacheContent = (cacheRow?.content ?? null) as SubtopicCacheContent | null;
     if (!cacheContent) {
       console.warn('[DiscussionStart] Cached content missing for regeneration', { cacheKey });
       return false;
@@ -371,13 +419,13 @@ async function tryRegenerateTemplate({
   }
 }
 
-function flattenTemplate(template: any) {
+function flattenTemplate(template: DiscussionTemplate | null | undefined) {
   const phases = Array.isArray(template?.phases) ? template.phases : [];
-  const flattened: Array<{ phaseId: string; step: any }> = [];
+  const flattened: Array<{ phaseId: string; step: DiscussionStep }> = [];
 
-  phases.forEach((phase: any) => {
+  phases.forEach((phase) => {
     const steps = Array.isArray(phase?.steps) ? phase.steps : [];
-    steps.forEach((step: any) => {
+    steps.forEach((step) => {
       if (step && typeof step.prompt === 'string') {
         flattened.push({
           phaseId: phase?.id || 'phase',
@@ -390,7 +438,7 @@ function flattenTemplate(template: any) {
   return flattened;
 }
 
-function getCurrentStep(template: any, messages: any[]) {
+function getCurrentStep(template: DiscussionTemplate, messages: DiscussionMessage[]) {
   const steps = flattenTemplate(template);
   if (!steps.length) return null;
 
@@ -429,7 +477,7 @@ function getCurrentStep(template: any, messages: any[]) {
   };
 }
 
-function buildInitialGoals(goals: any): DiscussionSessionGoal[] {
+function buildInitialGoals(goals: DiscussionTemplate['learning_goals']): DiscussionSessionGoal[] {
   if (!Array.isArray(goals)) {
     return [];
   }
@@ -437,7 +485,7 @@ function buildInitialGoals(goals: any): DiscussionSessionGoal[] {
   return goals
     .filter((goal) => goal && typeof goal.id === 'string')
     .map((goal) => ({
-      id: goal.id,
+      id: goal.id!,
       description: goal.description ?? '',
       rubric: goal.rubric ?? null,
       thinkingSkill: normalizeThinkingSkillMeta(goal.thinking_skill ?? goal.thinkingSkill),
@@ -488,14 +536,14 @@ async function ensureProgressRecord(userId: string, courseId: string, subtopicId
   }
 }
 
-function toStringArray(value: any): string[] {
+function toStringArray(value: unknown): string[] {
   if (!Array.isArray(value)) return [];
   return value
     .map((item) => (typeof item === 'string' ? item.trim() : ''))
     .filter((item) => item.length > 0);
 }
 
-function buildDiscussionSummary(content: any): string {
+function buildDiscussionSummary(content: SubtopicCacheContent | null): string {
   const summaryParts: string[] = [];
 
   if (content?.whatNext?.summary) {
@@ -524,7 +572,7 @@ function buildDiscussionSummary(content: any): string {
   return summaryParts.join('\n\n');
 }
 
-function extractMisconceptions(content: any): string[] {
+function extractMisconceptions(content: SubtopicCacheContent | null): string[] {
   if (Array.isArray(content?.commonPitfalls) && content.commonPitfalls.length > 0) {
     return toStringArray(content.commonPitfalls);
   }
@@ -575,7 +623,7 @@ async function assembleModuleDiscussionContextFromDb({
   moduleTitle,
   moduleRecord,
 }: ModuleDiscussionContextParams): Promise<ModuleDiscussionContextResult | null> {
-  let outline: any = null;
+  let outline: { subtopics?: Array<string | { title?: string; overview?: string }> } | null = null;
   try {
     outline = moduleRecord?.content ? JSON.parse(String(moduleRecord.content)) : null;
   } catch (parseError) {
@@ -620,7 +668,7 @@ async function assembleModuleDiscussionContextFromDb({
       });
     }
 
-    const cachedContent = cacheRow?.content ?? null;
+    const cachedContent = (cacheRow?.content ?? null) as SubtopicCacheContent | null;
     const objectives = toStringArray(cachedContent?.objectives);
     const takeaways = toStringArray(cachedContent?.keyTakeaways);
     const subMisconceptions = extractMisconceptions(cachedContent);

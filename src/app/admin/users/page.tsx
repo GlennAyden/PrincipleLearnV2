@@ -108,8 +108,8 @@ export default function AdminUsersPage() {
       setUsers((prev) => prev.filter((u) => u.id !== id))
       if (selectedUserId === id) setSelectedUserId(null)
       alert(`User ${email} deleted.`)
-    } catch (err: any) {
-      alert(`Failed: ${err.message}`)
+    } catch (err: unknown) {
+      alert(`Failed: ${err instanceof Error ? err.message : 'Unknown error'}`)
     } finally {
       setDeleteInProgress(null)
     }
@@ -129,8 +129,8 @@ export default function AdminUsersPage() {
       a.click()
       document.body.removeChild(a)
       URL.revokeObjectURL(url)
-    } catch (err: any) {
-      alert(`Export failed: ${err.message}`)
+    } catch (err: unknown) {
+      alert(`Export failed: ${err instanceof Error ? err.message : 'Unknown error'}`)
     } finally {
       setExportLoading(false)
     }
@@ -205,12 +205,12 @@ export default function AdminUsersPage() {
           <FiSearch />
           <input type="text" placeholder="Search by email or name..." value={searchTerm} onChange={(e) => setSearchTerm(e.target.value)} />
         </label>
-        <select className={styles.select} value={roleFilter} onChange={(e) => setRoleFilter(e.target.value as any)}>
+        <select className={styles.select} value={roleFilter} onChange={(e) => setRoleFilter(e.target.value as 'ALL' | 'USER' | 'ADMIN')}>
           <option value="ALL">All Roles</option>
           <option value="USER">Students</option>
           <option value="ADMIN">Admins</option>
         </select>
-        <select className={styles.select} value={sortBy} onChange={(e) => setSortBy(e.target.value as any)}>
+        <select className={styles.select} value={sortBy} onChange={(e) => setSortBy(e.target.value as 'recent' | 'email' | 'engagement' | 'completion')}>
           <option value="recent">Sort: Recent Activity</option>
           <option value="engagement">Sort: Engagement</option>
           <option value="completion">Sort: Completion</option>

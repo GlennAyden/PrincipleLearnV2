@@ -28,7 +28,7 @@ interface DiscussionGoal {
   id: string;
   description: string;
   covered: boolean;
-  rubric?: any;
+  rubric?: Record<string, unknown>;
 }
 
 interface DiscussionSession {
@@ -48,7 +48,7 @@ interface DiscussionMessage {
     type?: string;
     expected_type?: string;
     options?: string[];
-    [key: string]: any;
+    [key: string]: unknown;
   };
   step_key?: string;
 }
@@ -218,7 +218,7 @@ export default function DiscussionModulePage() {
         }
 
         const outline: OutlineModule[] =
-          result.course.subtopics?.map((subtopic: any, index: number) => {
+          result.course.subtopics?.map((subtopic: { id?: string; title?: string; content: string }, index: number) => {
             let content;
             try {
               content = JSON.parse(subtopic.content);
@@ -239,9 +239,9 @@ export default function DiscussionModulePage() {
             outline,
           });
         }
-      } catch (err: any) {
+      } catch (err: unknown) {
         if (!cancelled) {
-          setCourseError(err?.message ?? 'Tidak dapat memuat data kursus');
+          setCourseError(err instanceof Error ? err.message : 'Tidak dapat memuat data kursus');
         }
       } finally {
         if (!cancelled) {
@@ -341,11 +341,11 @@ export default function DiscussionModulePage() {
             );
           }
         }
-      } catch (err: any) {
+      } catch (err: unknown) {
         if (!cancelled) {
           setPrereqDetails(null);
           setRequiresPreparation(true);
-          setError(err?.message ?? 'Gagal memeriksa prasyarat diskusi');
+          setError(err instanceof Error ? err.message : 'Gagal memeriksa prasyarat diskusi');
         }
       } finally {
         if (!cancelled) {
@@ -375,7 +375,7 @@ export default function DiscussionModulePage() {
 
     async function startNewSession() {
       try {
-        const payload: Record<string, any> = {
+        const payload: Record<string, unknown> = {
           courseId,
           subtopicTitle: apiSubtopicTitle,
           moduleTitle: moduleTitle || undefined,
@@ -414,9 +414,9 @@ export default function DiscussionModulePage() {
           setMessages(Array.isArray(data.messages) ? data.messages : []);
           setCurrentStep(data.currentStep ?? null);
         }
-      } catch (err: any) {
+      } catch (err: unknown) {
         if (!cancelled) {
-          const message = err?.message ?? 'Tidak dapat memulai sesi diskusi';
+          const message = err instanceof Error ? err.message : 'Tidak dapat memulai sesi diskusi';
           if (/unable to resolve discussion context/i.test(message) || /discussion session not found/i.test(message)) {
             setRequiresPreparation(true);
             setError(
@@ -478,9 +478,9 @@ export default function DiscussionModulePage() {
           setMessages(Array.isArray(data.messages) ? data.messages : []);
           setCurrentStep(data.currentStep ?? null);
         }
-      } catch (err: any) {
+      } catch (err: unknown) {
         if (!cancelled) {
-          const message = err?.message ?? 'Tidak dapat memuat sesi diskusi';
+          const message = err instanceof Error ? err.message : 'Tidak dapat memuat sesi diskusi';
           if (/unable to resolve discussion context/i.test(message) || /discussion session not found/i.test(message)) {
             setRequiresPreparation(true);
             setError(
@@ -558,8 +558,8 @@ export default function DiscussionModulePage() {
       setCurrentStep(nextStep);
       setInputValue('');
       setSelectedOption(null);
-    } catch (err: any) {
-      setError(err?.message ?? 'Tidak dapat mengirim jawaban');
+    } catch (err: unknown) {
+      setError(err instanceof Error ? err.message : 'Tidak dapat mengirim jawaban');
     } finally {
       setSubmitting(false);
     }
@@ -671,7 +671,7 @@ export default function DiscussionModulePage() {
     router.push(`/course/${courseId}?module=${moduleIndex}`);
   };
 
-  const formatAssessment = (assessment: any): string => {
+  const formatAssessment = (assessment: unknown): string => {
     if (typeof assessment === 'string') {
       return assessment;
     }
@@ -679,15 +679,16 @@ export default function DiscussionModulePage() {
       return String(assessment ?? '');
     }
 
+    const obj = assessment as Record<string, unknown>;
     const fragments: string[] = [];
 
     const mainText =
-      typeof assessment.comment === 'string' && assessment.comment.trim()
-        ? assessment.comment.trim()
-        : typeof assessment.notes === 'string' && assessment.notes.trim()
-        ? assessment.notes.trim()
-        : typeof assessment.message === 'string' && assessment.message.trim()
-        ? assessment.message.trim()
+      typeof obj.comment === 'string' && obj.comment.trim()
+        ? obj.comment.trim()
+        : typeof obj.notes === 'string' && obj.notes.trim()
+        ? obj.notes.trim()
+        : typeof obj.message === 'string' && obj.message.trim()
+        ? obj.message.trim()
         : '';
 
     if (mainText) {
@@ -695,15 +696,15 @@ export default function DiscussionModulePage() {
     }
 
     const goalIdentifier =
-      assessment.goalId ?? assessment.goal_id ?? assessment.goal ?? null;
+      obj.goalId ?? obj.goal_id ?? obj.goal ?? null;
 
     if (goalIdentifier !== null && goalIdentifier !== undefined) {
       const goalLabel = `Goal ${goalIdentifier}`;
       const satisfied =
-        typeof assessment.satisfied === 'boolean'
-          ? assessment.satisfied
-          : typeof assessment.satisfied === 'string'
-          ? assessment.satisfied.toLowerCase() === 'true'
+        typeof obj.satisfied === 'boolean'
+          ? obj.satisfied
+          : typeof obj.satisfied === 'string'
+          ? obj.satisfied.toLowerCase() === 'true'
           : null;
       if (satisfied !== null) {
         fragments.push(
@@ -712,12 +713,12 @@ export default function DiscussionModulePage() {
       } else {
         fragments.push(goalLabel);
       }
-    } else if (typeof assessment.satisfied === 'boolean') {
-      fragments.push(assessment.satisfied ? 'Goal tercapai' : 'Goal belum tercapai');
+    } else if (typeof obj.satisfied === 'boolean') {
+      fragments.push(obj.satisfied ? 'Goal tercapai' : 'Goal belum tercapai');
     }
 
-    if (typeof assessment.explanation === 'string' && assessment.explanation.trim()) {
-      fragments.push(assessment.explanation.trim());
+    if (typeof obj.explanation === 'string' && obj.explanation.trim()) {
+      fragments.push(obj.explanation.trim());
     }
 
     if (!fragments.length) {
@@ -946,7 +947,7 @@ export default function DiscussionModulePage() {
                       <div className={styles.messageBody}>{message.content}</div>
                       {Array.isArray(meta.assessments) && meta.assessments.length > 0 && (
                         <ul className={styles.assessmentList}>
-                          {meta.assessments.map((item: any, idx: number) => (
+                          {meta.assessments.map((item: unknown, idx: number) => (
                             <li key={idx}>{formatAssessment(item)}</li>
                           ))}
                         </ul>

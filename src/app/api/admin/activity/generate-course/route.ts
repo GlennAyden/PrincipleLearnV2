@@ -26,8 +26,8 @@ interface CourseGenerationActivityRow {
   id: string;
   user_id: string | null;
   course_id: string | null;
-  request_payload: any;
-  outline: any;
+  request_payload: Record<string, unknown> | null;
+  outline: unknown[] | null;
   created_at: string;
 }
 
@@ -110,17 +110,17 @@ async function buildActivityPayload({
   for (const row of filteredRows) {
     const user = await fetchCached<User>(userCache, row.user_id, 'users')
     const course = await fetchCached<Course>(courseCache, row.course_id, 'courses')
-    const requestPayload = typeof row.request_payload === 'object' && row.request_payload !== null ? row.request_payload : {}
-    const outlineArray = Array.isArray(row.outline) ? row.outline : []
+    const requestPayload: Record<string, unknown> = typeof row.request_payload === 'object' && row.request_payload !== null ? row.request_payload : {}
+    const outlineArray: unknown[] = Array.isArray(row.outline) ? row.outline : []
 
-    const modules = outlineArray.map((module: any, moduleIdx: number) => ({
-      title: module?.module || `Modul ${moduleIdx + 1}`,
+    const modules = (outlineArray as Record<string, unknown>[]).map((module, moduleIdx) => ({
+      title: (module?.module as string) || `Modul ${moduleIdx + 1}`,
       subtopics: Array.isArray(module?.subtopics)
-        ? module.subtopics
+        ? (module.subtopics as Record<string, unknown>[])
             .filter(Boolean)
-            .map((subtopic: any, subIdx: number) => ({
-              title: subtopic?.title || `Subtopik ${subIdx + 1}`,
-              overview: subtopic?.overview || '',
+            .map((subtopic: Record<string, unknown>, subIdx: number) => ({
+              title: (subtopic?.title as string) || `Subtopik ${subIdx + 1}`,
+              overview: (subtopic?.overview as string) || '',
             }))
         : [],
     }))
@@ -131,12 +131,12 @@ async function buildActivityPayload({
       userEmail: user?.email ?? 'Unknown User',
       userId: row.user_id ?? 'unknown',
       courseId: row.course_id ?? null,
-      courseName: course?.title ?? requestPayload?.step1?.topic ?? 'Permintaan Kursus',
+      courseName: course?.title ?? ((requestPayload?.step1 as Record<string, unknown> | undefined)?.topic as string | undefined) ?? 'Permintaan Kursus',
       requestPayload,
       steps: {
-        step1: requestPayload?.step1 ?? {},
-        step2: requestPayload?.step2 ?? {},
-        step3: requestPayload?.step3 ?? {},
+        step1: (requestPayload?.step1 as Record<string, unknown>) ?? {},
+        step2: (requestPayload?.step2 as Record<string, unknown>) ?? {},
+        step3: (requestPayload?.step3 as Record<string, unknown>) ?? {},
       },
       outline: modules,
     })

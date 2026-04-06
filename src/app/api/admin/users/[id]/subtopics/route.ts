@@ -30,21 +30,24 @@ export async function GET(
       return NextResponse.json({ error: 'userId required' }, { status: 400 });
     }
 
-    const courses = await DatabaseService.getRecords<any>('courses', {
+    interface CourseSubRow { id: string; title: string; created_at: string; created_by: string }
+    interface SubtopicSubRow { id: string; title: string; order_index?: number; course_id: string }
+
+    const courses = await DatabaseService.getRecords<CourseSubRow>('courses', {
       filter: { created_by: userId },
       orderBy: { column: 'created_at', ascending: true },
     });
 
     const coursePayload = [];
     for (const course of courses) {
-      const subtopics = await DatabaseService.getRecords<any>('subtopics', {
+      const subtopics = await DatabaseService.getRecords<SubtopicSubRow>('subtopics', {
         filter: { course_id: course.id },
         orderBy: { column: 'order_index', ascending: true },
       });
       coursePayload.push({
         courseId: course.id,
         courseTitle: course.title,
-        subtopics: subtopics.map((subtopic: any) => ({
+        subtopics: subtopics.map(subtopic => ({
           subtopicId: subtopic.id,
           title: subtopic.title,
           orderIndex: subtopic.order_index ?? 0,
@@ -53,7 +56,7 @@ export async function GET(
     }
 
     // The admin_subtopic_delete_logs table does not exist
-    const deleteLogs: any[] = [];
+    const deleteLogs: Record<string, unknown>[] = [];
 
     return NextResponse.json({
       courses: coursePayload,
@@ -84,7 +87,10 @@ export async function POST(
       );
     }
 
-    const [course] = await DatabaseService.getRecords<any>('courses', {
+    interface CoursePostRow { id: string; title: string; created_by: string }
+    interface SubtopicPostRow { id: string; title: string }
+
+    const [course] = await DatabaseService.getRecords<CoursePostRow>('courses', {
       filter: { id: courseId },
       limit: 1,
     });
@@ -92,7 +98,7 @@ export async function POST(
       return NextResponse.json({ error: 'Course not found for user' }, { status: 404 });
     }
 
-    const [subtopic] = await DatabaseService.getRecords<any>('subtopics', {
+    const [subtopic] = await DatabaseService.getRecords<SubtopicPostRow>('subtopics', {
       filter: { id: subtopicId },
       limit: 1,
     });

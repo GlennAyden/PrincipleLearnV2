@@ -5,6 +5,17 @@ import { NextRequest, NextResponse } from 'next/server'
 import { adminDb } from '@/lib/database'
 import { verifyToken } from '@/lib/jwt'
 
+// ── Row Interfaces ──
+interface DiscussionSummaryRow { id: string; status: string; phase?: string; updated_at: string; learning_goals: unknown }
+interface JournalSummaryRow { id: string; content: string; reflection?: string; created_at: string }
+interface TranscriptSummaryRow { id: string; title?: string; created_at: string }
+interface AskSummaryRow { id: string; question: string; created_at: string }
+interface ChallengeSummaryRow { id: string; challenge_type?: string; created_at: string }
+interface QuizSummaryRow { id: string; is_correct: boolean; submitted_at?: string; created_at: string }
+interface FeedbackSummaryRow { id: string; rating?: number; created_at: string }
+interface IdRow { id: string }
+interface UserRecordRow { id: string; email: string }
+
 // ─── Auth ─────────────────────────────────────────────────────────────────────
 
 function unauthorized(message = 'Unauthorized access') {
@@ -14,6 +25,7 @@ function unauthorized(message = 'Unauthorized access') {
 // ─── Safe query helper ────────────────────────────────────────────────────────
 
 async function safeQuery<T>(
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any -- Supabase query builder returns complex generic types
   query: any,
   label: string,
   fallback: T
@@ -88,7 +100,7 @@ export async function GET(
       courseCountRows,
     ] = await Promise.all([
       // Recent entries (limit 1, most recent)
-      safeQuery<any[]>(
+      safeQuery<DiscussionSummaryRow[]>(
         adminDb
           .from('discussion_sessions')
           .select('id, status, phase, updated_at, learning_goals')
@@ -98,7 +110,7 @@ export async function GET(
         'recent discussion',
         []
       ),
-      safeQuery<any[]>(
+      safeQuery<JournalSummaryRow[]>(
         adminDb
           .from('jurnal')
           .select('id, content, reflection, created_at')
@@ -108,7 +120,7 @@ export async function GET(
         'recent journal',
         []
       ),
-      safeQuery<any[]>(
+      safeQuery<TranscriptSummaryRow[]>(
         adminDb
           .from('transcript')
           .select('id, title, created_at')
@@ -118,7 +130,7 @@ export async function GET(
         'recent transcript',
         []
       ),
-      safeQuery<any[]>(
+      safeQuery<AskSummaryRow[]>(
         adminDb
           .from('ask_question_history')
           .select('id, question, created_at')
@@ -128,7 +140,7 @@ export async function GET(
         'recent ask question',
         []
       ),
-      safeQuery<any[]>(
+      safeQuery<ChallengeSummaryRow[]>(
         adminDb
           .from('challenge_responses')
           .select('id, challenge_type, created_at')
@@ -138,7 +150,7 @@ export async function GET(
         'recent challenge',
         []
       ),
-      safeQuery<any[]>(
+      safeQuery<QuizSummaryRow[]>(
         adminDb
           .from('quiz_submissions')
           .select('id, is_correct, submitted_at, created_at')
@@ -148,7 +160,7 @@ export async function GET(
         'recent quiz',
         []
       ),
-      safeQuery<any[]>(
+      safeQuery<FeedbackSummaryRow[]>(
         adminDb
           .from('feedback')
           .select('id, rating, created_at')
@@ -158,7 +170,7 @@ export async function GET(
         'recent feedback',
         []
       ),
-      safeQuery<any[]>(
+      safeQuery<IdRow[]>(
         adminDb
           .from('courses')
           .select('id')
@@ -169,42 +181,42 @@ export async function GET(
         []
       ),
       // Count queries
-      safeQuery<any[]>(
+      safeQuery<IdRow[]>(
         adminDb.from('discussion_sessions').select('id').eq('user_id', userId),
         'discussion count',
         []
       ),
-      safeQuery<any[]>(
+      safeQuery<IdRow[]>(
         adminDb.from('jurnal').select('id').eq('user_id', userId),
         'journal count',
         []
       ),
-      safeQuery<any[]>(
+      safeQuery<IdRow[]>(
         adminDb.from('transcript').select('id').eq('user_id', userId),
         'transcript count',
         []
       ),
-      safeQuery<any[]>(
+      safeQuery<IdRow[]>(
         adminDb.from('ask_question_history').select('id').eq('user_id', userId),
         'ask question count',
         []
       ),
-      safeQuery<any[]>(
+      safeQuery<IdRow[]>(
         adminDb.from('challenge_responses').select('id').eq('user_id', userId),
         'challenge count',
         []
       ),
-      safeQuery<any[]>(
+      safeQuery<IdRow[]>(
         adminDb.from('quiz_submissions').select('id').eq('user_id', userId),
         'quiz count',
         []
       ),
-      safeQuery<any[]>(
+      safeQuery<IdRow[]>(
         adminDb.from('feedback').select('id').eq('user_id', userId),
         'feedback count',
         []
       ),
-      safeQuery<any[]>(
+      safeQuery<IdRow[]>(
         adminDb.from('courses').select('id').eq('created_by', userId),
         'course count',
         []
@@ -220,9 +232,10 @@ export async function GET(
     const recentQuiz = quizRows[0] ?? null
     const recentFeedback = feedbackRows[0] ?? null
 
+    const typedUser = userRecord as unknown as UserRecordRow;
     const response = {
-      userId: (userRecord as any).id,
-      email: (userRecord as any).email,
+      userId: typedUser.id,
+      email: typedUser.email,
 
       recentDiscussion: recentDiscussion
         ? {

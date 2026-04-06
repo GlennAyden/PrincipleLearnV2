@@ -147,11 +147,11 @@ function DiscussionCard({
               : [],
           });
         }
-      } catch (err: any) {
+      } catch (err: unknown) {
         if (!cancelled) {
           console.error('[DiscussionCard] unable to load session status:', err);
           setSession(null);
-          setError(err?.message ?? '');
+          setError(err instanceof Error ? err.message : '');
         }
       } finally {
         if (!cancelled) {
@@ -296,7 +296,7 @@ export default function CourseOverviewPage() {
           
           // Transform subtopics to outline format
           console.log(`[Course Page] DEBUG: Transforming ${result.course.subtopics.length} subtopics`);
-          const outline: ModuleOutline[] = result.course.subtopics.map((subtopic: any, index: number) => {
+          const outline: ModuleOutline[] = result.course.subtopics.map((subtopic: { id?: string; title?: string; content: string }, index: number) => {
             console.log(`[Course Page] DEBUG: Processing subtopic ${index}:`, subtopic);
             
             let content;

@@ -109,9 +109,11 @@ export default function AdminDiscussionsPage() {
         }
         const payload = await response.json();
         setSessions(payload.sessions ?? []);
-      } catch (error: any) {
-        if (error.name !== 'AbortError') {
-          setListError(error?.message ?? 'Tidak dapat memuat sesi diskusi');
+      } catch (error: unknown) {
+        if (error instanceof Error && error.name !== 'AbortError') {
+          setListError(error.message ?? 'Tidak dapat memuat sesi diskusi');
+        } else if (!(error instanceof Error)) {
+          setListError('Tidak dapat memuat sesi diskusi');
         }
       } finally {
         setLoadingSessions(false);
@@ -150,9 +152,11 @@ export default function AdminDiscussionsPage() {
         }
         const payload = await response.json();
         setDetail(payload);
-      } catch (error: any) {
-        if (error.name !== 'AbortError') {
-          setDetailError(error?.message ?? 'Tidak dapat memuat detail sesi');
+      } catch (error: unknown) {
+        if (error instanceof Error && error.name !== 'AbortError') {
+          setDetailError(error.message ?? 'Tidak dapat memuat detail sesi');
+        } else if (!(error instanceof Error)) {
+          setDetailError('Tidak dapat memuat detail sesi');
         }
       } finally {
         setLoadingDetail(false);
@@ -241,8 +245,8 @@ export default function AdminDiscussionsPage() {
         throw new Error(err.error || 'Gagal memperbarui status goal');
       }
       await refreshDetail();
-    } catch (error: any) {
-      alert(error?.message ?? 'Tidak dapat memperbarui status goal');
+    } catch (error: unknown) {
+      alert(error instanceof Error ? error.message : 'Tidak dapat memperbarui status goal');
     } finally {
       setSubmittingAction(false);
     }
@@ -271,8 +275,8 @@ export default function AdminDiscussionsPage() {
       setNoteText('');
       setNotePhase(null);
       await refreshDetail();
-    } catch (error: any) {
-      alert(error?.message ?? 'Tidak dapat menambahkan catatan');
+    } catch (error: unknown) {
+      alert(error instanceof Error ? error.message : 'Tidak dapat menambahkan catatan');
     } finally {
       setSubmittingAction(false);
     }
@@ -300,7 +304,7 @@ export default function AdminDiscussionsPage() {
     const phases = new Set<string>();
     (detail?.messages ?? []).forEach((msg) => {
       const phase = msg.metadata?.phase;
-      if (phase) phases.add(phase);
+      if (phase) phases.add(String(phase));
     });
     return Array.from(phases);
   }, [detail?.messages]);
@@ -517,8 +521,8 @@ export default function AdminDiscussionsPage() {
                       <li key={goal.id} className={styles.goalItem}>
                         <div>
                           <p>{goal.description}</p>
-                          {goal.rubric?.success_summary && (
-                            <small>{goal.rubric.success_summary}</small>
+                          {!!goal.rubric?.success_summary && (
+                            <small>{String(goal.rubric.success_summary)}</small>
                           )}
                         </div>
                         <button
@@ -603,12 +607,12 @@ export default function AdminDiscussionsPage() {
                           {new Date(message.createdAt).toLocaleTimeString()}
                         </span>
                         <small>{getMessageTypeLabel(message)}</small>
-                        {message.metadata?.phase && (
-                          <small>{message.metadata.phase}</small>
+                        {!!message.metadata?.phase && (
+                          <small>{String(message.metadata.phase)}</small>
                         )}
-                        {(message.metadata?.adminEmail || message.metadata?.admin_email) && (
+                        {!!(message.metadata?.adminEmail || message.metadata?.admin_email) && (
                           <small>
-                            {message.metadata.adminEmail || message.metadata.admin_email}
+                            {String(message.metadata.adminEmail || message.metadata.admin_email)}
                           </small>
                         )}
                       </div>

@@ -35,7 +35,7 @@ export function getTokenExpiration(token: string): Date | null {
   try {
     const decoded = jwt.decode(token, { complete: true });
     if (decoded && typeof decoded === 'object' && decoded.payload && typeof decoded.payload === 'object') {
-      const exp = (decoded.payload as any).exp;
+      const exp = (decoded.payload as Record<string, unknown>).exp as number | undefined;
       if (exp) {
         return new Date(exp * 1000);
       }

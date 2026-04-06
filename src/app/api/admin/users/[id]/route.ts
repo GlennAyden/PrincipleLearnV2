@@ -44,9 +44,10 @@ async function safeDeleteByUser(
     }
     console.log(`[Admin Delete User] Deleted from ${table} for user ${userId}`)
     return { deleted: true }
-  } catch (err: any) {
-    console.warn(`[Admin Delete User] Exception deleting from ${table}:`, err?.message)
-    return { deleted: false, error: err?.message }
+  } catch (err: unknown) {
+    const message = err instanceof Error ? err.message : 'Unknown error'
+    console.warn(`[Admin Delete User] Exception deleting from ${table}:`, message)
+    return { deleted: false, error: message }
   }
 }
 
@@ -79,11 +80,13 @@ export async function DELETE(
       )
     }
 
-    if (!users || (users as any[]).length === 0) {
+    interface UserDeleteRow { id: string; email: string; role: string }
+    const userList = (users ?? []) as unknown as UserDeleteRow[]
+    if (userList.length === 0) {
       return NextResponse.json({ error: 'User not found' }, { status: 404 })
     }
 
-    const user = (users as any[])[0]
+    const user = userList[0]
     console.log(`[Admin Delete User] Found user: ${user.email}, Role: ${user.role}`)
 
     // Prevent deleting admin users
@@ -155,8 +158,9 @@ export async function DELETE(
       .select('id')
       .eq('created_by', userId)
 
-    if (userCourses && (userCourses as any[]).length > 0) {
-      for (const course of userCourses as any[]) {
+    const courseList = (userCourses ?? []) as unknown as { id: string }[]
+    if (courseList.length > 0) {
+      for (const course of courseList) {
         await safeDeleteByUser('subtopics', 'course_id', course.id)
         await safeDeleteByUser('quiz', 'course_id', course.id)
         await safeDeleteByUser('subtopic_cache', 'course_id', course.id)
@@ -188,7 +192,8 @@ export async function DELETE(
       .eq('id', userId)
       .limit(1)
 
-    if (verifyUser && (verifyUser as any[]).length > 0) {
+    const verifyList = (verifyUser ?? []) as unknown as { id: string }[]
+    if (verifyList.length > 0) {
       console.error(`[Admin Delete User] User still exists after deletion: ${userId}`)
       return NextResponse.json(
         { error: 'User deletion may have failed - user still exists' },

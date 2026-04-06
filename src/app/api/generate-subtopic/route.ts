@@ -451,7 +451,7 @@ export async function POST(request: Request) {
     }
 
     return NextResponse.json(data);
-  } catch (err: any) {
+  } catch (err: unknown) {
     console.error('Error generating subtopic:', err);
     return NextResponse.json(
       { error: 'Failed to generate subtopic' },
@@ -460,12 +460,22 @@ export async function POST(request: Request) {
   }
 }
 
+interface QuizItem {
+  question?: string;
+  options?: unknown[];
+  correctIndex?: number;
+}
+
+interface SupabaseClient {
+  from(table: string): ReturnType<typeof import('@/lib/database').adminDb.from>;
+}
+
 interface SyncQuizParams {
-  adminDb: any;
+  adminDb: SupabaseClient;
   courseId?: string;
   moduleTitle?: string;
   subtopicTitle?: string;
-  quizItems?: any[];
+  quizItems?: QuizItem[];
   subtopicId?: string;
   subtopicData?: { id?: string; title?: string; content?: string | null };
 }
@@ -541,7 +551,7 @@ async function syncQuizQuestions({
     }
 
     const quizInserts = quizItems
-      .map((q: any, index: number) => {
+      .map((q: QuizItem, index: number) => {
         if (!q || typeof q !== 'object') return null;
 
         const rawQuestion = typeof q.question === 'string' && q.question.trim().length > 0
@@ -549,7 +559,7 @@ async function syncQuizQuestions({
           : `Quiz ${index + 1}: Pertanyaan opsional`;
 
         const optionsArray = Array.isArray(q.options)
-          ? q.options.map((opt: any) => (typeof opt === 'string' ? opt.trim() : `${opt}`)).filter(Boolean)
+          ? q.options.map((opt: unknown) => (typeof opt === 'string' ? opt.trim() : `${opt}`)).filter(Boolean)
           : [];
 
         if (optionsArray.length < 4) {
@@ -575,7 +585,7 @@ async function syncQuizQuestions({
           created_at: new Date().toISOString(),
         };
       })
-      .filter(Boolean);
+      .filter((item): item is NonNullable<typeof item> => item !== null);
 
     if (quizInserts.length === 0) {
       console.warn('[GenerateSubtopic] Quiz sync skipped because sanitized quiz data is empty');
@@ -612,7 +622,18 @@ async function syncQuizQuestions({
   }
 }
 
-function buildDiscussionSummary(content: any): string {
+interface SubtopicContent {
+  whatNext?: { summary?: string; encouragement?: string };
+  keyTakeaways?: string[];
+  objectives?: string[];
+  pages?: Array<{ title?: string; paragraphs?: string[] }>;
+  quiz?: QuizItem[];
+  commonPitfalls?: string[];
+  misconceptions?: string[];
+  [key: string]: unknown;
+}
+
+function buildDiscussionSummary(content: SubtopicContent | null): string {
   const summaryParts: string[] = [];
 
   if (content?.whatNext?.summary) {
@@ -641,7 +662,7 @@ function buildDiscussionSummary(content: any): string {
   return summaryParts.join('\n\n');
 }
 
-function extractMisconceptions(content: any): string[] {
+function extractMisconceptions(content: SubtopicContent | null): string[] {
   if (Array.isArray(content?.commonPitfalls) && content.commonPitfalls.length > 0) {
     return content.commonPitfalls;
   }
@@ -656,7 +677,7 @@ function isDiscussionLabel(label: string): boolean {
 }
 
 interface ModuleDiscussionContextParams {
-  adminDb: any;
+  adminDb: SupabaseClient;
   courseId: string;
   moduleTitle: string;
   moduleRecord: { id?: string; title?: string; content?: string | null };
@@ -687,7 +708,7 @@ async function assembleModuleDiscussionContext({
     return null;
   }
 
-  let outline: any = null;
+  let outline: { subtopics?: Array<string | { title?: string; type?: string; isDiscussion?: boolean; overview?: string }> } | null = null;
   try {
     outline = moduleRecord.content ? JSON.parse(moduleRecord.content) : null;
   } catch (parseError) {
@@ -724,7 +745,7 @@ async function assembleModuleDiscussionContext({
     }
 
     const cacheKey = `${courseId}-${moduleTitle}-${subtopicTitle}`;
-    let cachedContent: any = null;
+    let cachedContent: SubtopicContent | null = null;
 
     try {
       const { data: cacheRow } = await adminDb
@@ -732,7 +753,7 @@ async function assembleModuleDiscussionContext({
         .select('content')
         .eq('cache_key', cacheKey)
         .maybeSingle();
-      cachedContent = cacheRow?.content ?? null;
+      cachedContent = (cacheRow?.content ?? null) as SubtopicContent | null;
     } catch (cacheError) {
       console.warn('[GenerateSubtopic] Failed to load cached content for module aggregation', {
         courseId,
@@ -743,10 +764,10 @@ async function assembleModuleDiscussionContext({
     }
 
     const objectives = Array.isArray(cachedContent?.objectives)
-      ? cachedContent.objectives.filter((item: any) => typeof item === 'string' && item.trim())
+      ? cachedContent.objectives.filter((item: string) => typeof item === 'string' && item.trim())
       : [];
     const takeaways = Array.isArray(cachedContent?.keyTakeaways)
-      ? cachedContent.keyTakeaways.filter((item: any) => typeof item === 'string' && item.trim())
+      ? cachedContent.keyTakeaways.filter((item: string) => typeof item === 'string' && item.trim())
       : [];
     const subMisconceptions = extractMisconceptions(cachedContent);
     const summaryText =

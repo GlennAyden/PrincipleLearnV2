@@ -5,11 +5,23 @@ import { adminDb } from '@/lib/database';
 import { verifyToken } from '@/lib/jwt';
 import { withApiLogging } from '@/lib/api-logger';
 
+interface LearningProfileRow {
+  id: string;
+  user_id: string;
+  display_name?: string;
+  programming_experience?: string;
+  learning_style?: string;
+  learning_goals?: string;
+  challenges?: string;
+  created_at?: string | null;
+  updated_at?: string | null;
+}
+
 function normalizeText(value: unknown) {
   return typeof value === 'string' ? value.trim() : '';
 }
 
-function sanitizeProfile(profile: any) {
+function sanitizeProfile(profile: LearningProfileRow | null) {
   if (!profile) return null;
   return {
     id: profile.id,
@@ -49,7 +61,7 @@ export async function GET(request: NextRequest) {
       .from('learning_profiles')
       .select('*')
       .eq('user_id', userId)
-      .maybeSingle();
+      .maybeSingle() as { data: LearningProfileRow | null; error: { message: string } | null };
 
     if (error) {
       console.error('[LearningProfile] GET query error:', error);
@@ -60,7 +72,7 @@ export async function GET(request: NextRequest) {
       exists: !!profile,
       profile: sanitizeProfile(profile),
     });
-  } catch (err: any) {
+  } catch (err: unknown) {
     console.error('[LearningProfile] GET error:', err);
     return NextResponse.json({ error: 'Failed to load profile' }, { status: 500 });
   }
@@ -113,7 +125,7 @@ async function postHandler(request: NextRequest) {
         learning_goals: normalizedLearningGoals,
         challenges: normalizedChallenges,
         updated_at: new Date().toISOString(),
-      }, { onConflict: 'user_id' });
+      }, { onConflict: 'user_id' }) as { data: LearningProfileRow[] | LearningProfileRow | null; error: { message: string } | null };
 
     if (error) {
       console.error('[LearningProfile] Save error:', error);
@@ -124,8 +136,8 @@ async function postHandler(request: NextRequest) {
     }
 
     const profile = Array.isArray(data) ? data[0] : data;
-    return NextResponse.json({ success: true, profile: sanitizeProfile(profile) });
-  } catch (err: any) {
+    return NextResponse.json({ success: true, profile: sanitizeProfile(profile ?? null) });
+  } catch (err: unknown) {
     console.error('[LearningProfile] POST error:', err);
     return NextResponse.json(
       { error: 'Failed to save profile' },

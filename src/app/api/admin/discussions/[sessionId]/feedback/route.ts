@@ -6,11 +6,12 @@ import { withApiLogging } from '@/lib/api-logger';
 
 let hasDiscussionAdminActionsTable: boolean | null = null;
 
-function isMissingTableError(error: any, tableName: string): boolean {
+function isMissingTableError(error: unknown, tableName: string): boolean {
+  const err = error as { code?: string; message?: string } | null
   return (
-    error?.code === 'PGRST205' &&
-    typeof error?.message === 'string' &&
-    error.message.includes(`'public.${tableName}'`)
+    err?.code === 'PGRST205' &&
+    typeof err?.message === 'string' &&
+    err.message.includes(`'public.${tableName}'`)
   );
 }
 
@@ -51,7 +52,7 @@ async function postHandler(
       summary: body.summary.trim(),
       goals: Array.isArray(body.goals)
         ? body.goals
-            .map((item: any) => ({
+            .map((item: { id?: unknown; note?: unknown }) => ({
               id: typeof item?.id === 'string' ? item.id : undefined,
               note: typeof item?.note === 'string' ? item.note : '',
             }))

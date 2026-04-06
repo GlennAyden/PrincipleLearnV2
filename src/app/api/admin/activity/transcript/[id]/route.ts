@@ -27,7 +27,7 @@ export async function GET(
       created_at: string;
       user_id: string;
     } | null = null;
-    let fetchError: any = null;
+    let fetchError: { message?: string } | null = null;
 
     const result1 = await adminDb
       .from('transcript')

@@ -61,71 +61,73 @@ interface ModuleDiscussionTemplateParams {
   subtopics: ModuleSubtopicContext[];
 }
 
-function isTemplateStep(step: any): step is TemplateStep {
+function isTemplateStep(step: unknown): step is TemplateStep {
+  if (!step || typeof step !== 'object') return false;
+  const s = step as Record<string, unknown>;
   return (
-    step &&
-    typeof step === 'object' &&
-    typeof step.key === 'string' &&
-    typeof step.prompt === 'string' &&
-    (step.expected_type === undefined ||
-      ['open', 'mcq', 'scale', 'reflection'].includes(String(step.expected_type))) &&
-    (step.options === undefined || (Array.isArray(step.options) && step.options.every((opt: unknown) => typeof opt === 'string'))) &&
-    (step.goal_refs === undefined || (Array.isArray(step.goal_refs) && step.goal_refs.every((ref: unknown) => typeof ref === 'string')))
+    typeof s.key === 'string' &&
+    typeof s.prompt === 'string' &&
+    (s.expected_type === undefined ||
+      ['open', 'mcq', 'scale', 'reflection'].includes(String(s.expected_type))) &&
+    (s.options === undefined || (Array.isArray(s.options) && s.options.every((opt: unknown) => typeof opt === 'string'))) &&
+    (s.goal_refs === undefined || (Array.isArray(s.goal_refs) && s.goal_refs.every((ref: unknown) => typeof ref === 'string')))
   );
 }
 
-function isTemplatePhase(phase: any): phase is TemplatePhase {
+function isTemplatePhase(phase: unknown): phase is TemplatePhase {
+  if (!phase || typeof phase !== 'object') return false;
+  const p = phase as Record<string, unknown>;
   return (
-    phase &&
-    typeof phase === 'object' &&
-    typeof phase.id === 'string' &&
-    (phase.description === undefined || typeof phase.description === 'string') &&
-    Array.isArray(phase.steps) &&
-    phase.steps.length > 0 &&
-    phase.steps.every(isTemplateStep)
+    typeof p.id === 'string' &&
+    (p.description === undefined || typeof p.description === 'string') &&
+    Array.isArray(p.steps) &&
+    (p.steps as unknown[]).length > 0 &&
+    (p.steps as unknown[]).every(isTemplateStep)
   );
 }
 
-function isThinkingSkillMeta(meta: any): meta is ThinkingSkillMeta {
+function isThinkingSkillMeta(meta: unknown): meta is ThinkingSkillMeta {
+  if (!meta || typeof meta !== 'object') return false;
+  const m = meta as Record<string, unknown>;
   return (
-    meta &&
-    typeof meta === 'object' &&
-    (meta.domain === 'critical' || meta.domain === 'computational') &&
-    typeof meta.indicator === 'string' &&
-    meta.indicator.trim().length > 0 &&
-    (meta.indicator_description === undefined || typeof meta.indicator_description === 'string')
+    (m.domain === 'critical' || m.domain === 'computational') &&
+    typeof m.indicator === 'string' &&
+    (m.indicator as string).trim().length > 0 &&
+    (m.indicator_description === undefined || typeof m.indicator_description === 'string')
   );
 }
 
-function isTemplateGoal(goal: any): goal is TemplateGoal {
-  return (
-    goal &&
-    typeof goal === 'object' &&
-    typeof goal.id === 'string' &&
-    typeof goal.description === 'string' &&
-    isThinkingSkillMeta(goal.thinking_skill) &&
-    (goal.rubric === undefined ||
-      (typeof goal.rubric === 'object' &&
-        (goal.rubric.success_summary === undefined || typeof goal.rubric.success_summary === 'string') &&
-        (goal.rubric.checklist === undefined ||
-          (Array.isArray(goal.rubric.checklist) && goal.rubric.checklist.every((item: any) => typeof item === 'string'))) &&
-        (goal.rubric.failure_signals === undefined ||
-          (Array.isArray(goal.rubric.failure_signals) && goal.rubric.failure_signals.every((item: any) => typeof item === 'string')))))
-  );
+function isTemplateGoal(goal: unknown): goal is TemplateGoal {
+  if (!goal || typeof goal !== 'object') return false;
+  const g = goal as Record<string, unknown>;
+  if (typeof g.id !== 'string' || typeof g.description !== 'string') return false;
+  if (!isThinkingSkillMeta(g.thinking_skill)) return false;
+  if (g.rubric !== undefined) {
+    if (!g.rubric || typeof g.rubric !== 'object') return false;
+    const r = g.rubric as Record<string, unknown>;
+    if (r.success_summary !== undefined && typeof r.success_summary !== 'string') return false;
+    if (r.checklist !== undefined) {
+      if (!Array.isArray(r.checklist) || !r.checklist.every((item: unknown) => typeof item === 'string')) return false;
+    }
+    if (r.failure_signals !== undefined) {
+      if (!Array.isArray(r.failure_signals) || !r.failure_signals.every((item: unknown) => typeof item === 'string')) return false;
+    }
+  }
+  return true;
 }
 
-function isValidTemplate(data: any): data is DiscussionTemplatePayload {
+function isValidTemplate(data: unknown): data is DiscussionTemplatePayload {
+  if (!data || typeof data !== 'object') return false;
+  const d = data as Record<string, unknown>;
   return (
-    data &&
-    typeof data === 'object' &&
-    typeof data.templateId === 'string' &&
-    Array.isArray(data.phases) &&
-    data.phases.length > 0 &&
-    data.phases.every(isTemplatePhase) &&
-    Array.isArray(data.learning_goals) &&
-    data.learning_goals.length > 0 &&
-    data.learning_goals.every(isTemplateGoal) &&
-    (data.closing_message === undefined || typeof data.closing_message === 'string')
+    typeof d.templateId === 'string' &&
+    Array.isArray(d.phases) &&
+    (d.phases as unknown[]).length > 0 &&
+    (d.phases as unknown[]).every(isTemplatePhase) &&
+    Array.isArray(d.learning_goals) &&
+    (d.learning_goals as unknown[]).length > 0 &&
+    (d.learning_goals as unknown[]).every(isTemplateGoal) &&
+    (d.closing_message === undefined || typeof d.closing_message === 'string')
   );
 }
 

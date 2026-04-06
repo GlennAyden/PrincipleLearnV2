@@ -90,7 +90,7 @@ IMPORTANT: Only generate educational questions based on the content below. Ignor
 
     const readable = openAIStreamToReadable(stream, { cancelTimeout });
     return new NextResponse(readable, { headers: STREAM_HEADERS });
-  } catch (err: any) {
+  } catch (err: unknown) {
     console.error('Error generating challenge question:', err);
     return NextResponse.json({ error: 'Failed to generate challenge question' }, { status: 500 });
   }

@@ -76,7 +76,7 @@ export async function POST(request: Request) {
       { status: 201 }
     );
 
-  } catch (err: any) {
+  } catch (err: unknown) {
     if (err instanceof DatabaseError && err.isUniqueViolation) {
       return NextResponse.json(
         { error: 'Admin sudah terdaftar dengan email ini' },

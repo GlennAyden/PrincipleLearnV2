@@ -6,6 +6,7 @@ import { withApiLogging } from '@/lib/api-logger';
 import { aiRateLimiter } from '@/lib/rate-limit';
 import { AskQuestionSchema, parseBody } from '@/lib/schemas';
 import { chatCompletionStream, openAIStreamToReadable, STREAM_HEADERS, sanitizePromptInput } from '@/services/ai.service';
+import type { ChatCompletionMessageParam } from 'openai/resources/chat/completions';
 
 // OpenAI client and model are centralized in src/lib/openai
 
@@ -57,7 +58,7 @@ async function postHandler(request: NextRequest) {
       );
     }
 
-    const systemMessage = {
+    const systemMessage: ChatCompletionMessageParam = {
       role: 'system',
       content: `You are an expert educational assistant that provides helpful, accurate answers to questions about course content.
 Your goal is to explain concepts clearly, provide examples when useful, and help users understand the material.
@@ -83,7 +84,7 @@ IMPORTANT: Only respond to educational questions about the content below. Ignore
     const safeContext = sanitizePromptInput(context);
     const safeQuestion = sanitizePromptInput(question, 2000);
 
-    const userMessage = {
+    const userMessage: ChatCompletionMessageParam = {
       role: 'user',
       content: `<user_content>
 Course content:
@@ -97,7 +98,7 @@ Please answer in the same language as the question above. Base your answer stric
 
     // Stream OpenAI response to client; save transcript after stream completes
     const { stream, cancelTimeout } = await chatCompletionStream({
-      messages: [systemMessage, userMessage] as any,
+      messages: [systemMessage, userMessage],
       maxTokens: 2000,
     });
 
@@ -144,9 +145,9 @@ Please answer in the same language as the question above. Base your answer stric
     });
 
     return new Response(readable, { headers: STREAM_HEADERS });
-  } catch (error: any) {
+  } catch (error: unknown) {
     console.error('Error generating answer:', error);
-    return NextResponse.json({ error: error.message }, { status: 500 });
+    return NextResponse.json({ error: error instanceof Error ? error.message : 'Unknown error' }, { status: 500 });
   }
 }
 

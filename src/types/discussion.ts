@@ -4,8 +4,8 @@ export interface LearningGoal {
   id: string;
   description: string;
   covered: boolean;
-  rubric?: any;
-  thinkingSkill?: any;
+  rubric?: Record<string, unknown>;
+  thinkingSkill?: Record<string, unknown>;
 }
 
 export interface DiscussionSession {
@@ -35,7 +35,7 @@ export interface DiscussionMessage {
   id: string;
   role: 'agent' | 'student';
   content: string;
-  metadata?: Record<string, any>;
+  metadata?: Record<string, unknown>;
   stepKey?: string | null;
   createdAt: string;
 }

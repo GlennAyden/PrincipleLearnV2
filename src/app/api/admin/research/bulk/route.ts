@@ -61,7 +61,7 @@ export async function POST(request: NextRequest) {
       user_id: prompt.user_id,
       course_id: prompt.course_id,
       prompt_text: prompt.question,
-      prompt_stage: classifyPrompt(prompt.question) as any,
+      prompt_stage: classifyPrompt(prompt.question),
       classified_by: 'bulk_auto',
       classification_method: 'rule_based',
       confidence_score: 0.8,
@@ -80,9 +80,9 @@ export async function POST(request: NextRequest) {
       message: `${data.length} classifications created`
     });
 
-  } catch (error: any) {
+  } catch (error: unknown) {
     console.error('Bulk error:', error);
-    return NextResponse.json({ error: error.message }, { status: 500 });
+    return NextResponse.json({ error: error instanceof Error ? error.message : 'Unknown error' }, { status: 500 });
   }
 }
 

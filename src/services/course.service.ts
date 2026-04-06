@@ -77,6 +77,11 @@ export function canAccessCourse(
  * Create a course with its module subtopics in a single operation.
  * Used by generate-course to persist AI-generated outlines.
  */
+export interface CourseModuleInput {
+  module?: string;
+  [key: string]: unknown;
+}
+
 export async function createCourseWithSubtopics(
   data: {
     title: string;
@@ -86,7 +91,7 @@ export async function createCourseWithSubtopics(
     estimated_duration: number;
   },
   userId: string,
-  modules: any[]
+  modules: CourseModuleInput[]
 ) {
   const course = (await DatabaseService.insertRecord('courses', {
     ...data,

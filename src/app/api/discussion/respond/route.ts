@@ -14,23 +14,61 @@ interface SessionRecord {
   user_id: string;
   status: string;
   phase: string;
-  learning_goals: any;
+  learning_goals: unknown;
   template_id: string | null;
   subtopic_id: string;
   course_id: string;
 }
 
+interface DiscussionStep {
+  key: string;
+  prompt: string;
+  expected_type?: string;
+  options?: string[];
+  goal_refs?: string[];
+  answer?: string | number;
+  feedback?: { correct?: string; incorrect?: string };
+}
+
+interface DiscussionTemplate {
+  phases?: Array<{
+    id?: string;
+    steps?: Array<DiscussionStep>;
+  }>;
+  closing_message?: string;
+  learning_goals?: Array<{
+    id?: string;
+    description?: string;
+    rubric?: GoalRubric;
+    thinking_skill?: unknown;
+    thinkingSkill?: unknown;
+  }>;
+}
+
+interface GoalRubric {
+  success_summary?: string;
+  checklist?: string[];
+  failure_signals?: string[];
+}
+
+interface TemplateSource {
+  summary?: string;
+  keyTakeaways?: string[];
+  learningObjectives?: string[];
+  subtopicTitle?: string;
+}
+
 type TemplateRecord = {
   id: string;
-  template: any;
+  template: DiscussionTemplate;
   version: string;
-  source?: any;
+  source?: TemplateSource;
 };
 
 interface DiscussionGoalState {
   id: string;
   description: string;
-  rubric?: any;
+  rubric?: GoalRubric | null;
   covered: boolean;
   thinkingSkill?: ThinkingSkillMeta | null;
 }
@@ -40,11 +78,13 @@ async function insertDiscussionMessage(payload: {
   role: 'agent' | 'student';
   content: string;
   step_key?: string | null;
-  metadata?: Record<string, any>;
+  metadata?: Record<string, unknown>;
 }) {
   const { error } = await adminDb.from('discussion_messages').insert(payload);
   if (error) {
-    const msg = (error as any)?.message ?? String(error);
+    const msg = typeof error === 'object' && error !== null && 'message' in error
+      ? (error as { message: string }).message
+      : String(error);
     throw new Error(`Failed to insert discussion message: ${msg}`);
   }
 }
@@ -312,13 +352,13 @@ async function fetchMessages(sessionId: string) {
   return data ?? [];
 }
 
-function flattenTemplate(template: any) {
+function flattenTemplate(template: DiscussionTemplate | null | undefined) {
   const phases = Array.isArray(template?.phases) ? template.phases : [];
-  const flattened: Array<{ phaseId: string; step: any }> = [];
+  const flattened: Array<{ phaseId: string; step: DiscussionStep }> = [];
 
-  phases.forEach((phase: any) => {
+  phases.forEach((phase) => {
     const steps = Array.isArray(phase?.steps) ? phase.steps : [];
-    steps.forEach((step: any) => {
+    steps.forEach((step) => {
       if (step && typeof step.prompt === 'string') {
         flattened.push({
           phaseId: phase?.id || 'phase',
@@ -331,7 +371,7 @@ function flattenTemplate(template: any) {
   return flattened;
 }
 
-function normalizeGoals(goals: any): DiscussionGoalState[] {
+function normalizeGoals(goals: unknown): DiscussionGoalState[] {
   if (!Array.isArray(goals)) {
     return [];
   }
@@ -347,7 +387,7 @@ function normalizeGoals(goals: any): DiscussionGoalState[] {
 
 function mergeGoalDetails(
   currentGoals: DiscussionGoalState[],
-  templateGoals: any
+  templateGoals: DiscussionTemplate['learning_goals']
 ) {
   const templateArray = Array.isArray(templateGoals) ? templateGoals : [];
   if (!templateArray.length) {
@@ -355,10 +395,11 @@ function mergeGoalDetails(
   }
   const currentMap = new Map(currentGoals.map((goal) => [goal.id, goal]));
 
-  const merged = templateArray.map((goal: any) => {
-    const existing = currentMap.get(goal?.id);
+  const merged = templateArray.map((goal) => {
+    const goalId = goal?.id ?? '';
+    const existing = currentMap.get(goalId);
     return {
-      id: goal?.id ?? existing?.id ?? '',
+      id: goalId || existing?.id || '',
       description: goal?.description ?? existing?.description ?? '',
       rubric: goal?.rubric ?? existing?.rubric ?? null,
       covered: existing?.covered ?? false,
@@ -385,9 +426,9 @@ interface StepEvaluationResult {
 
 interface EvaluateStepParams {
   responseText: string;
-  step?: any;
-  templateGoals?: any[];
-  templateSource?: any;
+  step?: DiscussionStep;
+  templateGoals?: DiscussionTemplate['learning_goals'];
+  templateSource?: TemplateSource;
   currentGoals: DiscussionGoalState[];
 }
 
@@ -576,8 +617,8 @@ async function evaluateStepResponse({
     const parsed = JSON.parse(raw.trim() || '{}');
     const goalAssessments = Array.isArray(parsed.goalAssessments)
       ? parsed.goalAssessments
-        .filter((assessment: any) => goalRefs.includes(assessment?.goalId))
-        .map((assessment: any) => ({
+        .filter((assessment: { goalId?: string; satisfied?: boolean; notes?: string }) => goalRefs.includes(assessment?.goalId ?? ''))
+        .map((assessment: { goalId: string; satisfied: boolean; notes?: string }) => ({
           goalId: assessment.goalId,
           satisfied: Boolean(assessment.satisfied),
           notes: assessment.notes,

@@ -9,13 +9,14 @@ import { createClient, SupabaseClient } from '@supabase/supabase-js';
 
 const OPTIONAL_SUPABASE_TABLES = new Set(['discussion_admin_actions']);
 
-function isOptionalMissingTableError(error: any): boolean {
-  if (error?.code !== 'PGRST205' || typeof error?.message !== 'string') {
+function isOptionalMissingTableError(error: unknown): boolean {
+  const err = error as Record<string, unknown> | null | undefined;
+  if (err?.code !== 'PGRST205' || typeof err?.message !== 'string') {
     return false;
   }
 
   return Array.from(OPTIONAL_SUPABASE_TABLES).some((tableName) =>
-    error.message.includes(`'public.${tableName}'`)
+    (err.message as string).includes(`'public.${tableName}'`)
   );
 }
 
@@ -170,7 +171,7 @@ export class DatabaseService {
     tableName: string,
     options?: {
       select?: string;
-      filter?: Record<string, any>;
+      filter?: Record<string, unknown>;
       orderBy?: { column: string; ascending?: boolean };
       limit?: number;
       useServiceRole?: boolean;
@@ -226,7 +227,7 @@ export class DatabaseService {
       await detectJsonbColumns();
 
       // Stringify any nested objects/arrays for non-JSONB text columns
-      const sanitized = sanitizeForInsert(tableName, data as Record<string, any>);
+      const sanitized = sanitizeForInsert(tableName, data as Record<string, unknown>);
 
       const { data: result, error } = await getSupabaseClient()
         .from(tableName)
@@ -256,7 +257,7 @@ export class DatabaseService {
     _options?: { useServiceRole?: boolean },
   ): Promise<T> {
     try {
-      const sanitized = sanitizeForInsert(tableName, data as Record<string, any>);
+      const sanitized = sanitizeForInsert(tableName, data as Record<string, unknown>);
 
       const TABLES_WITHOUT_UPDATED_AT = ['rate_limits', 'api_logs', 'quiz_submissions'];
       const payload = TABLES_WITHOUT_UPDATED_AT.includes(tableName)
@@ -366,9 +367,9 @@ function getJsonbColumnsSync(tableName: string): string[] {
   return source[tableName] || [];
 }
 
-function sanitizeForInsert(tableName: string, data: Record<string, any>): Record<string, any> {
+function sanitizeForInsert(tableName: string, data: Record<string, unknown>): Record<string, unknown> {
   const jsonbCols = getJsonbColumnsSync(tableName);
-  const sanitized: Record<string, any> = {};
+  const sanitized: Record<string, unknown> = {};
 
   for (const [key, value] of Object.entries(data)) {
     if (value === undefined) continue;
@@ -400,7 +401,7 @@ function sanitizeForInsert(tableName: string, data: Record<string, any>): Record
 class SupabaseQueryBuilder {
   private tableName: string;
   private client: SupabaseClient;
-  private filters: Array<{ method: string; args: any[] }> = [];
+  private filters: Array<{ method: string; args: unknown[] }> = [];
   private selectFields: string = '*';
   private orderConfig: { column: string; ascending: boolean } | null = null;
   private limitCount: number | null = null;
@@ -418,12 +419,12 @@ class SupabaseQueryBuilder {
     return this;
   }
 
-  eq(column: string, value: any) {
+  eq(column: string, value: string | number | boolean | null) {
     this.filters.push({ method: 'eq', args: [column, value] });
     return this;
   }
 
-  neq(column: string, value: any) {
+  neq(column: string, value: string | number | boolean | null) {
     this.filters.push({ method: 'neq', args: [column, value] });
     return this;
   }
@@ -433,22 +434,22 @@ class SupabaseQueryBuilder {
     return this;
   }
 
-  gte(column: string, value: any) {
+  gte(column: string, value: string | number) {
     this.filters.push({ method: 'gte', args: [column, value] });
     return this;
   }
 
-  lte(column: string, value: any) {
+  lte(column: string, value: string | number) {
     this.filters.push({ method: 'lte', args: [column, value] });
     return this;
   }
 
-  contains(column: string, value: any) {
+  contains(column: string, value: Record<string, unknown> | unknown[]) {
     this.filters.push({ method: 'contains', args: [column, value] });
     return this;
   }
 
-  in(column: string, values: any[]) {
+  in(column: string, values: (string | number)[]) {
     this.filters.push({ method: 'in', args: [column, values] });
     return this;
   }
@@ -483,7 +484,7 @@ class SupabaseQueryBuilder {
     return this;
   }
 
-  async insert(data: Record<string, any> | Record<string, any>[]) {
+  async insert(data: Record<string, unknown> | Record<string, unknown>[]) {
     try {
       const records = Array.isArray(data) ? data : [data];
       const sanitized = records.map(r => sanitizeForInsert(this.tableName, r));
@@ -506,7 +507,7 @@ class SupabaseQueryBuilder {
     }
   }
 
-  async update(data: Record<string, any>) {
+  async update(data: Record<string, unknown>) {
     try {
       // Only inject updated_at if the caller didn't already provide it
       // and the table likely has the column (skip for known tables without it)
@@ -516,6 +517,7 @@ class SupabaseQueryBuilder {
         : { ...data, updated_at: new Date().toISOString() };
       const sanitized = sanitizeForInsert(this.tableName, payload);
 
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any -- dynamic Supabase filter chaining
       let query: any = this.client.from(this.tableName).update(sanitized);
       for (const filter of this.filters) {
         query = query[filter.method](...filter.args);
@@ -538,6 +540,7 @@ class SupabaseQueryBuilder {
 
   async delete() {
     try {
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any -- dynamic Supabase filter chaining
       let query: any = this.client.from(this.tableName).delete();
       for (const filter of this.filters) {
         query = query[filter.method](...filter.args);
@@ -557,7 +560,7 @@ class SupabaseQueryBuilder {
     }
   }
 
-  async upsert(data: Record<string, any> | Record<string, any>[], options?: { onConflict?: string }) {
+  async upsert(data: Record<string, unknown> | Record<string, unknown>[], options?: { onConflict?: string }) {
     try {
       const records = Array.isArray(data) ? data : [data];
       const sanitized = records.map(r => sanitizeForInsert(this.tableName, r));
@@ -583,11 +586,10 @@ class SupabaseQueryBuilder {
   }
 
   // Execute query (called when await is used on the builder chain)
-  async then<T>(
-    resolve: (value: { data: any; error: any }) => T,
-    reject?: (error: any) => T
-  ) {
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any -- Supabase thenable interface requires any for dynamic query results
+  async then<T>(resolve: (value: { data: any; error: any }) => T, reject?: (error: any) => T) {
     try {
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any -- dynamic Supabase filter chaining
       let query: any = this.client.from(this.tableName).select(this.selectFields);
 
       // Apply filters

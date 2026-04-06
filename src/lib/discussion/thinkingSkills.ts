@@ -110,14 +110,16 @@ export function buildThinkingSkillGuidanceLines(): string[] {
   return lines;
 }
 
-export function normalizeThinkingSkillMeta(meta: any): ThinkingSkillMeta | null {
+export function normalizeThinkingSkillMeta(meta: unknown): ThinkingSkillMeta | null {
   if (!meta || typeof meta !== 'object') {
     return null;
   }
 
+  const m = meta as Record<string, unknown>;
+
   const domainValue =
-    meta.domain === 'critical' || meta.domain === 'computational'
-      ? meta.domain
+    m.domain === 'critical' || m.domain === 'computational'
+      ? m.domain
       : null;
 
   if (!domainValue) {
@@ -125,8 +127,8 @@ export function normalizeThinkingSkillMeta(meta: any): ThinkingSkillMeta | null 
   }
 
   const indicator =
-    typeof meta.indicator === 'string' && meta.indicator.trim().length > 0
-      ? meta.indicator.trim()
+    typeof m.indicator === 'string' && m.indicator.trim().length > 0
+      ? m.indicator.trim()
       : null;
 
   if (!indicator) {
@@ -134,10 +136,10 @@ export function normalizeThinkingSkillMeta(meta: any): ThinkingSkillMeta | null 
   }
 
   const indicatorDescription =
-    typeof meta.indicator_description === 'string'
-      ? meta.indicator_description
-      : typeof meta.indicatorDescription === 'string'
-      ? meta.indicatorDescription
+    typeof m.indicator_description === 'string'
+      ? m.indicator_description
+      : typeof m.indicatorDescription === 'string'
+      ? m.indicatorDescription
       : undefined;
 
   return {

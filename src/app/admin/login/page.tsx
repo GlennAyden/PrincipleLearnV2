@@ -47,9 +47,9 @@ export default function AdminLoginPage() {
       // Redirect to admin dashboard on success
       router.push('/admin/dashboard');
       
-    } catch (err: any) {
+    } catch (err: unknown) {
       console.error('[Admin Login] Login error:', err);
-      setError(err.message || 'Login failed. Please check your credentials.');
+      setError(err instanceof Error ? err.message : 'Login failed. Please check your credentials.');
     } finally {
       setLoading(false);
     }

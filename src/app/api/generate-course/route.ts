@@ -153,8 +153,8 @@ Important: Write all titles and overviews in the same language as the user's inp
     try {
       outline = parseAndValidateAIResponse(textRaw, CourseOutlineResponseSchema, 'Generate Course');
       console.log(`[Generate Course] Validated outline with ${outline.length} modules`);
-    } catch (parseErr: any) {
-      console.error('[Generate Course] Failed to parse/validate AI response:', parseErr.message);
+    } catch (parseErr: unknown) {
+      console.error('[Generate Course] Failed to parse/validate AI response:', parseErr instanceof Error ? parseErr.message : parseErr);
       throw new Error('Invalid or malformed AI response');
     }
 
@@ -162,7 +162,7 @@ Important: Write all titles and overviews in the same language as the user's inp
     outline = appendDiscussionNodes(outline);
 
     // 8. Save course to database
-    let createdCourse: any = null;
+    let createdCourse: { id: string } | null = null;
 
     if (actorIdentifier) {
       try {
@@ -219,10 +219,10 @@ Important: Write all titles and overviews in the same language as the user's inp
     // 9. Kirim balik outline + courseId
     console.log('[Generate Course] Returning outline to client');
     return NextResponse.json({ outline, courseId: createdCourse?.id || null }, { headers: corsHeaders });
-  } catch (err: any) {
+  } catch (err: unknown) {
     console.error('[Generate Course] Error generating course outline:', err);
-    console.error('[Generate Course] Error details:', err.message);
-    console.error('[Generate Course] Error stack:', err.stack);
+    console.error('[Generate Course] Error details:', err instanceof Error ? err.message : err);
+    console.error('[Generate Course] Error stack:', err instanceof Error ? err.stack : 'No stack');
     return NextResponse.json(
       { error: 'Failed to generate outline' },
       { status: 500, headers: corsHeaders }
@@ -234,17 +234,23 @@ export const POST = withApiLogging(postHandler, {
   label: 'generate-course',
 });
 
-function appendDiscussionNodes(modules: any[]): any[] {
+interface CourseModule {
+  module?: string;
+  subtopics?: Array<Record<string, unknown>>;
+  [key: string]: unknown;
+}
+
+function appendDiscussionNodes(modules: CourseModule[]): CourseModule[] {
   if (!Array.isArray(modules)) return [];
 
   return modules.map((module, moduleIdx) => {
     const currentModule = module ?? {};
     const originalSubtopics = Array.isArray(currentModule.subtopics)
-      ? currentModule.subtopics.filter((item: any) => !!item)
+      ? currentModule.subtopics.filter((item) => !!item)
       : [];
 
     const hasDiscussion = originalSubtopics.some(
-      (item: any) =>
+      (item) =>
         item &&
         typeof item === 'object' &&
         (item.type === 'discussion' ||

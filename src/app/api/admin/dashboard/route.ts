@@ -7,9 +7,41 @@ import type { NextRequest } from 'next/server'
 import { adminDb } from '@/lib/database'
 import { withCacheHeaders } from '@/lib/api-middleware'
 import jwt from 'jsonwebtoken'
-import type { TimeRange, ActivityItem, DashboardAPIResponse } from '@/types/dashboard'
+import type { TimeRange, ActivityItem, DashboardAPIResponse, CTBreakdown, CThBreakdown } from '@/types/dashboard'
 
 const JWT_SECRET = process.env.JWT_SECRET!
+
+// ── Row Interfaces for DB Queries ────────────────────────────────────────────
+
+interface UserRow { id: string; email: string; role: string; created_at: string }
+interface CourseRow { id: string; title: string; created_at: string; created_by: string }
+interface QuizSubmissionRow { id: string; user_id: string; is_correct: boolean; reasoning_note: string; created_at: string }
+interface DiscussionRow { id: string; user_id: string; status: string; learning_goals: unknown; created_at: string }
+interface JournalRow { id: string; user_id: string; type: string; content: string; created_at: string }
+interface ChallengeRow { id: string; user_id: string; question: string; created_at: string }
+interface AskHistoryRow { id: string; user_id: string; question: string; prompt_components: unknown; prompt_version: string; session_number: number; created_at: string }
+interface FeedbackRow { id: string; user_id: string; rating: number; comment: string; created_at: string }
+interface TranscriptRow { id: string; user_id: string; created_at: string }
+interface LearningProfileRow { id: string; user_id: string; created_at: string }
+interface PromptClassificationRow { id: string; user_id: string; prompt_stage: string; prompt_stage_score: number; micro_markers: unknown; primary_marker: string; created_at: string }
+interface CognitiveIndicatorRow {
+  id: string; user_id: string; ct_total_score: number; cth_total_score: number;
+  ct_decomposition: number; ct_pattern_recognition: number; ct_abstraction: number;
+  ct_algorithm_design: number; ct_evaluation_debugging: number; ct_generalization: number;
+  cth_interpretation: number; cth_analysis: number; cth_evaluation: number;
+  cth_inference: number; cth_explanation: number; cth_self_regulation: number;
+  cognitive_depth_level: string; created_at: string
+}
+
+interface CognitiveAccumulator {
+  ct_total: number; cth_total: number;
+  ct_decomposition: number; ct_pattern_recognition: number; ct_abstraction: number;
+  ct_algorithm_design: number; ct_evaluation_debugging: number; ct_generalization: number;
+  cth_interpretation: number; cth_analysis: number; cth_evaluation: number;
+  cth_inference: number; cth_explanation: number; cth_self_regulation: number;
+}
+
+interface LearningGoal { id?: string; covered?: boolean; description?: string }
 
 // ── Auth Helper ──────────────────────────────────────────────────────────────
 
@@ -39,10 +71,10 @@ function getDateSince(range: TimeRange): Date | null {
 // ── Safe Table Query (handles missing tables gracefully) ─────────────────────
 // Enhanced with optional date filtering, limit, and ordering at database level
 
-async function safeQuery<T = any>(
+async function safeQuery<T = Record<string, unknown>>(
   tableName: string,
   selectFields: string = '*',
-  filters?: Record<string, any>,
+  filters?: Record<string, string | number | boolean | null>,
   options?: { dateSince?: Date | null; limit?: number; orderBy?: { column: string; ascending: boolean } }
 ): Promise<T[]> {
   try {
@@ -91,7 +123,7 @@ function buildUserMap<T extends { user_id?: string; created_by?: string }>(
 ): Map<string, T[]> {
   const map = new Map<string, T[]>()
   for (const item of items) {
-    const uid = (item as any)[userIdField]
+    const uid = item[userIdField]
     if (!uid) continue
     if (!map.has(uid)) map.set(uid, [])
     map.get(uid)!.push(item)
@@ -101,7 +133,7 @@ function buildUserMap<T extends { user_id?: string; created_by?: string }>(
 
 // ── Heuristic Prompt Stage Classification (fallback) ─────────────────────────
 
-function classifyPromptStageHeuristic(promptComponents: any): string {
+function classifyPromptStageHeuristic(promptComponents: unknown): string {
   if (!promptComponents) return 'SCP'
   const comps = typeof promptComponents === 'string'
     ? (() => { try { return JSON.parse(promptComponents) } catch { return {} } })()
@@ -155,20 +187,20 @@ export async function GET(request: NextRequest) {
       cognitiveIndicators,
     ] = await Promise.all([
       // Users: always fetch ALL (not time-filtered) for user lookup
-      safeQuery('users', 'id, email, role, created_at', { role: 'user' }, { limit: 5000 }),
+      safeQuery<UserRow>('users', 'id, email, role, created_at', { role: 'user' }, { limit: 5000 }),
       // FIX: removed non-existent 'user_id' column — courses use 'created_by'
-      safeQuery('courses', 'id, title, created_at, created_by', {}, queryOpts),
-      safeQuery('quiz_submissions', 'id, user_id, is_correct, reasoning_note, created_at', {}, queryOpts),
-      safeQuery('discussion_sessions', 'id, user_id, status, learning_goals, created_at', {}, queryOpts),
-      safeQuery('jurnal', 'id, user_id, type, content, created_at', {}, queryOpts),
-      safeQuery('challenge_responses', 'id, user_id, question, created_at', {}, queryOpts),
-      safeQuery('ask_question_history', 'id, user_id, question, prompt_components, prompt_version, session_number, created_at', {}, queryOpts),
-      safeQuery('feedback', 'id, user_id, rating, comment, created_at', {}, queryOpts),
-      safeQuery('transcript', 'id, user_id, created_at', {}, queryOpts),
-      safeQuery('learning_profiles', 'id, user_id, created_at', {}, queryOpts),
+      safeQuery<CourseRow>('courses', 'id, title, created_at, created_by', {}, queryOpts),
+      safeQuery<QuizSubmissionRow>('quiz_submissions', 'id, user_id, is_correct, reasoning_note, created_at', {}, queryOpts),
+      safeQuery<DiscussionRow>('discussion_sessions', 'id, user_id, status, learning_goals, created_at', {}, queryOpts),
+      safeQuery<JournalRow>('jurnal', 'id, user_id, type, content, created_at', {}, queryOpts),
+      safeQuery<ChallengeRow>('challenge_responses', 'id, user_id, question, created_at', {}, queryOpts),
+      safeQuery<AskHistoryRow>('ask_question_history', 'id, user_id, question, prompt_components, prompt_version, session_number, created_at', {}, queryOpts),
+      safeQuery<FeedbackRow>('feedback', 'id, user_id, rating, comment, created_at', {}, queryOpts),
+      safeQuery<TranscriptRow>('transcript', 'id, user_id, created_at', {}, queryOpts),
+      safeQuery<LearningProfileRow>('learning_profiles', 'id, user_id, created_at', {}, queryOpts),
       // Research tables — graceful fallback if not created
-      safeQuery('prompt_classifications', 'id, user_id, prompt_stage, prompt_stage_score, micro_markers, primary_marker, created_at', {}, queryOpts),
-      safeQuery('cognitive_indicators', 'id, user_id, ct_total_score, cth_total_score, ct_decomposition, ct_pattern_recognition, ct_abstraction, ct_algorithm_design, ct_evaluation_debugging, ct_generalization, cth_interpretation, cth_analysis, cth_evaluation, cth_inference, cth_explanation, cth_self_regulation, cognitive_depth_level, created_at', {}, queryOpts),
+      safeQuery<PromptClassificationRow>('prompt_classifications', 'id, user_id, prompt_stage, prompt_stage_score, micro_markers, primary_marker, created_at', {}, queryOpts),
+      safeQuery<CognitiveIndicatorRow>('cognitive_indicators', 'id, user_id, ct_total_score, cth_total_score, ct_decomposition, ct_pattern_recognition, ct_abstraction, ct_algorithm_design, ct_evaluation_debugging, ct_generalization, cth_interpretation, cth_analysis, cth_evaluation, cth_inference, cth_explanation, cth_self_regulation, cognitive_depth_level, created_at', {}, queryOpts),
     ])
 
     // Data is already time-filtered at DB level, no need for in-memory filterByTime
@@ -192,40 +224,40 @@ export async function GET(request: NextRequest) {
       activeStudents = users.length
     } else {
       const activeUserIds = new Set<string>()
-      courses.forEach((c: any) => { if (c.created_by) activeUserIds.add(c.created_by) })
-      quizSubmissions.forEach((q: any) => { if (q.user_id) activeUserIds.add(q.user_id) })
-      discussions.forEach((d: any) => { if (d.user_id) activeUserIds.add(d.user_id) })
-      journals.forEach((j: any) => { if (j.user_id) activeUserIds.add(j.user_id) })
-      challenges.forEach((c: any) => { if (c.user_id) activeUserIds.add(c.user_id) })
-      askHistory.forEach((a: any) => { if (a.user_id) activeUserIds.add(a.user_id) })
-      feedbacks.forEach((f: any) => { if (f.user_id) activeUserIds.add(f.user_id) })
-      transcripts.forEach((t: any) => { if (t.user_id) activeUserIds.add(t.user_id) })
+      courses.forEach(c => { if (c.created_by) activeUserIds.add(c.created_by) })
+      quizSubmissions.forEach(q => { if (q.user_id) activeUserIds.add(q.user_id) })
+      discussions.forEach(d => { if (d.user_id) activeUserIds.add(d.user_id) })
+      journals.forEach(j => { if (j.user_id) activeUserIds.add(j.user_id) })
+      challenges.forEach(c => { if (c.user_id) activeUserIds.add(c.user_id) })
+      askHistory.forEach(a => { if (a.user_id) activeUserIds.add(a.user_id) })
+      feedbacks.forEach(f => { if (f.user_id) activeUserIds.add(f.user_id) })
+      transcripts.forEach(t => { if (t.user_id) activeUserIds.add(t.user_id) })
       activeStudents = activeUserIds.size
     }
 
     const totalQuizzes = quizSubmissions.length
-    const correctQuizzes = quizSubmissions.filter((q: any) => q.is_correct === true).length
+    const correctQuizzes = quizSubmissions.filter(q => q.is_correct === true).length
     const quizAccuracy = totalQuizzes > 0 ? Math.round((correctQuizzes / totalQuizzes) * 100) : 0
 
     const totalDiscussions = discussions.length
-    const completedDiscussions = discussions.filter((d: any) => d.status === 'completed').length
+    const completedDiscussions = discussions.filter(d => d.status === 'completed').length
 
     const totalFeedbacks = feedbacks.length
-    const ratedFeedbacks = feedbacks.filter((f: any) => f.rating)
+    const ratedFeedbacks = feedbacks.filter(f => f.rating)
     const avgRating = ratedFeedbacks.length > 0
-      ? Math.round((ratedFeedbacks.reduce((sum: number, f: any) => sum + (f.rating || 0), 0) / ratedFeedbacks.length) * 10) / 10
+      ? Math.round((ratedFeedbacks.reduce((sum: number, f) => sum + (f.rating || 0), 0) / ratedFeedbacks.length) * 10) / 10
       : 0
 
     // CT Coverage Rate from discussions
     let totalGoals = 0
     let coveredGoals = 0
-    discussions.forEach((d: any) => {
+    discussions.forEach(d => {
       const goals = typeof d.learning_goals === 'string'
-        ? (() => { try { return JSON.parse(d.learning_goals) } catch { return [] } })()
+        ? (() => { try { return JSON.parse(d.learning_goals as string) } catch { return [] } })()
         : (d.learning_goals || [])
       if (Array.isArray(goals)) {
         totalGoals += goals.length
-        coveredGoals += goals.filter((g: any) => g.covered).length
+        coveredGoals += goals.filter((g: LearningGoal) => g.covered).length
       }
     })
     const ctCoverageRate = totalGoals > 0 ? Math.round((coveredGoals / totalGoals) * 100) : 0
@@ -267,7 +299,7 @@ export async function GET(request: NextRequest) {
       let totalScore = 0
       const markerDist: Record<string, number> = { GCP: 0, PP: 0, ARP: 0 }
 
-      promptClassifications.forEach((pc: any) => {
+      promptClassifications.forEach(pc => {
         const stage = pc.prompt_stage || 'SCP'
         if (stage in researchStages) researchStages[stage]++
         totalScore += pc.prompt_stage_score || 1
@@ -292,7 +324,7 @@ export async function GET(request: NextRequest) {
       totalPrompts = askHistory.length
       let totalScore = 0
 
-      askHistory.forEach((a: any) => {
+      askHistory.forEach(a => {
         const stage = classifyPromptStageHeuristic(a.prompt_components)
         stageDistribution[stage] = (stageDistribution[stage] || 0) + 1
         const scoreMap: Record<string, number> = { SCP: 1, SRP: 2, MQP: 3, Reflektif: 4 }
@@ -315,15 +347,15 @@ export async function GET(request: NextRequest) {
 
     let avgCTScore: number | undefined = undefined
     let avgCThScore: number | undefined = undefined
-    let ctBreakdown: any = undefined
-    let cthBreakdown: any = undefined
+    let ctBreakdown: CTBreakdown | undefined = undefined
+    let cthBreakdown: CThBreakdown | undefined = undefined
 
     if (hasResearchRM3) {
       // Already time-filtered at DB level
       const ciCount = cognitiveIndicators.length
 
       if (ciCount > 0) {
-        const sumCI = cognitiveIndicators.reduce((acc: any, ci: any) => ({
+        const sumCI = cognitiveIndicators.reduce((acc: CognitiveAccumulator, ci) => ({
           ct_total: acc.ct_total + (ci.ct_total_score || 0),
           cth_total: acc.cth_total + (ci.cth_total_score || 0),
           ct_decomposition: acc.ct_decomposition + (ci.ct_decomposition || 0),
@@ -384,10 +416,10 @@ export async function GET(request: NextRequest) {
     }
 
     // ── 4. Student Summary (optimized with pre-built Maps) ──────────────────
-    const userMap = new Map(users.map((u: any) => [u.id, u.email]))
+    const userMap = new Map(users.map(u => [u.id, u.email]))
     const pcByUser = buildUserMap(promptClassifications)
 
-    const studentSummary = users.map((u: any) => {
+    const studentSummary = users.map(u => {
       const userId = u.id
 
       // O(1) lookups via pre-built Maps
@@ -399,7 +431,7 @@ export async function GET(request: NextRequest) {
       const userAsk = askByUser.get(userId) || []
       const userTranscripts = transcriptsByUser.get(userId) || []
 
-      const userCorrect = userQuizzes.filter((q: any) => q.is_correct === true).length
+      const userCorrect = userQuizzes.filter(q => q.is_correct === true).length
       const userQuizAccuracy = userQuizzes.length > 0 ? Math.round((userCorrect / userQuizzes.length) * 100) : 0
 
       // Determine prompt stage
@@ -408,7 +440,7 @@ export async function GET(request: NextRequest) {
         const userPC = pcByUser.get(userId) || []
         if (userPC.length > 0) {
           // Get the most recent classification
-          const sorted = [...userPC].sort((a: any, b: any) =>
+          const sorted = [...userPC].sort((a, b) =>
             new Date(b.created_at).getTime() - new Date(a.created_at).getTime()
           )
           userStage = sorted[0].prompt_stage || 'SCP'
@@ -416,7 +448,7 @@ export async function GET(request: NextRequest) {
         }
       } else if (userAsk.length > 0) {
         // Heuristic fallback
-        const lastAsk = [...userAsk].sort((a: any, b: any) =>
+        const lastAsk = [...userAsk].sort((a, b) =>
           new Date(b.created_at).getTime() - new Date(a.created_at).getTime()
         )[0]
         userStage = classifyPromptStageHeuristic(lastAsk?.prompt_components)
@@ -424,11 +456,11 @@ export async function GET(request: NextRequest) {
 
       // Last activity
       const allTimestamps = [
-        ...userCourses.map((c: any) => c.created_at),
-        ...userQuizzes.map((q: any) => q.created_at),
-        ...userAsk.map((a: any) => a.created_at),
-        ...userChallenges.map((c: any) => c.created_at),
-        ...userJournals.map((j: any) => j.created_at),
+        ...userCourses.map(c => c.created_at),
+        ...userQuizzes.map(q => q.created_at),
+        ...userAsk.map(a => a.created_at),
+        ...userChallenges.map(c => c.created_at),
+        ...userJournals.map(j => j.created_at),
       ].filter(Boolean).map(t => new Date(t).getTime()).filter(t => !isNaN(t))
 
       const lastActivity = allTimestamps.length > 0
@@ -456,73 +488,73 @@ export async function GET(request: NextRequest) {
     const recentItems: ActivityItem[] = []
 
     // FIX: use 'created_by' for courses (not 'user_id' which doesn't exist)
-    courses.slice(-10).forEach((c: any) => {
+    courses.slice(-10).forEach(c => {
       recentItems.push({
         type: 'course',
-        email: (userMap.get(c.created_by) as string) || 'Unknown',
+        email: userMap.get(c.created_by) || 'Unknown',
         detail: c.title || 'New course generated',
         timestamp: c.created_at,
       })
     })
 
-    askHistory.slice(-10).forEach((a: any) => {
+    askHistory.slice(-10).forEach(a => {
       recentItems.push({
         type: 'ask',
-        email: (userMap.get(a.user_id) as string) || 'Unknown',
+        email: userMap.get(a.user_id) || 'Unknown',
         detail: (a.question || '').substring(0, 80),
         timestamp: a.created_at,
       })
     })
 
-    challenges.slice(-10).forEach((c: any) => {
+    challenges.slice(-10).forEach(c => {
       recentItems.push({
         type: 'challenge',
-        email: (userMap.get(c.user_id) as string) || 'Unknown',
+        email: userMap.get(c.user_id) || 'Unknown',
         detail: (c.question || '').substring(0, 80),
         timestamp: c.created_at,
       })
     })
 
-    quizSubmissions.slice(-10).forEach((q: any) => {
+    quizSubmissions.slice(-10).forEach(q => {
       recentItems.push({
         type: 'quiz',
-        email: (userMap.get(q.user_id) as string) || 'Unknown',
+        email: userMap.get(q.user_id) || 'Unknown',
         detail: q.is_correct ? 'Jawaban benar' : 'Jawaban salah',
         timestamp: q.created_at,
       })
     })
 
-    journals.slice(-10).forEach((j: any) => {
+    journals.slice(-10).forEach(j => {
       recentItems.push({
         type: 'journal',
-        email: (userMap.get(j.user_id) as string) || 'Unknown',
+        email: userMap.get(j.user_id) || 'Unknown',
         detail: j.type === 'structured_reflection' ? 'Refleksi terstruktur' : 'Jurnal entry',
         timestamp: j.created_at,
       })
     })
 
-    transcripts.slice(-10).forEach((t: any) => {
+    transcripts.slice(-10).forEach(t => {
       recentItems.push({
         type: 'transcript',
-        email: (userMap.get(t.user_id) as string) || 'Unknown',
+        email: userMap.get(t.user_id) || 'Unknown',
         detail: 'Transcript saved',
         timestamp: t.created_at,
       })
     })
 
-    feedbacks.slice(-10).forEach((f: any) => {
+    feedbacks.slice(-10).forEach(f => {
       recentItems.push({
         type: 'feedback',
-        email: (userMap.get(f.user_id) as string) || 'Unknown',
+        email: userMap.get(f.user_id) || 'Unknown',
         detail: f.rating ? `Rating ${f.rating}/5` : (f.comment || '').substring(0, 80) || 'Feedback submitted',
         timestamp: f.created_at,
       })
     })
 
-    discussions.slice(-10).forEach((d: any) => {
+    discussions.slice(-10).forEach(d => {
       recentItems.push({
         type: 'discussion',
-        email: (userMap.get(d.user_id) as string) || 'Unknown',
+        email: userMap.get(d.user_id) || 'Unknown',
         detail: `Discussion ${d.status || 'started'}`,
         timestamp: d.created_at,
       })
@@ -549,7 +581,7 @@ export async function GET(request: NextRequest) {
     }
 
     return withCacheHeaders(NextResponse.json(response), 30)
-  } catch (err: any) {
+  } catch (err: unknown) {
     console.error('[Admin Dashboard] Error:', err)
     return NextResponse.json(
       { error: 'Internal server error' },

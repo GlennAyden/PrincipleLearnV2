@@ -71,7 +71,7 @@ export function useLocalStorage<T>(key: string, initialValue: T) {
         typeof valueToStore === 'object' &&
         !Array.isArray(valueToStore)
       ) {
-        mergedValue = { ...(storedValue as any), ...(valueToStore as any) } as T;
+        mergedValue = { ...(storedValue as Record<string, unknown>), ...(valueToStore as Record<string, unknown>) } as T;
       }
 
       // Update state and localStorage

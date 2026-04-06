@@ -3,7 +3,7 @@ import { adminDb } from '@/lib/database';
 
 interface ApiLogContext {
   label?: string;
-  metadata?: Record<string, any>;
+  metadata?: Record<string, unknown>;
 }
 
 interface ApiLogPayload extends ApiLogContext {
@@ -64,6 +64,7 @@ export async function logApiCall({
   }
 }
 
+// eslint-disable-next-line @typescript-eslint/no-explicit-any -- generic handler signature requires any[] for parameter spread
 export function withApiLogging<T extends (...args: any[]) => Promise<Response>>(
   handler: T,
   context: ApiLogContext = {}
@@ -82,14 +83,15 @@ export function withApiLogging<T extends (...args: any[]) => Promise<Response>>(
         metadata: context.metadata,
       });
       return response;
-    } catch (error: any) {
+    } catch (error: unknown) {
       const duration = Date.now() - startedAt;
+      const errObj = error as Record<string, unknown> | undefined;
       await logApiCall({
         request,
-        status: error?.status ?? 500,
+        status: (errObj?.status as number) ?? 500,
         durationMs: duration,
         errorMessage:
-          error?.message ?? (typeof error === 'string' ? error : 'Unhandled error'),
+          (errObj?.message as string) ?? (typeof error === 'string' ? error : 'Unhandled error'),
         label: context.label,
         metadata: context.metadata,
       });

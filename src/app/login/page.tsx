@@ -74,8 +74,8 @@ export default function LoginPage() {
         // Fallback: go to dashboard if we can't get userId
         router.replace('/dashboard');
       }
-    } catch (err: any) {
-      setError(err.message || 'Login failed. Please check your credentials.');
+    } catch (err: unknown) {
+      setError(err instanceof Error ? err.message : 'Login failed. Please check your credentials.');
       console.error('Login error:', err);
     } finally {
       setIsLoading(false);

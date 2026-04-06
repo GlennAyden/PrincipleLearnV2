@@ -84,7 +84,7 @@ export async function GET(
     // Step 4: Transform to outline format (same as in course page)
     console.log(`[Debug Course Test] Step 4: Transforming to outline format`);
     const outline = subtopics.map((subtopic, index) => {
-      let content: any;
+      let content: { module?: string; subtopics?: unknown[] };
       try {
         content = JSON.parse(subtopic.content);
       } catch {

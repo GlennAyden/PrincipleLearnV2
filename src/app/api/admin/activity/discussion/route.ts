@@ -9,7 +9,7 @@ type DiscussionSessionRow = {
   subtopic_id: string
   status: string
   phase: string
-  learning_goals: any
+  learning_goals: unknown
   created_at: string
   updated_at: string
 }
@@ -20,7 +20,7 @@ type DiscussionMessageRow = {
   role: 'agent' | 'student' | 'system'
   content: string
   step_key: string | null
-  metadata: any
+  metadata: Record<string, unknown> | null
   created_at: string
 }
 
@@ -124,15 +124,15 @@ export async function GET(req: NextRequest) {
   }
 }
 
-function normalizeGoals(rawGoals: any): GoalState[] {
+function normalizeGoals(rawGoals: unknown): GoalState[] {
   if (!Array.isArray(rawGoals)) return []
   return rawGoals
     .filter(Boolean)
-    .map((goal: any) => ({
-      id: goal?.id ?? '',
-      description: goal?.description ?? '',
+    .map((goal: Record<string, unknown>) => ({
+      id: (goal?.id as string) ?? '',
+      description: (goal?.description as string) ?? '',
       covered: Boolean(goal?.covered),
-      thinkingSkill: goal?.thinkingSkill ?? goal?.thinking_skill ?? null,
+      thinkingSkill: (goal?.thinkingSkill ?? goal?.thinking_skill ?? null) as GoalState['thinkingSkill'],
     }))
     .filter((goal: GoalState) => goal.id)
 }
@@ -163,7 +163,7 @@ function buildExchanges(messages: DiscussionMessageRow[], goalMap: Map<string, G
     }
 
     if (msg.role === 'student') {
-      const evaluation = msg.metadata?.evaluation ?? {}
+      const evaluation = (msg.metadata?.evaluation ?? {}) as Record<string, unknown>
       const coveredGoals: string[] = Array.isArray(evaluation.coveredGoals) ? evaluation.coveredGoals : []
       const thinkingSkills = coveredGoals
         .map((goalId) => goalMap.get(goalId))

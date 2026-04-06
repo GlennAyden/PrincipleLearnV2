@@ -40,6 +40,28 @@ interface ChallengeItem {
   reasoningNote?: string;
 }
 
+interface SubtopicOutlineItem {
+  title: string;
+  overview?: string;
+  type?: string;
+  isDiscussion?: boolean;
+}
+
+interface ModuleOutline {
+  id: string;
+  rawTitle?: string;
+  module: string;
+  subtopics: (SubtopicOutlineItem | string)[];
+}
+
+interface CourseState {
+  id: string;
+  title: string;
+  level: string;
+  outline: ModuleOutline[];
+  subtopicDetails?: Record<number, Record<number, SubtopicResponse>>;
+}
+
 // Skeleton loading component for subtopic content
 const SkeletonLoading = () => {
   return (
@@ -131,7 +153,7 @@ export default function SubtopicPage() {
   const [loadingChallenge, setLoadingChallenge] = useState<boolean>(false);
   const [loadingExamples, setLoadingExamples] = useState(false);
 
-  const [course, setCourse] = useState<any>(null);
+  const [course, setCourse] = useState<CourseState | null>(null);
   const [courseLoading, setCourseLoading] = useState(true);
   const [data, setData] = useState<SubtopicResponse | null>(null);
   const [loading, setLoading] = useState(false);
@@ -161,7 +183,7 @@ export default function SubtopicPage() {
         
         if (result.success && result.course) {
           // Transform subtopics to outline format
-          const outline = result.course.subtopics?.map((subtopic: any, index: number) => {
+          const outline = result.course.subtopics?.map((subtopic: { id?: string; title?: string; content: string }, index: number) => {
             let content;
             try {
               content = JSON.parse(subtopic.content);
@@ -208,7 +230,7 @@ export default function SubtopicPage() {
     const moduleTitle = moduleInfo.module;
     const subTitle = typeof subInfo === 'string' ? subInfo : subInfo.title;
     const cached =
-      (course as any).subtopicDetails?.[moduleIndex]?.[subtopicIndex] ?? null;
+      course?.subtopicDetails?.[moduleIndex]?.[subtopicIndex] ?? null;
     if (cached) {
       setData(cached);
       setSubtopicProgress((prev) => {
@@ -237,25 +259,27 @@ export default function SubtopicPage() {
         setData(json);
 
         // Cache the generated content in course state
-        const updated = {
-          ...course,
-          subtopicDetails: {
-            ...course.subtopicDetails,
-            [moduleIndex]: {
-              ...course.subtopicDetails?.[moduleIndex],
-              [subtopicIndex]: json,
+        if (course) {
+          const updated: CourseState = {
+            ...course,
+            subtopicDetails: {
+              ...course.subtopicDetails,
+              [moduleIndex]: {
+                ...course.subtopicDetails?.[moduleIndex],
+                [subtopicIndex]: json,
+              },
             },
-          },
-        };
-        setCourse(updated);
+          };
+          setCourse(updated);
+        }
         setSubtopicProgress((prev) => {
           if (prev && prev[subtopicProgressKey]) {
             return prev;
           }
           return { ...(prev ?? {}), [subtopicProgressKey]: true };
         });
-      } catch (e: any) {
-        setError(e.message);
+      } catch (e: unknown) {
+        setError(e instanceof Error ? e.message : 'Unknown error');
       } finally {
         setLoading(false);
       }
@@ -314,7 +338,7 @@ export default function SubtopicPage() {
           const result = await response.json();
           if (result.success && result.responses) {
             // Transform API response to match component format
-            const transformedData = result.responses.map((resp: any) => ({
+            const transformedData = result.responses.map((resp: { question: string; answer: string; feedback?: string; reasoning_note?: string }) => ({
               question: resp.question,
               answer: resp.answer,
               feedback: resp.feedback,
@@ -488,9 +512,9 @@ export default function SubtopicPage() {
       const updatedExamples = [...examplesData, ...examples]; 
       setExamplesData(updatedExamples);
       setActiveExampleIndex(updatedExamples.length - 1); // Select the newest example
-    } catch (e: any) {
+    } catch (e: unknown) {
       console.error(e);
-      alert('Gagal generate contoh: ' + e.message);
+      alert('Gagal generate contoh: ' + (e instanceof Error ? e.message : 'Unknown error'));
     } finally {
       setLoadingExamples(false);
     }

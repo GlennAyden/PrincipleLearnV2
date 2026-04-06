@@ -32,7 +32,7 @@ interface Quiz {
   course_id: string;
   subtopic_id: string;
   question: string;
-  options: any;
+  options: unknown;
   correct_answer: string | null;
 }
 

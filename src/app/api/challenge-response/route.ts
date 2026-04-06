@@ -87,10 +87,11 @@ async function postHandler(req: NextRequest) {
         message: 'Challenge response saved successfully'
       });
       
-    } catch (dbError: any) {
+    } catch (dbError: unknown) {
       const message = dbError instanceof DatabaseError ? dbError.message : 'Unknown database error';
-      console.error('[Challenge Response] Database error:', message, dbError?.originalError || dbError);
-      
+      const originalError = dbError instanceof DatabaseError ? dbError.originalError : dbError;
+      console.error('[Challenge Response] Database error:', message, originalError);
+
       return NextResponse.json(
         {
           success: false,
@@ -102,10 +103,10 @@ async function postHandler(req: NextRequest) {
       );
     }
 
-  } catch (error: any) {
+  } catch (error: unknown) {
     console.error('Error in challenge response API:', error);
     return NextResponse.json(
-      { error: 'Failed to process challenge response: ' + error.message },
+      { error: 'Failed to process challenge response: ' + (error instanceof Error ? error.message : 'Unknown error') },
       { status: 500 }
     );
   }
@@ -191,10 +192,11 @@ export async function GET(req: NextRequest) {
         responses
       });
       
-    } catch (dbError: any) {
+    } catch (dbError: unknown) {
       const message = dbError instanceof DatabaseError ? dbError.message : 'Unknown database error';
-      console.error('[Challenge Response] Database error:', message, dbError?.originalError || dbError);
-      
+      const originalError = dbError instanceof DatabaseError ? dbError.originalError : dbError;
+      console.error('[Challenge Response] Database error:', message, originalError);
+
       return NextResponse.json(
         {
           success: false,
@@ -206,10 +208,10 @@ export async function GET(req: NextRequest) {
       );
     }
 
-  } catch (error: any) {
+  } catch (error: unknown) {
     console.error('Error retrieving challenge responses:', error);
     return NextResponse.json(
-      { error: 'Failed to retrieve challenge responses: ' + error.message },
+      { error: 'Failed to retrieve challenge responses: ' + (error instanceof Error ? error.message : 'Unknown error') },
       { status: 500 }
     );
   }

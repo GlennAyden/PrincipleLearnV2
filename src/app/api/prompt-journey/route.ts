@@ -3,6 +3,17 @@ import { NextRequest, NextResponse } from 'next/server';
 import { adminDb } from '@/lib/database';
 import { verifyToken } from '@/lib/jwt';
 
+interface PromptJourneyEntry {
+  id: string;
+  question: string;
+  reasoning_note: string | null;
+  prompt_components: unknown;
+  prompt_version: number | null;
+  session_number: number | null;
+  subtopic_label: string | null;
+  created_at: string;
+}
+
 function normalizePromptComponents(value: unknown) {
   if (!value) return null;
 
@@ -46,14 +57,14 @@ export async function GET(request: NextRequest) {
       query = query.eq('course_id', courseId);
     }
 
-    const { data, error } = await query;
+    const { data, error } = await query as { data: PromptJourneyEntry[] | null; error: { message: string } | null };
 
     if (error) {
       console.error('[PromptJourney] Query error:', error);
       return NextResponse.json({ error: 'Failed to fetch prompt journey' }, { status: 500 });
     }
 
-    const normalizedEntries = (data || []).map((entry: any) => ({
+    const normalizedEntries = (data || []).map((entry: PromptJourneyEntry) => ({
       ...entry,
       prompt_components: normalizePromptComponents(entry.prompt_components),
       prompt_version:
@@ -71,7 +82,7 @@ export async function GET(request: NextRequest) {
       entries: normalizedEntries,
       count: normalizedEntries.length,
     });
-  } catch (err: any) {
+  } catch (err: unknown) {
     console.error('[PromptJourney] Error:', err);
     return NextResponse.json({ error: 'Failed to fetch prompt journey' }, { status: 500 });
   }

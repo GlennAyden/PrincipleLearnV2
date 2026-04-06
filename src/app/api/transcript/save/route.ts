@@ -34,13 +34,13 @@ async function resolveUserByIdentifier(identifier: string) {
   const trimmed = identifier.trim();
   if (!trimmed) return null;
 
-  const byId = await DatabaseService.getRecords<any>('users', {
+  const byId = await DatabaseService.getRecords<{ id: string; email: string }>('users', {
     filter: { id: trimmed },
     limit: 1,
   });
   if (byId.length > 0) return byId[0];
 
-  const byEmail = await DatabaseService.getRecords<any>('users', {
+  const byEmail = await DatabaseService.getRecords<{ id: string; email: string }>('users', {
     filter: { email: trimmed },
     limit: 1,
   });
@@ -93,18 +93,18 @@ async function postHandler(req: NextRequest) {
       notes: `Subtopic: ${data.subtopic}`
     };
 
-    let transcript: any = null;
+    let transcript: { id: string } | null = null;
     try {
-      transcript = await DatabaseService.insertRecord('transcript', transcriptData);
-    } catch (primaryError: any) {
-      const message = String(primaryError?.message || '');
+      transcript = await DatabaseService.insertRecord<{ id: string; user_id: string; course_id: string; subtopic_id: string | null; content: string; notes: string }>('transcript', transcriptData);
+    } catch (primaryError: unknown) {
+      const message = String(primaryError instanceof Error ? primaryError.message : '');
       if (!message.includes("public.transcript")) {
         throw primaryError;
       }
 
       // Backward-compatible fallback for environments using plural table naming.
       try {
-        transcript = await DatabaseService.insertRecord('transcripts', transcriptData);
+        transcript = await DatabaseService.insertRecord<{ id: string; user_id: string; course_id: string; subtopic_id: string | null; content: string; notes: string }>('transcripts', transcriptData);
       } catch (fallbackError) {
         console.error('[Transcript] Both table names failed:', { primaryError: message, fallbackError });
         throw primaryError; // throw original error for clearer diagnostics
@@ -119,8 +119,8 @@ async function postHandler(req: NextRequest) {
       subtopicId,
     });
 
-    return NextResponse.json({ success: true, id: transcript.id });
-  } catch (error: any) {
+    return NextResponse.json({ success: true, id: transcript!.id });
+  } catch (error: unknown) {
     console.error('Error saving transcript:', error);
     return NextResponse.json(
       { error: 'Failed to save transcript' },

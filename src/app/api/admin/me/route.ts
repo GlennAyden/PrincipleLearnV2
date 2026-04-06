@@ -34,7 +34,7 @@ export async function GET(req: NextRequest) {
     console.log('[Admin Me] Returning user data:', userData)
     return NextResponse.json({ user: userData }, { status: 200 })
     
-  } catch (err: any) {
+  } catch (err: unknown) {
     console.error('Error di /api/admin/me:', err)
     return NextResponse.json({ error: 'Internal Server Error' }, { status: 500 })
   }

@@ -43,7 +43,7 @@ export async function GET(req: NextRequest) {
   const days = parseInt(searchParams.get('days') || '7');
 
   let total = 0;
-  const typeDist: Record<ActivityType, number> = {} as any;
+  const typeDist = {} as Record<ActivityType, number>;
   const topUsers: Array<{userId: string; email: string; count: number; engagement: number}> = [];
   const trends: Array<{date: string; events: number; avgEngagement: number}> = [];
   const anomalies: ActivityAnalytics['anomalies'] = [];
@@ -51,7 +51,7 @@ export async function GET(req: NextRequest) {
   for (const [type, table] of Object.entries(TABLES)) {
     const count = await getTableCount(table, days);
     total += count;
-    (typeDist as any)[type] = count;
+    typeDist[type as ActivityType] = count;
   }
 
   // Mock trends (7 days)

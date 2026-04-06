@@ -28,7 +28,7 @@ export async function POST(req: NextRequest) {
     });
 
     const now = new Date().toISOString();
-    const progressData: Record<string, any> = {
+    const progressData: Record<string, string | number | null> = {
       id: progressId,
       user_id: userId,
       course_id: courseId,
@@ -60,10 +60,11 @@ export async function POST(req: NextRequest) {
       message: 'User progress updated successfully'
     });
 
-  } catch (error: any) {
+  } catch (error: unknown) {
+    const message = error instanceof Error ? error.message : 'Unknown error';
     console.error('Error updating user progress:', error);
     return NextResponse.json(
-      { error: 'Failed to update user progress: ' + error.message },
+      { error: 'Failed to update user progress: ' + message },
       { status: 500 }
     );
   }
@@ -83,7 +84,7 @@ export async function GET(req: NextRequest) {
     }
 
     // Build filter conditions
-    const filter: any = { user_id: userId };
+    const filter: Record<string, string> = { user_id: userId };
     if (courseId) filter.course_id = courseId;
 
     // Get user progress from database
@@ -106,10 +107,11 @@ export async function GET(req: NextRequest) {
       statistics: stats
     });
 
-  } catch (error: any) {
+  } catch (error: unknown) {
+    const message = error instanceof Error ? error.message : 'Unknown error';
     console.error('Error retrieving user progress:', error);
     return NextResponse.json(
-      { error: 'Failed to retrieve user progress: ' + error.message },
+      { error: 'Failed to retrieve user progress: ' + message },
       { status: 500 }
     );
   }

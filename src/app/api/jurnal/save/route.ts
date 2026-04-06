@@ -54,18 +54,18 @@ function parseStructuredContent(data: JurnalSubmission) {
 
   if (typeof data.content === 'string') {
     try {
-      const parsed = JSON.parse(data.content);
+      const parsed = JSON.parse(data.content) as Record<string, unknown>;
       if (parsed && typeof parsed === 'object') {
         return {
-          understood: normalizeText((parsed as any).understood),
-          confused: normalizeText((parsed as any).confused),
-          strategy: normalizeText((parsed as any).strategy),
-          promptEvolution: normalizeText((parsed as any).promptEvolution),
+          understood: normalizeText(parsed.understood),
+          confused: normalizeText(parsed.confused),
+          strategy: normalizeText(parsed.strategy),
+          promptEvolution: normalizeText(parsed.promptEvolution),
           contentRating:
-            typeof (parsed as any).contentRating === 'number' && Number.isFinite((parsed as any).contentRating)
-              ? (parsed as any).contentRating
+            typeof parsed.contentRating === 'number' && Number.isFinite(parsed.contentRating)
+              ? parsed.contentRating
               : null,
-          contentFeedback: normalizeText((parsed as any).contentFeedback),
+          contentFeedback: normalizeText(parsed.contentFeedback),
         };
       }
     } catch {
@@ -154,14 +154,14 @@ async function postHandler(req: NextRequest) {
 
     // Save journal to database
     const jurnalData = {
-      user_id: (user as any).id,
+      user_id: user.id,
       course_id: data.courseId,
       content: normalizedContent,
       type,
       reflection: JSON.stringify(reflectionContext),
     };
 
-    const jurnal = await DatabaseService.insertRecord<{ id: string } & Record<string, any>>('jurnal', jurnalData as any);
+    const jurnal = await DatabaseService.insertRecord<{ id: string } & Record<string, unknown>>('jurnal', jurnalData);
     
     console.log(`Journal saved to database:`, {
       id: jurnal.id,
@@ -174,7 +174,7 @@ async function postHandler(req: NextRequest) {
     });
 
     return NextResponse.json({ success: true, id: jurnal.id });
-  } catch (error: any) {
+  } catch (error: unknown) {
     console.error('Error saving jurnal refleksi:', error);
     return NextResponse.json(
       { error: 'Failed to save jurnal refleksi' },

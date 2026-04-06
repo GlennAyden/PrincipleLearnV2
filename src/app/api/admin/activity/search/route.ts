@@ -14,10 +14,14 @@ const TABLES: Record<ActivityType, string> = {
   discussion: 'discussion_sessions'
 };
 
-async function safeQuery(table: string): Promise<any[]> {
+// Dynamic DB rows from multiple tables with varying schemas — string index is unavoidable
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+type DynamicRow = Record<string, any>;
+
+async function safeQuery(table: string): Promise<DynamicRow[]> {
   try {
     const { data } = await adminDb.from(table).select('*').limit(1000);
-    return Array.isArray(data) ? data : [];
+    return Array.isArray(data) ? (data as DynamicRow[]) : [];
   } catch {
     return [];
   }
@@ -99,7 +103,7 @@ export async function GET(req: NextRequest) {
           userEmail: 'user@email.com', // From cache in prod
           topic: item.subtopic_label || item.topic || item.title || 'N/A',
           detail: item.question || item.content || item.answer || item.comment || 'Activity',
-          stage: (item.prompt_components ? 'SRP' : undefined) as any,
+          stage: item.prompt_components ? 'SRP' : undefined,
           engagementScore: computeEngagement(type),
           courseId: item.course_id
         } as GlobalActivityItem;

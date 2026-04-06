@@ -27,7 +27,7 @@ export async function POST(req: Request) {
     response.cookies.delete('csrf_token');
     
     return response;
-  } catch (error: any) {
+  } catch (error: unknown) {
     console.error('Logout error:', error);
     return NextResponse.json(
       { error: 'Failed to logout' },

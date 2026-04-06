@@ -20,7 +20,7 @@ export async function GET() {
         name: user.name || null,
       },
     });
-  } catch (error: any) {
+  } catch (error: unknown) {
     console.error('Get user error:', error);
     return NextResponse.json(
       { error: 'Failed to get user data' },

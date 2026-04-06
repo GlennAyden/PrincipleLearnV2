@@ -89,10 +89,10 @@ export default function QuestionBox({
           console.error('Transcript save error:', transcriptErr);
         });
       }
-    } catch (err: any) {
+    } catch (err: unknown) {
       console.error('AskQuestion error:', err);
       setStreamingAnswer('');
-      onAnswer(fullPrompt, `Error: ${err.message}`);
+      onAnswer(fullPrompt, `Error: ${err instanceof Error ? err.message : 'Unknown error'}`);
     } finally {
       setLoading(false);
     }

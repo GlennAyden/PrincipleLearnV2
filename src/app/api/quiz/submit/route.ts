@@ -65,7 +65,7 @@ async function postHandler(req: NextRequest) {
     }
 
     // Find quiz questions in database - try multiple strategies
-    let quizQuestions: any[] = [];
+    let quizQuestions: Array<Record<string, unknown>> = [];
     
     // Strategy 1: Use subtopic_id if we found it
     if (subtopicId) {
@@ -111,22 +111,22 @@ async function postHandler(req: NextRequest) {
 
     for (let i = 0; i < answers.length; i++) {
       const answer = answers[i];
-      let matchingQuiz: any = null;
+      let matchingQuiz: Record<string, unknown> | null | undefined = null;
       let matchMethod = '';
-      
+
       // Strategy 1: Exact question text match
-      matchingQuiz = quizQuestions.find(q => q.question.trim() === answer.question.trim());
+      matchingQuiz = quizQuestions.find(q => (q.question as string).trim() === answer.question.trim());
       if (matchingQuiz) {
         matchMethod = 'exact_text';
       }
       
       // Strategy 2: Fuzzy question text match (remove extra whitespace, punctuation)
       if (!matchingQuiz) {
-        const normalizeText = (text: string) => text.replace(/\s+/g, ' ').replace(/[^\w\s]/g, '').toLowerCase().trim();
-        const normalizedAnswerQuestion = normalizeText(answer.question);
-        
-        matchingQuiz = quizQuestions.find(q => 
-          normalizeText(q.question) === normalizedAnswerQuestion
+        const normalizeQuizText = (text: string) => text.replace(/\s+/g, ' ').replace(/[^\w\s]/g, '').toLowerCase().trim();
+        const normalizedAnswerQuestion = normalizeQuizText(answer.question);
+
+        matchingQuiz = quizQuestions.find(q =>
+          normalizeQuizText(q.question as string) === normalizedAnswerQuestion
         );
         if (matchingQuiz) {
           matchMethod = 'fuzzy_text';
@@ -143,8 +143,8 @@ async function postHandler(req: NextRequest) {
       if (!matchingQuiz) {
         const answerWords = answer.question.toLowerCase().split(/\s+/).filter((w: string) => w.length > 3);
         if (answerWords.length > 0) {
-          matchingQuiz = quizQuestions.find((q: any) => {
-            const quizWords = q.question.toLowerCase().split(/\s+/).filter((w: string) => w.length > 3);
+          matchingQuiz = quizQuestions.find((q: Record<string, unknown>) => {
+            const quizWords = (q.question as string).toLowerCase().split(/\s+/).filter((w: string) => w.length > 3);
             const commonWords = answerWords.filter((word: string) => quizWords.includes(word));
             return commonWords.length >= Math.min(2, answerWords.length * 0.5);
           });
@@ -157,10 +157,11 @@ async function postHandler(req: NextRequest) {
       if (matchingQuiz) {
         const reasoningFromAnswer = normalizeText(answer.reasoningNote);
         const reasoningFromArray = normalizeText(data.reasoningNotes?.[i]);
+        const quizId = matchingQuiz.id as string;
 
         matchedRows.push({
           user_id: user.id,
-          quiz_id: matchingQuiz.id,
+          quiz_id: quizId,
           course_id: data.courseId,
           subtopic_id: subtopicId,
           module_index: normalizeIndex(data.moduleIndex),
@@ -169,12 +170,12 @@ async function postHandler(req: NextRequest) {
           is_correct: answer.isCorrect,
           reasoning_note: reasoningFromAnswer || reasoningFromArray || null,
         });
-        
+
         matchingResults.push({
           questionIndex: i,
           matched: true,
           method: matchMethod,
-          quizId: matchingQuiz.id,
+          quizId,
           question: answer.question.substring(0, 50) + '...'
         });
         
@@ -219,7 +220,7 @@ async function postHandler(req: NextRequest) {
       : insertedRows
         ? [insertedRows]
         : [];
-    const submissionIds = insertedRowList.map((row: any) => row.id);
+    const submissionIds = insertedRowList.map((row: Record<string, unknown>) => row.id);
     
     console.log(`Quiz submission saved to database:`, {
       user: data.userId,
@@ -262,7 +263,7 @@ async function postHandler(req: NextRequest) {
         quizQuestionsFound: quizQuestions.length
       }
     });
-  } catch (error: any) {
+  } catch (error: unknown) {
     console.error('Error saving quiz attempt:', error);
     return NextResponse.json(
       { error: 'Failed to save quiz attempt' },
@@ -306,14 +307,14 @@ async function resolveModuleContext({
   }
 
   try {
-    const modules = await DatabaseService.getRecords<any>('subtopics', {
+    const modules = await DatabaseService.getRecords<{ id: string; title: string; content: string }>('subtopics', {
       filter: { course_id: courseId },
       useServiceRole: true,
     });
 
     for (const row of modules) {
       const parsedTitle = typeof row?.title === 'string' ? row.title : '';
-      let parsedContent: any = null;
+      let parsedContent: { module?: string; subtopics?: Array<string | { title?: string }> } | null = null;
       try {
         parsedContent = row?.content ? JSON.parse(row.content) : null;
       } catch {
@@ -331,7 +332,7 @@ async function resolveModuleContext({
       }
 
       if (normalizedSubtopic && Array.isArray(parsedContent?.subtopics)) {
-        const match = parsedContent.subtopics.find((item: any) => {
+        const match = parsedContent.subtopics.find((item: string | { title?: string }) => {
           const candidate = typeof item === 'string' ? item : item?.title;
           return candidate && normalizeValue(candidate) === normalizedSubtopic;
         });
@@ -393,7 +394,7 @@ async function markSubtopicQuizCompletion({
       return;
     }
 
-    let content: any = cacheRow.content;
+    let content: Record<string, unknown> = (cacheRow.content ?? {}) as Record<string, unknown>;
     if (typeof content === 'string') {
       try {
         content = JSON.parse(content);
@@ -407,7 +408,7 @@ async function markSubtopicQuizCompletion({
     }
 
     const existingUsers = Array.isArray(content.completed_users)
-      ? content.completed_users.map((value: any) => String(value))
+      ? (content.completed_users as unknown[]).map((value: unknown) => String(value))
       : [];
 
     if (!existingUsers.includes(userId)) {

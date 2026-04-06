@@ -60,7 +60,7 @@ export async function GET(request: NextRequest) {
       .select('id, email, created_at')
       .eq('role', 'user')
 
-    const studentSummary: InsightsStudentRow[] = (users || []).map((u: any) => ({
+    const studentSummary: InsightsStudentRow[] = (users || []).map((u: { id: string; email: string; created_at: string }) => ({
       userId: u.id,
       email: u.email,
       totalPrompts: Math.floor(Math.random() * 50),
@@ -98,7 +98,7 @@ export async function GET(request: NextRequest) {
       }
     })
 
-  } catch (err: any) {
+  } catch (err: unknown) {
     console.error('[Insights Export] Error:', err)
     return NextResponse.json(
       { error: 'Export failed' },

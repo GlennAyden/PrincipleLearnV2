@@ -95,7 +95,7 @@ export async function POST(_req: Request) {
     });
 
     return response;
-  } catch (error: any) {
+  } catch (error: unknown) {
     console.error('Token refresh error:', error);
     return NextResponse.json(
       { error: 'Failed to refresh token' },

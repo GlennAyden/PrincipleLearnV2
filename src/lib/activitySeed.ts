@@ -12,11 +12,11 @@ const DEMO_EMAIL = 'activity.demo@principlelearn.ai';
 const DEMO_COURSE_TITLE = 'Activity Monitoring Demo Course';
 
 // Helper: insertRecord typed to return a record with at least an `id` field
-async function insert<T extends Record<string, any>>(
+async function insert<T extends Record<string, unknown>>(
   table: string,
-  data: Record<string, any>,
+  data: Record<string, unknown>,
 ): Promise<T & { id: string }> {
-  return DatabaseService.insertRecord<T & { id: string }>(table, data as any);
+  return DatabaseService.insertRecord<T & { id: string }>(table, data as Partial<T & { id: string }>);
 }
 
 async function ensureDemoUser(): Promise<{ userId: string; userEmail: string }> {

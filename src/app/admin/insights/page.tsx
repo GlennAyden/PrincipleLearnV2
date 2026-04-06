@@ -51,8 +51,8 @@ export default function InsightsPage() {
       if (!res.ok) throw new Error('Failed to load insights');
       const apiData: InsightsAPIResponse = await res.json();
       setData(apiData);
-    } catch (err: any) {
-      setError(err.message);
+    } catch (err: unknown) {
+      setError(err instanceof Error ? err.message : 'Unknown error');
     } finally {
       setLoading(false);
     }

@@ -47,7 +47,13 @@ async function getHandler(request: NextRequest) {
       return NextResponse.json({ error: 'Failed to load analytics' }, { status: 500 });
     }
 
-    const sessions = (sessionsRaw ?? []) as any[];
+    interface AnalyticsSessionRow {
+      id: string; status: string; phase?: string; learning_goals: { covered?: boolean }[];
+      created_at: string; updated_at: string; user_id: string; course_id: string;
+      users?: { email: string } | null; courses?: { title: string } | null;
+      subtopics?: { title: string } | null; count_messages?: unknown;
+    }
+    const sessions = (sessionsRaw ?? []) as unknown as AnalyticsSessionRow[];
 
     // Calculate aggregates
     const now = new Date();
@@ -73,11 +79,11 @@ async function getHandler(request: NextRequest) {
 
       const goals = Array.isArray(session.learning_goals) ? session.learning_goals : [];
       totalGoals += goals.length;
-      coveredGoals += goals.filter((g: any) => g.covered).length;
+      coveredGoals += goals.filter((g: { covered?: boolean }) => g.covered).length;
 
       // Health score logic
       const daysStalled = (now.getTime() - new Date(session.updated_at).getTime()) / (24 * 60 * 60 * 1000);
-      const goalPct = goals.length ? (goals.filter((g: any) => g.covered).length / goals.length) : 0;
+      const goalPct = goals.length ? (goals.filter((g: { covered?: boolean }) => g.covered).length / goals.length) : 0;
       const hasActivity = messageCount > 3;
       const score = Math.round(
         (goalPct * 50) +

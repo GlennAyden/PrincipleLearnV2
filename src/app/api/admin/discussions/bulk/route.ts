@@ -42,14 +42,14 @@ async function postHandler(request: NextRequest) {
           results.failed++;
           results.errors.push(`Unknown action: ${action} for ${sessionId}`);
         }
-      } catch (err: any) {
+      } catch (err: unknown) {
         results.failed++;
-        results.errors.push(`Session ${sessionId}: ${err.message}`);
+        results.errors.push(`Session ${sessionId}: ${err instanceof Error ? err.message : 'Unknown error'}`);
       }
     }
 
     return NextResponse.json({ results });
-  } catch (error: any) {
+  } catch (error: unknown) {
     console.error('[AdminDiscussionsBulk] Error:', error);
     return NextResponse.json({ error: 'Internal server error' }, { status: 500 });
   }

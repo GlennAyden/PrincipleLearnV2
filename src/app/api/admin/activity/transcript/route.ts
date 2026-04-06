@@ -51,7 +51,7 @@ export async function GET(req: NextRequest) {
         orderBy: { column: 'created_at', ascending: false }
       });
     } catch (dbError) {
-      const message = String((dbError as any)?.message || '');
+      const message = dbError instanceof Error ? dbError.message : '';
       if (!message.includes("public.transcript")) {
         console.error('[Activity API] Database error fetching transcripts:', dbError);
         return NextResponse.json([], { status: 200 });

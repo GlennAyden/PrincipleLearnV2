@@ -6,11 +6,12 @@ import { withApiLogging } from '@/lib/api-logger';
 
 let hasDiscussionAdminActionsTable: boolean | null = null;
 
-function isMissingTableError(error: any, tableName: string): boolean {
+function isMissingTableError(error: unknown, tableName: string): boolean {
+  const err = error as { code?: string; message?: string } | null
   return (
-    error?.code === 'PGRST205' &&
-    typeof error?.message === 'string' &&
-    error.message.includes(`'public.${tableName}'`)
+    err?.code === 'PGRST205' &&
+    typeof err?.message === 'string' &&
+    err.message.includes(`'public.${tableName}'`)
   );
 }
 
@@ -69,7 +70,7 @@ async function getHandler(
       console.error('[AdminDiscussions] Failed to fetch messages', messageError);
     }
 
-    let actions: any[] = [];
+    let actions: Record<string, unknown>[] = [];
     if (hasDiscussionAdminActionsTable !== false) {
       try {
         const { data: actionsData, error: actionsError } = await adminDb
@@ -91,7 +92,7 @@ async function getHandler(
           hasDiscussionAdminActionsTable = true;
           actions = actionsData ?? [];
         }
-      } catch (actionsError: any) {
+      } catch (actionsError: unknown) {
         if (isMissingTableError(actionsError, 'discussion_admin_actions')) {
           markDiscussionAdminActionsTableUnavailable();
           console.warn(
@@ -103,27 +104,35 @@ async function getHandler(
       }
     }
 
+    interface SessionQueryRow {
+      id: string; status: string; phase: string; learning_goals: unknown;
+      created_at: string; updated_at: string; user_id: string; course_id: string;
+      subtopic_id: string; users?: { email: string } | null;
+      courses?: { title: string } | null; subtopics?: { title: string } | null;
+    }
+    const session = sessionData as unknown as SessionQueryRow;
+
     return NextResponse.json({
       session: {
-        id: sessionData.id,
-        status: sessionData.status,
-        phase: sessionData.phase,
-        learningGoals: Array.isArray(sessionData.learning_goals)
-          ? sessionData.learning_goals
+        id: session.id,
+        status: session.status,
+        phase: session.phase,
+        learningGoals: Array.isArray(session.learning_goals)
+          ? session.learning_goals
           : [],
-        createdAt: sessionData.created_at,
-        updatedAt: sessionData.updated_at,
+        createdAt: session.created_at,
+        updatedAt: session.updated_at,
         user: {
-          id: sessionData.user_id,
-          email: (sessionData as any)?.users?.email ?? null,
+          id: session.user_id,
+          email: session.users?.email ?? null,
         },
         course: {
-          id: sessionData.course_id,
-          title: (sessionData as any)?.courses?.title ?? null,
+          id: session.course_id,
+          title: session.courses?.title ?? null,
         },
         subtopic: {
-          id: sessionData.subtopic_id,
-          title: (sessionData as any)?.subtopics?.title ?? null,
+          id: session.subtopic_id,
+          title: session.subtopics?.title ?? null,
         },
       },
       messages: messages ?? [],
@@ -181,7 +190,7 @@ async function postHandler(
       const goals = Array.isArray(sessionData.learning_goals)
         ? sessionData.learning_goals
         : [];
-      const goalIndex = goals.findIndex((goal: any) => goal?.id === goalId);
+      const goalIndex = goals.findIndex((goal: Record<string, unknown>) => goal?.id === goalId);
       if (goalIndex === -1) {
         return NextResponse.json(
           { error: 'Goal not found in session' },
@@ -189,7 +198,7 @@ async function postHandler(
         );
       }
 
-      const updatedGoals = goals.map((goal: any) =>
+      const updatedGoals = goals.map((goal: Record<string, unknown>) =>
         goal?.id === goalId ? { ...goal, covered } : goal
       );
 

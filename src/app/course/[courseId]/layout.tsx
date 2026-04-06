@@ -65,7 +65,7 @@ export default function CourseLayout({ children }: { children: ReactNode }) {
         
         if (result.success && result.course) {
           // Transform subtopics to outline format
-          const outline: ModuleOutline[] = result.course.subtopics?.map((subtopic: any, index: number) => {
+          const outline: ModuleOutline[] = result.course.subtopics?.map((subtopic: { id?: string; title?: string; content: string }, index: number) => {
             let content;
             try {
               content = JSON.parse(subtopic.content);

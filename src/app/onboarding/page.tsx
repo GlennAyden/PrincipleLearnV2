@@ -100,8 +100,8 @@ export default function OnboardingPage() {
       } else {
         router.replace('/request-course/step1');
       }
-    } catch (err: any) {
-      setError(err.message);
+    } catch (err: unknown) {
+      setError(err instanceof Error ? err.message : 'Unknown error');
     } finally {
       setSaving(false);
     }

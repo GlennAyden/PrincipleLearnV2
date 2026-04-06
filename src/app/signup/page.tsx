@@ -90,7 +90,7 @@ export default function SignUpPage() {
       } else {
         setError("Registration successful, but auto-login failed. Please sign in manually.");
       }
-    } catch (err: any) {
+    } catch (err: unknown) {
       setError("Network error. Please check your connection and try again.");
       console.error("Registration error:", err);
     } finally {

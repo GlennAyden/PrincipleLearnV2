@@ -37,8 +37,11 @@ export async function chatCompletion({
       },
       { signal: controller.signal },
     );
-  } catch (error: any) {
-    if (error?.name === 'AbortError' || controller.signal.aborted) {
+  } catch (error: unknown) {
+    if (
+      (error instanceof Error && error.name === 'AbortError') ||
+      controller.signal.aborted
+    ) {
       throw new Error(`OpenAI API timeout after ${timeoutMs}ms`);
     }
     throw error;
@@ -63,9 +66,9 @@ export async function chatCompletionWithRetry({
     try {
       console.log(`[AI] Attempt ${attempt}/${maxAttempts}`);
       return await chatCompletion({ messages, maxTokens, timeoutMs });
-    } catch (error: any) {
-      lastError = error;
-      console.error(`[AI] Attempt ${attempt} failed:`, error.message);
+    } catch (error: unknown) {
+      lastError = error instanceof Error ? error : new Error(String(error));
+      console.error(`[AI] Attempt ${attempt} failed:`, lastError.message);
 
       if (attempt < maxAttempts) {
         await new Promise((resolve) =>
@@ -102,9 +105,12 @@ export async function chatCompletionStream(opts: ChatCompletionOptions) {
       { signal: controller.signal },
     );
     return { stream, cancelTimeout: () => clearTimeout(timer) };
-  } catch (error: any) {
+  } catch (error: unknown) {
     clearTimeout(timer);
-    if (error?.name === 'AbortError' || controller.signal.aborted) {
+    if (
+      (error instanceof Error && error.name === 'AbortError') ||
+      controller.signal.aborted
+    ) {
       throw new Error(`OpenAI API timeout after ${timeoutMs}ms`);
     }
     throw error;
@@ -214,7 +220,7 @@ export function sanitizePromptInput(
  * Parse JSON from AI response text, stripping markdown code fences.
  * Shared by generate-course, generate-subtopic, generate-examples.
  */
-export function parseAIJsonResponse<T = any>(raw: string): T {
+export function parseAIJsonResponse<T = unknown>(raw: string): T {
   if (!raw.trim()) {
     throw new Error('Empty response from model');
   }

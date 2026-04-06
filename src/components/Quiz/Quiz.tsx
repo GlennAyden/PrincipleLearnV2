@@ -93,7 +93,7 @@ export default function Quiz({
     }
   };
   
-  const submitQuizToServer = useCallback(async (answers: any[], score: number) => {
+  const submitQuizToServer = useCallback(async (answers: Array<{ question: string; options: string[]; userAnswer: string; isCorrect: boolean; questionIndex: number; reasoningNote: string }>, score: number) => {
     if (submitted || !user?.id) return;
 
     try {

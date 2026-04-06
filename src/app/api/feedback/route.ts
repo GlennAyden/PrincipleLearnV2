@@ -96,7 +96,18 @@ async function postHandler(req: NextRequest) {
         comment: normalizedComment,
       };
       
-      const savedFeedback = await DatabaseService.insertRecord<any>('feedback', feedbackData);
+      interface FeedbackRecord {
+        id: string;
+        user_id: string;
+        course_id: string;
+        subtopic_id: string | null;
+        module_index: number | null;
+        subtopic_index: number | null;
+        subtopic_label: string | null;
+        rating: number | null;
+        comment: string;
+      }
+      const savedFeedback = await DatabaseService.insertRecord<FeedbackRecord>('feedback', feedbackData);
       console.log('Feedback saved to database:', {
         id: savedFeedback.id,
         user: normalizedUserId,
@@ -115,7 +126,7 @@ async function postHandler(req: NextRequest) {
     
     // Kirim kembali respons ke client
     return NextResponse.json({ success: true });
-  } catch (error: any) {
+  } catch (error: unknown) {
     console.error('Error saving feedback:', error);
     return NextResponse.json(
       { error: 'Failed to save feedback' },

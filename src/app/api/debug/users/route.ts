@@ -52,7 +52,7 @@ export async function POST() {
       role: 'user'
     };
     
-    const newUser = await DatabaseService.insertRecord<{ id: string; email: string; role: string }>('users', testUser as any);
+    const newUser = await DatabaseService.insertRecord<{ id: string; email: string; role: string }>('users', testUser);
 
     console.log('Debug: User created:', newUser);
 

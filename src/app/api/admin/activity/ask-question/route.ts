@@ -14,7 +14,7 @@ interface AskQuestionHistory {
   subtopic_label: string | null;
   question: string;
   answer: string;
-  prompt_components?: any;
+  prompt_components?: Record<string, unknown>;
   reasoning_note?: string | null;
   created_at: string;
 }

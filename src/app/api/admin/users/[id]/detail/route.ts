@@ -5,6 +5,20 @@ import { NextRequest, NextResponse } from 'next/server'
 import { adminDb } from '@/lib/database'
 import { verifyToken } from '@/lib/jwt'
 
+// ── Row Interfaces ──
+interface UserDetailRow { id: string; email: string; name?: string; role: string; created_at: string; updated_at?: string }
+interface CourseDetailRow { id: string; title: string; created_at: string }
+interface QuizDetailRow { id: string; quiz_id: string; course_id: string; subtopic_id: string; answer: string; is_correct: boolean; reasoning_note?: string; submitted_at?: string; created_at: string }
+interface JournalDetailRow { id: string; content: unknown; reflection?: string; course_id: string; subtopic_id: string; created_at: string }
+interface TranscriptDetailRow { id: string; title?: string; created_at: string }
+interface AskDetailRow { id: string; question: string; course_id: string; subtopic_id: string; created_at: string }
+interface ChallengeDetailRow { id: string; challenge_type?: string; course_id: string; subtopic_id: string; created_at: string }
+interface DiscussionDetailRow { id: string; status: string; phase?: string; learning_goals: unknown; updated_at: string; created_at: string }
+interface FeedbackDetailRow { id: string; rating?: number; comment?: string; created_at: string }
+interface ProgressDetailRow { id: string; subtopic_id: string; completed: boolean; created_at: string }
+interface SubtopicDetailRow { id: string; course_id: string; title: string; order_index?: number }
+interface LearningProfileRow { display_name?: string; displayName?: string; programming_experience?: string; programmingExperience?: string; learning_style?: string; learningStyle?: string; learning_goals?: string; learningGoals?: string; challenges?: string; [key: string]: unknown }
+
 // ─── Auth ─────────────────────────────────────────────────────────────────────
 
 function requireAdmin(request: NextRequest) {
@@ -17,6 +31,7 @@ function requireAdmin(request: NextRequest) {
 
 // ─── Safe query helper ────────────────────────────────────────────────────────
 
+// eslint-disable-next-line @typescript-eslint/no-explicit-any -- Supabase query builder returns complex generic types
 async function safeQuery<T>(query: any, label: string, fallback: T): Promise<T> {
   try {
     const { data, error } = await query
@@ -79,7 +94,7 @@ export async function GET(
       return NextResponse.json({ error: 'User not found' }, { status: 404 })
     }
 
-    const user = userRecord as any
+    const user = userRecord as unknown as UserDetailRow
 
     // ── Parallel queries ──────────────────────────────────────────────
     const [
@@ -94,55 +109,55 @@ export async function GET(
       userProgress,
       learningProfile,
     ] = await Promise.all([
-      safeQuery<any[]>(
+      safeQuery<CourseDetailRow[]>(
         adminDb.from('courses').select('id, title, created_at').eq('created_by', userId).order('created_at', { ascending: false }),
         'courses', []
       ),
-      safeQuery<any[]>(
+      safeQuery<QuizDetailRow[]>(
         adminDb.from('quiz_submissions').select('id, quiz_id, course_id, subtopic_id, answer, is_correct, reasoning_note, submitted_at, created_at').eq('user_id', userId).order('created_at', { ascending: false }),
         'quiz_submissions', []
       ),
-      safeQuery<any[]>(
+      safeQuery<JournalDetailRow[]>(
         adminDb.from('jurnal').select('id, content, reflection, course_id, subtopic_id, created_at').eq('user_id', userId).order('created_at', { ascending: false }),
         'journals', []
       ),
-      safeQuery<any[]>(
+      safeQuery<TranscriptDetailRow[]>(
         adminDb.from('transcript').select('id, title, created_at').eq('user_id', userId).order('created_at', { ascending: false }),
         'transcripts', []
       ),
-      safeQuery<any[]>(
+      safeQuery<AskDetailRow[]>(
         adminDb.from('ask_question_history').select('id, question, course_id, subtopic_id, created_at').eq('user_id', userId).order('created_at', { ascending: false }),
         'ask_questions', []
       ),
-      safeQuery<any[]>(
+      safeQuery<ChallengeDetailRow[]>(
         adminDb.from('challenge_responses').select('id, challenge_type, course_id, subtopic_id, created_at').eq('user_id', userId).order('created_at', { ascending: false }),
         'challenges', []
       ),
-      safeQuery<any[]>(
+      safeQuery<DiscussionDetailRow[]>(
         adminDb.from('discussion_sessions').select('id, status, phase, learning_goals, updated_at, created_at').eq('user_id', userId).order('updated_at', { ascending: false }),
         'discussions', []
       ),
-      safeQuery<any[]>(
+      safeQuery<FeedbackDetailRow[]>(
         adminDb.from('feedback').select('id, rating, comment, created_at').eq('user_id', userId).order('created_at', { ascending: false }),
         'feedbacks', []
       ),
-      safeQuery<any[]>(
+      safeQuery<ProgressDetailRow[]>(
         adminDb.from('user_progress').select('id, subtopic_id, completed, created_at').eq('user_id', userId),
         'user_progress', []
       ),
-      safeQuery<any>(
+      safeQuery<LearningProfileRow | null>(
         adminDb.from('learning_profiles').select('*').eq('user_id', userId).maybeSingle(),
         'learning_profile', null
       ),
     ])
 
     // ── Per-course subtopic counts ────────────────────────────────────
-    const courseIds = courses.map((c: any) => c.id)
-    let allSubtopics: any[] = []
+    const courseIds = courses.map(c => c.id)
+    let allSubtopics: SubtopicDetailRow[] = []
     if (courseIds.length > 0) {
       // Query subtopics for all courses
       for (const cid of courseIds) {
-        const subs = await safeQuery<any[]>(
+        const subs = await safeQuery<SubtopicDetailRow[]>(
           adminDb.from('subtopics').select('id, course_id, title, order_index').eq('course_id', cid),
           `subtopics for ${cid}`, []
         )
@@ -151,7 +166,7 @@ export async function GET(
     }
 
     // Group subtopics by course
-    const subtopicsByCourse: Record<string, any[]> = {}
+    const subtopicsByCourse: Record<string, SubtopicDetailRow[]> = {}
     for (const sub of allSubtopics) {
       const cid = sub.course_id
       if (!subtopicsByCourse[cid]) subtopicsByCourse[cid] = []
@@ -170,14 +185,14 @@ export async function GET(
 
     // Completed subtopics
     const completedSubtopicIds = new Set(
-      userProgress.filter((p: any) => p.completed).map((p: any) => p.subtopic_id)
+      userProgress.filter(p => p.completed).map(p => p.subtopic_id)
     )
 
     // Build courses array
-    const coursesDetail = courses.map((c: any) => {
+    const coursesDetail = courses.map(c => {
       const subs = subtopicsByCourse[c.id] || []
       const quizStats = quizByCourse[c.id] || { total: 0, correct: 0 }
-      const completedCount = subs.filter((s: any) => completedSubtopicIds.has(s.id)).length
+      const completedCount = subs.filter(s => completedSubtopicIds.has(s.id)).length
       return {
         id: c.id,
         title: c.title || 'Untitled Course',
@@ -219,14 +234,14 @@ export async function GET(
 
     // ── Last activity ─────────────────────────────────────────────────
     const allDates = [
-      ...courses.map((c: any) => parseValidDate(c.created_at)),
-      ...quizSubmissions.map((q: any) => parseValidDate(q.submitted_at ?? q.created_at)),
-      ...journals.map((j: any) => parseValidDate(j.created_at)),
-      ...transcripts.map((t: any) => parseValidDate(t.created_at)),
-      ...askQuestions.map((a: any) => parseValidDate(a.created_at)),
-      ...challenges.map((c: any) => parseValidDate(c.created_at)),
-      ...discussions.map((d: any) => parseValidDate(d.updated_at ?? d.created_at)),
-      ...feedbacks.map((f: any) => parseValidDate(f.created_at)),
+      ...courses.map(c => parseValidDate(c.created_at)),
+      ...quizSubmissions.map(q => parseValidDate(q.submitted_at ?? q.created_at)),
+      ...journals.map(j => parseValidDate(j.created_at)),
+      ...transcripts.map(t => parseValidDate(t.created_at)),
+      ...askQuestions.map(a => parseValidDate(a.created_at)),
+      ...challenges.map(c => parseValidDate(c.created_at)),
+      ...discussions.map(d => parseValidDate(d.updated_at ?? d.created_at)),
+      ...feedbacks.map(f => parseValidDate(f.created_at)),
     ].filter((d): d is Date => d !== null)
 
     const lastActivityDate = allDates.length > 0
@@ -234,7 +249,8 @@ export async function GET(
       : parseValidDate(user.created_at) ?? new Date()
 
     // ── Recent activity entries (combined and sorted) ─────────────────
-    const recentActivity: any[] = []
+    interface ActivityEntry { id: string; type: string; title: string; detail: string; timestamp: string }
+    const recentActivity: ActivityEntry[] = []
 
     for (const c of courses.slice(0, 5)) {
       recentActivity.push({
@@ -324,7 +340,7 @@ export async function GET(
     // ── Learning profile ──────────────────────────────────────────────
     let learningProfileData = null
     if (learningProfile) {
-      const lp = learningProfile as any
+      const lp = learningProfile
       learningProfileData = {
         displayName: lp.display_name ?? lp.displayName ?? user.name ?? '',
         programmingExperience: lp.programming_experience ?? lp.programmingExperience ?? '',

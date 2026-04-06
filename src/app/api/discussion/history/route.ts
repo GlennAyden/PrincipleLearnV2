@@ -10,7 +10,7 @@ interface SessionRecord {
   user_id: string;
   status: string;
   phase: string;
-  learning_goals: any;
+  learning_goals: unknown;
   template_id: string | null;
   subtopic_id: string;
   course_id: string;
@@ -18,9 +18,37 @@ interface SessionRecord {
 
 type TemplateRecord = {
   id: string;
-  template: any;
+  template: DiscussionTemplate;
   version: string;
 };
+
+interface DiscussionTemplate {
+  phases?: Array<{
+    id?: string;
+    steps?: Array<DiscussionStep>;
+  }>;
+  closing_message?: string;
+  learning_goals?: unknown[];
+}
+
+interface DiscussionStep {
+  key: string;
+  prompt: string;
+  expected_type?: string;
+  options?: string[];
+  goal_refs?: string[];
+  answer?: string | number;
+  feedback?: { correct?: string; incorrect?: string };
+}
+
+interface DiscussionMessage {
+  id: string;
+  role: string;
+  content: string;
+  step_key: string | null;
+  metadata: Record<string, unknown> | null;
+  created_at: string;
+}
 
 async function getHandler(request: NextRequest) {
   try {
@@ -126,7 +154,7 @@ async function fetchLatestSession(userId: string, courseId: string, subtopicId: 
   }
 
   if (data && data[0]) {
-    const { created_at: _created_at, ...rest } = data[0] as any;
+    const { created_at: _created_at, ...rest } = data[0] as SessionRecord & { created_at?: string };
     return rest;
   }
 
@@ -176,13 +204,13 @@ async function fetchMessages(sessionId: string) {
   return data ?? [];
 }
 
-function flattenTemplate(template: any) {
+function flattenTemplate(template: DiscussionTemplate | null | undefined) {
   const phases = Array.isArray(template?.phases) ? template.phases : [];
-  const flattened: Array<{ phaseId: string; step: any }> = [];
+  const flattened: Array<{ phaseId: string; step: DiscussionStep }> = [];
 
-  phases.forEach((phase: any) => {
+  phases.forEach((phase) => {
     const steps = Array.isArray(phase?.steps) ? phase.steps : [];
-    steps.forEach((step: any) => {
+    steps.forEach((step) => {
       if (step && typeof step.prompt === 'string') {
         flattened.push({
           phaseId: phase?.id || 'phase',
@@ -195,7 +223,7 @@ function flattenTemplate(template: any) {
   return flattened;
 }
 
-function getCurrentStep(template: any, messages: any[]) {
+function getCurrentStep(template: DiscussionTemplate, messages: DiscussionMessage[]) {
   const steps = flattenTemplate(template);
   if (!steps.length) return null;
 

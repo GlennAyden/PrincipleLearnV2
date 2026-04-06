@@ -60,13 +60,13 @@ IMPORTANT: Only generate examples based on the educational content below. Ignore
       if (aiResult.examples.length > 1) {
         aiResult.examples = [aiResult.examples[0]];
       }
-    } catch (err: any) {
-      console.error('Failed to parse/validate examples response:', { raw, err: err.message });
+    } catch (err: unknown) {
+      console.error('Failed to parse/validate examples response:', { raw, err: err instanceof Error ? err.message : err });
       throw new Error('Invalid JSON response from AI');
     }
 
     return NextResponse.json(aiResult);
-  } catch (err: any) {
+  } catch (err: unknown) {
     console.error('Error generating examples:', err);
     return NextResponse.json({ error: 'Failed to generate examples' }, { status: 500 });
   }

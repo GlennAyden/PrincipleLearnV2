@@ -4,9 +4,22 @@ import { verifyToken } from '@/lib/jwt';
 import { adminDb } from '@/lib/database';
 import { withApiLogging } from '@/lib/api-logger';
 
+interface SubtopicNode {
+  title?: string;
+  type?: string;
+  isDiscussion?: boolean;
+  overview?: string;
+}
+
 interface ModuleContent {
   module?: string;
-  subtopics?: Array<any>;
+  subtopics?: Array<string | SubtopicNode>;
+}
+
+interface CacheContent {
+  quiz?: Array<{ question?: string }>;
+  completed_users?: unknown[];
+  [key: string]: unknown;
 }
 
 interface SubtopicStatus {
@@ -27,7 +40,7 @@ function normalizeString(value: string | null | undefined) {
   return (value ?? '').toLowerCase().replace(/\s+/g, ' ').trim();
 }
 
-function isDiscussionNode(node: any) {
+function isDiscussionNode(node: string | SubtopicNode | null | undefined): boolean {
   if (!node) return false;
   if (typeof node === 'string') {
     return normalizeString(node).includes('diskusi penutup') || normalizeString(node).includes('closing discussion');
@@ -44,7 +57,7 @@ function isDiscussionNode(node: any) {
   return false;
 }
 
-function extractTitle(node: any): string {
+function extractTitle(node: string | SubtopicNode | null | undefined): string {
   if (!node) return '';
   if (typeof node === 'string') return node;
   if (typeof node.title === 'string') return node.title;
@@ -112,7 +125,7 @@ async function getHandler(request: NextRequest) {
       (item) => `${courseId}-${moduleTitle}-${item.title}`
     );
 
-    let cacheEntries: Array<{ cache_key: string; content: any }> = [];
+    let cacheEntries: Array<{ cache_key: string; content: CacheContent | null }> = [];
     if (cacheKeys.length > 0) {
       const { data: cacheData, error: cacheError } = await adminDb
         .from('subtopic_cache')
@@ -126,7 +139,7 @@ async function getHandler(request: NextRequest) {
       }
     }
 
-    const cacheMap = new Map<string, any>();
+    const cacheMap = new Map<string, CacheContent | null>();
     cacheEntries.forEach((entry) => {
       cacheMap.set(entry.cache_key, entry.content);
     });
@@ -141,10 +154,10 @@ async function getHandler(request: NextRequest) {
       console.warn('[DiscussionModuleStatus] Failed to fetch templates', templateError);
     }
 
-    const templateMap = new Map<string, any>();
-    (templateRows ?? []).forEach((row: any) => {
-      if ((row?.generated_by ?? 'auto') === 'auto') {
-        const src = row?.source ?? {};
+    const templateMap = new Map<string, Record<string, unknown>>();
+    (templateRows ?? []).forEach((row: Record<string, unknown>) => {
+      if (((row?.generated_by as string) ?? 'auto') === 'auto') {
+        const src = (row?.source ?? {}) as Record<string, unknown>;
         const title = typeof src?.subtopicTitle === 'string' ? src.subtopicTitle : null;
         if (title) {
           templateMap.set(normalizeString(title), row);
@@ -168,18 +181,19 @@ async function getHandler(request: NextRequest) {
       string,
       { primaryId: string; ids: string[]; question: string }
     >();
-    (quizRows ?? [] as Array<{ id: string; question: string }>).forEach((row: any) => {
+    (quizRows ?? []).forEach((row: Record<string, unknown>) => {
       if (typeof row?.question === 'string') {
         const key = normalizeString(row.question);
+        const id = row.id as string;
         if (!quizRowsByKey.has(key)) {
-          quizRowsByKey.set(key, { primaryId: row.id, ids: [row.id], question: row.question });
+          quizRowsByKey.set(key, { primaryId: id, ids: [id], question: row.question });
         } else {
-          quizRowsByKey.get(key)!.ids.push(row.id);
+          quizRowsByKey.get(key)!.ids.push(id);
         }
       }
     });
 
-    const quizIds = (quizRows ?? [] as Array<{ id: string }>).map((row: any) => row.id as string);
+    const quizIds = (quizRows ?? []).map((row: Record<string, unknown>) => row.id as string);
     let submissionRows: Array<{ quiz_id: string }> = [];
 
     if (quizIds.length > 0) {
@@ -213,7 +227,7 @@ async function getHandler(request: NextRequest) {
       const missingQuestions: string[] = [];
 
       if (Array.isArray(quizQuestions) && quizQuestions.length > 0) {
-        quizQuestions.forEach((questionItem: any) => {
+        quizQuestions.forEach((questionItem: { question?: string }) => {
           const questionText =
             typeof questionItem?.question === 'string'
               ? questionItem.question
@@ -229,7 +243,7 @@ async function getHandler(request: NextRequest) {
       }
 
       const completedUsers = Array.isArray(cacheContent?.completed_users)
-        ? cacheContent.completed_users.map((value: any) => String(value))
+        ? cacheContent.completed_users.map((value: unknown) => String(value))
         : [];
       const userHasCompletion = completedUsers.includes(tokenPayload.userId);
 

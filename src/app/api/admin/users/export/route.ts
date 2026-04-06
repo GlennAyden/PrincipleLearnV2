@@ -5,6 +5,18 @@ import { NextRequest, NextResponse } from 'next/server'
 import { adminDb } from '@/lib/database'
 import { verifyToken } from '@/lib/jwt'
 
+// ── Row Interfaces ──
+interface UserExportRow { id: string; email: string; name?: string; role: string; created_at: string }
+interface CourseExportRow { id: string; created_by: string; title: string; created_at: string }
+interface QuizExportRow { id: string; user_id: string; is_correct: boolean; submitted_at?: string; created_at: string }
+interface JournalExportRow { id: string; user_id: string; created_at: string }
+interface TranscriptExportRow { id: string; user_id: string; created_at: string }
+interface AskExportRow { id: string; user_id: string; created_at: string }
+interface ChallengeExportRow { id: string; user_id: string; created_at: string }
+interface DiscussionExportRow { id: string; user_id: string; updated_at?: string; created_at: string }
+interface FeedbackExportRow { id: string; user_id: string; rating: number; created_at: string }
+interface ProgressExportRow { user_id: string; subtopic_id: string; completed: boolean }
+
 // ─── Auth ─────────────────────────────────────────────────────────────────────
 
 function requireAdmin(request: NextRequest) {
@@ -17,6 +29,7 @@ function requireAdmin(request: NextRequest) {
 
 // ─── Safe query helper ────────────────────────────────────────────────────────
 
+// eslint-disable-next-line @typescript-eslint/no-explicit-any -- Supabase query builder returns complex generic types
 async function safeQuery<T>(query: any, label: string, fallback: T): Promise<T> {
   try {
     const { data, error } = await query
@@ -56,7 +69,7 @@ function escapeCSV(value: unknown): string {
   return str
 }
 
-function buildCSV(headers: string[], rows: any[][]): string {
+function buildCSV(headers: string[], rows: unknown[][]): string {
   const headerLine = headers.map(escapeCSV).join(',')
   const dataLines = rows.map((row) => row.map(escapeCSV).join(','))
   return [headerLine, ...dataLines].join('\n')
@@ -109,64 +122,64 @@ export async function GET(request: NextRequest) {
       allFeedbacks,
       allProgress,
     ] = await Promise.all([
-      safeQuery<any[]>(
+      safeQuery<UserExportRow[]>(
         adminDb.from('users').select('id, email, name, role, created_at'),
         'users', []
       ),
-      safeQuery<any[]>(
+      safeQuery<CourseExportRow[]>(
         adminDb.from('courses').select('id, created_by, title, created_at'),
         'courses', []
       ),
-      safeQuery<any[]>(
+      safeQuery<QuizExportRow[]>(
         adminDb.from('quiz_submissions').select('id, user_id, is_correct, submitted_at, created_at'),
         'quiz_submissions', []
       ),
-      safeQuery<any[]>(
+      safeQuery<JournalExportRow[]>(
         adminDb.from('jurnal').select('id, user_id, created_at'),
         'journals', []
       ),
-      safeQuery<any[]>(
+      safeQuery<TranscriptExportRow[]>(
         adminDb.from('transcript').select('id, user_id, created_at'),
         'transcripts', []
       ),
-      safeQuery<any[]>(
+      safeQuery<AskExportRow[]>(
         adminDb.from('ask_question_history').select('id, user_id, created_at'),
         'ask_questions', []
       ),
-      safeQuery<any[]>(
+      safeQuery<ChallengeExportRow[]>(
         adminDb.from('challenge_responses').select('id, user_id, created_at'),
         'challenges', []
       ),
-      safeQuery<any[]>(
+      safeQuery<DiscussionExportRow[]>(
         adminDb.from('discussion_sessions').select('id, user_id, updated_at, created_at'),
         'discussions', []
       ),
-      safeQuery<any[]>(
+      safeQuery<FeedbackExportRow[]>(
         adminDb.from('feedback').select('id, user_id, rating, created_at'),
         'feedbacks', []
       ),
-      safeQuery<any[]>(
+      safeQuery<ProgressExportRow[]>(
         adminDb.from('user_progress').select('user_id, subtopic_id, completed'),
         'user_progress', []
       ),
     ])
 
     // ── Group by user ─────────────────────────────────────────────────
-    const coursesByUser = groupBy(allCourses, (c: any) => c.created_by)
-    const quizByUser = groupBy(allQuizSubmissions, (q: any) => q.user_id)
-    const journalByUser = groupBy(allJournals, (j: any) => j.user_id)
-    const transcriptByUser = groupBy(allTranscripts, (t: any) => t.user_id)
-    const askByUser = groupBy(allAskQuestions, (a: any) => a.user_id)
-    const challengeByUser = groupBy(allChallenges, (c: any) => c.user_id)
-    const discussionByUser = groupBy(allDiscussions, (d: any) => d.user_id)
-    const feedbackByUser = groupBy(allFeedbacks, (f: any) => f.user_id)
-    const progressByUser = groupBy(allProgress, (p: any) => p.user_id)
+    const coursesByUser = groupBy(allCourses, c => c.created_by)
+    const quizByUser = groupBy(allQuizSubmissions, q => q.user_id)
+    const journalByUser = groupBy(allJournals, j => j.user_id)
+    const transcriptByUser = groupBy(allTranscripts, t => t.user_id)
+    const askByUser = groupBy(allAskQuestions, a => a.user_id)
+    const challengeByUser = groupBy(allChallenges, c => c.user_id)
+    const discussionByUser = groupBy(allDiscussions, d => d.user_id)
+    const feedbackByUser = groupBy(allFeedbacks, f => f.user_id)
+    const progressByUser = groupBy(allProgress, p => p.user_id)
 
     // Filter to students only
-    const students = users.filter((u: any) => (u.role || '').toLowerCase() !== 'admin')
+    const students = users.filter(u => (u.role || '').toLowerCase() !== 'admin')
 
     // ── Build export rows ─────────────────────────────────────────────
-    const exportRows = students.map((user: any) => {
+    const exportRows = students.map(user => {
       const uid = user.id
       const courses = coursesByUser[uid] || []
       const quizzes = quizByUser[uid] || []
@@ -178,13 +191,13 @@ export async function GET(request: NextRequest) {
       const feedbacks = feedbackByUser[uid] || []
       const progress = progressByUser[uid] || []
 
-      const completedCount = progress.filter((p: any) => p.completed).length
+      const completedCount = progress.filter(p => p.completed).length
       const totalProgressEntries = progress.length
       const completionRate = totalProgressEntries > 0
         ? Math.round((completedCount / totalProgressEntries) * 100)
         : 0
 
-      const quizCorrect = quizzes.filter((q: any) => q.is_correct).length
+      const quizCorrect = quizzes.filter(q => q.is_correct).length
       const quizAccuracy = quizzes.length > 0
         ? Math.round((quizCorrect / quizzes.length) * 100)
         : 0
@@ -209,14 +222,14 @@ export async function GET(request: NextRequest) {
 
       // Last activity
       const allDates = [
-        ...courses.map((c: any) => parseValidDate(c.created_at)),
-        ...quizzes.map((q: any) => parseValidDate(q.submitted_at ?? q.created_at)),
-        ...journals.map((j: any) => parseValidDate(j.created_at)),
-        ...transcripts.map((t: any) => parseValidDate(t.created_at)),
-        ...asks.map((a: any) => parseValidDate(a.created_at)),
-        ...challenges.map((c: any) => parseValidDate(c.created_at)),
-        ...discussions.map((d: any) => parseValidDate(d.updated_at ?? d.created_at)),
-        ...feedbacks.map((f: any) => parseValidDate(f.created_at)),
+        ...courses.map(c => parseValidDate(c.created_at)),
+        ...quizzes.map(q => parseValidDate(q.submitted_at ?? q.created_at)),
+        ...journals.map(j => parseValidDate(j.created_at)),
+        ...transcripts.map(t => parseValidDate(t.created_at)),
+        ...asks.map(a => parseValidDate(a.created_at)),
+        ...challenges.map(c => parseValidDate(c.created_at)),
+        ...discussions.map(d => parseValidDate(d.updated_at ?? d.created_at)),
+        ...feedbacks.map(f => parseValidDate(f.created_at)),
       ].filter((d): d is Date => d !== null)
 
       const lastActivity = allDates.length > 0
@@ -224,7 +237,7 @@ export async function GET(request: NextRequest) {
         : toIsoDateOnly(user.created_at)
 
       const avgFeedbackRating = feedbacks.length > 0
-        ? (feedbacks.reduce((sum: number, f: any) => sum + (f.rating || 0), 0) / feedbacks.length).toFixed(1)
+        ? (feedbacks.reduce((sum: number, f) => sum + (f.rating || 0), 0) / feedbacks.length).toFixed(1)
         : 'N/A'
 
       return {
@@ -272,7 +285,7 @@ export async function GET(request: NextRequest) {
       'Completion Rate', 'Last Activity',
     ]
 
-    const rows = exportRows.map((r: any) => [
+    const rows = exportRows.map(r => [
       r.id, r.email, r.name, r.joinedAt, r.totalCourses, r.totalQuizzes,
       r.quizCorrect, r.quizAccuracy, r.totalJournals, r.totalTranscripts,
       r.totalAskQuestions, r.totalChallenges, r.totalDiscussions,

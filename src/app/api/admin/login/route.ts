@@ -79,7 +79,7 @@ export async function POST(request: Request) {
     return response
 
 
-  } catch (err: any) {
+  } catch (err: unknown) {
     console.error('Error di /api/admin/login:', err)
     return NextResponse.json(
       { error: 'Internal server error' },
