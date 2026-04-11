@@ -63,33 +63,54 @@ export async function GET(request: NextRequest) {
         const _userId = searchParams.get('user_id');
         const _courseId = searchParams.get('course_id');
 
-        // 1. Efficient counts using select('id') instead of fetching full rows
+        // 1. Counts from BOTH manual research tables AND auto-generated data
         const [
             { data: sessionsData },
             { data: classificationsData },
-            { data: indicatorsData }
+            { data: indicatorsData },
+            { data: autoPromptsData },
+            { data: autoScoresData },
         ] = await Promise.all([
             adminDb.from('learning_sessions').select('id, user_id'),
             adminDb.from('prompt_classifications').select('id, prompt_stage, user_id'),
-            adminDb.from('cognitive_indicators').select('id')
+            adminDb.from('cognitive_indicators').select('id'),
+            adminDb.from('ask_question_history').select('id, user_id, prompt_stage, session_number, course_id'),
+            adminDb.from('auto_cognitive_scores').select('id'),
         ]);
 
         const sessions = sessionsData || [];
         const classifications = classificationsData || [];
         const indicators = indicatorsData || [];
+        const autoPrompts = autoPromptsData || [];
+        const autoScores = autoScoresData || [];
 
-        const totalSessions = sessions.length;
-        const totalClassifications = classifications.length;
-        const totalIndicators = indicators.length;
+        // Derive auto sessions: unique (user_id, course_id, session_number) combos
+        const autoSessionKeys = new Set(
+            autoPrompts.map((p: { user_id: string; course_id: string; session_number: number }) =>
+                `${p.user_id}_${p.course_id}_${p.session_number ?? 1}`)
+        );
 
-        // Total unique students from sessions
-        const uniqueStudents = new Set(sessions.map((s: { user_id: string }) => s.user_id));
+        const totalSessions = sessions.length + autoSessionKeys.size;
+        const totalClassifications = classifications.length + autoPrompts.length;
+        const totalIndicators = indicators.length + autoScores.length;
+
+        // Total unique students from both sources
+        const uniqueStudents = new Set([
+            ...sessions.map((s: { user_id: string }) => s.user_id),
+            ...autoPrompts.map((p: { user_id: string }) => p.user_id),
+        ]);
         const totalStudents = uniqueStudents.size;
 
-        // 2. Stage distribution from classifications
+        // 2. Stage distribution from BOTH manual classifications AND auto-classified prompts
         const stageDistribution: Record<PromptStage, number> = { SCP: 0, SRP: 0, MQP: 0, REFLECTIVE: 0 };
         classifications.forEach((c: { prompt_stage: string }) => {
             const stage = c.prompt_stage as PromptStage;
+            if (stage in stageDistribution) {
+                stageDistribution[stage]++;
+            }
+        });
+        autoPrompts.forEach((p: { prompt_stage: string }) => {
+            const stage = (p.prompt_stage || '').toUpperCase() as PromptStage;
             if (stage in stageDistribution) {
                 stageDistribution[stage]++;
             }
@@ -156,10 +177,20 @@ export async function GET(request: NextRequest) {
             };
         }
 
-        // 4. User progression (top 10 users by session count)
+        // 4. User progression (top 10 users by session/prompt count)
         const userSessionCounts = new Map<string, number>();
         sessions.forEach((s: { user_id: string }) => {
             userSessionCounts.set(s.user_id, (userSessionCounts.get(s.user_id) || 0) + 1);
+        });
+        // Also count auto-detected sessions per user
+        const userAutoSessionKeys = new Map<string, Set<string>>();
+        autoPrompts.forEach((p: { user_id: string; course_id: string; session_number: number }) => {
+            const key = `${p.course_id}_${p.session_number ?? 1}`;
+            if (!userAutoSessionKeys.has(p.user_id)) userAutoSessionKeys.set(p.user_id, new Set());
+            userAutoSessionKeys.get(p.user_id)!.add(key);
+        });
+        userAutoSessionKeys.forEach((keys, uid) => {
+            userSessionCounts.set(uid, (userSessionCounts.get(uid) || 0) + keys.size);
         });
 
         const topUsers = Array.from(userSessionCounts.entries())
@@ -168,22 +199,28 @@ export async function GET(request: NextRequest) {
             .map(([uid]) => uid);
 
         const userProgression: UserProgression[] = topUsers.map(uid => {
-            const userClassifications = classifications.filter((c: { user_id: string }) => c.user_id === uid);
+            // Combine manual classifications + auto-classified prompts
+            const manualClassifications = classifications.filter((c: { user_id: string }) => c.user_id === uid);
+            const autoClassifications = autoPrompts.filter((p: { user_id: string }) => p.user_id === uid);
+            const allClassifications = [
+                ...manualClassifications.map((c: { prompt_stage: string }) => c.prompt_stage),
+                ...autoClassifications.map((p: { prompt_stage: string }) => p.prompt_stage || ''),
+            ];
             const sessionCount = userSessionCounts.get(uid) || 0;
 
             // Stage distribution for this user
             const userStageDist: Record<PromptStage, number> = { SCP: 0, SRP: 0, MQP: 0, REFLECTIVE: 0 };
             let totalStageScore = 0;
-            userClassifications.forEach((c: { prompt_stage: string }) => {
-                const stage = c.prompt_stage as PromptStage;
+            allClassifications.forEach((stageStr: string) => {
+                const stage = (stageStr || '').toUpperCase() as PromptStage;
                 if (stage in userStageDist) {
                     userStageDist[stage]++;
                     totalStageScore += PROMPT_STAGE_SCORES[stage] || 0;
                 }
             });
 
-            const avgStageScore = userClassifications.length > 0
-                ? Math.round((totalStageScore / userClassifications.length) * 100) / 100
+            const avgStageScore = allClassifications.length > 0
+                ? Math.round((totalStageScore / allClassifications.length) * 100) / 100
                 : 0;
 
             return {
