@@ -32,11 +32,11 @@ export async function POST(request: Request) {
     // Database caching for performance optimization
     if (courseId) {
       try {
-        const { adminDb, publicDb } = await import('@/lib/database');
+        const { adminDb } = await import('@/lib/database');
 
-        // Check cache first (read-only — use anon client for least privilege)
+        // Check cache first (use adminDb — anon client has no RLS read policy on subtopic_cache)
         const cacheKey = `${courseId}-${moduleTitle}-${subtopic}`;
-        const { data: cached } = await publicDb
+        const { data: cached } = await adminDb
           .from('subtopic_cache')
           .select('content')
           .eq('cache_key', cacheKey)
@@ -44,18 +44,24 @@ export async function POST(request: Request) {
 
         if (cached?.content) {
           console.log('[GenerateSubtopic] Returning cached subtopic data');
-          try {
-            await syncQuizQuestions({
-              adminDb,
-              courseId,
-              moduleTitle,
-              subtopicTitle: subtopic,
-              quizItems: cached.content?.quiz,
-            });
-          } catch (syncError) {
-            console.warn('[GenerateSubtopic] Quiz sync from cache failed', syncError);
-          }
-          return NextResponse.json(cached.content);
+          // Defer quiz sync to after response — no need to block the user
+          after(async () => {
+            try {
+              const { adminDb: bgAdminDb } = await import('@/lib/database');
+              await syncQuizQuestions({
+                adminDb: bgAdminDb,
+                courseId,
+                moduleTitle,
+                subtopicTitle: subtopic,
+                quizItems: cached.content?.quiz,
+              });
+            } catch (syncError) {
+              console.warn('[GenerateSubtopic] Quiz sync from cache failed', syncError);
+            }
+          });
+          const response = NextResponse.json(cached.content);
+          response.headers.set('Cache-Control', 'private, max-age=300, stale-while-revalidate=600');
+          return response;
         }
 
       } catch (cacheError) {
@@ -306,49 +312,54 @@ export async function POST(request: Request) {
         // Also save quiz questions to database for proper data structure
         if (data.quiz && Array.isArray(data.quiz) && data.quiz.length > 0) {
           try {
-            // Find subtopic record by matching the module content, not the individual subtopic name
-            const { data: allSubtopics, error: subtopicsError } = await adminDb
-              .from('subtopics')
-              .select('id, title, content')
-              .eq('course_id', courseId);
-
-            if (subtopicsError) {
-              console.warn('[GenerateSubtopic] Failed to load subtopics:', subtopicsError);
-            }
-
+            // Find subtopic record — try direct title match first (fast), then fallback to scan
             let subtopicData = null;
 
-            // Find the subtopic that contains this module in its content
-            if (allSubtopics && Array.isArray(allSubtopics)) {
-              for (const sub of allSubtopics) {
-                try {
-                  const parsedContent = JSON.parse(sub.content);
-                  if (parsedContent.module === moduleTitle) {
-                    subtopicData = sub;
-                    break;
-                  }
-                } catch {
-                  // If content is not valid JSON, try direct title match
-                  if (sub.title === moduleTitle) {
-                    subtopicData = sub;
-                    break;
+            // Attempt 1: Direct match by module title
+            const { data: directMatch } = await adminDb
+              .from('subtopics')
+              .select('id, title, content')
+              .eq('course_id', courseId)
+              .eq('title', moduleTitle)
+              .maybeSingle();
+
+            if (directMatch) {
+              subtopicData = directMatch;
+            } else {
+              // Attempt 2: Direct match by subtopic title
+              const { data: fallbackMatch } = await adminDb
+                .from('subtopics')
+                .select('id, title, content')
+                .eq('course_id', courseId)
+                .eq('title', subtopic)
+                .maybeSingle();
+
+              if (fallbackMatch) {
+                subtopicData = fallbackMatch;
+              } else {
+                // Attempt 3: Scan content JSON (last resort for mismatched titles)
+                const { data: allSubtopics } = await adminDb
+                  .from('subtopics')
+                  .select('id, title, content')
+                  .eq('course_id', courseId);
+
+                if (allSubtopics && Array.isArray(allSubtopics)) {
+                  for (const sub of allSubtopics) {
+                    try {
+                      const parsedContent = JSON.parse(sub.content);
+                      if (parsedContent.module === moduleTitle) {
+                        subtopicData = sub;
+                        break;
+                      }
+                    } catch {
+                      // Skip unparseable entries
+                    }
                   }
                 }
               }
             }
 
             const moduleRecord = subtopicData;
-
-            // Fallback: try direct lookup by subtopic parameter
-            if (!subtopicData) {
-              const { data: fallbackData } = await adminDb
-                .from('subtopics')
-                .select('id, title')
-                .eq('course_id', courseId)
-                .eq('title', subtopic)
-                .maybeSingle();
-              subtopicData = fallbackData ?? undefined;
-            }
 
             const subtopicId = subtopicData?.id;
 
@@ -431,7 +442,6 @@ export async function POST(request: Request) {
                 courseId,
                 moduleTitle,
                 subtopic,
-                availableSubtopics: allSubtopics?.map((s: { id: string; title: string }) => ({ id: s.id, title: s.title }))
               });
             }
           } catch (quizSaveError) {
@@ -492,31 +502,18 @@ async function syncQuizQuestions({
 
     if (!resolvedSubtopic?.id) {
       try {
-        const { data: allSubtopics, error: subtopicsError } = await adminDb
-          .from('subtopics')
-          .select('id, title, content')
-          .eq('course_id', courseId);
-
-        if (subtopicsError) {
-          console.warn('[GenerateSubtopic] Failed to load subtopics for quiz sync', subtopicsError);
-        } else if (allSubtopics) {
-          for (const sub of allSubtopics) {
-            try {
-              const parsed = sub?.content ? JSON.parse(sub.content) : null;
-              if (parsed?.module && moduleTitle && parsed.module === moduleTitle) {
-                resolvedSubtopic = sub;
-                break;
-              }
-            } catch {
-              // Fall back to direct title comparison if JSON parse fails
-              if (moduleTitle && sub?.title === moduleTitle) {
-                resolvedSubtopic = sub;
-                break;
-              }
-            }
-          }
+        // Try direct title match first (fast)
+        if (moduleTitle) {
+          const { data: directMatch } = await adminDb
+            .from('subtopics')
+            .select('id, title')
+            .eq('course_id', courseId)
+            .eq('title', moduleTitle)
+            .maybeSingle();
+          if (directMatch) resolvedSubtopic = directMatch;
         }
 
+        // Fallback: try subtopic title
         if (!resolvedSubtopic && subtopicTitle) {
           const { data: fallbackSubtopic } = await adminDb
             .from('subtopics')
@@ -524,9 +521,28 @@ async function syncQuizQuestions({
             .eq('course_id', courseId)
             .eq('title', subtopicTitle)
             .maybeSingle();
+          if (fallbackSubtopic) resolvedSubtopic = fallbackSubtopic;
+        }
 
-          if (fallbackSubtopic) {
-            resolvedSubtopic = fallbackSubtopic;
+        // Last resort: scan content JSON
+        if (!resolvedSubtopic && moduleTitle) {
+          const { data: allSubtopics } = await adminDb
+            .from('subtopics')
+            .select('id, title, content')
+            .eq('course_id', courseId);
+
+          if (allSubtopics) {
+            for (const sub of allSubtopics) {
+              try {
+                const parsed = sub?.content ? JSON.parse(sub.content) : null;
+                if (parsed?.module === moduleTitle) {
+                  resolvedSubtopic = sub;
+                  break;
+                }
+              } catch {
+                // Skip unparseable entries
+              }
+            }
           }
         }
       } catch (lookupError) {

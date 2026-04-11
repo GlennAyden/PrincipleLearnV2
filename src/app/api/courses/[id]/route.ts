@@ -75,10 +75,13 @@ export async function GET(
       }, { status: 403 });
     }
 
-    return NextResponse.json({
+    const response = NextResponse.json({
       success: true,
       course: courseWithSubtopics,
     });
+    // Course outline rarely changes — cache for 5 minutes
+    response.headers.set('Cache-Control', 'private, max-age=300, stale-while-revalidate=600');
+    return response;
   } catch (error) {
     console.error('[Get Course] Error fetching course:', error);
     return NextResponse.json({

@@ -170,17 +170,33 @@ export default function SubtopicPage() {
       ? activeSubtopic
       : activeSubtopic?.title ?? `Subtopic ${subtopicIndex + 1}`;
 
-  // Load course data from database API
+  // Load course data — check sessionStorage first to avoid sequential fetch
   useEffect(() => {
     async function loadCourse() {
       if (!courseId) return;
-      
+
+      // Try sessionStorage cache first (instant, avoids API roundtrip on navigation)
+      const cacheKey = `pl_course_${courseId}`;
+      try {
+        const cached = sessionStorage.getItem(cacheKey);
+        if (cached) {
+          const parsed = JSON.parse(cached) as CourseState;
+          if (parsed?.outline?.length) {
+            setCourse(parsed);
+            setCourseLoading(false);
+            return;
+          }
+        }
+      } catch {
+        // Ignore parse errors, proceed with API fetch
+      }
+
       setCourseLoading(true);
-      
+
       try {
         const response = await apiFetch(`/api/courses/${courseId}`);
         const result = await response.json();
-        
+
         if (result.success && result.course) {
           // Transform subtopics to outline format
           const outline = result.course.subtopics?.map((subtopic: { id?: string; title?: string; content: string }, index: number) => {
@@ -190,7 +206,7 @@ export default function SubtopicPage() {
             } catch {
               content = { module: subtopic.title, subtopics: [] };
             }
-            
+
             return {
               id: String(subtopic.id ?? `module-${index}`),
               rawTitle: subtopic.title ?? undefined,
@@ -198,15 +214,22 @@ export default function SubtopicPage() {
               subtopics: content.subtopics || []
             };
           }) || [];
-          
-          const courseData = {
+
+          const courseData: CourseState = {
             id: result.course.id,
             title: result.course.title,
             level: result.course.difficulty_level || 'Beginner',
             outline
           };
-          
+
           setCourse(courseData);
+
+          // Save to sessionStorage (without subtopicDetails to keep it small)
+          try {
+            sessionStorage.setItem(cacheKey, JSON.stringify(courseData));
+          } catch {
+            // sessionStorage full — ignore
+          }
         }
       } catch (error) {
         console.error('[Subtopic] Error loading course:', error);
@@ -215,7 +238,7 @@ export default function SubtopicPage() {
         setCourseLoading(false);
       }
     }
-    
+
     loadCourse();
   }, [courseId]);
 
@@ -288,33 +311,48 @@ export default function SubtopicPage() {
 
   }, [course, moduleIndex, subtopicIndex, courseId, subtopicProgressKey]);
 
-  // Background preload next subtopics for faster navigation (separate effect to avoid race condition)
+  // Background preload adjacent subtopics for faster navigation
   useEffect(() => {
     if (!data || !course?.outline) return;
 
     const currentModule = course.outline[moduleIndex];
-    const nextSubtopicIndex = subtopicIndex + 1;
+    const prefetchTargets: { module: string; subtopic: string }[] = [];
 
     // Preload next subtopic in same module
-    if (currentModule?.subtopics?.[nextSubtopicIndex]) {
-      const nextSubTitle = typeof currentModule.subtopics[nextSubtopicIndex] === 'string'
-        ? currentModule.subtopics[nextSubtopicIndex]
-        : currentModule.subtopics[nextSubtopicIndex].title;
+    const nextSubIdx = subtopicIndex + 1;
+    if (currentModule?.subtopics?.[nextSubIdx]) {
+      const sub = currentModule.subtopics[nextSubIdx];
+      prefetchTargets.push({
+        module: currentModule.module,
+        subtopic: typeof sub === 'string' ? sub : sub.title,
+      });
+    }
 
-      // Background fetch without blocking UI
-      const timer = setTimeout(() => {
+    // If last subtopic in module, preload first subtopic of next module
+    if (!currentModule?.subtopics?.[nextSubIdx]) {
+      const nextModule = course.outline[moduleIndex + 1];
+      if (nextModule?.subtopics?.[0]) {
+        const sub = nextModule.subtopics[0];
+        prefetchTargets.push({
+          module: nextModule.module,
+          subtopic: typeof sub === 'string' ? sub : sub.title,
+        });
+      }
+    }
+
+    if (prefetchTargets.length === 0) return;
+
+    // Short delay to let current render settle, then prefetch
+    const timer = setTimeout(() => {
+      prefetchTargets.forEach((target) => {
         apiFetch('/api/generate-subtopic', {
           method: 'POST',
-          body: JSON.stringify({
-            module: currentModule.module,
-            subtopic: nextSubTitle,
-            courseId: courseId,
-          }),
-        }).catch(() => {}); // Silently handle errors
-      }, 3000); // Delay to not interfere with current loading
+          body: JSON.stringify({ ...target, courseId }),
+        }).catch(() => {});
+      });
+    }, 500);
 
-      return () => clearTimeout(timer);
-    }
+    return () => clearTimeout(timer);
   }, [data, course, moduleIndex, subtopicIndex, courseId]);
 
   // Initialize challenge question when opening the tab
