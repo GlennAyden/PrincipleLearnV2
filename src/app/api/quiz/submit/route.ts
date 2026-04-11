@@ -1,4 +1,4 @@
-import { NextResponse } from 'next/server';
+import { NextResponse, after } from 'next/server';
 import type { NextRequest } from 'next/server';
 import { DatabaseService, DatabaseError, adminDb } from '@/lib/database';
 import { withApiLogging } from '@/lib/api-logger';
@@ -259,8 +259,33 @@ async function postHandler(req: NextRequest) {
       });
     }
     
-    return NextResponse.json({ 
-      success: true, 
+    const quizBatchId = `quiz_${user.id}_${data.courseId}_${Date.now()}`;
+    after(async () => {
+      try {
+        const qaText = matchedRows.map((row, i) => {
+          const ans = answers[i];
+          return `Q: ${ans?.question || ''}\nA: ${row.answer}\nCorrect: ${row.is_correct}\nReasoning: ${row.reasoning_note || '-'}`;
+        }).join('\n---\n');
+
+        if (qaText.length < 20) return;
+
+        const { scoreAndSave } = await import('@/services/cognitive-scoring.service');
+        await scoreAndSave({
+          source: 'quiz_submission',
+          user_id: user.id,
+          course_id: data.courseId,
+          source_id: quizBatchId,
+          user_text: qaText,
+          prompt_or_question: `Kuis subtopik: ${data.subtopicTitle || ''}`,
+          context_summary: `Skor: ${data.score}, ${matchedRows.filter(r => r.is_correct).length}/${matchedRows.length} benar`,
+        });
+      } catch (scoreError) {
+        console.warn('[QuizSubmit] Cognitive scoring failed:', scoreError);
+      }
+    });
+
+    return NextResponse.json({
+      success: true,
       submissionIds,
       matchingResults,
       message: `Saved ${successfulMatches}/${data.answers.length} quiz answers to database`,

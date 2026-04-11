@@ -163,6 +163,11 @@ export default function DiscussionModulePage() {
   const [selectedOption, setSelectedOption] = useState<string | null>(null);
   const [submitting, setSubmitting] = useState(false);
   const [showGoalPanel, setShowGoalPanel] = useState(false);
+  const [isRetrying, setIsRetrying] = useState(false);
+  const [retryAttempt, setRetryAttempt] = useState(0);
+  const [isRemediation, setIsRemediation] = useState(false);
+  const [remediationRound, setRemediationRound] = useState(0);
+  const [effortWarning, setEffortWarning] = useState('');
 
   const threadEndRef = useRef<HTMLDivElement | null>(null);
   const goalToggleRef = useRef<HTMLButtonElement | null>(null);
@@ -522,6 +527,7 @@ export default function DiscussionModulePage() {
 
     setSubmitting(true);
     setError('');
+    setEffortWarning('');
     try {
       const response = await fetch('/api/discussion/respond', {
         method: 'POST',
@@ -556,6 +562,50 @@ export default function DiscussionModulePage() {
         data.nextStep ??
         (data.session.status === 'completed' ? null : data.currentStep ?? null);
       setCurrentStep(nextStep);
+
+      // Handle effort rejection — keep input so student can edit
+      if (data.effortRejection) {
+        setEffortWarning('Jawaban Anda belum memenuhi syarat. Silakan baca umpan balik di atas.');
+        setSelectedOption(null);
+        return;
+      }
+
+      // Handle retry state
+      if (data.isRetry) {
+        setIsRetrying(true);
+        setRetryAttempt(data.attemptNumber ?? 1);
+      } else {
+        setIsRetrying(false);
+        setRetryAttempt(0);
+      }
+
+      // Handle clarification — keep step, clear input
+      if (data.clarificationGiven) {
+        setIsRetrying(false);
+        setRetryAttempt(0);
+        setInputValue('');
+        setSelectedOption(null);
+        return;
+      }
+
+      // Handle remediation phase
+      if (data.isRemediation) {
+        setIsRemediation(true);
+        setRemediationRound(data.remediationRound ?? 1);
+        setIsRetrying(false);
+        setRetryAttempt(0);
+      } else if (!data.isRetry) {
+        setIsRemediation(false);
+        setRemediationRound(0);
+      }
+
+      if (data.session.status === 'completed') {
+        setIsRemediation(false);
+        setRemediationRound(0);
+        setIsRetrying(false);
+        setRetryAttempt(0);
+      }
+
       setInputValue('');
       setSelectedOption(null);
     } catch (err: unknown) {
@@ -564,6 +614,8 @@ export default function DiscussionModulePage() {
       setSubmitting(false);
     }
   };
+
+  const MIN_OPEN_RESPONSE_LENGTH = 10;
 
   const goals = session?.learningGoals ?? [];
   const completedGoals = goals.filter((goal) => goal.covered).length;
@@ -575,10 +627,13 @@ export default function DiscussionModulePage() {
     (currentStep?.expected_type ?? '').toLowerCase() === 'mcq' &&
     Array.isArray(currentStep?.options);
   const mcqOptions = isCurrentStepMcq ? (currentStep?.options as string[]) : [];
+
+  const openResponseTooShort = !isCurrentStepMcq && inputValue.trim().length > 0 && inputValue.trim().length < MIN_OPEN_RESPONSE_LENGTH;
+
   const canSubmitResponse = currentStep
     ? isCurrentStepMcq
       ? Boolean(selectedOption)
-      : Boolean(inputValue.trim())
+      : inputValue.trim().length >= MIN_OPEN_RESPONSE_LENGTH
     : false;
 
   useEffect(() => {
@@ -594,6 +649,18 @@ export default function DiscussionModulePage() {
     const baseClass = [styles.composer, styles.composerStandalone];
     return (
       <form className={baseClass.join(' ')} onSubmit={handleSubmit}>
+        {isRetrying && (
+          <div className={styles.retryBanner}>
+            <span className={styles.retryIcon}>↻</span>
+            <span>Coba lagi (percobaan ke-{retryAttempt + 1} dari 2) — Perhatikan umpan balik di atas sebelum menjawab ulang.</span>
+          </div>
+        )}
+        {isRemediation && !isRetrying && (
+          <div className={styles.remediationBanner}>
+            <span className={styles.remediationIcon}>🎯</span>
+            <span>Fase Pendalaman (putaran {remediationRound}/2) — Pertanyaan ini menarget tujuan yang belum tercapai.</span>
+          </div>
+        )}
         {isCurrentStepMcq ? (
           <>
             <div className={styles.optionList}>
@@ -625,12 +692,20 @@ export default function DiscussionModulePage() {
           <div className={styles.responseWrapper}>
             <textarea
               className={styles.textarea}
-              placeholder="Tuliskan pemikiran dan penjelasan Anda..."
+              placeholder="Tuliskan pemikiran dan penjelasan Anda (minimal 10 karakter)..."
               value={inputValue}
-              onChange={(event) => setInputValue(event.target.value)}
+              onChange={(event) => { setInputValue(event.target.value); setEffortWarning(''); }}
               disabled={submitting}
               rows={3}
             />
+            {!isCurrentStepMcq && inputValue.trim().length > 0 && (
+              <span className={`${styles.charCount} ${openResponseTooShort ? styles.charCountWarn : styles.charCountOk}`}>
+                {inputValue.trim().length}/{MIN_OPEN_RESPONSE_LENGTH}
+              </span>
+            )}
+            {effortWarning && (
+              <p className={styles.effortWarning}>{effortWarning}</p>
+            )}
             <button
               type="submit"
               className={styles.sendButton}
@@ -930,6 +1005,7 @@ export default function DiscussionModulePage() {
                 {messages.map((message, index) => {
                   const isAgent = message.role === 'agent';
                   const meta = message.metadata ?? {};
+                  const metaType = message.metadata?.type;
                   const timestamp = formatTimestamp(message.created_at);
                   return (
                     <div
@@ -942,6 +1018,18 @@ export default function DiscussionModulePage() {
                 <span className={styles.messageAuthor}>
                   {isAgent ? 'Mentor' : 'Anda'}
                 </span>
+                        {metaType === 'retry_prompt' && (
+                          <span className={styles.retryTag}>Coba Lagi</span>
+                        )}
+                        {metaType === 'effort_rejection' && (
+                          <span className={styles.effortTag}>Perlu Perbaikan</span>
+                        )}
+                        {metaType === 'clarification_response' && (
+                          <span className={styles.clarificationTag}>Klarifikasi</span>
+                        )}
+                        {metaType === 'remediation_prompt' && (
+                          <span className={styles.remediationTag}>Pendalaman</span>
+                        )}
                         {timestamp && <span className={styles.messageTime}>{timestamp}</span>}
                       </div>
                       <div className={styles.messageBody}>{message.content}</div>
@@ -956,18 +1044,49 @@ export default function DiscussionModulePage() {
                   );
                 })}
                 {session?.status === 'completed' && (
-                  <div className={styles.completedPanel}>
-                    <p>
-                      Semua tujuan pembelajaran telah tercapai. Lanjutkan perjalanan belajar ke
-                      modul berikutnya.
-                    </p>
-                    <button
-                      className={styles.primaryButton}
-                      onClick={() => router.push(nextModuleHref)}
-                      type="button"
-                    >
-                      Lanjut Modul Berikutnya
-                    </button>
+                  <div className={`${styles.completedPanel} ${allGoalsCompleted ? styles.completedFull : styles.completedPartial}`}>
+                    <h3 className={styles.completionTitle}>
+                      {allGoalsCompleted
+                        ? 'Semua tujuan pembelajaran telah tercapai!'
+                        : `${completedGoals} dari ${totalGoals} tujuan tercapai`}
+                    </h3>
+                    {!allGoalsCompleted && (
+                      <p className={styles.completionSubtext}>
+                        Beberapa tujuan belum sepenuhnya tercapai setelah sesi pendalaman. Tinjau kembali materi untuk memperkuat pemahaman.
+                      </p>
+                    )}
+
+                    {totalGoals > 0 && (
+                      <ul className={styles.completionGoalList}>
+                        {goals.map((goal) => (
+                          <li key={goal.id} className={goal.covered ? styles.completionGoalCovered : styles.completionGoalMissed}>
+                            <span className={goal.covered ? styles.goalIconDone : styles.goalIconPending}>
+                              {goal.covered ? '✓' : '✗'}
+                            </span>
+                            <span>{goal.description}</span>
+                          </li>
+                        ))}
+                      </ul>
+                    )}
+
+                    <div className={styles.completionActions}>
+                      {!allGoalsCompleted && (
+                        <button
+                          className={styles.secondaryButton}
+                          onClick={() => router.push(`/course/${courseId}`)}
+                          type="button"
+                        >
+                          Tinjau Materi Modul
+                        </button>
+                      )}
+                      <button
+                        className={styles.primaryButton}
+                        onClick={() => router.push(nextModuleHref)}
+                        type="button"
+                      >
+                        Lanjut Modul Berikutnya
+                      </button>
+                    </div>
                   </div>
                 )}
                 {!shouldRenderComposer && session?.status !== 'completed' && (

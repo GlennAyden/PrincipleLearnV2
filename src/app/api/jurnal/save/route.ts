@@ -1,5 +1,5 @@
 // "jurnal" uses Indonesian spelling — matches the database table name.
-import { NextResponse } from 'next/server';
+import { NextResponse, after } from 'next/server';
 import type { NextRequest } from 'next/server';
 import { DatabaseService } from '@/lib/database';
 import { withApiLogging } from '@/lib/api-logger';
@@ -181,6 +181,36 @@ async function postHandler(req: NextRequest) {
       moduleIndex,
       subtopicIndex,
     });
+
+    if (type === 'structured_reflection' && structured) {
+      after(async () => {
+        try {
+          const allText = [
+            structured.understood, structured.confused,
+            structured.strategy, structured.promptEvolution,
+          ].filter(Boolean).join('\n');
+          if (allText.length < 20) return;
+
+          const { scoreAndSave } = await import('@/services/cognitive-scoring.service');
+          await scoreAndSave({
+            source: 'journal',
+            user_id: user.id,
+            course_id: data.courseId,
+            source_id: jurnal.id,
+            user_text: allText,
+            prompt_or_question: 'Refleksi terstruktur (dipahami, membingungkan, strategi, evolusi prompt)',
+            reflection_fields: {
+              understood: structured.understood,
+              confused: structured.confused,
+              strategy: structured.strategy,
+              promptEvolution: structured.promptEvolution,
+            },
+          });
+        } catch (scoreError) {
+          console.warn('[Journal] Cognitive scoring failed:', scoreError);
+        }
+      });
+    }
 
     return NextResponse.json({ success: true, id: jurnal.id });
   } catch (error: unknown) {

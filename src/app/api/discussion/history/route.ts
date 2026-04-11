@@ -227,7 +227,17 @@ function getCurrentStep(template: DiscussionTemplate, messages: DiscussionMessag
   const steps = flattenTemplate(template);
   if (!steps.length) return null;
 
-  const agentMessages = messages.filter((message) => message.role === 'agent');
+  const agentMessages = messages.filter(
+    (message: DiscussionMessage) =>
+      message.role === 'agent' &&
+      (!message.metadata ||
+        (message.metadata.type !== 'coach_feedback' &&
+         message.metadata.type !== 'closing' &&
+         message.metadata.type !== 'retry_prompt' &&
+         message.metadata.type !== 'effort_rejection' &&
+         message.metadata.type !== 'remediation_prompt' &&
+         message.metadata.type !== 'clarification_response'))
+  );
   const lastAgent = agentMessages[agentMessages.length - 1];
 
   if (!lastAgent) {

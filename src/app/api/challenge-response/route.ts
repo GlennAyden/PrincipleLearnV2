@@ -1,4 +1,4 @@
-import { NextRequest, NextResponse } from 'next/server';
+import { NextRequest, NextResponse, after } from 'next/server';
 import { adminDb, DatabaseError } from '@/lib/database';
 import { verifyToken } from '@/lib/jwt';
 import { withApiLogging } from '@/lib/api-logger';
@@ -80,7 +80,24 @@ async function postHandler(req: NextRequest) {
       }
       
       console.log('[Challenge Response] Successfully saved challenge response');
-      
+
+      after(async () => {
+        try {
+          const { scoreAndSave } = await import('@/services/cognitive-scoring.service');
+          await scoreAndSave({
+            source: 'challenge_response',
+            user_id: userId,
+            course_id: courseId,
+            source_id: challengeId,
+            user_text: normalizedAnswer,
+            prompt_or_question: normalizedQuestion,
+            ai_response: normalizedFeedback.slice(0, 500),
+          });
+        } catch (scoreError) {
+          console.warn('[ChallengeResponse] Cognitive scoring failed:', scoreError);
+        }
+      });
+
       return NextResponse.json({
         success: true,
         challengeId: challengeId,

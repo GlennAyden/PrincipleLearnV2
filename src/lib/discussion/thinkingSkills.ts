@@ -15,6 +15,13 @@ export interface ThinkingSkillMeta {
 
 const CRITICAL_THINKING_INDICATORS: ThinkingSkillIndicator[] = [
   {
+    id: 'ct_interpretation',
+    domain: 'critical',
+    name: 'Interpretation',
+    description:
+      'Kemampuan memahami dan menjelaskan makna dari data, situasi, atau pengalaman belajar.',
+  },
+  {
     id: 'ct_analysis',
     domain: 'critical',
     name: 'Analysis',
@@ -74,18 +81,25 @@ const COMPUTATIONAL_THINKING_INDICATORS: ThinkingSkillIndicator[] = [
       'Kemampuan memfokuskan perhatian pada inti konsep dengan mengabaikan detail yang tidak relevan.',
   },
   {
-    id: 'cpt_algorithmic_thinking',
+    id: 'cpt_algorithm_design',
     domain: 'computational',
-    name: 'Algorithmic Thinking',
+    name: 'Algorithm Design',
     description:
       'Kemampuan menyusun urutan langkah penyelesaian masalah secara logis dan sistematis.',
   },
   {
-    id: 'cpt_debugging',
+    id: 'cpt_evaluation_debugging',
     domain: 'computational',
-    name: 'Debugging / Error Correction',
+    name: 'Evaluation & Debugging',
     description:
       'Kemampuan menemukan dan memperbaiki kesalahan dalam algoritma atau prosedur.',
+  },
+  {
+    id: 'cpt_generalization',
+    domain: 'computational',
+    name: 'Generalization',
+    description:
+      'Kemampuan menerapkan solusi dari satu konteks ke konteks lain yang serupa, mengenali pola yang dapat digeneralisasikan.',
   },
 ];
 
@@ -110,6 +124,13 @@ export function buildThinkingSkillGuidanceLines(): string[] {
   return lines;
 }
 
+// Backward compatibility: map old indicator names to new canonical names
+const INDICATOR_NAME_MAP: Record<string, string> = {
+  'Algorithmic Thinking': 'Algorithm Design',
+  'Debugging / Error Correction': 'Evaluation & Debugging',
+  'Debugging': 'Evaluation & Debugging',
+};
+
 export function normalizeThinkingSkillMeta(meta: unknown): ThinkingSkillMeta | null {
   if (!meta || typeof meta !== 'object') {
     return null;
@@ -126,14 +147,17 @@ export function normalizeThinkingSkillMeta(meta: unknown): ThinkingSkillMeta | n
     return null;
   }
 
-  const indicator =
+  const rawIndicator =
     typeof m.indicator === 'string' && m.indicator.trim().length > 0
       ? m.indicator.trim()
       : null;
 
-  if (!indicator) {
+  if (!rawIndicator) {
     return null;
   }
+
+  // Apply backward-compat mapping
+  const indicator = INDICATOR_NAME_MAP[rawIndicator] || rawIndicator;
 
   const indicatorDescription =
     typeof m.indicator_description === 'string'

@@ -142,6 +142,53 @@ Please answer in the same language as the question above. Base your answer stric
       cancelTimeout,
       onComplete: async (answer) => {
         const timestamp = new Date().toISOString();
+
+        // Follow-up detection: query most recent entry for same (user_id, course_id, session_number)
+        let isFollowUp = false;
+        let followUpOf: string | null = null;
+        let previousInteraction: { id: string; question: string; answer: string } | null = null;
+        try {
+          const { data: prevEntry } = await adminDb
+            .from('ask_question_history')
+            .select('id, question, answer, created_at')
+            .eq('user_id', userId)
+            .eq('course_id', courseId)
+            .eq('session_number', resolvedSessionNumber)
+            .order('created_at', { ascending: false })
+            .limit(1)
+            .maybeSingle();
+
+          if (prevEntry) {
+            const minutesDiff = (Date.now() - new Date(prevEntry.created_at).getTime()) / (1000 * 60);
+            if (minutesDiff <= 10) {
+              // Time-based: within 10 minutes counts as follow-up candidate
+              isFollowUp = true;
+              followUpOf = prevEntry.id;
+              previousInteraction = { id: prevEntry.id, question: prevEntry.question, answer: prevEntry.answer };
+            } else {
+              // Semantic overlap: check if 2+ words from previous answer appear in new question
+              const prevAnswerWords = new Set(
+                (prevEntry.answer || '')
+                  .toLowerCase()
+                  .split(/\W+/)
+                  .filter((w: string) => w.length > 3)
+              );
+              const questionWords = normalizedQuestion
+                .toLowerCase()
+                .split(/\W+/)
+                .filter((w: string) => w.length > 3);
+              const overlapCount = questionWords.filter((w: string) => prevAnswerWords.has(w)).length;
+              if (overlapCount >= 2) {
+                isFollowUp = true;
+                followUpOf = prevEntry.id;
+                previousInteraction = { id: prevEntry.id, question: prevEntry.question, answer: prevEntry.answer };
+              }
+            }
+          }
+        } catch (followUpError) {
+          console.warn('[AskQuestion] Follow-up detection failed (non-blocking):', followUpError);
+        }
+
         const transcriptData = {
           user_id: userId,
           course_id: courseId,
@@ -158,6 +205,8 @@ Please answer in the same language as the question above. Base your answer stric
           prompt_stage: classification.stage,
           stage_confidence: classification.confidence,
           micro_markers: classification.microMarkers,
+          is_follow_up: isFollowUp,
+          follow_up_of: followUpOf,
           created_at: timestamp,
           updated_at: timestamp,
         };
@@ -176,6 +225,30 @@ Please answer in the same language as the question above. Base your answer stric
             moduleIndex: transcriptData.module_index,
             subtopicIndex: transcriptData.subtopic_index,
           });
+
+          // Generate a deterministic source_id for cognitive scoring
+          const sourceId = `aq_${userId}_${courseId}_${Date.now()}`;
+
+          try {
+            const { scoreAndSave } = await import('@/services/cognitive-scoring.service');
+            await scoreAndSave({
+              source: 'ask_question',
+              user_id: userId,
+              course_id: courseId,
+              source_id: sourceId,
+              user_text: normalizedQuestion,
+              prompt_or_question: 'Pertanyaan mahasiswa ke AI',
+              ai_response: answer.slice(0, 500),
+              context_summary: context?.slice(0, 300),
+              is_follow_up: isFollowUp,
+              previous_interaction: previousInteraction
+                ? `Q: ${previousInteraction.question}\nA: ${(previousInteraction.answer || '').slice(0, 300)}`
+                : undefined,
+              prompt_stage: classification.stage,
+            });
+          } catch (scoreError) {
+            console.warn('[AskQuestion] Cognitive scoring failed (non-blocking):', scoreError);
+          }
         }
       },
     });

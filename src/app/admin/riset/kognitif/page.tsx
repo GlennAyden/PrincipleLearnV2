@@ -74,9 +74,29 @@ interface ClassificationOption {
 
 type ModalMode = 'add' | 'edit' | 'view'
 
+interface AutoScoreRow {
+    id: string
+    source: string
+    user_id: string
+    ct_total_score: number
+    cth_total_score: number
+    cognitive_depth_level: number
+    confidence: number
+    prompt_stage: string | null
+    created_at: string
+}
+
 // ============================================
 // CONSTANTS
 // ============================================
+
+const AUTO_SOURCE_LABELS: Record<string, string> = {
+    ask_question: 'Tanya Jawab',
+    challenge_response: 'Tantangan',
+    quiz_submission: 'Kuis',
+    journal: 'Refleksi',
+    discussion: 'Diskusi',
+}
 
 const ITEMS_PER_PAGE = 10
 
@@ -136,6 +156,12 @@ export default function KognitifPage() {
     const [analytics, setAnalytics] = useState<ResearchAnalytics | null>(null)
     const [matrixLoading, setMatrixLoading] = useState(true)
     const [matrixError, setMatrixError] = useState<string | null>(null)
+
+    // ============================================
+    // AUTO-SCORE STATE
+    // ============================================
+    const [autoScores, setAutoScores] = useState<AutoScoreRow[]>([])
+    const [autoLoading, setAutoLoading] = useState(false)
 
     // ============================================
     // FETCH FUNCTIONS
@@ -214,6 +240,14 @@ export default function KognitifPage() {
             fetchIndicators()
             fetchClassifications()
             fetchAnalytics()
+
+            // Fetch auto-scored cognitive data
+            setAutoLoading(true)
+            fetch('/api/admin/research/auto-scores?limit=20', { credentials: 'include' })
+                .then(r => r.json())
+                .then(data => { if (data.data) setAutoScores(data.data) })
+                .catch(() => {})
+                .finally(() => setAutoLoading(false))
         }
     }, [authLoading, admin, fetchIndicators, fetchClassifications, fetchAnalytics])
 
@@ -690,6 +724,65 @@ export default function KognitifPage() {
                         )}
                     </div>
                 )}
+            </div>
+
+            {/* ============================================ */}
+            {/* SECTION 3: Auto-Scoring */}
+            {/* ============================================ */}
+            <div className={styles.section}>
+                <div className={styles.sectionHeader}>
+                    <h3 className={styles.sectionTitle}>
+                        <span>🤖</span> Skor Otomatis (Auto-Scoring)
+                    </h3>
+                </div>
+
+                <div className={styles.sectionBody}>
+                    <p className={styles.sectionDesc}>
+                        Skor CT/CrT yang dihasilkan otomatis oleh AI untuk setiap interaksi siswa.
+                    </p>
+
+                    {autoLoading ? (
+                        <div className={styles.loadingState}>Memuat...</div>
+                    ) : autoScores.length === 0 ? (
+                        <div className={styles.emptyState}>
+                            <span>🤖</span>
+                            <h3>Belum ada data skor otomatis.</h3>
+                        </div>
+                    ) : (
+                        <div className={styles.tableWrap}>
+                            <table className={styles.dataTable}>
+                                <thead>
+                                    <tr>
+                                        <th>Sumber</th>
+                                        <th>CT Total</th>
+                                        <th>CrT Total</th>
+                                        <th>Depth</th>
+                                        <th>Confidence</th>
+                                        <th>Stage</th>
+                                        <th>Waktu</th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    {autoScores.map(row => (
+                                        <tr key={row.id}>
+                                            <td>
+                                                <span className={styles.sourceBadge} data-source={row.source}>
+                                                    {AUTO_SOURCE_LABELS[row.source] || row.source}
+                                                </span>
+                                            </td>
+                                            <td>{row.ct_total_score}/12</td>
+                                            <td>{row.cth_total_score}/12</td>
+                                            <td>L{row.cognitive_depth_level}</td>
+                                            <td>{(row.confidence * 100).toFixed(0)}%</td>
+                                            <td>{row.prompt_stage || '-'}</td>
+                                            <td>{new Date(row.created_at).toLocaleDateString('id-ID')}</td>
+                                        </tr>
+                                    ))}
+                                </tbody>
+                            </table>
+                        </div>
+                    )}
+                </div>
             </div>
 
             {/* ============================================ */}

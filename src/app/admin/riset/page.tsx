@@ -207,7 +207,7 @@ export default function RisetDashboard() {
                                 <div className={styles.navContent}>
                                     <div className={styles.navLabel}>Indikator Kognitif (RM3)</div>
                                     <div className={styles.navDesc}>
-                                        Penilaian indikator CT &amp; Critical Thinking dan matriks silang
+                                        Penilaian indikator CT &amp; Critical Thinking dan matriks silang. Termasuk skor otomatis dari semua fitur interaksi.
                                     </div>
                                 </div>
                                 <div className={styles.navArrow}><FiArrowRight /></div>

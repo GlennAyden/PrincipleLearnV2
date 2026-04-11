@@ -34,6 +34,61 @@ const TYPE_ICONS: Record<string, string> = {
   ask: '❓', challenge: '🧩', discussion: '💬', feedback: '⭐',
 }
 
+// ─── Constants ────────────────────────────────────────────────────
+
+const SOURCE_LABELS: Record<string, string> = {
+  ask_question: 'Tanya Jawab',
+  challenge_response: 'Tantangan',
+  quiz_submission: 'Kuis',
+  journal: 'Refleksi',
+  discussion: 'Diskusi',
+}
+
+const CT_INDICATORS = [
+  { key: 'ct_decomposition', label: 'Dekomposisi' },
+  { key: 'ct_pattern_recognition', label: 'Pengenalan Pola' },
+  { key: 'ct_abstraction', label: 'Abstraksi' },
+  { key: 'ct_algorithm_design', label: 'Desain Algoritma' },
+  { key: 'ct_evaluation_debugging', label: 'Evaluasi & Debugging' },
+  { key: 'ct_generalization', label: 'Generalisasi' },
+]
+
+const CRT_INDICATORS = [
+  { key: 'cth_interpretation', label: 'Interpretasi' },
+  { key: 'cth_analysis', label: 'Analisis' },
+  { key: 'cth_evaluation', label: 'Evaluasi' },
+  { key: 'cth_inference', label: 'Inferensi' },
+  { key: 'cth_explanation', label: 'Eksplanasi' },
+  { key: 'cth_self_regulation', label: 'Regulasi Diri' },
+]
+
+// ─── Types for Kognitif ────────────────────────────────────────────
+
+interface KognitifSourceSummary {
+  count: number
+  avg_ct: number
+  avg_crt: number
+  avg_depth: number
+}
+
+interface KognitifSummary {
+  by_source: Record<string, KognitifSourceSummary>
+  overall: {
+    total_count: number
+    avg_ct: number
+    avg_crt: number
+    indicator_breakdown: Record<string, number> | null
+  }
+  progression: Array<{ date: string; ct_total: number; crt_total: number; source: string }>
+  follow_up_comparison: {
+    follow_up_count: number
+    follow_up_avg_crt: number
+    non_follow_up_count: number
+    non_follow_up_avg_crt: number
+  } | null
+  stage_correlation: Array<{ stage: string; count: number; avg_ct: number; avg_crt: number; avg_depth: number }> | null
+}
+
 // ─── Types for Evolusi Prompt ──────────────────────────────────────
 
 interface EvolusiSession {
@@ -72,12 +127,17 @@ export default function StudentDetailPage() {
   const [student, setStudent] = useState<StudentDetail | null>(null)
   const [isLoading, setIsLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
-  const [activeSection, setActiveSection] = useState<'activity' | 'evolusi' | 'courses' | 'profile'>('activity')
+  const [activeSection, setActiveSection] = useState<'activity' | 'evolusi' | 'kognitif' | 'courses' | 'profile'>('activity')
 
   // Evolusi Prompt state
   const [evolusiData, setEvolusiData] = useState<EvolusiData | null>(null)
   const [evolusiLoading, setEvolusiLoading] = useState(false)
   const [evolusiError, setEvolusiError] = useState<string | null>(null)
+
+  // Kognitif (auto-scored CT/CrT) state
+  const [kognitifData, setKognitifData] = useState<KognitifSummary | null>(null)
+  const [kognitifLoading, setKognitifLoading] = useState(false)
+  const [kognitifError, setKognitifError] = useState<string | null>(null)
 
   const userId = params?.id as string
 
@@ -122,6 +182,24 @@ export default function StudentDetailPage() {
       .catch((err) => { console.error(err); setEvolusiError(err.message) })
       .finally(() => setEvolusiLoading(false))
   }, [activeSection, userId, admin, evolusiData])
+
+  // Fetch kognitif data when tab is active
+  useEffect(() => {
+    if (activeSection !== 'kognitif' || kognitifData || kognitifLoading) return
+    setKognitifLoading(true)
+    setKognitifError(null)
+    fetch(`/api/admin/research/auto-scores/summary?user_id=${params.id}`)
+      .then(r => r.json())
+      .then(data => {
+        if (data.success !== false) {
+          setKognitifData(data)
+        } else {
+          setKognitifError(data.error || 'Gagal memuat data kognitif')
+        }
+      })
+      .catch(() => setKognitifError('Gagal memuat data kognitif'))
+      .finally(() => setKognitifLoading(false))
+  }, [activeSection, kognitifData, kognitifLoading, params.id])
 
   const formatDate = (s: string) => {
     try { return new Date(s).toLocaleDateString('id-ID', { year: 'numeric', month: 'short', day: 'numeric' }) }
@@ -218,6 +296,13 @@ export default function StudentDetailPage() {
             </button>
             <button className={activeSection === 'evolusi' ? styles.tabActive : ''} onClick={() => setActiveSection('evolusi')}>
               Evolusi Prompt
+            </button>
+            <button
+              className={`${styles.tabBtn} ${activeSection === 'kognitif' ? styles.tabActive : ''}`}
+              onClick={() => setActiveSection('kognitif')}
+            >
+              <FiActivity size={14} />
+              Kognitif
             </button>
             <button className={activeSection === 'courses' ? styles.tabActive : ''} onClick={() => setActiveSection('courses')}>
               Kursus ({student.courses.length})
@@ -355,6 +440,166 @@ export default function StudentDetailPage() {
                 </>
               )}
             </section>
+          )}
+
+          {/* Bagian Kognitif */}
+          {activeSection === 'kognitif' && (
+            <div className={styles.sectionContent}>
+              {kognitifLoading ? (
+                <div className={styles.loadingState}>Memuat data kognitif...</div>
+              ) : kognitifError ? (
+                <div className={styles.errorState}>{kognitifError}</div>
+              ) : !kognitifData || kognitifData.overall.total_count === 0 ? (
+                <div className={styles.emptyState}>Belum ada data skor kognitif otomatis untuk siswa ini.</div>
+              ) : (
+                <>
+                  {/* Overall Summary Cards */}
+                  <div className={styles.kognitifOverview}>
+                    <div className={styles.kognitifCard}>
+                      <span className={styles.kognitifLabel}>Total Interaksi Diskor</span>
+                      <span className={styles.kognitifValue}>{kognitifData.overall.total_count}</span>
+                    </div>
+                    <div className={styles.kognitifCard}>
+                      <span className={styles.kognitifLabel}>Rata-rata CT</span>
+                      <span className={styles.kognitifValue}>{kognitifData.overall.avg_ct}/12</span>
+                    </div>
+                    <div className={styles.kognitifCard}>
+                      <span className={styles.kognitifLabel}>Rata-rata CrT</span>
+                      <span className={styles.kognitifValue}>{kognitifData.overall.avg_crt}/12</span>
+                    </div>
+                  </div>
+
+                  {/* Per-Source Breakdown */}
+                  <h3 className={styles.subHeading}>Skor per Fitur</h3>
+                  <div className={styles.tableWrap}>
+                    <table className={styles.dataTable}>
+                      <thead>
+                        <tr>
+                          <th>Sumber</th>
+                          <th>Jumlah</th>
+                          <th>Avg CT</th>
+                          <th>Avg CrT</th>
+                          <th>Avg Depth</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {Object.entries(kognitifData.by_source).map(([src, val]) => (
+                          <tr key={src}>
+                            <td>{SOURCE_LABELS[src] || src}</td>
+                            <td>{val.count}</td>
+                            <td>{val.avg_ct}</td>
+                            <td>{val.avg_crt}</td>
+                            <td>{val.avg_depth}</td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  </div>
+
+                  {/* 12-Indicator Breakdown */}
+                  {kognitifData.overall.indicator_breakdown && (
+                    <>
+                      <h3 className={styles.subHeading}>Breakdown 12 Indikator</h3>
+                      <div className={styles.indicatorGrid}>
+                        <div className={styles.indicatorGroup}>
+                          <h4 className={styles.indicatorGroupTitle}>Computational Thinking</h4>
+                          {CT_INDICATORS.map(ind => (
+                            <div key={ind.key} className={styles.indicatorRow}>
+                              <span className={styles.indicatorName}>{ind.label}</span>
+                              <div className={styles.indicatorBar}>
+                                <div
+                                  className={styles.indicatorFill}
+                                  data-level={Math.round(kognitifData.overall.indicator_breakdown![ind.key] || 0)}
+                                  style={{ width: `${((kognitifData.overall.indicator_breakdown![ind.key] || 0) / 2) * 100}%` }}
+                                />
+                              </div>
+                              <span className={styles.indicatorScore}>
+                                {(kognitifData.overall.indicator_breakdown![ind.key] || 0).toFixed(1)}
+                              </span>
+                            </div>
+                          ))}
+                        </div>
+                        <div className={styles.indicatorGroup}>
+                          <h4 className={styles.indicatorGroupTitle}>Critical Thinking</h4>
+                          {CRT_INDICATORS.map(ind => (
+                            <div key={ind.key} className={styles.indicatorRow}>
+                              <span className={styles.indicatorName}>{ind.label}</span>
+                              <div className={styles.indicatorBar}>
+                                <div
+                                  className={styles.indicatorFill}
+                                  data-level={Math.round(kognitifData.overall.indicator_breakdown![ind.key] || 0)}
+                                  style={{ width: `${((kognitifData.overall.indicator_breakdown![ind.key] || 0) / 2) * 100}%` }}
+                                />
+                              </div>
+                              <span className={styles.indicatorScore}>
+                                {(kognitifData.overall.indicator_breakdown![ind.key] || 0).toFixed(1)}
+                              </span>
+                            </div>
+                          ))}
+                        </div>
+                      </div>
+                    </>
+                  )}
+
+                  {/* Follow-up Comparison */}
+                  {kognitifData.follow_up_comparison && kognitifData.follow_up_comparison.follow_up_count > 0 && (
+                    <>
+                      <h3 className={styles.subHeading}>Analisis Follow-up (CrT)</h3>
+                      <div className={styles.followUpGrid}>
+                        <div className={styles.followUpCard}>
+                          <span className={styles.followUpLabel}>Pertanyaan Baru</span>
+                          <span className={styles.followUpCount}>{kognitifData.follow_up_comparison.non_follow_up_count}×</span>
+                          <span className={styles.followUpScore}>CrT: {kognitifData.follow_up_comparison.non_follow_up_avg_crt}</span>
+                        </div>
+                        <div className={styles.followUpCard} data-highlight="true">
+                          <span className={styles.followUpLabel}>Follow-up</span>
+                          <span className={styles.followUpCount}>{kognitifData.follow_up_comparison.follow_up_count}×</span>
+                          <span className={styles.followUpScore}>CrT: {kognitifData.follow_up_comparison.follow_up_avg_crt}</span>
+                        </div>
+                      </div>
+                    </>
+                  )}
+
+                  {/* Stage Correlation */}
+                  {kognitifData.stage_correlation && kognitifData.stage_correlation.length > 0 && (
+                    <>
+                      <h3 className={styles.subHeading}>Korelasi Tahap Prompt × Skor Kognitif</h3>
+                      <div className={styles.tableWrap}>
+                        <table className={styles.dataTable}>
+                          <thead>
+                            <tr>
+                              <th>Tahap</th>
+                              <th>Jumlah</th>
+                              <th>Avg CT</th>
+                              <th>Avg CrT</th>
+                              <th>Avg Depth</th>
+                            </tr>
+                          </thead>
+                          <tbody>
+                            {kognitifData.stage_correlation.map(row => (
+                              <tr key={row.stage}>
+                                <td>
+                                  <span className={styles.stageBadge} style={{
+                                    color: STAGE_CONFIG[row.stage]?.color || '#64748b',
+                                    background: STAGE_CONFIG[row.stage]?.bg || '#f1f5f9',
+                                  }}>
+                                    {STAGE_CONFIG[row.stage]?.label || row.stage}
+                                  </span>
+                                </td>
+                                <td>{row.count}</td>
+                                <td>{row.avg_ct}</td>
+                                <td>{row.avg_crt}</td>
+                                <td>{row.avg_depth}</td>
+                              </tr>
+                            ))}
+                          </tbody>
+                        </table>
+                      </div>
+                    </>
+                  )}
+                </>
+              )}
+            </div>
           )}
 
           {/* Bagian Kursus */}

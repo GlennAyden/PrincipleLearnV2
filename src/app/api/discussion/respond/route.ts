@@ -1,4 +1,4 @@
-import { NextRequest, NextResponse } from 'next/server';
+import { NextRequest, NextResponse, after } from 'next/server';
 
 import { verifyToken } from '@/lib/jwt';
 import { adminDb, publicDb } from '@/lib/database';
@@ -73,6 +73,272 @@ interface DiscussionGoalState {
   thinkingSkill?: ThinkingSkillMeta | null;
 }
 
+const MAX_ATTEMPTS_PER_STEP = 2; // 1 original + 1 retry
+const MAX_CLARIFICATIONS_PER_STEP = 1;
+const MAX_REMEDIATION_ROUNDS = 2;
+
+// ── Helpers: attempt counting, effort detection, retry prompts ─────
+
+function countStepAttempts(
+  messages: Array<{ role: string; step_key?: string | null; metadata?: Record<string, unknown> | null }>,
+  stepKey: string,
+): number {
+  return messages.filter((msg) => {
+    if (msg.role !== 'student') return false;
+    if (msg.step_key !== stepKey) return false;
+    const qf = msg.metadata?.quality_flag as string | undefined;
+    if (qf === 'low_effort' || qf === 'off_topic') return false;
+    return true;
+  }).length;
+}
+
+interface EffortCheck {
+  pass: boolean;
+  qualityFlag: 'adequate' | 'low_effort' | 'off_topic';
+  rejectionMessage?: string;
+}
+
+function detectMinimumEffort(responseText: string, expectedType: string | undefined): EffortCheck {
+  const trimmed = responseText.trim();
+
+  if (expectedType === 'mcq') {
+    return { pass: true, qualityFlag: 'adequate' };
+  }
+
+  if (trimmed.length < 10) {
+    return {
+      pass: false,
+      qualityFlag: 'low_effort',
+      rejectionMessage:
+        'Jawaban terlalu singkat. Cobalah jelaskan pemikiran Anda secara lebih rinci agar kami dapat menilai pemahaman Anda.',
+    };
+  }
+
+  const lowEffortPatterns = [
+    /^(saya )?(tidak|gak|ga|nggak|ndak) (tahu|tau|paham|mengerti|ngerti)\.?$/i,
+    /^(idk|dunno|i don'?t know|no idea)\.?$/i,
+    /^(entahlah|gatau|gaktau|ntah)\.?$/i,
+    /^[a-zA-Z0-9]{1,3}$/,
+    /^(ya|tidak|iya|enggak|ok|oke|okay)\.?$/i,
+  ];
+
+  for (const pattern of lowEffortPatterns) {
+    if (pattern.test(trimmed)) {
+      return {
+        pass: false,
+        qualityFlag: 'low_effort',
+        rejectionMessage:
+          'Jawaban ini belum cukup untuk menilai pemahaman Anda. Cobalah menjelaskan dengan kata-kata sendiri — tidak perlu sempurna, yang penting jujur dan lengkap.',
+      };
+    }
+  }
+
+  return { pass: true, qualityFlag: 'adequate' };
+}
+
+function buildRetryPrompt(step: DiscussionStep, evaluation: StepEvaluationResult): string {
+  const isMcq = step.expected_type === 'mcq' || Boolean(step.options?.length);
+
+  if (isMcq) {
+    return 'Jawaban sebelumnya belum tepat. Coba pikirkan kembali — perhatikan konsep utama yang dibahas sebelumnya, lalu pilih jawaban yang paling sesuai.';
+  }
+
+  const hint = evaluation.coachFeedback
+    ? `\n\nPetunjuk dari evaluasi sebelumnya: ${evaluation.coachFeedback}`
+    : '';
+
+  return (
+    `Mari coba lagi. Pertanyaannya tetap sama:\n\n"${step.prompt}"` +
+    hint +
+    '\n\nCobalah jawab dengan lebih detail dan pastikan jawabanmu mencakup poin-poin utama yang diminta.'
+  );
+}
+
+// ── Counter-question detection ────────────────────────────────────
+
+interface CounterQuestionCheck {
+  isCounterQuestion: boolean;
+  isDeflection: boolean;
+}
+
+function detectCounterQuestion(responseText: string): CounterQuestionCheck {
+  const trimmed = responseText.trim();
+
+  // Must contain a question mark
+  if (!trimmed.includes('?')) {
+    return { isCounterQuestion: false, isDeflection: false };
+  }
+
+  // Check if it STARTS with a question word (strong signal)
+  const questionStarters = /^(apa|bagaimana|kenapa|mengapa|apakah|bisakah|bolehkah|siapa|dimana|kapan|berapa|what|why|how|can|could|is|are|do|does)/i;
+  const startsWithQuestion = questionStarters.test(trimmed);
+
+  // Check if it contains answer-like indicators (negates counter-question)
+  const answerIndicators = /\b(menurut saya|menurut aku|saya pikir|saya rasa|jadi|karena|sehingga|oleh karena|maka|kesimpulannya|dengan demikian|i think|i believe|because|therefore)\b/i;
+  const hasAnswerContent = answerIndicators.test(trimmed);
+
+  // If has answer content AND question, it's likely an answer with a follow-up — treat as answer
+  if (hasAnswerContent) {
+    return { isCounterQuestion: false, isDeflection: false };
+  }
+
+  // Only a question, no answer content
+  if (startsWithQuestion) {
+    // Check for deflection patterns
+    const deflectionPatterns = [
+      /^(kenapa|mengapa) (harus|perlu|saya harus)/i,
+      /^(bisakah|bolehkah) (kamu|anda|ai|sistem) (saja|aja)/i,
+      /^(ga|gak|tidak) (mau|usah)/i,
+    ];
+    const isDeflection = deflectionPatterns.some(p => p.test(trimmed));
+    return { isCounterQuestion: true, isDeflection };
+  }
+
+  // Ends with question mark but doesn't start with question word — borderline
+  // Check sentence count: if only 1 sentence and it's a question, likely counter-question
+  const sentences = trimmed.split(/[.!?]+/).filter(s => s.trim().length > 0);
+  if (sentences.length <= 1) {
+    return { isCounterQuestion: true, isDeflection: false };
+  }
+
+  return { isCounterQuestion: false, isDeflection: false };
+}
+
+function countStepClarifications(
+  messages: Array<{ role: string; metadata?: Record<string, unknown> | null }>,
+  stepKey: string,
+): number {
+  return messages.filter((msg) => {
+    if (msg.role !== 'agent') return false;
+    const type = msg.metadata?.type as string | undefined;
+    return type === 'clarification_response' && msg.metadata?.original_step_key === stepKey;
+  }).length;
+}
+
+async function generateClarification(
+  studentQuestion: string,
+  originalPrompt: string,
+  templateSource: TemplateSource | undefined,
+): Promise<string> {
+  try {
+    const contextSummary = templateSource?.summary || '';
+    const keyTakeaways = Array.isArray(templateSource?.keyTakeaways)
+      ? templateSource.keyTakeaways.join(', ')
+      : '';
+
+    const controller = new AbortController();
+    const timeout = setTimeout(() => controller.abort(), 15_000);
+
+    const completion = await openai.chat.completions.create(
+      {
+        model: defaultOpenAIModel,
+        max_completion_tokens: 400,
+        temperature: 0.3,
+        messages: [
+          {
+            role: 'system',
+            content: 'Kamu adalah fasilitator pembelajaran. Seorang mahasiswa mengajukan pertanyaan klarifikasi saat sesi diskusi. Jawab pertanyaannya secara singkat dan jelas (2-4 kalimat) menggunakan konteks materi yang diberikan. Setelah menjawab, arahkan kembali ke pertanyaan diskusi yang asli.',
+          },
+          {
+            role: 'user',
+            content: [
+              `Konteks materi: ${contextSummary}`,
+              keyTakeaways ? `Poin penting: ${keyTakeaways}` : '',
+              '',
+              `Pertanyaan diskusi yang seharusnya dijawab: "${originalPrompt}"`,
+              `Pertanyaan klarifikasi dari mahasiswa: "${studentQuestion}"`,
+              '',
+              'Jawab pertanyaan klarifikasinya, lalu arahkan kembali untuk menjawab pertanyaan diskusi.',
+            ].filter(Boolean).join('\n'),
+          },
+        ],
+      },
+      { signal: controller.signal },
+    );
+
+    clearTimeout(timeout);
+
+    const answer = completion.choices?.[0]?.message?.content?.trim();
+    if (!answer) {
+      return `Pertanyaan yang bagus. Untuk saat ini, cobalah jawab pertanyaan diskusi berdasarkan pemahamanmu:\n\n"${originalPrompt}"`;
+    }
+
+    return answer;
+  } catch (err) {
+    console.warn('[Discussion] Clarification generation failed:', err);
+    return `Terima kasih atas pertanyaanmu. Cobalah jawab pertanyaan diskusi berdasarkan pemahamanmu saat ini:\n\n"${originalPrompt}"`;
+  }
+}
+
+// ── Remediation helpers ───────────────────────────────────────────
+
+function countRemediationRounds(
+  messages: Array<{ metadata?: Record<string, unknown> | null }>,
+): number {
+  return messages.filter((msg) => {
+    const type = msg.metadata?.type as string | undefined;
+    return type === 'remediation_prompt';
+  }).length;
+}
+
+async function generateRemediationQuestion(
+  uncoveredGoals: DiscussionGoalState[],
+  templateSource: TemplateSource | undefined,
+  remediationRound: number,
+): Promise<string> {
+  try {
+    const goalsText = uncoveredGoals
+      .map((g) => `- ${g.description}`)
+      .join('\n');
+
+    const contextSummary = templateSource?.summary || '';
+    const scaffoldingLevel = remediationRound === 1
+      ? 'Ajukan pertanyaan dari sudut pandang berbeda, tetap menantang tetapi lebih spesifik.'
+      : 'Ajukan pertanyaan yang lebih terbimbing dengan petunjuk/scaffolding yang jelas. Berikan konteks tambahan dalam pertanyaan.';
+
+    const controller = new AbortController();
+    const timeout = setTimeout(() => controller.abort(), 20_000);
+
+    const completion = await openai.chat.completions.create(
+      {
+        model: defaultOpenAIModel,
+        max_completion_tokens: 500,
+        temperature: 0.4,
+        messages: [
+          {
+            role: 'system',
+            content: `Kamu adalah fasilitator pembelajaran Socratic. Mahasiswa belum berhasil mencapai beberapa tujuan pembelajaran dalam diskusi sebelumnya. Tugasmu adalah membuat SATU pertanyaan baru yang mencakup semua tujuan yang belum tercapai. ${scaffoldingLevel} Pertanyaan harus dalam Bahasa Indonesia dan bersifat open-ended.`,
+          },
+          {
+            role: 'user',
+            content: [
+              `Konteks materi: ${contextSummary}`,
+              '',
+              `Tujuan yang belum tercapai (remediation round ${remediationRound}):`,
+              goalsText,
+              '',
+              'Buat SATU pertanyaan yang menguji pemahaman mahasiswa terhadap semua tujuan di atas. Hanya berikan pertanyaannya saja, tanpa pengantar.',
+            ].join('\n'),
+          },
+        ],
+      },
+      { signal: controller.signal },
+    );
+
+    clearTimeout(timeout);
+
+    const question = completion.choices?.[0]?.message?.content?.trim();
+    if (!question) {
+      return `Mari kita bahas kembali beberapa poin yang belum tercapai. Jelaskan pemahamanmu tentang: ${uncoveredGoals.map(g => g.description).join('; ')}`;
+    }
+
+    return question;
+  } catch (err) {
+    console.warn('[Discussion] Remediation question generation failed:', err);
+    return `Mari kita bahas kembali beberapa poin yang belum tercapai. Jelaskan pemahamanmu tentang: ${uncoveredGoals.map(g => g.description).join('; ')}`;
+  }
+}
+
 async function insertDiscussionMessage(payload: {
   session_id: string;
   role: 'agent' | 'student';
@@ -143,13 +409,156 @@ async function postHandler(request: NextRequest) {
       (msg: { role: string; metadata?: { type?: string } }) =>
         msg.role === 'agent' &&
         (!msg.metadata ||
-          (msg.metadata.type !== 'coach_feedback' && msg.metadata.type !== 'closing'))
+          (msg.metadata.type !== 'coach_feedback' &&
+           msg.metadata.type !== 'closing' &&
+           msg.metadata.type !== 'retry_prompt' &&
+           msg.metadata.type !== 'effort_rejection' &&
+           msg.metadata.type !== 'remediation_prompt' &&
+           msg.metadata.type !== 'clarification_response'))
     );
     const currentStepIndex =
       agentMessages.length > 0 ? Math.min(agentMessages.length - 1, steps.length - 1) : 0;
     const currentStep = steps[currentStepIndex] ?? steps[0];
+
+    // Check if we're in remediation mode (past template steps)
+    type RawMessage = {
+      role: string;
+      content: string;
+      step_key?: string | null;
+      metadata?: Record<string, unknown> | null;
+    };
+    const lastAgentMsg = (messages as RawMessage[])
+      .filter((m) => m.role === 'agent')
+      .pop();
+    const isRemediationStep = lastAgentMsg?.metadata?.type === 'remediation_prompt';
+
+    let activeStep = currentStep;
+    if (isRemediationStep && lastAgentMsg) {
+      // Use remediation prompt as the "step"
+      const targetGoalIds = (lastAgentMsg.metadata?.target_goal_ids as string[]) || [];
+      activeStep = {
+        phaseId: 'remediation',
+        step: {
+          key: lastAgentMsg.step_key || `remediation-${lastAgentMsg.metadata?.remediation_round || 1}`,
+          prompt: lastAgentMsg.content,
+          expected_type: 'open',
+          goal_refs: targetGoalIds,
+        },
+      };
+    }
+
     const trimmedAnswer = message.trim();
 
+    // ── STEP 1: Pre-check minimum effort (before LLM call) ──
+    const effortCheck = detectMinimumEffort(trimmedAnswer, activeStep?.step?.expected_type);
+
+    if (!effortCheck.pass) {
+      await insertDiscussionMessage({
+        session_id: session.id,
+        role: 'student',
+        content: trimmedAnswer,
+        step_key: activeStep?.step?.key ?? null,
+        metadata: { type: 'student_input', phase: activeStep?.phaseId ?? null, quality_flag: effortCheck.qualityFlag },
+      });
+
+      await insertDiscussionMessage({
+        session_id: session.id,
+        role: 'agent',
+        content: effortCheck.rejectionMessage!,
+        step_key: activeStep?.step?.key ? `${activeStep.step.key}-effort` : 'effort-check',
+        metadata: { type: 'effort_rejection', quality_flag: effortCheck.qualityFlag },
+      });
+
+      const updatedMessages = await fetchMessages(session.id);
+      return NextResponse.json({
+        session: { id: session.id, status: 'in_progress', phase: session.phase, learningGoals: normalizeGoals(session.learning_goals) },
+        messages: updatedMessages,
+        nextStep: { key: activeStep.step.key, prompt: activeStep.step.prompt, expected_type: activeStep.step.expected_type ?? 'open', options: activeStep.step.options ?? [], phase: activeStep.phaseId },
+        effortRejection: true,
+      });
+    }
+
+    // ── STEP 1b: Counter-question detection ──
+    const counterCheck = detectCounterQuestion(trimmedAnswer);
+
+    if (counterCheck.isCounterQuestion) {
+      if (counterCheck.isDeflection) {
+        // Deflection — ask them to try answering
+        await insertDiscussionMessage({
+          session_id: session.id,
+          role: 'student',
+          content: trimmedAnswer,
+          step_key: activeStep?.step?.key ?? null,
+          metadata: { type: 'student_input', phase: activeStep?.phaseId ?? null, quality_flag: 'deflection' },
+        });
+
+        await insertDiscussionMessage({
+          session_id: session.id,
+          role: 'agent',
+          content: 'Cobalah menjawab pertanyaan terlebih dahulu berdasarkan pemahamanmu saat ini. Tidak perlu sempurna — yang penting kamu mencoba berpikir dan menjelaskan dengan kata-katamu sendiri.',
+          step_key: activeStep?.step?.key ? `${activeStep.step.key}-deflection` : 'deflection',
+          metadata: { type: 'effort_rejection', quality_flag: 'deflection' },
+        });
+
+        const updatedMessages = await fetchMessages(session.id);
+        return NextResponse.json({
+          session: { id: session.id, status: 'in_progress', phase: session.phase, learningGoals: normalizeGoals(session.learning_goals) },
+          messages: updatedMessages,
+          nextStep: { key: activeStep.step.key, prompt: activeStep.step.prompt, expected_type: activeStep.step.expected_type ?? 'open', options: activeStep.step.options ?? [], phase: activeStep.phaseId },
+          effortRejection: true,
+        });
+      }
+
+      // Genuine clarification — check cap
+      const priorClarifications = countStepClarifications(messages, activeStep?.step?.key ?? '');
+
+      if (priorClarifications < MAX_CLARIFICATIONS_PER_STEP) {
+        // Save student question
+        await insertDiscussionMessage({
+          session_id: session.id,
+          role: 'student',
+          content: trimmedAnswer,
+          step_key: activeStep?.step?.key ?? null,
+          metadata: { type: 'student_input', phase: activeStep?.phaseId ?? null, quality_flag: 'counter_question' },
+        });
+
+        // Generate clarification
+        const clarificationText = await generateClarification(
+          trimmedAnswer,
+          activeStep.step.prompt,
+          templateRow.source,
+        );
+
+        await insertDiscussionMessage({
+          session_id: session.id,
+          role: 'agent',
+          content: clarificationText,
+          step_key: activeStep?.step?.key ? `${activeStep.step.key}-clarification` : 'clarification',
+          metadata: {
+            type: 'clarification_response',
+            phase: activeStep.phaseId,
+            original_step_key: activeStep.step.key,
+            expected_type: activeStep.step.expected_type ?? 'open',
+            options: activeStep.step.options ?? [],
+          },
+        });
+
+        const updatedMessages = await fetchMessages(session.id);
+        return NextResponse.json({
+          session: { id: session.id, status: 'in_progress', phase: session.phase, learningGoals: normalizeGoals(session.learning_goals) },
+          messages: updatedMessages,
+          nextStep: { key: activeStep.step.key, prompt: activeStep.step.prompt, expected_type: activeStep.step.expected_type ?? 'open', options: activeStep.step.options ?? [], phase: activeStep.phaseId },
+          clarificationGiven: true,
+        });
+      }
+      // If clarification cap reached, fall through to normal evaluation
+    }
+
+    // ── STEP 2: Count prior real attempts for this step ──
+    const priorAttempts = countStepAttempts(messages, activeStep?.step?.key ?? '');
+    const currentAttemptNumber = priorAttempts + 1;
+
+    // ── STEP 3: Normal evaluation ──
     let learningGoals = mergeGoalDetails(
       normalizeGoals(session.learning_goals),
       templateRow.template?.learning_goals
@@ -157,24 +566,24 @@ async function postHandler(request: NextRequest) {
 
     const evaluation = await evaluateStepResponse({
       responseText: trimmedAnswer,
-      step: currentStep?.step,
+      step: activeStep?.step,
       templateGoals: templateRow.template?.learning_goals,
       templateSource: templateRow.source,
       currentGoals: learningGoals,
     });
 
-    const studentMetadata = {
-      type: 'student_input',
-      phase: currentStep?.phaseId ?? null,
-      evaluation,
-    };
-
     await insertDiscussionMessage({
       session_id: session.id,
       role: 'student',
       content: trimmedAnswer,
-      step_key: currentStep?.step?.key ?? null,
-      metadata: studentMetadata,
+      step_key: activeStep?.step?.key ?? null,
+      metadata: {
+        type: 'student_input',
+        phase: activeStep?.phaseId ?? null,
+        evaluation,
+        quality_flag: evaluation.qualityFlag ?? 'adequate',
+        attempt_number: currentAttemptNumber,
+      },
     });
 
     if (evaluation.coachFeedback) {
@@ -182,14 +591,23 @@ async function postHandler(request: NextRequest) {
         session_id: session.id,
         role: 'agent',
         content: evaluation.coachFeedback,
-        step_key: currentStep?.step?.key ? `${currentStep.step.key}-feedback` : 'feedback',
-        metadata: {
-          type: 'coach_feedback',
-          assessments: evaluation.assessments ?? [],
-        },
+        step_key: activeStep?.step?.key ? `${activeStep.step.key}-feedback` : 'feedback',
+        metadata: { type: 'coach_feedback', assessments: evaluation.assessments ?? [] },
       });
     }
 
+    // ── STEP 4: Handle LLM-detected low quality ──
+    if (evaluation.qualityFlag === 'off_topic' || evaluation.qualityFlag === 'low_effort') {
+      const updatedMessages = await fetchMessages(session.id);
+      return NextResponse.json({
+        session: { id: session.id, status: 'in_progress', phase: session.phase, learningGoals },
+        messages: updatedMessages,
+        nextStep: { key: activeStep.step.key, prompt: activeStep.step.prompt, expected_type: activeStep.step.expected_type ?? 'open', options: activeStep.step.options ?? [], phase: activeStep.phaseId },
+        effortRejection: true,
+      });
+    }
+
+    // ── STEP 5: Update goal coverage ──
     const coveredSet = new Set(evaluation.coveredGoals);
     learningGoals = learningGoals.map((goal) =>
       coveredSet.has(goal.id) ? { ...goal, covered: true } : goal
@@ -198,13 +616,96 @@ async function postHandler(request: NextRequest) {
     const allGoalsCovered =
       learningGoals.length > 0 && learningGoals.every((goal) => goal.covered === true);
 
-    const nextStepCandidateIndex = currentStepIndex + 1;
-    let nextStep =
-      !allGoalsCovered && nextStepCandidateIndex < steps.length
-        ? steps[nextStepCandidateIndex]
-        : null;
+    // ── STEP 6: Retry vs Advance decision ──
+    const stepGoalRefs: string[] = Array.isArray(activeStep?.step?.goal_refs)
+      ? activeStep.step.goal_refs.filter(Boolean)
+      : [];
 
-    if (nextStep) {
+    const stepGoalsSatisfied =
+      stepGoalRefs.length === 0 ||
+      stepGoalRefs.every((goalId) => learningGoals.find((g) => g.id === goalId)?.covered);
+
+    const shouldRetry =
+      !stepGoalsSatisfied &&
+      !allGoalsCovered &&
+      currentAttemptNumber < MAX_ATTEMPTS_PER_STEP;
+
+    // Helper: deferred cognitive scoring
+    const deferCognitiveScoring = () => {
+      after(async () => {
+        try {
+          const { data: latestStudentMsg } = await adminDb
+            .from('discussion_messages')
+            .select('id')
+            .eq('session_id', session.id)
+            .eq('role', 'student')
+            .order('created_at', { ascending: false })
+            .limit(1);
+          const studentMsgId = latestStudentMsg?.[0]?.id ?? null;
+          const { scoreAndSave } = await import('@/services/cognitive-scoring.service');
+          await scoreAndSave({
+            source: 'discussion',
+            user_id: tokenPayload.userId,
+            course_id: session.course_id,
+            source_id: studentMsgId,
+            user_text: trimmedAnswer,
+            prompt_or_question: activeStep?.step?.prompt || 'Discussion step',
+          });
+        } catch (scoreError) {
+          console.warn('[Discussion] 12-indicator scoring failed:', scoreError);
+        }
+      });
+    };
+
+    if (shouldRetry) {
+      // ── RETRY: Stay on the same step ──
+      const retryPromptText = buildRetryPrompt(activeStep.step, evaluation);
+
+      await insertDiscussionMessage({
+        session_id: session.id,
+        role: 'agent',
+        content: retryPromptText,
+        step_key: activeStep.step.key ? `${activeStep.step.key}-retry` : 'retry',
+        metadata: {
+          type: 'retry_prompt',
+          phase: activeStep.phaseId,
+          expected_type: activeStep.step.expected_type ?? 'open',
+          options: activeStep.step.options ?? [],
+          attempt_number: currentAttemptNumber + 1,
+          original_step_key: activeStep.step.key,
+        },
+      });
+
+      const { error: retryUpdateError } = await adminDb
+        .from('discussion_sessions')
+        .eq('id', session.id)
+        .update({ learning_goals: learningGoals });
+
+      if (retryUpdateError) {
+        throw new Error(`Failed to update goals during retry: ${retryUpdateError.message}`);
+      }
+
+      const updatedMessages = await fetchMessages(session.id);
+      deferCognitiveScoring();
+
+      return NextResponse.json({
+        session: { id: session.id, status: 'in_progress', phase: activeStep.phaseId, learningGoals },
+        messages: updatedMessages,
+        nextStep: { key: activeStep.step.key, prompt: activeStep.step.prompt, expected_type: activeStep.step.expected_type ?? 'open', options: activeStep.step.options ?? [], phase: activeStep.phaseId },
+        isRetry: true,
+        attemptNumber: currentAttemptNumber,
+        maxAttempts: MAX_ATTEMPTS_PER_STEP,
+      });
+    }
+
+    // ── ADVANCE, REMEDIATE, or COMPLETE ──
+    const nextStepCandidateIndex = currentStepIndex + 1;
+    const hasMoreTemplateSteps = nextStepCandidateIndex < steps.length;
+
+    if (!allGoalsCovered && hasMoreTemplateSteps && !isRemediationStep) {
+      // ── ADVANCE to next template step ──
+      const nextStep = steps[nextStepCandidateIndex];
+
       await insertDiscussionMessage({
         session_id: session.id,
         role: 'agent',
@@ -221,65 +722,116 @@ async function postHandler(request: NextRequest) {
       const { error: phaseUpdateError } = await adminDb
         .from('discussion_sessions')
         .eq('id', session.id)
-        .update({
-          phase: nextStep.phaseId,
-          learning_goals: learningGoals,
-        });
+        .update({ phase: nextStep.phaseId, learning_goals: learningGoals });
 
       if (phaseUpdateError) {
         throw new Error(`Failed to update discussion phase: ${phaseUpdateError.message}`);
       }
-    } else {
-      const closingMessage =
-        templateRow.template?.closing_message || buildDefaultClosingMessage(learningGoals);
 
-      const { error: completionUpdateError } = await adminDb
-        .from('discussion_sessions')
-        .eq('id', session.id)
-        .update({
-          phase: 'completed',
-          status: 'completed',
-          learning_goals: learningGoals,
-        });
+      const updatedMessages = await fetchMessages(session.id);
+      deferCognitiveScoring();
 
-      if (completionUpdateError) {
-        throw new Error(`Failed to complete discussion session: ${completionUpdateError.message}`);
-      }
-
-      await insertDiscussionMessage({
-        session_id: session.id,
-        role: 'agent',
-        content: closingMessage,
-        step_key: 'closing',
-        metadata: {
-          type: 'closing',
-          goals: learningGoals,
-        },
+      return NextResponse.json({
+        session: { id: session.id, status: 'in_progress', phase: nextStep.phaseId, learningGoals },
+        messages: updatedMessages,
+        nextStep: { key: nextStep.step.key, prompt: nextStep.step.prompt, expected_type: nextStep.step.expected_type ?? 'open', options: nextStep.step.options ?? [], phase: nextStep.phaseId },
       });
-
-      nextStep = null;
-      await markProgressCompleted(session.user_id, session.course_id, session.subtopic_id);
     }
 
+    if (!allGoalsCovered && (!hasMoreTemplateSteps || isRemediationStep)) {
+      // ── REMEDIATION: Template steps exhausted but goals remain ──
+      const remediationRound = countRemediationRounds(messages) + 1;
+
+      if (remediationRound <= MAX_REMEDIATION_ROUNDS) {
+        const uncoveredGoals = learningGoals.filter((g) => !g.covered);
+        const uncoveredGoalIds = uncoveredGoals.map((g) => g.id);
+
+        // Transition message (only on first remediation round)
+        if (remediationRound === 1) {
+          await insertDiscussionMessage({
+            session_id: session.id,
+            role: 'agent',
+            content: `Ada ${uncoveredGoals.length} tujuan pembelajaran yang belum sepenuhnya tercapai. Mari kita bahas lebih lanjut agar pemahamanmu lebih lengkap.`,
+            step_key: `remediation-intro-${remediationRound}`,
+            metadata: { type: 'coach_feedback', phase: 'remediation' },
+          });
+        }
+
+        const remediationQuestion = await generateRemediationQuestion(
+          uncoveredGoals,
+          templateRow.source,
+          remediationRound,
+        );
+
+        const remediationStepKey = `remediation-${remediationRound}`;
+
+        await insertDiscussionMessage({
+          session_id: session.id,
+          role: 'agent',
+          content: remediationQuestion,
+          step_key: remediationStepKey,
+          metadata: {
+            type: 'remediation_prompt',
+            phase: 'remediation',
+            expected_type: 'open',
+            options: [],
+            remediation_round: remediationRound,
+            target_goal_ids: uncoveredGoalIds,
+          },
+        });
+
+        const { error: remUpdateError } = await adminDb
+          .from('discussion_sessions')
+          .eq('id', session.id)
+          .update({ phase: 'remediation', learning_goals: learningGoals });
+
+        if (remUpdateError) {
+          throw new Error(`Failed to update session for remediation: ${remUpdateError.message}`);
+        }
+
+        const updatedMessages = await fetchMessages(session.id);
+        deferCognitiveScoring();
+
+        return NextResponse.json({
+          session: { id: session.id, status: 'in_progress', phase: 'remediation', learningGoals },
+          messages: updatedMessages,
+          nextStep: { key: remediationStepKey, prompt: remediationQuestion, expected_type: 'open', options: [], phase: 'remediation' },
+          isRemediation: true,
+          remediationRound,
+          maxRemediationRounds: MAX_REMEDIATION_ROUNDS,
+        });
+      }
+    }
+
+    // ── SESSION COMPLETION (all goals covered OR max remediation exhausted) ──
+    const closingMessage = buildDefaultClosingMessage(learningGoals);
+
+    const { error: completionUpdateError } = await adminDb
+      .from('discussion_sessions')
+      .eq('id', session.id)
+      .update({ phase: 'completed', status: 'completed', learning_goals: learningGoals });
+
+    if (completionUpdateError) {
+      throw new Error(`Failed to complete discussion session: ${completionUpdateError.message}`);
+    }
+
+    await insertDiscussionMessage({
+      session_id: session.id,
+      role: 'agent',
+      content: closingMessage,
+      step_key: 'closing',
+      metadata: { type: 'closing', goals: learningGoals },
+    });
+
+    await markProgressCompleted(session.user_id, session.course_id, session.subtopic_id);
+
     const updatedMessages = await fetchMessages(session.id);
+    deferCognitiveScoring();
 
     return NextResponse.json({
-      session: {
-        id: session.id,
-        status: nextStep ? 'in_progress' : 'completed',
-        phase: nextStep ? nextStep.phaseId : 'completed',
-        learningGoals,
-      },
+      session: { id: session.id, status: 'completed', phase: 'completed', learningGoals },
       messages: updatedMessages,
-      nextStep: nextStep
-        ? {
-          key: nextStep.step.key,
-          prompt: nextStep.step.prompt,
-          expected_type: nextStep.step.expected_type ?? 'open',
-          options: nextStep.step.options ?? [],
-          phase: nextStep.phaseId,
-        }
-        : null,
+      nextStep: null,
     });
   } catch (error) {
     console.error('[DiscussionRespond] Failed to process response', error);
@@ -422,6 +974,7 @@ interface StepEvaluationResult {
   assessments?: Array<{ goalId: string; satisfied: boolean; notes?: string }>;
   coachFeedback?: string;
   evaluator: 'mcq' | 'llm' | 'fallback';
+  qualityFlag?: 'adequate' | 'low_effort' | 'off_topic';
 }
 
 interface EvaluateStepParams {
@@ -566,7 +1119,7 @@ async function evaluateStepResponse({
         name: 'goal_assessment',
         schema: {
           type: 'object',
-          required: ['goalAssessments'],
+          required: ['goalAssessments', 'qualityFlag'],
           properties: {
             goalAssessments: {
               type: 'array',
@@ -581,6 +1134,7 @@ async function evaluateStepResponse({
               },
             },
             coachFeedback: { type: 'string' },
+            qualityFlag: { type: 'string' },
           },
         },
       },
@@ -611,7 +1165,14 @@ async function evaluateStepResponse({
               `Pertanyaan/Penugasan: ${step?.prompt ?? "-"}`,
               `Jawaban peserta: ${responseText}`,
               "",
-              "Nilailah setiap goal dengan menandai satisfied true/false dan cantumkan catatan singkat. Buat juga coachFeedback ringkas (2-3 kalimat) dalam bahasa yang sama dengan materi.",
+              "INSTRUKSI PENILAIAN:",
+              "1. Nilailah setiap goal dengan menandai satisfied true/false dan cantumkan catatan singkat.",
+              "2. Buat coachFeedback ringkas (2-3 kalimat) dalam bahasa yang sama dengan materi.",
+              "3. Tentukan qualityFlag:",
+              "   - 'adequate': jawaban menunjukkan usaha nyata dan relevan dengan pertanyaan",
+              "   - 'low_effort': jawaban terlalu dangkal, tidak informatif, atau hanya mengulangi pertanyaan",
+              "   - 'off_topic': jawaban tidak berkaitan dengan pertanyaan atau materi yang dibahas",
+              "   Jika qualityFlag bukan 'adequate', SEMUA goal harus ditandai satisfied: false.",
             ].join("\n"),
           },
         ],
@@ -623,12 +1184,18 @@ async function evaluateStepResponse({
 
     const raw = completion.choices?.[0]?.message?.content ?? '';
     const parsed = JSON.parse(raw.trim() || '{}');
+
+    const qualityFlag: 'adequate' | 'low_effort' | 'off_topic' =
+      parsed.qualityFlag === 'low_effort' ? 'low_effort'
+      : parsed.qualityFlag === 'off_topic' ? 'off_topic'
+      : 'adequate';
+
     const goalAssessments = Array.isArray(parsed.goalAssessments)
       ? parsed.goalAssessments
         .filter((assessment: { goalId?: string; satisfied?: boolean; notes?: string }) => goalRefs.includes(assessment?.goalId ?? ''))
         .map((assessment: { goalId: string; satisfied: boolean; notes?: string }) => ({
           goalId: assessment.goalId,
-          satisfied: Boolean(assessment.satisfied),
+          satisfied: qualityFlag === 'adequate' ? Boolean(assessment.satisfied) : false,
           notes: assessment.notes,
         }))
       : [];
@@ -642,6 +1209,7 @@ async function evaluateStepResponse({
       assessments: goalAssessments,
       coachFeedback: parsed.coachFeedback,
       evaluator: 'llm',
+      qualityFlag,
     };
   } catch (error) {
     console.warn("[DiscussionRespond] Evaluation fallback triggered", error);
