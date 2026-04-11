@@ -39,7 +39,7 @@ export function middleware(req: NextRequest) {
     // For API routes, return JSON 401 instead of HTML redirect
     if (pathname.startsWith('/api/')) {
       return NextResponse.json(
-        { error: 'Authentication required' },
+        { error: 'Autentikasi diperlukan' },
         { status: 401 }
       )
     }
@@ -70,7 +70,7 @@ export function middleware(req: NextRequest) {
     // For API routes, return JSON 401
     if (pathname.startsWith('/api/')) {
       const response = NextResponse.json(
-        { error: 'Invalid or expired token' },
+        { error: 'Token tidak valid atau sudah kedaluwarsa' },
         { status: 401 }
       )
       response.cookies.delete('access_token')
@@ -93,7 +93,7 @@ export function middleware(req: NextRequest) {
   if ((isAdminPage || isAdminApi) && payload.role?.toLowerCase() !== 'admin') {
     if (isAdminApi) {
       return NextResponse.json(
-        { error: 'Forbidden: admin role required' },
+        { error: 'Akses ditolak: diperlukan peran admin' },
         { status: 403 }
       )
     }
@@ -110,7 +110,7 @@ export function middleware(req: NextRequest) {
     // Only enforce CSRF if the cookie exists (admin login doesn't set one)
     if (csrfCookie && csrfCookie !== csrfHeader) {
       return NextResponse.json(
-        { error: 'CSRF token mismatch' },
+        { error: 'Token CSRF tidak cocok' },
         { status: 403 }
       )
     }

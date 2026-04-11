@@ -6,7 +6,7 @@
 // ── Tab & Filter Types ──
 
 /** Tab identifiers for dashboard sections */
-export type DashboardTab = 'overview' | 'students' | 'activity' | 'system';
+export type DashboardTab = 'overview' | 'system';
 
 /** Time range filter options */
 export type TimeRange = '7d' | '30d' | '90d' | 'all';

@@ -24,7 +24,7 @@ async function postHandler(req: NextRequest) {
     const headerUserId = req.headers.get('x-user-id');
     if (!headerUserId) {
       return NextResponse.json(
-        { error: 'Authentication required' },
+        { error: 'Autentikasi diperlukan' },
         { status: 401 }
       );
     }
@@ -39,7 +39,7 @@ async function postHandler(req: NextRequest) {
 
     if (!user) {
       return NextResponse.json(
-        { error: "User not found" },
+        { error: "Pengguna tidak ditemukan" },
         { status: 404 }
       );
     }
@@ -52,7 +52,7 @@ async function postHandler(req: NextRequest) {
 
     if (courses.length === 0) {
       return NextResponse.json(
-        { error: "Course not found" },
+        { error: "Kursus tidak ditemukan" },
         { status: 404 }
       );
     }
@@ -99,7 +99,7 @@ async function postHandler(req: NextRequest) {
 
     if (quizQuestions.length === 0) {
       return NextResponse.json(
-        { error: "Quiz questions not found in database. Please regenerate the subtopic content." },
+        { error: "Pertanyaan kuis tidak ditemukan di database. Silakan generate ulang konten subtopik." },
         { status: 404 }
       );
     }
@@ -204,7 +204,7 @@ async function postHandler(req: NextRequest) {
     if (failedMatches.length > 0) {
       return NextResponse.json(
         {
-          error: 'Some quiz answers could not be matched to quiz questions',
+          error: 'Beberapa jawaban kuis tidak dapat dicocokkan dengan pertanyaan kuis',
           matchingResults,
           details: {
             totalAnswers: answers.length,
@@ -275,7 +275,7 @@ async function postHandler(req: NextRequest) {
   } catch (error: unknown) {
     console.error('Error saving quiz attempt:', error);
     return NextResponse.json(
-      { error: 'Failed to save quiz attempt' },
+      { error: 'Gagal menyimpan percobaan kuis' },
       { status: 500 }
     );
   }

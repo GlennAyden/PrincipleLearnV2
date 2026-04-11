@@ -28,7 +28,7 @@ async function postHandler(req: NextRequest) {
 
     if (!userId || !courseId || !normalizedQuestion || !normalizedAnswer) {
       return NextResponse.json(
-        { error: 'Missing required fields: userId, courseId, question, answer' },
+        { error: 'Field wajib tidak lengkap: userId, courseId, question, answer' },
         { status: 400 }
       );
     }
@@ -37,11 +37,11 @@ async function postHandler(req: NextRequest) {
     const tokenPayload = accessToken ? verifyToken(accessToken) : null;
 
     if (!tokenPayload) {
-      return NextResponse.json({ error: 'Not authenticated' }, { status: 401 });
+      return NextResponse.json({ error: 'Tidak terautentikasi' }, { status: 401 });
     }
 
     if (tokenPayload.userId !== userId) {
-      return NextResponse.json({ error: 'User mismatch' }, { status: 403 });
+      return NextResponse.json({ error: 'Pengguna tidak cocok' }, { status: 403 });
     }
 
     // Create unique identifier for this challenge session
@@ -84,7 +84,7 @@ async function postHandler(req: NextRequest) {
       return NextResponse.json({
         success: true,
         challengeId: challengeId,
-        message: 'Challenge response saved successfully'
+        message: 'Respons tantangan berhasil disimpan'
       });
       
     } catch (dbError: unknown) {
@@ -93,7 +93,7 @@ async function postHandler(req: NextRequest) {
       console.error('[Challenge Response] Database error:', message, originalError);
 
       return NextResponse.json(
-        { error: 'Failed to persist challenge response' },
+        { error: 'Gagal menyimpan respons tantangan' },
         { status: 500 }
       );
     }
@@ -101,7 +101,7 @@ async function postHandler(req: NextRequest) {
   } catch (error: unknown) {
     console.error('Error in challenge response API:', error);
     return NextResponse.json(
-      { error: 'Failed to process challenge response' },
+      { error: 'Gagal memproses respons tantangan' },
       { status: 500 }
     );
   }
@@ -122,7 +122,7 @@ export async function GET(req: NextRequest) {
 
     if (!userId) {
       return NextResponse.json(
-        { error: 'userId parameter is required' },
+        { error: 'Parameter userId diperlukan' },
         { status: 400 }
       );
     }
@@ -131,11 +131,11 @@ export async function GET(req: NextRequest) {
     const tokenPayload = accessToken ? verifyToken(accessToken) : null;
 
     if (!tokenPayload) {
-      return NextResponse.json({ error: 'Not authenticated' }, { status: 401 });
+      return NextResponse.json({ error: 'Tidak terautentikasi' }, { status: 401 });
     }
 
     if (tokenPayload.userId !== userId) {
-      return NextResponse.json({ error: 'User mismatch' }, { status: 403 });
+      return NextResponse.json({ error: 'Pengguna tidak cocok' }, { status: 403 });
     }
 
     console.log('[Challenge Response] Attempting to retrieve challenge responses for user:', userId);
@@ -193,7 +193,7 @@ export async function GET(req: NextRequest) {
       console.error('[Challenge Response] Database error:', message, originalError);
 
       return NextResponse.json(
-        { error: 'Failed to load challenge responses' },
+        { error: 'Gagal memuat respons tantangan' },
         { status: 500 }
       );
     }

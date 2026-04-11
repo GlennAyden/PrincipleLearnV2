@@ -30,7 +30,7 @@ export default function LoginPage() {
     setError('');
     
     if (!email.trim() || !password.trim()) {
-      setError('Please fill both email and password.');
+      setError('Mohon isi email dan kata sandi.');
       return;
     }
     
@@ -40,7 +40,7 @@ export default function LoginPage() {
       const result = await login(email, password, rememberMe);
       
       if (!result.success) {
-        setError(result.error || 'Login failed');
+        setError(result.error || 'Gagal masuk');
         return;
       }
 
@@ -75,7 +75,7 @@ export default function LoginPage() {
         router.replace('/dashboard');
       }
     } catch (err: unknown) {
-      setError(err instanceof Error ? err.message : 'Login failed. Please check your credentials.');
+      setError(err instanceof Error ? err.message : 'Gagal masuk. Periksa kembali email dan kata sandi Anda.');
       console.error('Login error:', err);
     } finally {
       setIsLoading(false);
@@ -113,7 +113,7 @@ export default function LoginPage() {
         <svg width="20" height="20" viewBox="0 0 20 20" fill="none">
           <path d="M15 10H5M5 10L9 6M5 10L9 14" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
         </svg>
-        Home
+        Beranda
       </Link>
 
       <div className={styles.card}>
@@ -134,8 +134,8 @@ export default function LoginPage() {
           <span className={styles.logoText}>PrincipleLearn</span>
         </div>
 
-        <h1 className={styles.title}>Welcome back</h1>
-        <p className={styles.subtitle}>Sign in to continue your learning journey</p>
+        <h1 className={styles.title}>Selamat Datang Kembali</h1>
+        <p className={styles.subtitle}>Masuk untuk melanjutkan perjalanan belajarmu</p>
         
         {error && (
           <div className={styles.error}>
@@ -161,7 +161,7 @@ export default function LoginPage() {
                 className={styles.input}
                 value={email}
                 onChange={(e) => setEmail(e.currentTarget.value)}
-                placeholder="you@example.com"
+                placeholder="anda@contoh.com"
                 required
                 disabled={isLoading}
                 autoComplete="email"
@@ -170,7 +170,7 @@ export default function LoginPage() {
           </div>
 
           <div className={styles.field}>
-            <label className={styles.label} htmlFor="login-password">Password</label>
+            <label className={styles.label} htmlFor="login-password">Kata Sandi</label>
             <div className={styles.inputWrap}>
               <svg className={styles.inputIcon} width="18" height="18" viewBox="0 0 18 18" fill="none">
                 <rect x="4" y="8" width="10" height="8" rx="2" stroke="currentColor" strokeWidth="1.5" fill="none" />
@@ -182,7 +182,7 @@ export default function LoginPage() {
                 className={styles.input}
                 value={password}
                 onChange={(e) => setPassword(e.currentTarget.value)}
-                placeholder="Enter your password"
+                placeholder="Masukkan kata sandi"
                 required
                 disabled={isLoading}
                 autoComplete="current-password"
@@ -192,7 +192,7 @@ export default function LoginPage() {
                 className={styles.eyeBtn}
                 onClick={() => setShowPassword(!showPassword)}
                 tabIndex={-1}
-                aria-label={showPassword ? 'Hide password' : 'Show password'}
+                aria-label={showPassword ? 'Sembunyikan kata sandi' : 'Tampilkan kata sandi'}
               >
                 {showPassword ? (
                   <svg width="18" height="18" viewBox="0 0 18 18" fill="none">
@@ -220,10 +220,10 @@ export default function LoginPage() {
                 className={styles.rememberCheckbox}
                 disabled={isLoading}
               />
-              <span className={styles.rememberText}>Remember me</span>
+              <span className={styles.rememberText}>Ingat saya</span>
             </label>
             <span className={styles.forgotLink} style={{ opacity: 0.5, cursor: 'default' }}>
-              Forgot password?
+              Lupa kata sandi?
             </span>
           </div>
 
@@ -235,11 +235,11 @@ export default function LoginPage() {
             {isLoading ? (
               <>
                 <span className={styles.spinner} />
-                Signing in...
+                Sedang masuk...
               </>
             ) : (
               <>
-                Sign in
+                Masuk
                 <svg width="18" height="18" viewBox="0 0 18 18" fill="none">
                   <path d="M4 9H14M14 9L10 5M14 9L10 13" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
                 </svg>
@@ -249,13 +249,13 @@ export default function LoginPage() {
         </form>
 
         <div className={styles.divider}>
-          <span>or</span>
+          <span>atau</span>
         </div>
 
         <div className={styles.footer}>
-          <p>Don&apos;t have an account?</p>
+          <p>Belum punya akun?</p>
           <Link href="/signup" className={styles.switchLink}>
-            Create an account
+            Buat akun
             <svg width="14" height="14" viewBox="0 0 14 14" fill="none">
               <path d="M3 7H11M11 7L8 4M11 7L8 10" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" />
             </svg>

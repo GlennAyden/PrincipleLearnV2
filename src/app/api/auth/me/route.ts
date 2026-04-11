@@ -7,7 +7,7 @@ export async function GET() {
 
     if (!user) {
       return NextResponse.json(
-        { error: 'Not authenticated' },
+        { error: 'Tidak terautentikasi' },
         { status: 401 }
       );
     }
@@ -23,7 +23,7 @@ export async function GET() {
   } catch (error: unknown) {
     console.error('Get user error:', error);
     return NextResponse.json(
-      { error: 'Failed to get user data' },
+      { error: 'Gagal mengambil data pengguna' },
       { status: 500 }
     );
   }

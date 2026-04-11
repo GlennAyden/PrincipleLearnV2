@@ -34,9 +34,9 @@ export function StageHeatmapChart({ data }: StageHeatmapProps) {
           <YAxis />
           <Tooltip />
           <Legend />
-          <Bar dataKey="sessions" fill="#8884d8" name="Sessions" />
-          <Bar dataKey="Avg CT" fill="#82ca9d" name="Avg CT Score" />
-          <Bar dataKey="Avg CTh" fill="#ffc658" name="Avg CTh Score" />
+          <Bar dataKey="sessions" fill="#8884d8" name="Sesi" />
+          <Bar dataKey="Avg CT" fill="#82ca9d" name="Skor CT Rata-rata" />
+          <Bar dataKey="Avg CTh" fill="#ffc658" name="Skor CTh Rata-rata" />
         </BarChart>
       </ResponsiveContainer>
     </div>

@@ -658,10 +658,10 @@ export default function DiscussionModulePage() {
 
   const statusLabel =
     session?.status === 'completed'
-      ? 'Done'
+      ? 'Selesai'
       : session?.status === 'in_progress'
-      ? 'In Progress'
-      : 'Ready';
+      ? 'Sedang Berlangsung'
+      : 'Siap';
 
   const nextModuleHref =
     course && moduleIndex + 1 < course.outline.length

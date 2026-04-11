@@ -37,7 +37,7 @@ export default function TranscriptModal({
         <header className={styles.modalHeader}>
           <h3 className={styles.modalTitle}>Qna Transkrip</h3>
           <button className={styles.closeBtn} onClick={onClose}>
-            Close
+            Tutup
           </button>
         </header>
 
@@ -45,7 +45,7 @@ export default function TranscriptModal({
           <table className={styles.table}>
             <thead>
               <tr>
-                <th>Timestamp</th>
+                <th>Waktu</th>
                 <th>Pertanyaan</th>
                 <th>Jawaban</th>
               </tr>

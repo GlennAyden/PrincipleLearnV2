@@ -26,7 +26,7 @@ export default function Step1() {
 
   const continueToStep2 = () => {
     if (!topic.trim() || !goal.trim()) {
-      setErr('Please fill both fields');
+      setErr('Mohon isi kedua kolom');
       return;
     }
     setPartial({ topic, goal });
@@ -42,7 +42,7 @@ export default function Step1() {
         <svg width="16" height="16" viewBox="0 0 16 16" fill="none">
           <path d="M10 12L6 8L10 4" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" />
         </svg>
-        Dashboard
+        Dasbor
       </Link>
 
       <div className={styles.card}>
@@ -64,8 +64,8 @@ export default function Step1() {
               <path d="M7 13H11" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" />
             </svg>
           </div>
-          <h1 className={styles.title}>What do you want to learn?</h1>
-          <p className={styles.subtitle}>Tell us your topic and learning goal</p>
+          <h1 className={styles.title}>Apa yang ingin kamu pelajari?</h1>
+          <p className={styles.subtitle}>Beritahu kami topik dan tujuan belajarmu</p>
         </div>
 
         {err && (
@@ -81,7 +81,7 @@ export default function Step1() {
 
         <div className={styles.form}>
           <div className={styles.field}>
-            <label className={styles.label}>Topic</label>
+            <label className={styles.label}>Topik</label>
             <div className={styles.inputWrap}>
               <div className={styles.inputIcon}>
                 <svg width="18" height="18" viewBox="0 0 18 18" fill="none">
@@ -91,7 +91,7 @@ export default function Step1() {
               <input
                 className={styles.input}
                 type="text"
-                placeholder="e.g., Machine Learning, Web Development, Data Science..."
+                placeholder="contoh: Machine Learning, Pengembangan Web, Data Science..."
                 value={topic}
                 onChange={e => setTopic(e.target.value)}
               />
@@ -99,7 +99,7 @@ export default function Step1() {
           </div>
 
           <div className={styles.field}>
-            <label className={styles.label}>Learning Goal</label>
+            <label className={styles.label}>Tujuan Belajar</label>
             <div className={styles.inputWrap}>
               <div className={styles.textareaIcon}>
                 <svg width="18" height="18" viewBox="0 0 18 18" fill="none">
@@ -110,7 +110,7 @@ export default function Step1() {
               </div>
               <textarea
                 className={styles.textarea}
-                placeholder="What do you want to achieve by learning this topic?"
+                placeholder="Apa yang ingin kamu capai dengan mempelajari topik ini?"
                 value={goal}
                 onChange={e => setGoal(e.target.value)}
               />
@@ -118,7 +118,7 @@ export default function Step1() {
           </div>
 
           <button className={styles.submitBtn} onClick={continueToStep2}>
-            Continue
+            Lanjut
             <svg width="16" height="16" viewBox="0 0 16 16" fill="none">
               <path d="M3 8H13M13 8L9 4M13 8L9 12" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" />
             </svg>

@@ -32,7 +32,7 @@ export default function QuestionBox({
     if (!fullPrompt.trim()) return;
     if (!user?.id) {
       console.warn('AskQuestion submission blocked: user not authenticated');
-      onAnswer(fullPrompt, 'You must be logged in to ask a question.');
+      onAnswer(fullPrompt, 'Kamu harus masuk untuk bertanya.');
       return;
     }
 
@@ -73,22 +73,6 @@ export default function QuestionBox({
       }
 
       onAnswer(fullPrompt, finalAnswer);
-
-      // Persist a transcript snapshot so admin can review QnA trails.
-      if (courseId && subtopic) {
-        apiFetch('/api/transcript/save', {
-          method: 'POST',
-          body: JSON.stringify({
-            userId: user.id,
-            courseId,
-            subtopic,
-            question: fullPrompt,
-            answer: finalAnswer,
-          }),
-        }).catch((transcriptErr) => {
-          console.error('Transcript save error:', transcriptErr);
-        });
-      }
     } catch (err: unknown) {
       console.error('AskQuestion error:', err);
       setStreamingAnswer('');

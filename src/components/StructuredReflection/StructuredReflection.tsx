@@ -116,26 +116,6 @@ export default function StructuredReflection({
         throw new Error(data.error || 'Gagal menyimpan refleksi');
       }
 
-      // Save feedback to /api/feedback if rating or feedbackText is provided
-      if (rating > 0 || feedbackText.trim()) {
-        try {
-          await apiFetch('/api/feedback', {
-            method: 'POST',
-            body: JSON.stringify({
-              subtopic: subtopic || null,
-              moduleIndex,
-              subtopicIndex,
-              comment: feedbackText.trim() || `Rating pembelajaran: ${rating}/5`,
-              rating: rating > 0 ? rating : null,
-              userId: user.id,
-              courseId,
-            }),
-          });
-        } catch {
-          // Non-critical, don't block on feedback save failure
-        }
-      }
-
       setSubmitted(true);
     } catch (err: unknown) {
       setError(err instanceof Error ? err.message : 'Unknown error');

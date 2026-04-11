@@ -12,7 +12,7 @@ export const POST = withProtection(async (req: NextRequest) => {
     const userId = req.headers.get('x-user-id') || 'unknown';
     if (!(await aiRateLimiter.isAllowed(userId))) {
       return NextResponse.json(
-        { error: 'Too many requests. Please try again later.' },
+        { error: 'Terlalu banyak permintaan. Coba lagi nanti.' },
         { status: 429 }
       );
     }
@@ -112,6 +112,6 @@ Please provide appropriate feedback for this answer, considering the user's leve
     return NextResponse.json({ feedback: feedbackRaw });
   } catch (err: unknown) {
     console.error('Error generating challenge feedback:', err);
-    return NextResponse.json({ error: 'Failed to generate challenge feedback' }, { status: 500 });
+    return NextResponse.json({ error: 'Gagal membuat umpan balik tantangan' }, { status: 500 });
   }
 }, { csrfProtection: false, requireAuth: true });

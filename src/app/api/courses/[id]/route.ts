@@ -17,20 +17,20 @@ export async function DELETE(
     const currentUser = await getCurrentUser();
     if (!currentUser) {
       return NextResponse.json({
-        error: 'Authentication required',
+        error: 'Autentikasi diperlukan',
       }, { status: 401 });
     }
 
     const course = await getCourseById(courseId);
     if (!course) {
       return NextResponse.json({
-        error: 'Course not found',
+        error: 'Kursus tidak ditemukan',
       }, { status: 404 });
     }
 
     if (!canAccessCourse(course, currentUser.id, currentUser.role)) {
       return NextResponse.json({
-        error: 'You do not have permission to delete this course',
+        error: 'Anda tidak memiliki izin untuk menghapus kursus ini',
       }, { status: 403 });
     }
 
@@ -38,12 +38,12 @@ export async function DELETE(
 
     return NextResponse.json({
       success: true,
-      message: 'Course deleted successfully',
+      message: 'Kursus berhasil dihapus',
     });
   } catch (error) {
     console.error('[Delete Course] Error deleting course:', error);
     return NextResponse.json({
-      error: 'Failed to delete course',
+      error: 'Gagal menghapus kursus',
     }, { status: 500 });
   }
 }
@@ -58,20 +58,20 @@ export async function GET(
     const currentUser = await getCurrentUser();
     if (!currentUser) {
       return NextResponse.json({
-        error: 'Authentication required',
+        error: 'Autentikasi diperlukan',
       }, { status: 401 });
     }
 
     const courseWithSubtopics = await getCourseWithSubtopics(courseId);
     if (!courseWithSubtopics) {
       return NextResponse.json({
-        error: 'Course not found',
+        error: 'Kursus tidak ditemukan',
       }, { status: 404 });
     }
 
     if (!canAccessCourse(courseWithSubtopics, currentUser.id, currentUser.role)) {
       return NextResponse.json({
-        error: 'You do not have permission to view this course',
+        error: 'Anda tidak memiliki izin untuk melihat kursus ini',
       }, { status: 403 });
     }
 
@@ -85,7 +85,7 @@ export async function GET(
   } catch (error) {
     console.error('[Get Course] Error fetching course:', error);
     return NextResponse.json({
-      error: 'Failed to fetch course',
+      error: 'Gagal memuat kursus',
     }, { status: 500 });
   }
 }

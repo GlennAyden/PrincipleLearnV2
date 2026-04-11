@@ -11,14 +11,14 @@ export async function POST(req: Request) {
     // If both CSRF token sources exist, validate they match
     if (csrfHeader && csrfCookie && csrfHeader !== csrfCookie) {
       return NextResponse.json(
-        { error: 'Invalid CSRF token' },
+        { error: 'Token CSRF tidak valid' },
         { status: 403 }
       );
     }
 
     const response = NextResponse.json({
       success: true,
-      message: 'Logged out successfully'
+      message: 'Berhasil keluar'
     });
     
     // Clear all auth-related cookies
@@ -30,7 +30,7 @@ export async function POST(req: Request) {
   } catch (error: unknown) {
     console.error('Logout error:', error);
     return NextResponse.json(
-      { error: 'Failed to logout' },
+      { error: 'Gagal keluar' },
       { status: 500 }
     );
   }

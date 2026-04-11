@@ -18,10 +18,10 @@ function getPasswordStrength(password: string) {
   const score = Object.values(checks).filter(Boolean).length;
   const labels: Record<number, string> = {
     0: '',
-    1: 'Weak',
-    2: 'Fair',
-    3: 'Good',
-    4: 'Strong',
+    1: 'Lemah',
+    2: 'Cukup',
+    3: 'Baik',
+    4: 'Kuat',
   };
   return { score, label: labels[score] || '', checks };
 }
@@ -51,12 +51,12 @@ export default function SignUpPage() {
     setError("");
     
     if (!email.trim() || !password.trim()) {
-      setError("Please fill both email and password.");
+      setError("Mohon isi email dan kata sandi.");
       return;
     }
 
     if (password.length < 8) {
-      setError("Password must be at least 8 characters long.");
+      setError("Kata sandi minimal 8 karakter.");
       return;
     }
     
@@ -75,9 +75,9 @@ export default function SignUpPage() {
       
       if (!response.ok) {
         if (data.error?.includes('already exists')) {
-          setError("An account with this email already exists. Please try signing in instead.");
+          setError("Akun dengan email ini sudah terdaftar. Silakan masuk.");
         } else {
-          setError(data.error || 'Registration failed');
+          setError(data.error || 'Pendaftaran gagal');
         }
         return;
       }
@@ -89,10 +89,10 @@ export default function SignUpPage() {
         // Redirect to onboarding first (consistent with login flow)
         router.push("/onboarding");
       } else {
-        setError("Registration successful, but auto-login failed. Please sign in manually.");
+        setError("Pendaftaran berhasil, namun auto-login gagal. Silakan masuk secara manual.");
       }
     } catch (err: unknown) {
-      setError("Network error. Please check your connection and try again.");
+      setError("Kesalahan jaringan. Periksa koneksi dan coba lagi.");
       console.error("Registration error:", err);
     } finally {
       setIsLoading(false);
@@ -131,7 +131,7 @@ export default function SignUpPage() {
         <svg width="20" height="20" viewBox="0 0 20 20" fill="none">
           <path d="M15 10H5M5 10L9 6M5 10L9 14" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
         </svg>
-        Home
+        Beranda
       </Link>
 
       <div className={styles.card}>
@@ -152,8 +152,8 @@ export default function SignUpPage() {
           <span className={styles.logoText}>PrincipleLearn</span>
         </div>
 
-        <h1 className={styles.title}>Create your account</h1>
-        <p className={styles.subtitle}>Start your personalized learning journey today</p>
+        <h1 className={styles.title}>Buat Akunmu</h1>
+        <p className={styles.subtitle}>Mulai perjalanan belajar personalmu hari ini</p>
         
         {error && (
           <div className={styles.error}>
@@ -168,7 +168,7 @@ export default function SignUpPage() {
         <form onSubmit={handleSignUp} className={styles.form}>
           {/* Name field */}
           <div className={styles.field}>
-            <label className={styles.label} htmlFor="signup-name">Full Name <span className={styles.optionalTag}>(optional)</span></label>
+            <label className={styles.label} htmlFor="signup-name">Nama Lengkap <span className={styles.optionalTag}>(opsional)</span></label>
             <div className={styles.inputWrap}>
               <svg className={styles.inputIcon} width="18" height="18" viewBox="0 0 18 18" fill="none">
                 <circle cx="9" cy="6" r="3" stroke="currentColor" strokeWidth="1.5" fill="none" />
@@ -178,7 +178,7 @@ export default function SignUpPage() {
                 id="signup-name"
                 type="text"
                 className={styles.input}
-                placeholder="Your full name"
+                placeholder="Nama lengkap Anda"
                 value={name}
                 onChange={(e) => setName(e.currentTarget.value)}
                 disabled={isLoading}
@@ -199,7 +199,7 @@ export default function SignUpPage() {
                 id="signup-email"
                 type="email"
                 className={styles.input}
-                placeholder="you@example.com"
+                placeholder="anda@contoh.com"
                 value={email}
                 onChange={(e) => setEmail(e.currentTarget.value)}
                 required
@@ -211,7 +211,7 @@ export default function SignUpPage() {
 
           {/* Password field */}
           <div className={styles.field}>
-            <label className={styles.label} htmlFor="signup-password">Password</label>
+            <label className={styles.label} htmlFor="signup-password">Kata Sandi</label>
             <div className={styles.inputWrap}>
               <svg className={styles.inputIcon} width="18" height="18" viewBox="0 0 18 18" fill="none">
                 <rect x="4" y="8" width="10" height="8" rx="2" stroke="currentColor" strokeWidth="1.5" fill="none" />
@@ -221,7 +221,7 @@ export default function SignUpPage() {
                 id="signup-password"
                 type={showPassword ? 'text' : 'password'}
                 className={styles.input}
-                placeholder="Create a password"
+                placeholder="Buat kata sandi"
                 value={password}
                 onChange={(e) => setPassword(e.currentTarget.value)}
                 required
@@ -233,7 +233,7 @@ export default function SignUpPage() {
                 className={styles.eyeBtn}
                 onClick={() => setShowPassword(!showPassword)}
                 tabIndex={-1}
-                aria-label={showPassword ? 'Hide password' : 'Show password'}
+                aria-label={showPassword ? 'Sembunyikan kata sandi' : 'Tampilkan kata sandi'}
               >
                 {showPassword ? (
                   <svg width="18" height="18" viewBox="0 0 18 18" fill="none">
@@ -275,11 +275,11 @@ export default function SignUpPage() {
             {isLoading ? (
               <>
                 <span className={styles.spinner} />
-                Creating account...
+                Membuat akun...
               </>
             ) : (
               <>
-                Create account
+                Buat Akun
                 <svg width="18" height="18" viewBox="0 0 18 18" fill="none">
                   <path d="M4 9H14M14 9L10 5M14 9L10 13" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
                 </svg>
@@ -289,13 +289,13 @@ export default function SignUpPage() {
         </form>
 
         <div className={styles.divider}>
-          <span>or</span>
+          <span>atau</span>
         </div>
 
         <div className={styles.footer}>
-          <p>Already have an account?</p>
+          <p>Sudah punya akun?</p>
           <Link href="/login" className={styles.switchLink}>
-            Sign in instead
+            Masuk di sini
             <svg width="14" height="14" viewBox="0 0 14 14" fill="none">
               <path d="M3 7H11M11 7L8 4M11 7L8 10" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" />
             </svg>

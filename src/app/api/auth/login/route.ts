@@ -16,7 +16,7 @@ export async function POST(req: Request) {
     // Check rate limiting
     if (!(await loginRateLimiter.isAllowed(ip))) {
       return NextResponse.json(
-        { error: 'Too many login attempts. Please try again later.' },
+        { error: 'Terlalu banyak percobaan login. Coba lagi nanti.' },
         { status: 429 }
       );
     }
@@ -30,7 +30,7 @@ export async function POST(req: Request) {
     const user = await findUserByEmail(email.toLowerCase().trim());
     if (!user || !user.password_hash) {
       return NextResponse.json(
-        { error: 'Invalid credentials' },
+        { error: 'Email atau kata sandi salah' },
         { status: 401 }
       );
     }
@@ -39,7 +39,7 @@ export async function POST(req: Request) {
     const isPasswordValid = await verifyPassword(password, user.password_hash);
     if (!isPasswordValid) {
       return NextResponse.json(
-        { error: 'Invalid credentials' },
+        { error: 'Email atau kata sandi salah' },
         { status: 401 }
       );
     }
@@ -96,7 +96,7 @@ export async function POST(req: Request) {
   } catch (error: unknown) {
     console.error('Login error:', error);
     return NextResponse.json(
-      { error: 'Failed to login' },
+      { error: 'Gagal masuk' },
       { status: 500 }
     );
   }

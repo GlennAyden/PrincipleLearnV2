@@ -15,7 +15,7 @@ export async function POST(_req: Request) {
     // If no refresh token exists, return unauthorized
     if (!oldRefreshToken) {
       return NextResponse.json(
-        { error: 'No refresh token provided' },
+        { error: 'Token refresh tidak tersedia' },
         { status: 401 }
       );
     }
@@ -26,7 +26,7 @@ export async function POST(_req: Request) {
     // If token is invalid or expired, return unauthorized
     if (!payload) {
       const response = NextResponse.json(
-        { error: 'Invalid or expired refresh token' },
+        { error: 'Token refresh tidak valid atau kedaluwarsa' },
         { status: 401 }
       );
 
@@ -42,7 +42,7 @@ export async function POST(_req: Request) {
 
     if (!user || !user.id || !user.email || !user.role) {
       const response = NextResponse.json(
-        { error: 'User no longer exists' },
+        { error: 'Pengguna tidak lagi terdaftar' },
         { status: 401 }
       );
 
@@ -98,7 +98,7 @@ export async function POST(_req: Request) {
   } catch (error: unknown) {
     console.error('Token refresh error:', error);
     return NextResponse.json(
-      { error: 'Failed to refresh token' },
+      { error: 'Gagal memperbarui token' },
       { status: 500 }
     );
   }

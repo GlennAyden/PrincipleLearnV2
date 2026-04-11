@@ -23,14 +23,14 @@ export async function GET(request: Request) {
 
         if (!identifier) {
           return NextResponse.json({
-            error: 'Authentication required',
+            error: 'Autentikasi diperlukan',
           }, { status: 401 });
         }
 
         const user = await resolveUserByIdentifier(identifier);
         if (!user) {
           return NextResponse.json({
-            error: 'User not found',
+            error: 'Pengguna tidak ditemukan',
           }, { status: 404 });
         }
 
@@ -48,7 +48,7 @@ export async function GET(request: Request) {
   } catch (error) {
     console.error('[Get Courses] Error fetching courses:', error);
     return NextResponse.json({
-      error: 'Failed to fetch courses',
+      error: 'Gagal memuat kursus',
     }, { status: 500 });
   }
 }

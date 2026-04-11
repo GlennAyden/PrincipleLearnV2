@@ -6,6 +6,7 @@ import { withApiLogging } from '@/lib/api-logger';
 import { aiRateLimiter } from '@/lib/rate-limit';
 import { AskQuestionSchema, parseBody } from '@/lib/schemas';
 import { chatCompletionStream, openAIStreamToReadable, STREAM_HEADERS, sanitizePromptInput } from '@/services/ai.service';
+import { classifyPromptStage } from '@/services/prompt-classifier';
 import type { ChatCompletionMessageParam } from 'openai/resources/chat/completions';
 
 // OpenAI client and model are centralized in src/lib/openai
@@ -43,17 +44,17 @@ async function postHandler(request: NextRequest) {
     const tokenPayload = accessToken ? verifyToken(accessToken) : null;
 
     if (!tokenPayload) {
-      return NextResponse.json({ error: 'Not authenticated' }, { status: 401 });
+      return NextResponse.json({ error: 'Tidak terautentikasi' }, { status: 401 });
     }
 
     if (tokenPayload.userId !== userId) {
-      return NextResponse.json({ error: 'User mismatch' }, { status: 403 });
+      return NextResponse.json({ error: 'Pengguna tidak cocok' }, { status: 403 });
     }
 
     // Rate limit AI calls per user
     if (!(await aiRateLimiter.isAllowed(tokenPayload.userId))) {
       return NextResponse.json(
-        { error: 'Too many requests. Please try again later.' },
+        { error: 'Terlalu banyak permintaan. Coba lagi nanti.' },
         { status: 429 }
       );
     }
@@ -104,6 +105,39 @@ Please answer in the same language as the question above. Base your answer stric
 
     const normalizedQuestion = question.trim();
 
+    // Auto-detect session number based on time gap (>24h = new session)
+    let resolvedSessionNumber = normalizePositiveInt(sessionNumber, 0);
+    if (resolvedSessionNumber === 0) {
+      try {
+        const { data: lastEntry } = await adminDb
+          .from('ask_question_history')
+          .select('session_number, created_at')
+          .eq('user_id', userId)
+          .eq('course_id', courseId)
+          .order('created_at', { ascending: false })
+          .limit(1)
+          .maybeSingle();
+
+        if (lastEntry) {
+          const lastTime = new Date(lastEntry.created_at).getTime();
+          const hoursDiff = (Date.now() - lastTime) / (1000 * 60 * 60);
+          resolvedSessionNumber = hoursDiff > 24
+            ? (lastEntry.session_number || 1) + 1
+            : (lastEntry.session_number || 1);
+        } else {
+          resolvedSessionNumber = 1;
+        }
+      } catch {
+        resolvedSessionNumber = 1;
+      }
+    }
+
+    // Auto-classify prompt stage (RM2)
+    const normalizedComponents = promptComponents && typeof promptComponents === 'object'
+      ? promptComponents as { tujuan?: string; konteks?: string; batasan?: string; reasoning?: string }
+      : null;
+    const classification = classifyPromptStage(normalizedQuestion, normalizedComponents);
+
     const readable = openAIStreamToReadable(stream, {
       cancelTimeout,
       onComplete: async (answer) => {
@@ -118,10 +152,12 @@ Please answer in the same language as the question above. Base your answer stric
           question: normalizedQuestion,
           answer,
           reasoning_note: (typeof reasoningNote === 'string' ? reasoningNote.trim() : '') || null,
-          prompt_components:
-            promptComponents && typeof promptComponents === 'object' ? promptComponents : null,
+          prompt_components: normalizedComponents,
           prompt_version: normalizePositiveInt(promptVersion, 1),
-          session_number: normalizePositiveInt(sessionNumber, 1),
+          session_number: resolvedSessionNumber,
+          prompt_stage: classification.stage,
+          stage_confidence: classification.confidence,
+          micro_markers: classification.microMarkers,
           created_at: timestamp,
           updated_at: timestamp,
         };

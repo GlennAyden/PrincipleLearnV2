@@ -25,11 +25,11 @@ export default function RequestCourseStep3() {
 
   const handleGenerate = () => {
     if (!problem.trim() || !assumption.trim()) {
-      setError('Please fill both fields');
+      setError('Mohon isi kedua kolom');
       return;
     }
     if (!user || !user.id || !user.email) {
-      setError('You must be logged in to generate a course');
+      setError('Kamu harus masuk untuk membuat kursus');
       return;
     }
     setPartial({ problem, assumption });
@@ -40,7 +40,7 @@ export default function RequestCourseStep3() {
     return (
       <div className={styles.loadingPage}>
         <div className={styles.loadingSpinner} />
-        <p>Loading...</p>
+        <p>Memuat...</p>
       </div>
     );
   }
@@ -56,7 +56,7 @@ export default function RequestCourseStep3() {
         <svg width="16" height="16" viewBox="0 0 16 16" fill="none">
           <path d="M10 12L6 8L10 4" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" />
         </svg>
-        Back
+        Kembali
       </Link>
 
       <div className={styles.card}>
@@ -78,8 +78,8 @@ export default function RequestCourseStep3() {
               <circle cx="14" cy="8" r="1" fill="currentColor" />
             </svg>
           </div>
-          <h1 className={styles.title}>Context & Assumptions</h1>
-          <p className={styles.subtitle}>Help AI understand your real-world needs</p>
+          <h1 className={styles.title}>Konteks & Asumsi</h1>
+          <p className={styles.subtitle}>Bantu AI memahami kebutuhanmu di dunia nyata</p>
         </div>
 
         {error && (
@@ -100,11 +100,11 @@ export default function RequestCourseStep3() {
                 <path d="M2 12.5L6 8.5L9 11.5L14 5.5" stroke="currentColor" strokeWidth="1.3" strokeLinecap="round" strokeLinejoin="round" />
                 <path d="M10 5.5H14V9.5" stroke="currentColor" strokeWidth="1.3" strokeLinecap="round" strokeLinejoin="round" />
               </svg>
-              Real-world problem
+              Masalah dunia nyata
             </label>
             <textarea
               className={styles.textarea}
-              placeholder="Name one real-world problem you want to solve by studying this..."
+              placeholder="Sebutkan satu masalah nyata yang ingin kamu selesaikan dengan mempelajari ini..."
               value={problem}
               onChange={(e) => setProblem(e.currentTarget.value)}
             />
@@ -115,11 +115,11 @@ export default function RequestCourseStep3() {
               <svg width="16" height="16" viewBox="0 0 16 16" fill="none">
                 <path d="M8 2L10 6H14L11 9L12 13L8 10.5L4 13L5 9L2 6H6L8 2Z" stroke="currentColor" strokeWidth="1.3" strokeLinejoin="round" />
               </svg>
-              Initial assumption
+              Asumsi awal
             </label>
             <textarea
               className={styles.textarea}
-              placeholder="What was your initial assumption about this material before you started learning?"
+              placeholder="Apa asumsi awalmu tentang materi ini sebelum kamu mulai belajar?"
               value={assumption}
               onChange={(e) => setAssumption(e.currentTarget.value)}
             />
@@ -129,7 +129,7 @@ export default function RequestCourseStep3() {
             <svg width="18" height="18" viewBox="0 0 18 18" fill="none">
               <path d="M9 2L11 7H16L12 10L13.5 15L9 12L4.5 15L6 10L2 7H7L9 2Z" stroke="currentColor" strokeWidth="1.3" fill="currentColor" fillOpacity="0.15" strokeLinejoin="round" />
             </svg>
-            Generate Course
+            Buat Kursus
           </button>
         </div>
       </div>

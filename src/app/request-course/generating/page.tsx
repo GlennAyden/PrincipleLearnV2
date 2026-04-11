@@ -18,21 +18,21 @@ interface StageInfo {
 }
 
 const STAGES: Record<Stage, StageInfo> = {
-  'sending':       { label: 'Sending Request',     description: 'Sending your course details to the server...',  basePercent: 0,   targetPercent: 10 },
-  'ai-generating': { label: 'AI Processing',       description: 'AI is generating your course outline...',       basePercent: 10,  targetPercent: 65 },
-  'processing':    { label: 'Processing Response',  description: 'Parsing and validating the AI response...',     basePercent: 65,  targetPercent: 75 },
-  'saving':        { label: 'Saving Course',        description: 'Saving your course to the database...',        basePercent: 75,  targetPercent: 90 },
-  'complete':      { label: 'Complete!',            description: 'Course created successfully! Redirecting...',   basePercent: 90,  targetPercent: 100 },
-  'error':         { label: 'Error',                description: 'Something went wrong.',                        basePercent: 0,   targetPercent: 0 },
+  'sending':       { label: 'Mengirim Permintaan',  description: 'Mengirim detail kursus ke server...',             basePercent: 0,   targetPercent: 10 },
+  'ai-generating': { label: 'Proses AI',            description: 'AI sedang membuat outline kursusmu...',        basePercent: 10,  targetPercent: 65 },
+  'processing':    { label: 'Memproses Respons',    description: 'Memeriksa dan memvalidasi respons AI...',       basePercent: 65,  targetPercent: 75 },
+  'saving':        { label: 'Menyimpan Kursus',     description: 'Menyimpan kursus ke database...',              basePercent: 75,  targetPercent: 90 },
+  'complete':      { label: 'Selesai!',             description: 'Kursus berhasil dibuat! Mengalihkan...',       basePercent: 90,  targetPercent: 100 },
+  'error':         { label: 'Error',                description: 'Terjadi kesalahan.',                           basePercent: 0,   targetPercent: 0 },
 };
 
 const AI_TIPS = [
-  'Structuring modules based on your learning level...',
-  'Connecting topics to your real-world problem...',
-  'Building progressive learning pathways...',
-  'Tailoring content to your goals...',
-  'Organizing subtopics for optimal understanding...',
-  'Almost there — polishing the outline...',
+  'Menyusun modul berdasarkan level belajarmu...',
+  'Menghubungkan topik dengan masalah nyatamu...',
+  'Membangun jalur pembelajaran bertahap...',
+  'Menyesuaikan konten dengan tujuanmu...',
+  'Mengorganisir subtopik untuk pemahaman optimal...',
+  'Hampir selesai — menyempurnakan outline...',
 ];
 
 export default function GeneratingPage() {
@@ -131,11 +131,11 @@ export default function GeneratingPage() {
         const textResponse = await res.text();
         console.error('Non-JSON response:', textResponse);
         if (res.status === 504) {
-          throw new Error('Course generation timed out. Please try again with a simpler topic.');
+          throw new Error('Pembuatan kursus timeout. Coba lagi dengan topik yang lebih sederhana.');
         } else if (res.status === 500) {
-          throw new Error('Server error occurred. Please try again in a moment.');
+          throw new Error('Terjadi error server. Coba lagi beberapa saat.');
         }
-        throw new Error(`Unexpected server response (${res.status}). Please try again.`);
+        throw new Error(`Respons server tidak terduga (${res.status}). Coba lagi.`);
       }
 
       setPercent(70);
@@ -160,10 +160,10 @@ export default function GeneratingPage() {
       stopAiProgress();
       if (err instanceof Error && err.name === 'AbortError') {
         setStage('error');
-        setErrorMsg('Course generation was cancelled.');
+        setErrorMsg('Pembuatan kursus dibatalkan.');
       } else {
         setStage('error');
-        setErrorMsg(err instanceof Error ? err.message : 'An unexpected error occurred');
+        setErrorMsg(err instanceof Error ? err.message : 'Terjadi kesalahan tidak terduga');
       }
     }
   };
@@ -261,14 +261,14 @@ export default function GeneratingPage() {
               <path d="M2 8C2 4.7 4.7 2 8 2C11.3 2 14 4.7 14 8C14 11.3 11.3 14 8 14C5.3 14 3 12.1 2.3 9.5" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" />
               <path d="M2 4V8H6" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" />
             </svg>
-            Go back &amp; try again
+            Kembali &amp; Coba Lagi
           </button>
         )}
 
         {/* Course info summary */}
         <div className={styles.courseSummary}>
           <div className={styles.summaryItem}>
-            <span className={styles.summaryLabel}>Topic</span>
+            <span className={styles.summaryLabel}>Topik</span>
             <span className={styles.summaryValue}>{answers.topic || '—'}</span>
           </div>
           <div className={styles.summaryItem}>

@@ -12,7 +12,7 @@ export async function POST(req: Request) {
     // Check rate limiting
     if (!(await registerRateLimiter.isAllowed(ip))) {
       return NextResponse.json(
-        { error: 'Too many registration attempts. Please try again later.' },
+        { error: 'Terlalu banyak percobaan pendaftaran. Coba lagi nanti.' },
         { status: 429 }
       );
     }
@@ -29,7 +29,7 @@ export async function POST(req: Request) {
     const existingUser = await findUserByEmail(normalizedEmail);
     if (existingUser) {
       return NextResponse.json(
-        { error: 'User with this email already exists' },
+        { error: 'Pengguna dengan email ini sudah terdaftar' },
         { status: 409 }
       );
     }
@@ -58,19 +58,19 @@ export async function POST(req: Request) {
         email: newUser.email,
         role: newUser.role
       },
-      message: 'Registration successful. You can now log in.'
+      message: 'Pendaftaran berhasil. Silakan masuk.'
     });
   } catch (error: unknown) {
     // Handle race condition: another request created the same email between check and insert
     if (error instanceof DatabaseError && error.isUniqueViolation) {
       return NextResponse.json(
-        { error: 'User with this email already exists' },
+        { error: 'Pengguna dengan email ini sudah terdaftar' },
         { status: 409 }
       );
     }
     console.error('Registration error:', error);
     return NextResponse.json(
-      { error: 'Failed to register user' },
+      { error: 'Gagal mendaftarkan pengguna' },
       { status: 500 }
     );
   }

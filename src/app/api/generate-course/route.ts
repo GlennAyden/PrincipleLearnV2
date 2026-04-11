@@ -35,7 +35,7 @@ async function postHandler(req: NextRequest) {
     } catch (parseError) {
       console.error('[Generate Course] Invalid JSON in request body:', parseError);
       return NextResponse.json(
-        { error: 'Invalid JSON in request body' },
+        { error: 'JSON tidak valid dalam body permintaan' },
         { status: 400 }
       );
     }
@@ -53,7 +53,7 @@ async function postHandler(req: NextRequest) {
     const rateLimitKey = headerUserId || actorIdentifier || req.headers.get('x-forwarded-for') || 'unknown';
     if (!(await aiRateLimiter.isAllowed(rateLimitKey))) {
       return NextResponse.json(
-        { error: 'Too many requests. Please try again later.' },
+        { error: 'Terlalu banyak permintaan. Coba lagi nanti.' },
         { status: 429, headers: corsHeaders }
       );
     }
@@ -147,7 +147,7 @@ Important: Write all titles and overviews in the same language as the user's inp
     const textRaw = response.choices?.[0]?.message?.content;
     if (!textRaw || !textRaw.trim()) {
       console.error('[Generate Course] Empty content! Full message:', JSON.stringify(response.choices?.[0]?.message));
-      throw new Error('Empty response from model');
+      throw new Error('Respons kosong dari model');
     }
 
     let outline;
@@ -225,7 +225,7 @@ Important: Write all titles and overviews in the same language as the user's inp
     console.error('[Generate Course] Error details:', err instanceof Error ? err.message : err);
     console.error('[Generate Course] Error stack:', err instanceof Error ? err.stack : 'No stack');
     return NextResponse.json(
-      { error: 'Failed to generate outline' },
+      { error: 'Gagal membuat outline' },
       { status: 500, headers: corsHeaders }
     );
   }

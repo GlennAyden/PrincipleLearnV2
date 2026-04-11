@@ -11,6 +11,8 @@ interface PromptJourneyEntry {
   prompt_version: number | null;
   session_number: number | null;
   subtopic_label: string | null;
+  prompt_stage: string | null;
+  stage_confidence: number | null;
   created_at: string;
 }
 
@@ -48,7 +50,7 @@ export async function GET(request: NextRequest) {
 
     let query = adminDb
       .from('ask_question_history')
-      .select('id, question, reasoning_note, prompt_components, prompt_version, session_number, subtopic_label, created_at')
+      .select('id, question, reasoning_note, prompt_components, prompt_version, session_number, subtopic_label, prompt_stage, stage_confidence, created_at')
       .eq('user_id', userId)
       .order('created_at', { ascending: true })
       .limit(200);

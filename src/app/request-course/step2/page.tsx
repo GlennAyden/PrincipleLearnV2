@@ -10,9 +10,9 @@ import type { Level } from '@/context/RequestCourseContext';
 import styles from './page.module.scss';
 
 const levels: { value: Level; label: string; icon: string; desc: string; color: string }[] = [
-  { value: 'Beginner',     label: 'Beginner',     icon: '🌱', desc: 'Starting from the basics',     color: 'green' },
-  { value: 'Intermediate', label: 'Intermediate', icon: '📚', desc: 'Some prior knowledge',         color: 'blue' },
-  { value: 'Advanced',     label: 'Advanced',     icon: '🚀', desc: 'Deep dive & advanced topics',  color: 'purple' },
+  { value: 'Beginner',     label: 'Beginner',     icon: '🌱', desc: 'Mulai dari dasar',               color: 'green' },
+  { value: 'Intermediate', label: 'Intermediate', icon: '📚', desc: 'Sudah punya pengetahuan dasar', color: 'blue' },
+  { value: 'Advanced',     label: 'Advanced',     icon: '🚀', desc: 'Pembahasan mendalam & topik lanjutan', color: 'purple' },
 ];
 
 export default function RequestCourseStep2() {
@@ -33,7 +33,7 @@ export default function RequestCourseStep2() {
 
   const handleContinue = () => {
     if (!level) {
-      setError('Please select your knowledge level');
+      setError('Pilih level pengetahuanmu');
       return;
     }
     setPartial({ level, extraTopics });
@@ -49,7 +49,7 @@ export default function RequestCourseStep2() {
         <svg width="16" height="16" viewBox="0 0 16 16" fill="none">
           <path d="M10 12L6 8L10 4" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" />
         </svg>
-        Back
+        Kembali
       </Link>
 
       <div className={styles.card}>
@@ -70,8 +70,8 @@ export default function RequestCourseStep2() {
               <path d="M4 18L14 24L24 18" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" />
             </svg>
           </div>
-          <h1 className={styles.title}>Your knowledge level</h1>
-          <p className={styles.subtitle}>Help us calibrate the course difficulty</p>
+          <h1 className={styles.title}>Level pengetahuanmu</h1>
+          <p className={styles.subtitle}>Bantu kami menyesuaikan tingkat kesulitan kursus</p>
         </div>
 
         {error && (
@@ -112,19 +112,19 @@ export default function RequestCourseStep2() {
         {/* Extra topics */}
         <div className={styles.field}>
           <label className={styles.label}>
-            Specific topics to cover
-            <span className={styles.optional}>(optional)</span>
+            Topik spesifik yang ingin dipelajari
+            <span className={styles.optional}>(opsional)</span>
           </label>
           <textarea
             className={styles.textarea}
-            placeholder="e.g., Neural Networks, Transfer Learning, NLP..."
+            placeholder="contoh: Neural Networks, Transfer Learning, NLP..."
             value={extraTopics}
             onChange={e => setExtraTopics(e.currentTarget.value)}
           />
         </div>
 
         <button className={styles.submitBtn} onClick={handleContinue}>
-          Continue
+          Lanjut
           <svg width="16" height="16" viewBox="0 0 16 16" fill="none">
             <path d="M3 8H13M13 8L9 4M13 8L9 12" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" />
           </svg>

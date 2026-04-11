@@ -42,7 +42,7 @@ export async function GET(request: NextRequest) {
     const token = request.cookies.get('access_token')?.value;
     const payload = token ? verifyToken(token) : null;
     if (!payload) {
-      return NextResponse.json({ error: 'Not authenticated' }, { status: 401 });
+      return NextResponse.json({ error: 'Tidak terautentikasi' }, { status: 401 });
     }
 
     const { searchParams } = new URL(request.url);
@@ -50,11 +50,11 @@ export async function GET(request: NextRequest) {
     const userId = requestedUserId || payload.userId;
 
     if (!userId) {
-      return NextResponse.json({ error: 'userId required' }, { status: 400 });
+      return NextResponse.json({ error: 'userId diperlukan' }, { status: 400 });
     }
 
     if (userId !== payload.userId && (payload.role ?? '').toLowerCase() !== 'admin') {
-      return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
+      return NextResponse.json({ error: 'Akses ditolak' }, { status: 403 });
     }
 
     const { data: profile, error } = await adminDb
@@ -65,7 +65,7 @@ export async function GET(request: NextRequest) {
 
     if (error) {
       console.error('[LearningProfile] GET query error:', error);
-      return NextResponse.json({ error: 'Failed to load profile' }, { status: 500 });
+      return NextResponse.json({ error: 'Gagal memuat profil' }, { status: 500 });
     }
 
     return NextResponse.json({
@@ -84,7 +84,7 @@ async function postHandler(request: NextRequest) {
     const token = request.cookies.get('access_token')?.value;
     const payload = token ? verifyToken(token) : null;
     if (!payload) {
-      return NextResponse.json({ error: 'Not authenticated' }, { status: 401 });
+      return NextResponse.json({ error: 'Tidak terautentikasi' }, { status: 401 });
     }
 
     const body = await request.json();
@@ -98,7 +98,7 @@ async function postHandler(request: NextRequest) {
     } = body;
 
     if (!userId || userId !== payload.userId) {
-      return NextResponse.json({ error: 'User mismatch' }, { status: 403 });
+      return NextResponse.json({ error: 'Pengguna tidak cocok' }, { status: 403 });
     }
 
     const normalizedDisplayName = normalizeText(displayName);
@@ -109,7 +109,7 @@ async function postHandler(request: NextRequest) {
 
     if (!normalizedDisplayName || !normalizedProgrammingExperience || !normalizedLearningStyle) {
       return NextResponse.json(
-        { error: 'displayName, programmingExperience, and learningStyle are required' },
+        { error: 'displayName, programmingExperience, dan learningStyle diperlukan' },
         { status: 400 }
       );
     }
@@ -130,7 +130,7 @@ async function postHandler(request: NextRequest) {
     if (error) {
       console.error('[LearningProfile] Save error:', error);
       return NextResponse.json(
-        { error: 'Failed to save profile' },
+        { error: 'Gagal menyimpan profil' },
         { status: 500 }
       );
     }

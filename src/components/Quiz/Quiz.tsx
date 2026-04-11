@@ -133,7 +133,7 @@ export default function Quiz({
   if (!safeItems.length) {
     return (
       <section className={styles.quizSection}>
-        <h3 className={styles.quizHeader}>Quiz Time!</h3>
+        <h3 className={styles.quizHeader}>Waktu Kuis!</h3>
         <div className={styles.noQuizMessage}>
           <p>Quiz sedang disiapkan untuk subtopik ini. Silakan lanjut ke bagian selanjutnya atau kembali lagi nanti.</p>
         </div>
@@ -143,7 +143,7 @@ export default function Quiz({
 
   return (
     <section className={styles.quizSection}>
-      <h3 className={styles.quizHeader}>Quiz Time!</h3>
+      <h3 className={styles.quizHeader}>Waktu Kuis!</h3>
       {safeItems.map((q, qIdx) => (
         <div key={qIdx} className={styles.questionBlock}>
           <p className={styles.questionText}>
@@ -196,7 +196,7 @@ export default function Quiz({
         disabled={selectedAnswers.some((ans) => ans === null) || showResults || loading}
         className={styles.checkButton}
       >
-        {loading ? 'Saving...' : (showResults ? 'Done' : 'Check Result')}
+        {loading ? 'Menyimpan...' : (showResults ? 'Selesai' : 'Cek Hasil')}
       </button>
     </section>
   );

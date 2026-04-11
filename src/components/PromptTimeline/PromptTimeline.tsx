@@ -3,6 +3,15 @@
 import React, { useState, useEffect } from 'react';
 import styles from './PromptTimeline.module.scss';
 
+type PromptStage = 'SCP' | 'SRP' | 'MQP' | 'Reflective';
+
+const STAGE_CONFIG: Record<PromptStage, { label: string; color: string; description: string }> = {
+  SCP: { label: 'SCP', color: '#f59e0b', description: 'Simple Clarification' },
+  SRP: { label: 'SRP', color: '#f97316', description: 'Structured Reformulation' },
+  MQP: { label: 'MQP', color: '#3b82f6', description: 'Multi-Question' },
+  Reflective: { label: 'Reflektif', color: '#22c55e', description: 'Evaluatif & Reflektif' },
+};
+
 interface PromptEntry {
   id: string;
   question: string;
@@ -15,6 +24,8 @@ interface PromptEntry {
   } | null;
   prompt_version: number;
   session_number: number;
+  prompt_stage: PromptStage | null;
+  stage_confidence: number | null;
   created_at: string;
   subtopic_label: string | null;
 }
@@ -83,10 +94,41 @@ export default function PromptTimeline({ userId, courseId }: PromptTimelineProps
 
   const sessionKeys = Object.keys(grouped).map(Number).sort((a, b) => a - b);
 
+  // Compute stage summary across all entries
+  const stageCounts: Record<string, number> = {};
+  entries.forEach(e => {
+    if (e.prompt_stage) stageCounts[e.prompt_stage] = (stageCounts[e.prompt_stage] || 0) + 1;
+  });
+  const latestStage = entries[entries.length - 1]?.prompt_stage;
+
   return (
     <div className={styles.container}>
       <h3 className={styles.title}>🧭 Prompt Journey Timeline</h3>
       <p className={styles.subtitle}>Lihat bagaimana cara Anda bertanya berkembang dari waktu ke waktu</p>
+
+      {/* Stage summary bar */}
+      {latestStage && (
+        <div className={styles.stageSummary}>
+          <span className={styles.stageSummaryLabel}>Tahap saat ini:</span>
+          <span
+            className={styles.stageBadgeLarge}
+            style={{ backgroundColor: STAGE_CONFIG[latestStage]?.color || '#94a3b8' }}
+          >
+            {STAGE_CONFIG[latestStage]?.label || latestStage}
+          </span>
+          <span className={styles.stageDistribution}>
+            {Object.entries(stageCounts).map(([stage, count]) => (
+              <span key={stage} className={styles.stageCount}>
+                <span
+                  className={styles.stageDot}
+                  style={{ backgroundColor: STAGE_CONFIG[stage as PromptStage]?.color || '#94a3b8' }}
+                />
+                {STAGE_CONFIG[stage as PromptStage]?.label || stage}: {count}
+              </span>
+            ))}
+          </span>
+        </div>
+      )}
 
       <div className={styles.timeline}>
         {sessionKeys.map((session) => (
@@ -101,7 +143,13 @@ export default function PromptTimeline({ userId, courseId }: PromptTimelineProps
             {grouped[session].map((entry, idx) => (
               <div key={entry.id} className={styles.entryCard}>
                 <div className={styles.entryConnector}>
-                  <div className={styles.dot} />
+                  <div
+                    className={styles.dot}
+                    style={entry.prompt_stage ? {
+                      backgroundColor: STAGE_CONFIG[entry.prompt_stage]?.color || '#94a3b8',
+                      borderColor: STAGE_CONFIG[entry.prompt_stage]?.color || '#94a3b8',
+                    } : undefined}
+                  />
                   {idx < grouped[session].length - 1 && <div className={styles.line} />}
                 </div>
 
@@ -118,6 +166,15 @@ export default function PromptTimeline({ userId, courseId }: PromptTimelineProps
                     </span>
                     {entry.subtopic_label && (
                       <span className={styles.subtopicTag}>{entry.subtopic_label}</span>
+                    )}
+                    {entry.prompt_stage && (
+                      <span
+                        className={styles.stageBadge}
+                        style={{ backgroundColor: STAGE_CONFIG[entry.prompt_stage]?.color || '#94a3b8' }}
+                        title={STAGE_CONFIG[entry.prompt_stage]?.description || ''}
+                      >
+                        {STAGE_CONFIG[entry.prompt_stage]?.label || entry.prompt_stage}
+                      </span>
                     )}
                     <span className={styles.versionBadge}>v{entry.prompt_version}</span>
                   </div>

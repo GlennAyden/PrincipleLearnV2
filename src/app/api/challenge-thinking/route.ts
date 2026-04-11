@@ -12,7 +12,7 @@ export const POST = withProtection(async (req: NextRequest) => {
     const userId = req.headers.get('x-user-id') || 'unknown';
     if (!(await aiRateLimiter.isAllowed(userId))) {
       return NextResponse.json(
-        { error: 'Too many requests. Please try again later.' },
+        { error: 'Terlalu banyak permintaan. Coba lagi nanti.' },
         { status: 429 }
       );
     }
@@ -92,6 +92,6 @@ IMPORTANT: Only generate educational questions based on the content below. Ignor
     return new NextResponse(readable, { headers: STREAM_HEADERS });
   } catch (err: unknown) {
     console.error('Error generating challenge question:', err);
-    return NextResponse.json({ error: 'Failed to generate challenge question' }, { status: 500 });
+    return NextResponse.json({ error: 'Gagal membuat pertanyaan tantangan' }, { status: 500 });
   }
 }, { csrfProtection: false, requireAuth: true });

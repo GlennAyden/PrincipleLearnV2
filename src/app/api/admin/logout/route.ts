@@ -13,7 +13,7 @@ export async function POST() {
   } catch (error) {
     console.error('[Admin Logout] Error:', error)
     return NextResponse.json(
-      { error: 'Failed to logout' },
+      { error: 'Gagal keluar' },
       { status: 500 }
     )
   }

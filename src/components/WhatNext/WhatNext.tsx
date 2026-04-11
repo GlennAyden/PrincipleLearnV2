@@ -12,7 +12,7 @@ export interface WhatNextProps {
 export default function WhatNext({ summary, encouragement }: WhatNextProps) {
   return (
     <section className={styles.whatNextSection}>
-      <h3 className={styles.header}>What next?</h3>
+      <h3 className={styles.header}>Selanjutnya?</h3>
       <p className={styles.summary}>{summary}</p>
       <p className={styles.encouragement}>{encouragement}</p>
     </section>

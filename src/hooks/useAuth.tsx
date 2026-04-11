@@ -75,7 +75,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       const data = await res.json();
 
       if (!res.ok) {
-        return { success: false, error: data.error || 'Login failed' };
+        return { success: false, error: data.error || 'Gagal masuk' };
       }
 
       // CSRF token is set as a cookie by the server (httpOnly: false)
@@ -90,7 +90,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       return { success: true };
     } catch (error) {
       console.error('Login error:', error);
-      return { success: false, error: 'An unexpected error occurred' };
+      return { success: false, error: 'Terjadi kesalahan tidak terduga' };
     }
   };
 

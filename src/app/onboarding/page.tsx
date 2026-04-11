@@ -92,7 +92,7 @@ export default function OnboardingPage() {
       }
 
       // Check if user has courses
-      const coursesRes = await fetch(`/api/courses?userId=${encodeURIComponent(user.email)}`);
+      const coursesRes = await fetch(`/api/courses?userId=${encodeURIComponent(user.id)}`);
       const coursesData = await coursesRes.json();
 
       if (coursesData.success && coursesData.courses?.length > 0) {

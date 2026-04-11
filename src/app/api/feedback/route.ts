@@ -29,7 +29,7 @@ async function postHandler(req: NextRequest) {
     const headerUserId = req.headers.get('x-user-id');
     if (!headerUserId) {
       return NextResponse.json(
-        { error: 'Authentication required' },
+        { error: 'Autentikasi diperlukan' },
         { status: 401 }
       );
     }
@@ -128,21 +128,21 @@ async function postHandler(req: NextRequest) {
     } catch (error) {
       console.error('Error saving feedback to database:', error);
       return NextResponse.json(
-        { error: 'Failed to save feedback' },
+        { error: 'Gagal menyimpan umpan balik' },
         { status: 500 }
       );
     }
-    
+
     // Kirim kembali respons ke client
     return NextResponse.json({ success: true });
   } catch (error: unknown) {
     console.error('Error saving feedback:', error);
     return NextResponse.json(
-      { error: 'Failed to save feedback' },
+      { error: 'Gagal menyimpan umpan balik' },
       { status: 500 }
     );
   }
-} 
+}
 
 export const POST = withApiLogging(postHandler, {
   label: 'feedback',

@@ -15,7 +15,7 @@ export async function POST(request: Request) {
 
     if (!activeToken) {
       return NextResponse.json(
-        { error: 'Authentication required. Only existing admins can register new admins.' },
+        { error: 'Autentikasi diperlukan. Hanya admin yang dapat mendaftarkan admin baru.' },
         { status: 401 }
       )
     }
@@ -23,7 +23,7 @@ export async function POST(request: Request) {
     const payload = verifyToken(activeToken);
     if (!payload || payload.role?.toLowerCase() !== 'admin') {
       return NextResponse.json(
-        { error: 'Forbidden. Only admins can register new admin accounts.' },
+        { error: 'Akses ditolak. Hanya admin yang dapat mendaftarkan akun admin baru.' },
         { status: 403 }
       )
     }
@@ -85,7 +85,7 @@ export async function POST(request: Request) {
     }
     console.error('Error di /api/admin/register:', err)
     return NextResponse.json(
-      { error: 'Internal server error' },
+      { error: 'Kesalahan server internal' },
       { status: 500 }
     )
   }

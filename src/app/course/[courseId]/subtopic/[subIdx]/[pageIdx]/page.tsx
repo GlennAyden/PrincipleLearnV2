@@ -395,11 +395,11 @@ export default function SubtopicPage() {
     loadChallengeHistory();
   }, [user?.id, courseId, moduleIndex, subtopicIndex, pageNumber]);
 
-  if (courseLoading) return <div className={styles.loading}>Loading course…</div>;
-  if (!course) return <div className={styles.error}>Course not found</div>;
+  if (courseLoading) return <div className={styles.loading}>Memuat kursus…</div>;
+  if (!course) return <div className={styles.error}>Kursus tidak ditemukan</div>;
   if (loading && !data) return <SkeletonLoading />;
   if (error) return <div className={styles.error}>Error: {error}</div>;
-  if (!data) return <div className={styles.error}>No content available.</div>;
+  if (!data) return <div className={styles.error}>Konten tidak tersedia.</div>;
 
   const contentCount = data.pages.length;
   const feedbackStep = contentCount + 2;
@@ -598,7 +598,7 @@ export default function SubtopicPage() {
           {activeTab === null ? (
             <div className={styles.initialButtons}>
               <button className={styles.initialBtn} onClick={() => setActiveTab('ask')}>
-                Ask Question
+                Tanya Pertanyaan
               </button>
               <button
                 className={styles.initialBtn}
@@ -607,7 +607,7 @@ export default function SubtopicPage() {
                   if (!challengeQ) fetchChallengeQ();
                 }}
               >
-                Challenge My Thinking
+                Tantang Pemikiranku
               </button>
               <button
                 className={styles.initialBtn}
@@ -616,7 +616,7 @@ export default function SubtopicPage() {
                   if (!examplesData.length) fetchExamples();
                 }}
               >
-                Give Me Examples
+                Beri Contoh
               </button>
             </div>
           ) : (
@@ -629,7 +629,7 @@ export default function SubtopicPage() {
                   className={`${styles.tab} ${activeTab === 'ask' ? styles.activeTab : ''}`}
                   onClick={() => setActiveTab('ask')}
                 >
-                  Ask Question
+                  Tanya Pertanyaan
                 </button>
                 <button
                   className={`${styles.tab} ${activeTab === 'challenge' ? styles.activeTab : ''}`}
@@ -638,7 +638,7 @@ export default function SubtopicPage() {
                     if (!challengeQ) fetchChallengeQ();
                   }}
                 >
-                  Challenge My Thinking
+                  Tantang Pemikiranku
                 </button>
                 <button
                   className={`${styles.tab} ${activeTab === 'examples' ? styles.activeTab : ''}`}
@@ -647,7 +647,7 @@ export default function SubtopicPage() {
                     if (!examplesData.length) fetchExamples();
                   }}
                 >
-                  Give Me Examples
+                  Beri Contoh
                 </button>
               </div>
               <div className={styles.tabContent}>
@@ -674,7 +674,7 @@ export default function SubtopicPage() {
                     {/* Show challenge history if available */}
                     {challengeData.length > 0 && (
                       <div className={styles.challengeHistory}>
-                        <h3 className={styles.historyTitle}>Previous Challenges:</h3>
+                        <h3 className={styles.historyTitle}>Tantangan Sebelumnya:</h3>
                         <div className={styles.historyList}>
                           {challengeData.map((item, idx) => (
                             <div 
@@ -697,7 +697,7 @@ export default function SubtopicPage() {
                       <div className={styles.challengeReview}>
                         <ChallengeBox question={challengeData[activeChallengeIndex].question} />
                         <div className={styles.challengeAnswer}>
-                          <div className={styles.answerLabel}>Your Answer:</div>
+                          <div className={styles.answerLabel}>Jawabanmu:</div>
                           <div className={styles.answerContent}>{challengeData[activeChallengeIndex].answer}</div>
                         </div>
                         {challengeData[activeChallengeIndex].feedback && (
@@ -705,7 +705,7 @@ export default function SubtopicPage() {
                         )}
                         {challengeData[activeChallengeIndex].reasoningNote && (
                           <div className={styles.challengeAnswer}>
-                            <div className={styles.answerLabel}>Your Reasoning:</div>
+                            <div className={styles.answerLabel}>Penalaranmu:</div>
                             <div className={styles.answerContent}>{challengeData[activeChallengeIndex].reasoningNote}</div>
                           </div>
                         )}
@@ -713,7 +713,7 @@ export default function SubtopicPage() {
                           onClick={() => setActiveChallengeIndex(-1)} 
                           className={styles.newChallengeBtn}
                         >
-                          Try a New Challenge
+                          Coba Tantangan Baru
                         </button>
                       </div>
                     )}
@@ -729,7 +729,7 @@ export default function SubtopicPage() {
                                 className={styles.regenerateBtn} 
                                 onClick={fetchChallengeQ} 
                                 disabled={loadingChallenge}
-                                title="Generate a new challenge question"
+                                title="Buat pertanyaan tantangan baru"
                               >
                                 {loadingChallenge ? (
                                   <span className={styles.loadingSpinner}></span>
@@ -738,7 +738,7 @@ export default function SubtopicPage() {
                                     <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                                       <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
                                     </svg>
-                                    <span>Regenerate</span>
+                                    <span>Buat Ulang</span>
                                   </>
                                 )}
                               </button>
@@ -747,7 +747,7 @@ export default function SubtopicPage() {
                                   type="text"
                                   value={challengeAnswer}
                                   onChange={(e) => setChallengeAnswer(e.target.value)}
-                                  placeholder="Type your answer here..."
+                                  placeholder="Ketik jawabanmu di sini..."
                                   className={styles.answerInput}
                                   disabled={loadingChallenge}
                                 />
@@ -755,7 +755,7 @@ export default function SubtopicPage() {
                                   type="text"
                                   value={challengeReasoning}
                                   onChange={(e) => setChallengeReasoning(e.target.value)}
-                                  placeholder="Why do you choose this answer? (optional)"
+                                  placeholder="Mengapa kamu memilih jawaban ini? (opsional)"
                                   className={styles.answerInput}
                                   disabled={loadingChallenge}
                                 />
@@ -817,7 +817,7 @@ export default function SubtopicPage() {
       {pageNumber === contentCount && (
         <div className={styles.sectionContainer}>
           <div className={styles.sectionHeader}>
-            <h2 className={styles.sectionTitle}>💡 Key Takeaways</h2>
+            <h2 className={styles.sectionTitle}>💡 Poin Penting</h2>
             <p className={styles.sectionDescription}>
               Poin-poin penting yang perlu Anda ingat dari materi ini
             </p>
@@ -830,7 +830,7 @@ export default function SubtopicPage() {
       {pageNumber === contentCount + 1 && course?.outline && (
         <div className={styles.sectionContainer}>
           <div className={styles.sectionHeader}>
-            <h2 className={styles.sectionTitle}>🧠 Quiz Time!</h2>
+            <h2 className={styles.sectionTitle}>🧠 Waktu Kuis!</h2>
             <p className={styles.sectionDescription}>
               Uji pemahaman Anda tentang materi yang telah dipelajari
             </p>
@@ -851,7 +851,7 @@ export default function SubtopicPage() {
       {pageNumber === contentCount + 2 && (
         <div className={styles.sectionContainer}>
           <div className={styles.sectionHeader}>
-            <h2 className={styles.sectionTitle}>📝 Feedback & Next Steps</h2>
+            <h2 className={styles.sectionTitle}>📝 Umpan Balik & Langkah Selanjutnya</h2>
             <p className={styles.sectionDescription}>
               Berikan masukan dan lihat langkah selanjutnya dalam pembelajaran Anda
             </p>
@@ -884,11 +884,11 @@ export default function SubtopicPage() {
       <div className={styles.navigationButtons}>
         {pageNumber > 0 && (
           <button className={styles.backBtn} onClick={goBack}>
-            Back
+            Kembali
           </button>
         )}
         <button className={styles.nextBtn} onClick={goNext}>
-          {pageNumber === feedbackStep ? 'Finish' : 'Next'}
+          {pageNumber === feedbackStep ? 'Selesai' : 'Selanjutnya'}
         </button>
       </div>
     </>

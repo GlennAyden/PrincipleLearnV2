@@ -49,11 +49,11 @@ export default function DashboardPage() {
         if (result.success) {
           setCourses(result.courses);
         } else {
-          setLoadError(result.error || 'Failed to load courses');
+          setLoadError(result.error || 'Gagal memuat kursus');
         }
       } catch (error) {
         console.error('[Dashboard] Error loading courses:', error);
-        setLoadError(error instanceof Error ? error.message : 'Failed to load courses. Please check your connection.');
+        setLoadError(error instanceof Error ? error.message : 'Gagal memuat kursus. Periksa koneksi Anda.');
       } finally {
         setLoading(false);
       }
@@ -64,7 +64,7 @@ export default function DashboardPage() {
   if (authLoading) return (
     <div className={styles.loadingPage}>
       <div className={styles.loadingSpinner} />
-      <p>Loading...</p>
+      <p>Memuat...</p>
     </div>
   );
   if (!isAuthenticated) return null;
@@ -78,21 +78,21 @@ export default function DashboardPage() {
       const response = await apiFetch(`/api/courses/${id}`, { method: 'DELETE' });
       const result = await response.json();
       if (!result.success) {
-        alert('Failed to delete course: ' + result.error);
+        alert('Gagal menghapus kursus: ' + result.error);
         return;
       }
       setCourses(courses.filter(c => c.id !== id));
       setDeleteConfirm(null);
     } catch (error) {
-      alert('Error deleting course: ' + (error instanceof Error ? error.message : 'Unknown error'));
+      alert('Error menghapus kursus: ' + (error instanceof Error ? error.message : 'Error tidak diketahui'));
     }
   };
 
   const greeting = () => {
     const hour = new Date().getHours();
-    if (hour < 12) return 'Good morning';
-    if (hour < 17) return 'Good afternoon';
-    return 'Good evening';
+    if (hour < 12) return 'Selamat Pagi';
+    if (hour < 17) return 'Selamat Siang';
+    return 'Selamat Malam';
   };
 
   const userName = user?.name || user?.email?.split('@')[0] || 'Learner';
@@ -135,7 +135,7 @@ export default function DashboardPage() {
                 <path d="M12 12.75L15 9.75L12 6.75" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" />
                 <path d="M15 9.75H6.75" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" />
               </svg>
-              Log out
+              Keluar
             </button>
           </div>
         </div>
@@ -151,8 +151,8 @@ export default function DashboardPage() {
             </h1>
             <p className={styles.greetingSub}>
               {courses.length > 0
-                ? `You have ${courses.length} course${courses.length > 1 ? 's' : ''} in progress`
-                : 'Ready to start your learning journey?'
+                ? `${courses.length} kursus sedang berjalan`
+                : 'Siap memulai perjalanan belajarmu?'
               }
             </p>
           </div>
@@ -163,7 +163,7 @@ export default function DashboardPage() {
             <svg width="18" height="18" viewBox="0 0 18 18" fill="none">
               <path d="M9 3V15M3 9H15" stroke="currentColor" strokeWidth="2" strokeLinecap="round" />
             </svg>
-            Create Course
+            Buat Kursus
           </button>
         </div>
 
@@ -176,13 +176,13 @@ export default function DashboardPage() {
               <rect x="2" y="12" width="7" height="7" rx="2" stroke="currentColor" strokeWidth="1.5" fill="none" />
               <rect x="11" y="12" width="7" height="7" rx="2" stroke="currentColor" strokeWidth="1.5" fill="none" />
             </svg>
-            My Courses
+            Kursus Saya
           </h2>
 
           {loading ? (
             <div className={styles.loadingState}>
               <div className={styles.loadingSpinner} />
-              <p>Loading courses...</p>
+              <p>Memuat kursus...</p>
             </div>
           ) : loadError ? (
             <div className={styles.errorState}>
@@ -193,13 +193,13 @@ export default function DashboardPage() {
                   <circle cx="24" cy="33" r="1.5" fill="currentColor" />
                 </svg>
               </div>
-              <h3>Failed to load courses</h3>
+              <h3>Gagal memuat kursus</h3>
               <p>{loadError}</p>
               <button
                 className={styles.retryBtn}
                 onClick={() => window.location.reload()}
               >
-                Try Again
+                Coba Lagi
               </button>
             </div>
           ) : courses.length > 0 ? (
@@ -226,7 +226,7 @@ export default function DashboardPage() {
                             e.stopPropagation();
                             setDeleteConfirm(deleteConfirm === course.id ? null : course.id);
                           }}
-                          aria-label="Delete course"
+                          aria-label="Hapus kursus"
                         >
                           <svg width="16" height="16" viewBox="0 0 16 16" fill="none">
                             <circle cx="8" cy="4" r="1" fill="currentColor" />
@@ -248,7 +248,7 @@ export default function DashboardPage() {
                           className={styles.continueBtn}
                           onClick={() => router.push(`/course/${course.id}`)}
                         >
-                          Continue Learning
+                          Lanjut Belajar
                           <svg width="14" height="14" viewBox="0 0 14 14" fill="none">
                             <path d="M3 7H11M11 7L8 4M11 7L8 10" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" />
                           </svg>
@@ -259,19 +259,19 @@ export default function DashboardPage() {
                     {/* Delete confirmation */}
                     {deleteConfirm === course.id && (
                       <div className={styles.deleteOverlay}>
-                        <p>Delete this course?</p>
+                        <p>Hapus kursus ini?</p>
                         <div className={styles.deleteActions}>
                           <button
                             className={styles.confirmDelete}
                             onClick={(e) => { e.stopPropagation(); handleDelete(course.id); }}
                           >
-                            Delete
+                            Hapus
                           </button>
                           <button
                             className={styles.cancelDelete}
                             onClick={(e) => { e.stopPropagation(); setDeleteConfirm(null); }}
                           >
-                            Cancel
+                            Batal
                           </button>
                         </div>
                       </div>
@@ -293,8 +293,8 @@ export default function DashboardPage() {
                   <path d="M28 42H36" stroke="currentColor" strokeWidth="2" strokeLinecap="round" />
                 </svg>
               </div>
-              <h3>No courses yet</h3>
-              <p>Create your first AI-generated course and start learning</p>
+              <h3>Belum ada kursus</h3>
+              <p>Buat kursus pertamamu dengan AI dan mulai belajar</p>
               <button
                 className={styles.emptyCreateBtn}
                 onClick={() => router.push('/request-course/step1')}
@@ -302,7 +302,7 @@ export default function DashboardPage() {
                 <svg width="18" height="18" viewBox="0 0 18 18" fill="none">
                   <path d="M9 3V15M3 9H15" stroke="currentColor" strokeWidth="2" strokeLinecap="round" />
                 </svg>
-                Create Your First Course
+                Buat Kursus Pertamamu
               </button>
             </div>
           )}

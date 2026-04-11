@@ -68,7 +68,7 @@ export default function NextSubtopics({
 
   return (
     <div className={styles.wrapper}>
-      <h3 className={styles.heading}>Next Subtopics</h3>
+      <h3 className={styles.heading}>Subtopik Selanjutnya</h3>
       <ul className={styles.list}>
         {nextItems.map(({ idx, moduleIdx, title, isDiscussion }) => (
           <li key={`${moduleIdx}-${idx}`} className={styles.item}>
@@ -98,7 +98,7 @@ export default function NextSubtopics({
             >
               {moduleIdx !== moduleIndex && (
                 <span className={styles.moduleLabel}>
-                  Module {moduleIdx + 1}:
+                  Modul {moduleIdx + 1}:
                 </span>
               )}
               {title}

@@ -117,7 +117,7 @@ export default function FeedbackList({ feedback }: FeedbackListProps) {
             </svg>
           )}
         </div>
-        <span>Feedback:</span>
+        <span>Umpan Balik:</span>
       </div>
       <div className={styles.feedbackContent}>
         {formatFeedback(feedback)}

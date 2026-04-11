@@ -353,14 +353,14 @@ export default function CourseOverviewPage() {
     return (
       <div className={styles.error}>
         Error: {error}{' '}
-        <button onClick={() => window.location.reload()}>Retry</button>
+        <button onClick={() => window.location.reload()}>Coba Lagi</button>
       </div>
     );
-  if (!course) return <div className={styles.loading}>Course not found</div>;
+  if (!course) return <div className={styles.loading}>Kursus tidak ditemukan</div>;
   if (!course.outline || course.outline.length === 0) {
     return (
       <div className={styles.error}>
-        No course content available. <button onClick={() => window.location.reload()}>Retry</button>
+        No course content available. <button onClick={() => window.location.reload()}>Coba Lagi</button>
       </div>
     );
   }

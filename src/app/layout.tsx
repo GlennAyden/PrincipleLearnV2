@@ -14,9 +14,9 @@ const poppins = Poppins({
 
 // Metadata for the app
 export const metadata = {
-  title: 'PrincipleLearn - Learn Smarter. Think Deeper. Master Anything!',
-  description: 'When you learn smarter by leveraging effective strategies and staying curious and thinking deeper by questioning assumptions and exploring new perspectives you empower yourself to master anything.',
-  keywords: 'learning, education, online courses, skill development',
+  title: 'PrincipleLearn - Belajar Lebih Cerdas. Berpikir Lebih Dalam. Kuasai Apapun!',
+  description: 'Dengan belajar lebih cerdas menggunakan strategi efektif dan tetap penasaran, serta berpikir lebih dalam dengan mempertanyakan asumsi dan mengeksplorasi perspektif baru, kamu bisa menguasai apapun.',
+  keywords: 'belajar, pendidikan, kursus online, pengembangan keterampilan',
 };
 
 export default function RootLayout({
@@ -25,7 +25,7 @@ export default function RootLayout({
   children: ReactNode;
 }) {
   return (
-    <html lang="en">
+    <html lang="id">
       <head>
         <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
       </head>
