@@ -22,8 +22,8 @@ interface SessionRow {
   session_number: number
   dominant_stage: string | null
   total_prompts: number | null
-  started_at: string | null
-  ended_at: string | null
+  session_start: string | null
+  session_end: string | null
 }
 
 interface ClassificationRow {
@@ -74,7 +74,7 @@ export async function GET(
     let sessions: SessionRow[] = []
     const { data: sessionData, error: sessionError } = await adminDb
       .from('learning_sessions')
-      .select('id, session_number, dominant_stage, total_prompts, started_at, ended_at')
+      .select('id, session_number, dominant_stage, total_prompts, session_start, session_end')
       .eq('user_id', userId)
       .order('session_number', { ascending: true })
 
@@ -133,8 +133,8 @@ export async function GET(
       session_number: s.session_number,
       dominant_stage: s.dominant_stage || 'N/A',
       total_prompts: s.total_prompts ?? 0,
-      started_at: s.started_at,
-      ended_at: s.ended_at,
+      started_at: s.session_start,
+      ended_at: s.session_end,
     }))
 
     // If no learning_sessions table data, derive sessions from prompt history
