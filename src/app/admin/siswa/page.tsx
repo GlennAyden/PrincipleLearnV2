@@ -1,7 +1,7 @@
-// src/app/admin/users/page.tsx
+// src/app/admin/siswa/page.tsx
 'use client'
 
-import React, { useEffect, useMemo, useState, useCallback } from 'react'
+import React, { useEffect, useMemo, useState } from 'react'
 import styles from './page.module.scss'
 import { useRouter } from 'next/navigation'
 import {
@@ -16,7 +16,6 @@ import {
   FiClock,
   FiTrendingUp,
   FiExternalLink,
-  FiDownload,
   FiZap,
   FiHelpCircle,
   FiTarget,
@@ -34,7 +33,7 @@ const STAGE_CONFIG: Record<string, { label: string; color: string; bg: string }>
   'N/A': { label: 'N/A', color: '#64748b', bg: '#f1f5f9' },
 }
 
-export default function AdminUsersPage() {
+export default function AdminSiswaPage() {
   const router = useRouter()
   const { admin, loading: authLoading } = useAdmin()
   const [users, setUsers] = useState<StudentListItem[]>([])
@@ -49,9 +48,8 @@ export default function AdminUsersPage() {
   const [activitySummary, setActivitySummary] = useState<ActivitySummary | null>(null)
   const [activityLoading, setActivityLoading] = useState(false)
   const [activityError, setActivityError] = useState<string | null>(null)
-  const [exportLoading, setExportLoading] = useState(false)
 
-  // Fetch users
+  // Ambil data pengguna
   useEffect(() => {
     if (authLoading) return
     if (!admin) { router.push('/admin/login'); return }
@@ -59,7 +57,7 @@ export default function AdminUsersPage() {
     setError(null)
     fetch('/api/admin/users', { credentials: 'include' })
       .then(async (res) => {
-        if (!res.ok) { const d = await res.json().catch(() => ({})); throw new Error(d.error || 'Failed to fetch users') }
+        if (!res.ok) { const d = await res.json().catch(() => ({})); throw new Error(d.error || 'Gagal memuat data pengguna') }
         return res.json()
       })
       .then(setUsers)
@@ -67,14 +65,14 @@ export default function AdminUsersPage() {
       .finally(() => setIsLoading(false))
   }, [admin, authLoading, router])
 
-  // Fetch activity summary
+  // Ambil ringkasan aktivitas
   useEffect(() => {
     if (!selectedUserId) { setActivitySummary(null); return }
     setActivityLoading(true)
     setActivityError(null)
     fetch(`/api/admin/users/${selectedUserId}/activity-summary`, { credentials: 'include' })
       .then(async (res) => {
-        if (!res.ok) { const d = await res.json().catch(() => ({})); throw new Error(d.message || 'Failed') }
+        if (!res.ok) { const d = await res.json().catch(() => ({})); throw new Error(d.message || 'Gagal memuat aktivitas') }
         return res.json()
       })
       .then(setActivitySummary)
@@ -90,53 +88,32 @@ export default function AdminUsersPage() {
 
   const getActivityStatus = (lastActivity?: string | null) => {
     const last = parseDate(lastActivity)
-    if (!last) return { label: 'No Activity', tone: 'cold' as const }
+    if (!last) return { label: 'Tidak Ada Aktivitas', tone: 'cold' as const }
     const days = (Date.now() - last.getTime()) / 86400000
-    if (days <= 2) return { label: 'Active', tone: 'hot' as const }
-    if (days <= 7) return { label: 'Warm', tone: 'warm' as const }
-    return { label: 'Idle', tone: 'cold' as const }
+    if (days <= 2) return { label: 'Aktif', tone: 'hot' as const }
+    if (days <= 7) return { label: 'Hangat', tone: 'warm' as const }
+    return { label: 'Tidak Aktif', tone: 'cold' as const }
   }
 
-  const formatDate = (s: string) => new Date(s).toLocaleDateString()
+  const formatDate = (s: string) => new Date(s).toLocaleDateString('id-ID')
 
   const handleDelete = async (id: string, email: string) => {
-    if (!confirm(`Delete user ${email}? ALL data will be permanently removed.`)) return
+    if (!confirm(`Hapus pengguna ${email}? SEMUA data akan dihapus secara permanen.`)) return
     try {
       setDeleteInProgress(id)
       const res = await fetch(`/api/admin/users/${id}`, { method: 'DELETE', credentials: 'include' })
-      if (!res.ok) { const d = await res.json(); throw new Error(d.error || 'Failed') }
+      if (!res.ok) { const d = await res.json(); throw new Error(d.error || 'Gagal menghapus') }
       setUsers((prev) => prev.filter((u) => u.id !== id))
       if (selectedUserId === id) setSelectedUserId(null)
-      alert(`User ${email} deleted.`)
+      alert(`Pengguna ${email} telah dihapus.`)
     } catch (err: unknown) {
-      alert(`Failed: ${err instanceof Error ? err.message : 'Unknown error'}`)
+      alert(`Gagal: ${err instanceof Error ? err.message : 'Kesalahan tidak diketahui'}`)
     } finally {
       setDeleteInProgress(null)
     }
   }
 
-  const handleExport = useCallback(async (format: 'csv' | 'json') => {
-    try {
-      setExportLoading(true)
-      const res = await fetch(`/api/admin/users/export?format=${format}`, { credentials: 'include' })
-      if (!res.ok) { const d = await res.json().catch(() => ({})); throw new Error(d.error || 'Export failed') }
-      const blob = await res.blob()
-      const url = URL.createObjectURL(blob)
-      const a = document.createElement('a')
-      a.href = url
-      a.download = `students_${new Date().toISOString().split('T')[0]}.${format}`
-      document.body.appendChild(a)
-      a.click()
-      document.body.removeChild(a)
-      URL.revokeObjectURL(url)
-    } catch (err: unknown) {
-      alert(`Export failed: ${err instanceof Error ? err.message : 'Unknown error'}`)
-    } finally {
-      setExportLoading(false)
-    }
-  }, [])
-
-  // Computed
+  // Data yang ditampilkan
   const displayedUsers = useMemo(() => {
     const q = searchTerm.trim().toLowerCase()
     const list = users
@@ -164,92 +141,84 @@ export default function AdminUsersPage() {
   const timelineEntries = useMemo(() => {
     if (!activitySummary) return []
     const entries: Array<{ label: string; icon: string; title: string; timestamp?: string | null; detail?: string | null }> = []
-    if (activitySummary.recentDiscussion) entries.push({ label: 'Discussion', icon: '💬', title: 'Latest discussion', timestamp: activitySummary.recentDiscussion.updatedAt, detail: `Phase ${activitySummary.recentDiscussion.phase ?? 'N/A'} · ${activitySummary.recentDiscussion.goalCount} goals` })
-    if (activitySummary.recentJournal) entries.push({ label: 'Journal', icon: '📓', title: activitySummary.recentJournal.title ?? 'Latest journal', timestamp: activitySummary.recentJournal.createdAt, detail: activitySummary.recentJournal.snippet })
-    if (activitySummary.recentTranscript) entries.push({ label: 'Transcript', icon: '📝', title: activitySummary.recentTranscript.title ?? 'Latest transcript', timestamp: activitySummary.recentTranscript.createdAt })
-    if (activitySummary.recentAskQuestion) entries.push({ label: 'Ask Question', icon: '❓', title: 'Latest question', timestamp: activitySummary.recentAskQuestion.createdAt, detail: activitySummary.recentAskQuestion.question })
-    if (activitySummary.recentChallenge) entries.push({ label: 'Challenge', icon: '🧩', title: 'Latest challenge', timestamp: activitySummary.recentChallenge.createdAt, detail: activitySummary.recentChallenge.challengeType ? `Type: ${activitySummary.recentChallenge.challengeType}` : null })
-    if (activitySummary.recentQuiz) entries.push({ label: 'Quiz', icon: '✅', title: `Quiz — ${activitySummary.recentQuiz.isCorrect ? 'Correct' : 'Incorrect'}`, timestamp: activitySummary.recentQuiz.createdAt })
-    if (activitySummary.recentFeedback) entries.push({ label: 'Feedback', icon: '⭐', title: 'Latest feedback', timestamp: activitySummary.recentFeedback.createdAt, detail: activitySummary.recentFeedback.rating != null ? `Rating: ${activitySummary.recentFeedback.rating}/5` : null })
+    if (activitySummary.recentDiscussion) entries.push({ label: 'Diskusi', icon: '💬', title: 'Diskusi terbaru', timestamp: activitySummary.recentDiscussion.updatedAt, detail: `Fase ${activitySummary.recentDiscussion.phase ?? 'N/A'} · ${activitySummary.recentDiscussion.goalCount} tujuan` })
+    if (activitySummary.recentJournal) entries.push({ label: 'Jurnal', icon: '📓', title: activitySummary.recentJournal.title ?? 'Jurnal terbaru', timestamp: activitySummary.recentJournal.createdAt, detail: activitySummary.recentJournal.snippet })
+    if (activitySummary.recentTranscript) entries.push({ label: 'Transkrip', icon: '📝', title: activitySummary.recentTranscript.title ?? 'Transkrip terbaru', timestamp: activitySummary.recentTranscript.createdAt })
+    if (activitySummary.recentAskQuestion) entries.push({ label: 'Pertanyaan', icon: '❓', title: 'Pertanyaan terbaru', timestamp: activitySummary.recentAskQuestion.createdAt, detail: activitySummary.recentAskQuestion.question })
+    if (activitySummary.recentChallenge) entries.push({ label: 'Tantangan', icon: '🧩', title: 'Tantangan terbaru', timestamp: activitySummary.recentChallenge.createdAt, detail: activitySummary.recentChallenge.challengeType ? `Tipe: ${activitySummary.recentChallenge.challengeType}` : null })
+    if (activitySummary.recentQuiz) entries.push({ label: 'Kuis', icon: '✅', title: `Kuis — ${activitySummary.recentQuiz.isCorrect ? 'Benar' : 'Salah'}`, timestamp: activitySummary.recentQuiz.createdAt })
+    if (activitySummary.recentFeedback) entries.push({ label: 'Umpan Balik', icon: '⭐', title: 'Umpan balik terbaru', timestamp: activitySummary.recentFeedback.createdAt, detail: activitySummary.recentFeedback.rating != null ? `Penilaian: ${activitySummary.recentFeedback.rating}/5` : null })
     return entries.sort((a, b) => (parseDate(b.timestamp)?.getTime() ?? 0) - (parseDate(a.timestamp)?.getTime() ?? 0))
   }, [activitySummary])
 
-  // Auto-select first user
+  // Otomatis pilih pengguna pertama
   useEffect(() => {
     if (displayedUsers.length === 0) { setSelectedUserId(null); return }
     if (!selectedUserId || !displayedUsers.some((u) => u.id === selectedUserId)) setSelectedUserId(displayedUsers[0].id)
   }, [displayedUsers, selectedUserId])
 
-  if (authLoading) return <div className={styles.loading}>Loading...</div>
+  if (authLoading) return <div className={styles.loading}>Memuat...</div>
   if (!admin) return null
 
   return (
     <div className={styles.page}>
       <header className={styles.header}>
         <div>
-          <h1 className={styles.pageTitle}>Students Workspace</h1>
-          <p className={styles.pageSubtitle}>Monitor engagement, inspect learning traces, and manage student data.</p>
-        </div>
-        <div className={styles.headerActions}>
-          <button className={styles.exportBtn} onClick={() => handleExport('csv')} disabled={exportLoading}>
-            <FiDownload /> {exportLoading ? 'Exporting...' : 'Export CSV'}
-          </button>
-          <button className={styles.exportBtn} onClick={() => handleExport('json')} disabled={exportLoading}>
-            <FiDownload /> JSON
-          </button>
+          <h1 className={styles.pageTitle}>Ruang Kerja Siswa</h1>
+          <p className={styles.pageSubtitle}>Pantau keterlibatan, periksa jejak belajar, dan kelola data siswa.</p>
         </div>
       </header>
 
       <section className={styles.controlBar}>
         <label className={styles.searchInput}>
           <FiSearch />
-          <input type="text" placeholder="Search by email or name..." value={searchTerm} onChange={(e) => setSearchTerm(e.target.value)} />
+          <input type="text" placeholder="Cari berdasarkan email atau nama..." value={searchTerm} onChange={(e) => setSearchTerm(e.target.value)} />
         </label>
         <select className={styles.select} value={roleFilter} onChange={(e) => setRoleFilter(e.target.value as 'ALL' | 'USER' | 'ADMIN')}>
-          <option value="ALL">All Roles</option>
-          <option value="USER">Students</option>
-          <option value="ADMIN">Admins</option>
+          <option value="ALL">Semua Peran</option>
+          <option value="USER">Siswa</option>
+          <option value="ADMIN">Admin</option>
         </select>
         <select className={styles.select} value={sortBy} onChange={(e) => setSortBy(e.target.value as 'recent' | 'email' | 'engagement' | 'completion')}>
-          <option value="recent">Sort: Recent Activity</option>
-          <option value="engagement">Sort: Engagement</option>
-          <option value="completion">Sort: Completion</option>
-          <option value="email">Sort: Email A-Z</option>
+          <option value="recent">Urut: Aktivitas Terbaru</option>
+          <option value="engagement">Urut: Keterlibatan</option>
+          <option value="completion">Urut: Penyelesaian</option>
+          <option value="email">Urut: Email A-Z</option>
         </select>
       </section>
 
       <section className={styles.statGrid}>
         <article className={styles.statCard}>
           <span className={styles.statIcon}><FiUsers /></span>
-          <div><p className={styles.statLabel}>Total Students</p><h3>{studentUsers.length}</h3></div>
+          <div><p className={styles.statLabel}>Total Siswa</p><h3>{studentUsers.length}</h3></div>
         </article>
         <article className={styles.statCard}>
           <span className={`${styles.statIcon} ${styles.statIconGreen}`}><FiTrendingUp /></span>
-          <div><p className={styles.statLabel}>Active (2 Days)</p><h3>{activeCount}</h3></div>
+          <div><p className={styles.statLabel}>Aktif (2 Hari)</p><h3>{activeCount}</h3></div>
         </article>
         <article className={styles.statCard}>
           <span className={`${styles.statIcon} ${styles.statIconGray}`}><FiClock /></span>
-          <div><p className={styles.statLabel}>Idle (7+ Days)</p><h3>{idleCount}</h3></div>
+          <div><p className={styles.statLabel}>Tidak Aktif (7+ Hari)</p><h3>{idleCount}</h3></div>
         </article>
         <article className={styles.statCard}>
           <span className={`${styles.statIcon} ${styles.statIconOrange}`}><FiActivity /></span>
-          <div><p className={styles.statLabel}>Avg Engagement</p><h3>{avgEngagement}%</h3></div>
+          <div><p className={styles.statLabel}>Rata-rata Keterlibatan</p><h3>{avgEngagement}%</h3></div>
         </article>
       </section>
 
       {isLoading ? (
-        <div className={styles.loading}>Loading students...</div>
+        <div className={styles.loading}>Memuat data siswa...</div>
       ) : error ? (
         <div className={styles.error}><FiAlertCircle /> {error}</div>
       ) : (
         <section className={styles.workspace}>
           <aside className={styles.studentRail}>
             <div className={styles.railHeader}>
-              <h3>Student List</h3>
-              <span>{displayedUsers.length} records</span>
+              <h3>Daftar Siswa</h3>
+              <span>{displayedUsers.length} data</span>
             </div>
             {displayedUsers.length === 0 ? (
-              <p className={styles.noData}>No users matched your filter.</p>
+              <p className={styles.noData}>Tidak ada pengguna yang cocok dengan filter.</p>
             ) : (
               <div className={styles.studentList}>
                 {displayedUsers.map((u) => {
@@ -260,8 +229,8 @@ export default function AdminUsersPage() {
                     <article key={u.id} className={`${styles.studentCard} ${isActive ? styles.studentCardActive : ''}`} onClick={() => setSelectedUserId(u.id)}>
                       <div className={styles.studentCardTop}>
                         <div>
-                          <h4>{u.name !== 'Unknown' ? u.name : u.email}</h4>
-                          {u.name !== 'Unknown' && <span className={styles.emailSub}>{u.email}</span>}
+                          <h4>{u.name !== 'Unknown' && u.name !== 'Tidak Diketahui' ? u.name : u.email}</h4>
+                          {u.name !== 'Unknown' && u.name !== 'Tidak Diketahui' && <span className={styles.emailSub}>{u.email}</span>}
                         </div>
                         <div className={styles.badgeGroup}>
                           <span className={styles.stageBadge} style={{ color: stageConfig.color, background: stageConfig.bg }}>{stageConfig.label}</span>
@@ -270,7 +239,7 @@ export default function AdminUsersPage() {
                       </div>
                       <div className={styles.metaRow}>
                         <span className={`${styles.statusPill} ${styles[`status_${status.tone}`]}`}>{status.label}</span>
-                        <span>Joined {formatDate(u.createdAt)}</span>
+                        <span>Bergabung {formatDate(u.createdAt)}</span>
                       </div>
                       <div className={styles.progressRow}>
                         <div className={styles.miniProgress}>
@@ -279,32 +248,32 @@ export default function AdminUsersPage() {
                           <span className={styles.miniValue}>{u.engagementScore}%</span>
                         </div>
                         <div className={styles.miniProgress}>
-                          <span className={styles.miniLabel}>Comp</span>
+                          <span className={styles.miniLabel}>Komp</span>
                           <div className={styles.miniBar}><div className={styles.miniFillGreen} style={{ width: `${u.courseCompletionRate}%` }} /></div>
                           <span className={styles.miniValue}>{u.courseCompletionRate}%</span>
                         </div>
                       </div>
                       <div className={styles.countGrid}>
-                        <span title="Courses"><FiFileText /> {u.totalCourses}</span>
-                        <span title="Quizzes"><FiCheckSquare /> {u.totalQuizzes}</span>
-                        <span title="Journals"><FiBookOpen /> {u.totalJournals}</span>
-                        <span title="Transcripts"><FiMessageCircle /> {u.totalTranscripts}</span>
-                        <span title="Questions"><FiHelpCircle /> {u.totalAskQuestions}</span>
-                        <span title="Challenges"><FiTarget /> {u.totalChallenges}</span>
-                        <span title="Discussions"><FiZap /> {u.totalDiscussions}</span>
-                        <span title="Feedbacks"><FiStar /> {u.totalFeedbacks}</span>
+                        <span title="Kursus"><FiFileText /> {u.totalCourses}</span>
+                        <span title="Kuis"><FiCheckSquare /> {u.totalQuizzes}</span>
+                        <span title="Jurnal"><FiBookOpen /> {u.totalJournals}</span>
+                        <span title="Transkrip"><FiMessageCircle /> {u.totalTranscripts}</span>
+                        <span title="Pertanyaan"><FiHelpCircle /> {u.totalAskQuestions}</span>
+                        <span title="Tantangan"><FiTarget /> {u.totalChallenges}</span>
+                        <span title="Diskusi"><FiZap /> {u.totalDiscussions}</span>
+                        <span title="Umpan Balik"><FiStar /> {u.totalFeedbacks}</span>
                       </div>
                       <div className={styles.cardFooter}>
-                        <small>Last: {u.lastActivity || 'N/A'}</small>
+                        <small>Terakhir: {u.lastActivity || 'N/A'}</small>
                         <div className={styles.footerActions}>
-                          <button className={styles.viewDetailBtn} onClick={(e) => { e.stopPropagation(); router.push(`/admin/users/${u.id}`) }} title="View detail">
+                          <button className={styles.viewDetailBtn} onClick={(e) => { e.stopPropagation(); router.push(`/admin/siswa/${u.id}`) }} title="Lihat detail">
                             <FiExternalLink />
                           </button>
                           <button
                             className={`${styles.deleteBtn} ${u.role.toUpperCase() === 'ADMIN' ? styles.disabled : ''}`}
                             onClick={(e) => { e.stopPropagation(); if (u.role.toUpperCase() !== 'ADMIN') handleDelete(u.id, u.email) }}
                             disabled={u.role.toUpperCase() === 'ADMIN' || deleteInProgress === u.id}
-                            title="Delete user"
+                            title="Hapus pengguna"
                           >
                             {deleteInProgress === u.id ? '...' : <FiTrash2 />}
                           </button>
@@ -319,79 +288,79 @@ export default function AdminUsersPage() {
 
           <section className={styles.detailPanel}>
             {!selectedUser ? (
-              <div className={styles.emptyDetail}>Select a student to inspect activity.</div>
+              <div className={styles.emptyDetail}>Pilih siswa untuk memeriksa aktivitas.</div>
             ) : (
               <>
                 <header className={styles.detailHeader}>
                   <div>
-                    <h2>{selectedUser.name !== 'Unknown' ? selectedUser.name : selectedUser.email}</h2>
-                    <p>{selectedUser.name !== 'Unknown' ? `${selectedUser.email} · ` : ''}Role {selectedUser.role} · Joined {formatDate(selectedUser.createdAt)}</p>
+                    <h2>{selectedUser.name !== 'Unknown' && selectedUser.name !== 'Tidak Diketahui' ? selectedUser.name : selectedUser.email}</h2>
+                    <p>{selectedUser.name !== 'Unknown' && selectedUser.name !== 'Tidak Diketahui' ? `${selectedUser.email} · ` : ''}Peran {selectedUser.role} · Bergabung {formatDate(selectedUser.createdAt)}</p>
                   </div>
-                  <button className={styles.viewDetailFullBtn} onClick={() => router.push(`/admin/users/${selectedUser.id}`)}>
-                    <FiExternalLink /> Full Detail
+                  <button className={styles.viewDetailFullBtn} onClick={() => router.push(`/admin/siswa/${selectedUser.id}`)}>
+                    <FiExternalLink /> Detail Lengkap
                   </button>
                 </header>
 
                 <div className={styles.detailStatsGrid}>
-                  <div className={styles.detailStatItem}><span className={styles.detailStatNum}>{selectedUser.totalCourses}</span><span className={styles.detailStatLabel}>Courses</span></div>
-                  <div className={styles.detailStatItem}><span className={styles.detailStatNum}>{selectedUser.totalQuizzes}</span><span className={styles.detailStatLabel}>Quizzes</span></div>
-                  <div className={styles.detailStatItem}><span className={styles.detailStatNum}>{selectedUser.totalJournals}</span><span className={styles.detailStatLabel}>Journals</span></div>
-                  <div className={styles.detailStatItem}><span className={styles.detailStatNum}>{selectedUser.totalTranscripts}</span><span className={styles.detailStatLabel}>Transcripts</span></div>
-                  <div className={styles.detailStatItem}><span className={styles.detailStatNum}>{selectedUser.totalAskQuestions}</span><span className={styles.detailStatLabel}>Questions</span></div>
-                  <div className={styles.detailStatItem}><span className={styles.detailStatNum}>{selectedUser.totalChallenges}</span><span className={styles.detailStatLabel}>Challenges</span></div>
-                  <div className={styles.detailStatItem}><span className={styles.detailStatNum}>{selectedUser.totalDiscussions}</span><span className={styles.detailStatLabel}>Discussions</span></div>
-                  <div className={styles.detailStatItem}><span className={styles.detailStatNum}>{selectedUser.engagementScore}%</span><span className={styles.detailStatLabel}>Engagement</span></div>
+                  <div className={styles.detailStatItem}><span className={styles.detailStatNum}>{selectedUser.totalCourses}</span><span className={styles.detailStatLabel}>Kursus</span></div>
+                  <div className={styles.detailStatItem}><span className={styles.detailStatNum}>{selectedUser.totalQuizzes}</span><span className={styles.detailStatLabel}>Kuis</span></div>
+                  <div className={styles.detailStatItem}><span className={styles.detailStatNum}>{selectedUser.totalJournals}</span><span className={styles.detailStatLabel}>Jurnal</span></div>
+                  <div className={styles.detailStatItem}><span className={styles.detailStatNum}>{selectedUser.totalTranscripts}</span><span className={styles.detailStatLabel}>Transkrip</span></div>
+                  <div className={styles.detailStatItem}><span className={styles.detailStatNum}>{selectedUser.totalAskQuestions}</span><span className={styles.detailStatLabel}>Pertanyaan</span></div>
+                  <div className={styles.detailStatItem}><span className={styles.detailStatNum}>{selectedUser.totalChallenges}</span><span className={styles.detailStatLabel}>Tantangan</span></div>
+                  <div className={styles.detailStatItem}><span className={styles.detailStatNum}>{selectedUser.totalDiscussions}</span><span className={styles.detailStatLabel}>Diskusi</span></div>
+                  <div className={styles.detailStatItem}><span className={styles.detailStatNum}>{selectedUser.engagementScore}%</span><span className={styles.detailStatLabel}>Keterlibatan</span></div>
                 </div>
 
                 <div className={styles.tabs}>
-                  <button className={activeTab === 'overview' ? styles.tabActive : ''} onClick={() => setActiveTab('overview')}>Overview</button>
-                  <button className={activeTab === 'activity' ? styles.tabActive : ''} onClick={() => setActiveTab('activity')}>Timeline</button>
+                  <button className={activeTab === 'overview' ? styles.tabActive : ''} onClick={() => setActiveTab('overview')}>Ringkasan</button>
+                  <button className={activeTab === 'activity' ? styles.tabActive : ''} onClick={() => setActiveTab('activity')}>Lini Masa</button>
                 </div>
 
-                {activityLoading && <div className={styles.loading}>Loading activity...</div>}
+                {activityLoading && <div className={styles.loading}>Memuat aktivitas...</div>}
                 {activityError && <div className={styles.error}><FiAlertCircle /> {activityError}</div>}
 
                 {activeTab === 'overview' && !activityLoading && (
                   <div className={styles.activityGrid}>
                     <article className={styles.activityCard}>
-                      <h4>💬 Discussions</h4>
+                      <h4>Diskusi</h4>
                       <p className={styles.activityValue}>{activitySummary?.totals?.discussions ?? 0}</p>
-                      <p className={styles.activityLabel}>{activitySummary?.recentDiscussion ? `Last: ${new Date(activitySummary.recentDiscussion.updatedAt).toLocaleString()}` : 'No discussions'}</p>
+                      <p className={styles.activityLabel}>{activitySummary?.recentDiscussion ? `Terakhir: ${new Date(activitySummary.recentDiscussion.updatedAt).toLocaleString('id-ID')}` : 'Belum ada diskusi'}</p>
                     </article>
                     <article className={styles.activityCard}>
-                      <h4>📓 Journals</h4>
+                      <h4>Jurnal</h4>
                       <p className={styles.activityValue}>{activitySummary?.totals?.journals ?? 0}</p>
-                      <p className={styles.activityLabel}>{activitySummary?.recentJournal ? (activitySummary.recentJournal.title ?? 'Latest journal') : 'No journals'}</p>
+                      <p className={styles.activityLabel}>{activitySummary?.recentJournal ? (activitySummary.recentJournal.title ?? 'Jurnal terbaru') : 'Belum ada jurnal'}</p>
                     </article>
                     <article className={styles.activityCard}>
-                      <h4>📝 Transcripts</h4>
+                      <h4>Transkrip</h4>
                       <p className={styles.activityValue}>{activitySummary?.totals?.transcripts ?? 0}</p>
-                      <p className={styles.activityLabel}>{activitySummary?.recentTranscript ? (activitySummary.recentTranscript.title ?? 'Latest transcript') : 'No transcripts'}</p>
+                      <p className={styles.activityLabel}>{activitySummary?.recentTranscript ? (activitySummary.recentTranscript.title ?? 'Transkrip terbaru') : 'Belum ada transkrip'}</p>
                     </article>
                     <article className={styles.activityCard}>
-                      <h4>❓ Questions</h4>
+                      <h4>Pertanyaan</h4>
                       <p className={styles.activityValue}>{activitySummary?.totals?.askQuestions ?? 0}</p>
-                      <p className={styles.activityLabel}>{activitySummary?.recentAskQuestion ? activitySummary.recentAskQuestion.question.slice(0, 50) : 'No questions'}</p>
+                      <p className={styles.activityLabel}>{activitySummary?.recentAskQuestion ? activitySummary.recentAskQuestion.question.slice(0, 50) : 'Belum ada pertanyaan'}</p>
                     </article>
                     <article className={styles.activityCard}>
-                      <h4>🧩 Challenges</h4>
+                      <h4>Tantangan</h4>
                       <p className={styles.activityValue}>{activitySummary?.totals?.challenges ?? 0}</p>
-                      <p className={styles.activityLabel}>{activitySummary?.recentChallenge ? `Type: ${activitySummary.recentChallenge.challengeType ?? 'N/A'}` : 'No challenges'}</p>
+                      <p className={styles.activityLabel}>{activitySummary?.recentChallenge ? `Tipe: ${activitySummary.recentChallenge.challengeType ?? 'N/A'}` : 'Belum ada tantangan'}</p>
                     </article>
                     <article className={styles.activityCard}>
-                      <h4>✅ Quizzes</h4>
+                      <h4>Kuis</h4>
                       <p className={styles.activityValue}>{activitySummary?.totals?.quizzes ?? 0}</p>
-                      <p className={styles.activityLabel}>{activitySummary?.recentQuiz ? `Last: ${activitySummary.recentQuiz.isCorrect ? 'Correct ✓' : 'Incorrect ✗'}` : 'No quizzes'}</p>
+                      <p className={styles.activityLabel}>{activitySummary?.recentQuiz ? `Terakhir: ${activitySummary.recentQuiz.isCorrect ? 'Benar' : 'Salah'}` : 'Belum ada kuis'}</p>
                     </article>
                     <article className={styles.activityCard}>
-                      <h4>⭐ Feedback</h4>
+                      <h4>Umpan Balik</h4>
                       <p className={styles.activityValue}>{activitySummary?.totals?.feedbacks ?? 0}</p>
-                      <p className={styles.activityLabel}>{activitySummary?.recentFeedback ? `Rating: ${activitySummary.recentFeedback.rating ?? 'N/A'}` : 'No feedback'}</p>
+                      <p className={styles.activityLabel}>{activitySummary?.recentFeedback ? `Penilaian: ${activitySummary.recentFeedback.rating ?? 'N/A'}` : 'Belum ada umpan balik'}</p>
                     </article>
                     <article className={styles.activityCard}>
-                      <h4>📚 Courses</h4>
+                      <h4>Kursus</h4>
                       <p className={styles.activityValue}>{activitySummary?.totals?.courses ?? 0}</p>
-                      <p className={styles.activityLabel}>Completion: {selectedUser.courseCompletionRate}%</p>
+                      <p className={styles.activityLabel}>Penyelesaian: {selectedUser.courseCompletionRate}%</p>
                     </article>
                   </div>
                 )}
@@ -399,7 +368,7 @@ export default function AdminUsersPage() {
                 {activeTab === 'activity' && !activityLoading && (
                   <div className={styles.timelineWrap}>
                     {timelineEntries.length === 0 ? (
-                      <p className={styles.noData}>No recent activity available.</p>
+                      <p className={styles.noData}>Belum ada aktivitas terbaru.</p>
                     ) : (
                       <ul className={styles.timelineList}>
                         {timelineEntries.map((item, index) => (
@@ -409,7 +378,7 @@ export default function AdminUsersPage() {
                               <p>{item.title}</p>
                               {item.detail && <small>{item.detail}</small>}
                             </div>
-                            <time>{item.timestamp ? new Date(item.timestamp).toLocaleString() : 'N/A'}</time>
+                            <time>{item.timestamp ? new Date(item.timestamp).toLocaleString('id-ID') : 'N/A'}</time>
                           </li>
                         ))}
                       </ul>

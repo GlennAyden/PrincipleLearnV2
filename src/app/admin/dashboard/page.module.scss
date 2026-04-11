@@ -232,6 +232,20 @@
   p { font-size: 0.95rem; color: #059669; font-weight: 500; margin: 0; }
 }
 
+/* ── Quick Navigation Cards ── */
+.quickNav { display: grid; grid-template-columns: repeat(3, 1fr); gap: 14px; margin-bottom: 20px; }
+.quickNavCard {
+  display: flex; align-items: center; gap: 12px; padding: 16px 18px;
+  background: #fff; border: 1px solid #e2e8f0; border-radius: 12px;
+  cursor: pointer; transition: all 0.15s;
+  &:hover { box-shadow: 0 4px 12px rgba(0,0,0,0.06); border-color: #c7d2fe; }
+  strong { font-size: 0.88rem; color: #1e293b; display: block; }
+  p { font-size: 0.75rem; color: #94a3b8; margin: 2px 0 0; }
+  svg:last-child { margin-left: auto; color: #94a3b8; flex-shrink: 0; }
+}
+.quickNavIcon { font-size: 1.4rem; color: #6366f1; flex-shrink: 0; }
+@media (max-width: 768px) { .quickNav { grid-template-columns: 1fr; } }
+
 /* ── Bottom Row (legacy compat) ── */
 .bottomRow { display: grid; grid-template-columns: 2fr 1fr; gap: 16px;
   @media (max-width: 900px) { grid-template-columns: 1fr; }

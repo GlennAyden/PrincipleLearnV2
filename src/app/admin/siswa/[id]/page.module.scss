@@ -1,4 +1,4 @@
-/* src/app/admin/users/[id]/page.module.scss — Student Detail Page */
+/* src/app/admin/siswa/[id]/page.module.scss — Student Detail Page */
 
 .page {
   --bg-shell: #f0f2f5;
@@ -345,6 +345,187 @@
   -webkit-box-orient: vertical;
 }
 
+/* ─── Evolusi Prompt Section ─────────────────────────────────────── */
+
+.evolusiSection {
+  margin-top: 14px;
+}
+
+.evolusiSubtitle {
+  margin: 0 0 10px;
+  font-size: 0.95rem;
+  font-weight: 700;
+  color: var(--ink-1);
+}
+
+.evolusiDistribution {
+  background: var(--panel);
+  border: 1px solid var(--line);
+  border-radius: 16px;
+  padding: 16px;
+  margin-bottom: 14px;
+}
+
+.stageBarContainer {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.stageBarItem {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.stageBarLabel {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+
+.stageTag {
+  display: inline-flex;
+  padding: 0.16rem 0.5rem;
+  border-radius: 999px;
+  font-size: 0.7rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+}
+
+.stageCount {
+  font-size: 0.78rem;
+  font-weight: 600;
+  color: var(--ink-2);
+}
+
+.stageBarTrack {
+  height: 8px;
+  background: #f1f5f9;
+  border-radius: 999px;
+  overflow: hidden;
+}
+
+.stageBarFill {
+  height: 100%;
+  border-radius: 999px;
+  transition: width 0.4s ease;
+}
+
+.evolusiSessions {
+  background: var(--panel);
+  border: 1px solid var(--line);
+  border-radius: 16px;
+  padding: 16px;
+  margin-bottom: 14px;
+}
+
+.tableWrap {
+  overflow-x: auto;
+}
+
+.evolusiTable {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 0.85rem;
+}
+
+.evolusiTable th {
+  text-align: left;
+  padding: 8px 10px;
+  font-size: 0.72rem;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  color: var(--ink-2);
+  font-weight: 700;
+  border-bottom: 2px solid var(--line);
+  white-space: nowrap;
+}
+
+.evolusiTable td {
+  padding: 8px 10px;
+  border-bottom: 1px solid #edf2f7;
+  vertical-align: middle;
+}
+
+.evolusiTable tbody tr:hover {
+  background: #f8faff;
+}
+
+.evolusiTable tbody tr:last-child td {
+  border-bottom: 0;
+}
+
+.evolusiHistory {
+  background: var(--panel);
+  border: 1px solid var(--line);
+  border-radius: 16px;
+  padding: 16px;
+}
+
+.promptList {
+  display: flex;
+  flex-direction: column;
+  gap: 0;
+}
+
+.promptItem {
+  padding: 10px 0;
+  border-bottom: 1px solid #edf2f7;
+}
+
+.promptItem:last-child {
+  border-bottom: 0;
+}
+
+.promptMeta {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+  flex-wrap: wrap;
+}
+
+.promptSession {
+  font-size: 0.72rem;
+  font-weight: 600;
+  color: var(--ink-2);
+  background: #f1f5f9;
+  padding: 0.12rem 0.4rem;
+  border-radius: 6px;
+}
+
+.promptMeta time {
+  font-size: 0.72rem;
+  color: var(--ink-2);
+  margin-left: auto;
+}
+
+.promptText {
+  margin: 0.4rem 0 0;
+  font-size: 0.88rem;
+  line-height: 1.5;
+  color: var(--ink-1);
+}
+
+.microMarkers {
+  margin-top: 6px;
+  display: flex;
+  gap: 6px;
+  flex-wrap: wrap;
+}
+
+.markerChip {
+  display: inline-flex;
+  padding: 0.14rem 0.44rem;
+  border-radius: 6px;
+  font-size: 0.66rem;
+  font-weight: 600;
+  background: rgba(99, 102, 241, 0.08);
+  color: #6366f1;
+  letter-spacing: 0.02em;
+}
+
 /* ─── Courses Section ────────────────────────────────────────────── */
 
 .coursesSection {
@@ -528,5 +709,14 @@
 
   .progressCard {
     flex-wrap: wrap;
+  }
+
+  .evolusiTable {
+    font-size: 0.78rem;
+  }
+
+  .evolusiTable th,
+  .evolusiTable td {
+    padding: 6px 8px;
   }
 }

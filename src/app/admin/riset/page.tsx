@@ -4,7 +4,7 @@ import React, { useEffect, useState } from 'react'
 import { useRouter } from 'next/navigation'
 import {
     FiClipboard, FiUsers, FiLayers, FiBarChart2,
-    FiDownload, FiCalendar, FiTag, FiActivity
+    FiCalendar, FiTag, FiActivity, FiArrowRight
 } from 'react-icons/fi'
 import { useAdmin } from '@/hooks/useAdmin'
 import styles from './page.module.scss'
@@ -13,7 +13,7 @@ const StageHeatmapChart = dynamic(() => import('@/components/admin/ResearchChart
 const UserProgressionChart = dynamic(() => import('@/components/admin/ResearchChart').then(mod => ({ default: mod.UserProgressionChart })), { ssr: false })
 import type { ResearchAnalytics } from '@/types/research'
 
-export default function ResearchDashboard() {
+export default function RisetDashboard() {
     const router = useRouter()
     const { admin, loading: authLoading } = useAdmin()
     const [analytics, setAnalytics] = useState<ResearchAnalytics | null>(null)
@@ -31,7 +31,6 @@ export default function ResearchDashboard() {
             setLoading(true)
             setError(null)
 
-            // Single API call - analytics endpoint now provides all stats
             const res = await fetch('/api/admin/research/analytics', { credentials: 'include' })
             const data = await res.json()
 
@@ -68,7 +67,7 @@ export default function ResearchDashboard() {
                 <div>
                     <h2>
                         <span className={styles.headerIcon}><FiClipboard /></span>
-                        Research Dashboard
+                        Dashboard Riset
                     </h2>
                     <p className={styles.headerSub}>
                         Analisis perkembangan prompt dan indikator kognitif siswa
@@ -82,7 +81,7 @@ export default function ResearchDashboard() {
                 <div className={styles.loading}>Memuat data...</div>
             ) : (
                 <>
-                    {/* Stats Cards */}
+                    {/* KPI Cards */}
                     <div className={styles.statsGrid}>
                         <div className={`${styles.statCard} ${styles.statCardBlue}`}>
                             <div className={styles.statHeader}>
@@ -117,50 +116,6 @@ export default function ResearchDashboard() {
                         </div>
                     </div>
 
-                    {/* Quick Actions */}
-                    <div className={styles.actionsSection}>
-                        <h3 className={styles.sectionTitle}>
-                            <FiLayers /> Aksi Cepat
-                        </h3>
-                        <div className={styles.actionsGrid}>
-                            <div
-                                className={styles.actionCard}
-                                onClick={() => router.push('/admin/research/sessions')}
-                            >
-                                <div className={styles.actionIcon}><FiCalendar /></div>
-                                <div className={styles.actionLabel}>Sesi Pembelajaran</div>
-                                <div className={styles.actionDesc}>Kelola sesi longitudinal</div>
-                            </div>
-
-                            <div
-                                className={styles.actionCard}
-                                onClick={() => router.push('/admin/research/classifications')}
-                            >
-                                <div className={styles.actionIcon}><FiTag /></div>
-                                <div className={styles.actionLabel}>Klasifikasi Prompt</div>
-                                <div className={styles.actionDesc}>SCP, SRP, MQP, Reflektif</div>
-                            </div>
-
-                            <div
-                                className={styles.actionCard}
-                                onClick={() => router.push('/admin/research/indicators')}
-                            >
-                                <div className={styles.actionIcon}><FiBarChart2 /></div>
-                                <div className={styles.actionLabel}>Indikator Kognitif</div>
-                                <div className={styles.actionDesc}>CT & Critical Thinking</div>
-                            </div>
-
-                            <div
-                                className={styles.actionCard}
-                                onClick={() => router.push('/admin/research/export')}
-                            >
-                                <div className={styles.actionIcon}><FiDownload /></div>
-                                <div className={styles.actionLabel}>Export Data</div>
-                                <div className={styles.actionDesc}>JSON, CSV, SPSS</div>
-                            </div>
-                        </div>
-                    </div>
-
                     {/* Stage Distribution */}
                     <div className={styles.distributionSection}>
                         <h3 className={styles.sectionTitle}>
@@ -192,7 +147,7 @@ export default function ResearchDashboard() {
                             </div>
 
                             <div className={`${styles.stageCard} ${styles.stageREFLECTIVE}`}>
-                                <div className={styles.stageLabel}>Reflective</div>
+                                <div className={styles.stageLabel}>Reflektif</div>
                                 <div className={styles.stageValue}>{stageDistribution.REFLECTIVE}</div>
                                 <div className={styles.stagePercent}>
                                     {totalPrompts > 0 ? Math.round((stageDistribution.REFLECTIVE / totalPrompts) * 100) : 0}%
@@ -205,61 +160,105 @@ export default function ResearchDashboard() {
                     {analytics && (
                         <div className={styles.analyticsSection}>
                             <h3 className={styles.sectionTitle}>
-                                📊 Analytics & Progression
+                                <FiBarChart2 /> Analitik &amp; Progresi
                             </h3>
                             <div className={styles.chartsGrid}>
                                 <div className={styles.chartCard}>
-                                    <h4>Stage Heatmap (RM2)</h4>
+                                    <h4>Heatmap Tahap (RM2)</h4>
                                     <StageHeatmapChart data={analytics.stage_heatmap} />
                                 </div>
                                 <div className={styles.chartCard}>
-                                    <h4>User Progression (Top 10)</h4>
+                                    <h4>Progresi Pengguna (10 Teratas)</h4>
                                     <UserProgressionChart progression={analytics.user_progression} />
-                                </div>
-                            </div>
-                            <div className={styles.reliabilityCard}>
-                                <h4>Inter-Rater Reliability</h4>
-                                <div className={styles.reliabilityStats}>
-                                    <div>Kappa Prompt: {analytics.inter_rater_kappa.prompt_stage.toFixed(2)}</div>
-                                    <div>Kappa CT: {analytics.inter_rater_kappa.ct_indicators.toFixed(2)}</div>
-                                    <div>Status: <span className={styles.reliabilityStatus}>{analytics.inter_rater_kappa.reliability_status}</span></div>
                                 </div>
                             </div>
                         </div>
                     )}
 
+                    {/* Navigation Cards */}
+                    <div className={styles.navSection}>
+                        <h3 className={styles.sectionTitle}>
+                            <FiLayers /> Halaman Riset
+                        </h3>
+                        <div className={styles.navGrid}>
+                            <div
+                                className={styles.navCard}
+                                onClick={() => router.push('/admin/riset/prompt')}
+                            >
+                                <div className={styles.navIconWrap}>
+                                    <FiTag />
+                                </div>
+                                <div className={styles.navContent}>
+                                    <div className={styles.navLabel}>Evolusi Prompt (RM2)</div>
+                                    <div className={styles.navDesc}>
+                                        Kelola sesi pembelajaran dan klasifikasi tahap prompt siswa
+                                    </div>
+                                </div>
+                                <div className={styles.navArrow}><FiArrowRight /></div>
+                            </div>
+
+                            <div
+                                className={styles.navCard}
+                                onClick={() => router.push('/admin/riset/kognitif')}
+                            >
+                                <div className={styles.navIconWrap}>
+                                    <FiBarChart2 />
+                                </div>
+                                <div className={styles.navContent}>
+                                    <div className={styles.navLabel}>Indikator Kognitif (RM3)</div>
+                                    <div className={styles.navDesc}>
+                                        Penilaian indikator CT &amp; Critical Thinking dan matriks silang
+                                    </div>
+                                </div>
+                                <div className={styles.navArrow}><FiArrowRight /></div>
+                            </div>
+                        </div>
+                    </div>
+
+                    {/* Inter-Rater Reliability */}
+                    {analytics && (
+                        <div className={styles.reliabilityCard}>
+                            <h4>Reliabilitas Antar-Penilai</h4>
+                            <div className={styles.reliabilityStats}>
+                                <div>Kappa Prompt: {analytics.inter_rater_kappa.prompt_stage.toFixed(2)}</div>
+                                <div>Kappa CT: {analytics.inter_rater_kappa.ct_indicators.toFixed(2)}</div>
+                                <div>Status: <span className={styles.reliabilityStatus}>{analytics.inter_rater_kappa.reliability_status}</span></div>
+                            </div>
+                        </div>
+                    )}
+
                     {/* Panduan Tahap Prompt */}
-                    <div className={styles.recentSection}>
+                    <div className={styles.guideSection}>
                         <h3 className={styles.sectionTitle}>
                             <FiClipboard /> Panduan Tahap Prompt
                         </h3>
-                        <div className={styles.recentList}>
-                            <div className={styles.recentItem}>
-                                <div className={`${styles.recentIcon} ${styles.recentIconSession}`}>1</div>
-                                <div className={styles.recentContent}>
-                                    <div className={styles.recentTitle}>SCP (Simple Clarification Prompt)</div>
-                                    <div className={styles.recentMeta}>Pertanyaan tunggal, langsung, minim konteks masalah</div>
+                        <div className={styles.guideList}>
+                            <div className={styles.guideItem}>
+                                <div className={`${styles.guideIcon} ${styles.guideIconSCP}`}>1</div>
+                                <div className={styles.guideContent}>
+                                    <div className={styles.guideTitle}>SCP (Simple Clarification Prompt)</div>
+                                    <div className={styles.guideMeta}>Pertanyaan tunggal, langsung, minim konteks masalah</div>
                                 </div>
                             </div>
-                            <div className={styles.recentItem}>
-                                <div className={`${styles.recentIcon} ${styles.recentIconClassification}`}>2</div>
-                                <div className={styles.recentContent}>
-                                    <div className={styles.recentTitle}>SRP (Structured Reformulation Prompt)</div>
-                                    <div className={styles.recentMeta}>Prompt direformulasi setelah respons awal AI untuk memperjelas tujuan</div>
+                            <div className={styles.guideItem}>
+                                <div className={`${styles.guideIcon} ${styles.guideIconSRP}`}>2</div>
+                                <div className={styles.guideContent}>
+                                    <div className={styles.guideTitle}>SRP (Structured Reformulation Prompt)</div>
+                                    <div className={styles.guideMeta}>Prompt direformulasi setelah respons awal AI untuk memperjelas tujuan</div>
                                 </div>
                             </div>
-                            <div className={styles.recentItem}>
-                                <div className={`${styles.recentIcon} ${styles.recentIconIndicator}`}>3</div>
-                                <div className={styles.recentContent}>
-                                    <div className={styles.recentTitle}>MQP (Multi-Question Prompt)</div>
-                                    <div className={styles.recentMeta}>Pertanyaan berlapis dan iteratif dalam satu rangkaian penyelesaian masalah</div>
+                            <div className={styles.guideItem}>
+                                <div className={`${styles.guideIcon} ${styles.guideIconMQP}`}>3</div>
+                                <div className={styles.guideContent}>
+                                    <div className={styles.guideTitle}>MQP (Multi-Question Prompt)</div>
+                                    <div className={styles.guideMeta}>Pertanyaan berlapis dan iteratif dalam satu rangkaian penyelesaian masalah</div>
                                 </div>
                             </div>
-                            <div className={styles.recentItem}>
-                                <div className={`${styles.recentIcon} ${styles.recentIconIndicator}`}>4</div>
-                                <div className={styles.recentContent}>
-                                    <div className={styles.recentTitle}>Reflective Prompt</div>
-                                    <div className={styles.recentMeta}>Prompt menilai kualitas solusi, membandingkan alternatif, dan menjustifikasi keputusan</div>
+                            <div className={styles.guideItem}>
+                                <div className={`${styles.guideIcon} ${styles.guideIconREF}`}>4</div>
+                                <div className={styles.guideContent}>
+                                    <div className={styles.guideTitle}>Reflective Prompt</div>
+                                    <div className={styles.guideMeta}>Prompt menilai kualitas solusi, membandingkan alternatif, dan menjustifikasi keputusan</div>
                                 </div>
                             </div>
                         </div>

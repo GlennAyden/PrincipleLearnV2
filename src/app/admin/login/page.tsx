@@ -49,7 +49,7 @@ export default function AdminLoginPage() {
       
     } catch (err: unknown) {
       console.error('[Admin Login] Login error:', err);
-      setError(err instanceof Error ? err.message : 'Login failed. Please check your credentials.');
+      setError(err instanceof Error ? err.message : 'Gagal masuk. Periksa kembali email dan kata sandi Anda.');
     } finally {
       setLoading(false);
     }
@@ -58,7 +58,7 @@ export default function AdminLoginPage() {
   return (
     <div className={styles.container}>
       <form className={styles.form} onSubmit={handleSubmit}>
-        <h1 className={styles.title}>Admin Login</h1>
+        <h1 className={styles.title}>Login Admin</h1>
 
         {error && <div className={styles.error}>{error}</div>}
 
@@ -75,11 +75,11 @@ export default function AdminLoginPage() {
         </div>
 
         <div className={styles.formGroup}>
-          <label className={styles.label}>Password</label>
+          <label className={styles.label}>Kata Sandi</label>
           <input
             type="password"
             className={styles.input}
-            placeholder="Enter your password"
+            placeholder="Masukkan kata sandi"
             value={password}
             onChange={(e) => setPassword(e.target.value)}
             required
@@ -91,7 +91,7 @@ export default function AdminLoginPage() {
           className={styles.button}
           disabled={loading}
         >
-          {loading ? 'Logging in...' : 'Login'}
+          {loading ? 'Sedang masuk...' : 'Masuk'}
         </button>
       </form>
     </div>

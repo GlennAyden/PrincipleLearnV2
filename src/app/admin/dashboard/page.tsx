@@ -12,7 +12,7 @@ import {
   FiUsers, FiBook, FiCheckSquare, FiTarget, FiMessageCircle,
   FiTrendingUp, FiFileText, FiHelpCircle, FiStar, FiClock,
   FiRefreshCw, FiAlertTriangle, FiActivity, FiShield, FiGrid,
-  FiEdit3, FiDatabase, FiArrowRight,
+  FiEdit3, FiDatabase, FiArrowRight, FiClipboard,
 } from 'react-icons/fi'
 import { useRouter } from 'next/navigation'
 import { useAdmin } from '@/hooks/useAdmin'
@@ -33,19 +33,17 @@ const ACTIVITY_COLORS: Record<string, string> = {
   journal: '#8b5cf6', transcript: '#06b6d4', feedback: '#f97316', discussion: '#10b981',
 }
 const ACTIVITY_LABELS: Record<string, string> = {
-  course: 'Course', ask: 'Ask Question', challenge: 'Challenge', quiz: 'Quiz',
-  journal: 'Journal', transcript: 'Transcript', feedback: 'Feedback', discussion: 'Discussion',
+  course: 'Kursus', ask: 'Tanya Jawab', challenge: 'Tantangan', quiz: 'Kuis',
+  journal: 'Jurnal', transcript: 'Transkrip', feedback: 'Umpan Balik', discussion: 'Diskusi',
 }
 
 const TABS: { id: DashboardTab; label: string; icon: React.ReactNode }[] = [
-  { id: 'overview', label: 'Overview', icon: <FiGrid /> },
-  { id: 'students', label: 'Students', icon: <FiUsers /> },
-  { id: 'activity', label: 'Activity', icon: <FiActivity /> },
-  { id: 'system', label: 'System Health', icon: <FiShield /> },
+  { id: 'overview', label: 'Ringkasan', icon: <FiGrid /> },
+  { id: 'system', label: 'Kesehatan Sistem', icon: <FiShield /> },
 ]
 const TIME_RANGES: { value: TimeRange; label: string }[] = [
-  { value: '7d', label: '7 Days' }, { value: '30d', label: '30 Days' },
-  { value: '90d', label: '90 Days' }, { value: 'all', label: 'All Time' },
+  { value: '7d', label: '7 Hari' }, { value: '30d', label: '30 Hari' },
+  { value: '90d', label: '90 Hari' }, { value: 'all', label: 'Semua' },
 ]
 
 function formatTime(ts: string): string {
@@ -53,21 +51,13 @@ function formatTime(ts: string): string {
   if (isNaN(d.getTime())) return '—'
   const ms = Date.now() - d.getTime()
   const mins = Math.floor(ms / 60000)
-  if (mins < 1) return 'just now'
-  if (mins < 60) return `${mins}m ago`
+  if (mins < 1) return 'baru saja'
+  if (mins < 60) return `${mins} menit lalu`
   const hrs = Math.floor(mins / 60)
-  if (hrs < 24) return `${hrs}h ago`
+  if (hrs < 24) return `${hrs} jam lalu`
   const days = Math.floor(hrs / 24)
-  if (days < 7) return `${days}d ago`
+  if (days < 7) return `${days} hari lalu`
   return d.toLocaleDateString('id-ID', { day: 'numeric', month: 'short' })
-}
-
-function stageClass(stage: string): string {
-  if (stage === 'SCP') return styles.stageSCP
-  if (stage === 'SRP') return styles.stageSRP
-  if (stage === 'MQP') return styles.stageMQP
-  if (stage === 'Reflektif' || stage === 'REFLECTIVE') return styles.stageReflektif
-  return styles.stageNA
 }
 
 export default function AdminDashboardPage() {
@@ -78,7 +68,7 @@ export default function AdminDashboardPage() {
   const [kpi, setKpi] = useState<DashboardKPI | null>(null)
   const [rm2, setRm2] = useState<RM2Data | null>(null)
   const [rm3, setRm3] = useState<RM3Data | null>(null)
-  const [students, setStudents] = useState<StudentRow[]>([])
+  const [, setStudents] = useState<StudentRow[]>([])
   const [recentActivity, setRecentActivity] = useState<ActivityItem[]>([])
   const [systemHealth, setSystemHealth] = useState<SystemHealth | null>(null)
   const [meta, setMeta] = useState<{ generatedAt: string; queryTimeMs: number } | null>(null)
@@ -117,7 +107,7 @@ export default function AdminDashboardPage() {
   useEffect(() => { if (!authLoading && admin) fetchDashboard() }, [authLoading, admin, fetchDashboard])
   useEffect(() => { if (!authLoading && admin && activeTab === 'system') fetchSystemHealth() }, [authLoading, admin, activeTab, fetchSystemHealth])
 
-  if (authLoading) return <div className={styles.loadingScreen}>Loading...</div>
+  if (authLoading) return <div className={styles.loadingScreen}>Memuat...</div>
 
   const stageData = rm2 ? Object.entries(rm2.stages).map(([s, c]) => ({
     name: s, fullName: STAGE_LABELS[s] || s, count: c,
@@ -137,12 +127,12 @@ export default function AdminDashboardPage() {
     <div className={styles.page}>
       <header className={styles.header}>
         <div>
-          <h1 className={styles.title}>Research Overview</h1>
+          <h1 className={styles.title}>Ringkasan Riset</h1>
           <p className={styles.subtitle}>RM2 (Prompt Evolution) &amp; RM3 (Critical Thinking) Dashboard</p>
         </div>
         <div className={styles.headerMeta}>
           {meta && <span className={styles.queryTime}>{meta.queryTimeMs}ms</span>}
-          <button className={styles.refreshBtn} onClick={() => { fetchDashboard(); if (activeTab === 'system') fetchSystemHealth() }} disabled={loading} title="Refresh">
+          <button className={styles.refreshBtn} onClick={() => { fetchDashboard(); if (activeTab === 'system') fetchSystemHealth() }} disabled={loading} title="Perbarui">
             <FiRefreshCw className={loading ? styles.spinning : ''} />
           </button>
           <span className={styles.adminBadge}>{admin?.email}</span>
@@ -166,40 +156,40 @@ export default function AdminDashboardPage() {
         </div>
       </nav>
 
-      {error && <div className={styles.errorBanner}><p>⚠️ {error}</p><button onClick={fetchDashboard}>Retry</button></div>}
+      {error && <div className={styles.errorBanner}><p>⚠️ {error}</p><button onClick={fetchDashboard}>Coba Lagi</button></div>}
 
-      {loading ? <div className={styles.loadingScreen}>Loading dashboard data...</div> : (
+      {loading ? <div className={styles.loadingScreen}>Memuat data dashboard...</div> : (
         <>
           {/* ═══ OVERVIEW TAB ═══ */}
           {activeTab === 'overview' && (
             <>
               <section className={styles.kpiGrid}>
-                <div className={`${styles.kpiCard} ${styles.kpiIndigo}`}><div className={styles.kpiIcon}><FiUsers /></div><div className={styles.kpiBody}><span className={styles.kpiValue}>{kpi?.activeStudents || 0}</span><span className={styles.kpiLabel}>Active Students</span></div></div>
-                <div className={`${styles.kpiCard} ${styles.kpiBlue}`}><div className={styles.kpiIcon}><FiBook /></div><div className={styles.kpiBody}><span className={styles.kpiValue}>{kpi?.totalCourses || 0}</span><span className={styles.kpiLabel}>Total Courses</span></div></div>
-                <div className={`${styles.kpiCard} ${styles.kpiGreen}`}><div className={styles.kpiIcon}><FiCheckSquare /></div><div className={styles.kpiBody}><span className={styles.kpiValue}>{kpi?.quizAccuracy || 0}%</span><span className={styles.kpiLabel}>Quiz Accuracy</span></div></div>
-                <div className={`${styles.kpiCard} ${styles.kpiAmber}`}><div className={styles.kpiIcon}><FiTarget /></div><div className={styles.kpiBody}><span className={styles.kpiValue}>{kpi?.ctCoverageRate || 0}%</span><span className={styles.kpiLabel}>CT Coverage</span></div></div>
-                <div className={`${styles.kpiCard} ${styles.kpiPurple}`}><div className={styles.kpiIcon}><FiMessageCircle /></div><div className={styles.kpiBody}><span className={styles.kpiValue}>{kpi?.totalDiscussions || 0}</span><span className={styles.kpiLabel}>Discussions</span></div></div>
-                <div className={`${styles.kpiCard} ${styles.kpiRose}`}><div className={styles.kpiIcon}><FiTrendingUp /></div><div className={styles.kpiBody}><span className={styles.kpiValue}>{rm2?.totalPrompts || 0}</span><span className={styles.kpiLabel}>Total Prompts</span></div></div>
-                <div className={`${styles.kpiCard} ${styles.kpiCyan}`}><div className={styles.kpiIcon}><FiHelpCircle /></div><div className={styles.kpiBody}><span className={styles.kpiValue}>{kpi?.totalAskQuestions || 0}</span><span className={styles.kpiLabel}>Ask Questions</span></div></div>
+                <div className={`${styles.kpiCard} ${styles.kpiIndigo}`}><div className={styles.kpiIcon}><FiUsers /></div><div className={styles.kpiBody}><span className={styles.kpiValue}>{kpi?.activeStudents || 0}</span><span className={styles.kpiLabel}>Siswa Aktif</span></div></div>
+                <div className={`${styles.kpiCard} ${styles.kpiBlue}`}><div className={styles.kpiIcon}><FiBook /></div><div className={styles.kpiBody}><span className={styles.kpiValue}>{kpi?.totalCourses || 0}</span><span className={styles.kpiLabel}>Total Kursus</span></div></div>
+                <div className={`${styles.kpiCard} ${styles.kpiGreen}`}><div className={styles.kpiIcon}><FiCheckSquare /></div><div className={styles.kpiBody}><span className={styles.kpiValue}>{kpi?.quizAccuracy || 0}%</span><span className={styles.kpiLabel}>Akurasi Kuis</span></div></div>
+                <div className={`${styles.kpiCard} ${styles.kpiAmber}`}><div className={styles.kpiIcon}><FiTarget /></div><div className={styles.kpiBody}><span className={styles.kpiValue}>{kpi?.ctCoverageRate || 0}%</span><span className={styles.kpiLabel}>Cakupan CT</span></div></div>
+                <div className={`${styles.kpiCard} ${styles.kpiPurple}`}><div className={styles.kpiIcon}><FiMessageCircle /></div><div className={styles.kpiBody}><span className={styles.kpiValue}>{kpi?.totalDiscussions || 0}</span><span className={styles.kpiLabel}>Diskusi</span></div></div>
+                <div className={`${styles.kpiCard} ${styles.kpiRose}`}><div className={styles.kpiIcon}><FiTrendingUp /></div><div className={styles.kpiBody}><span className={styles.kpiValue}>{rm2?.totalPrompts || 0}</span><span className={styles.kpiLabel}>Total Prompt</span></div></div>
+                <div className={`${styles.kpiCard} ${styles.kpiCyan}`}><div className={styles.kpiIcon}><FiHelpCircle /></div><div className={styles.kpiBody}><span className={styles.kpiValue}>{kpi?.totalAskQuestions || 0}</span><span className={styles.kpiLabel}>Tanya Jawab</span></div></div>
                 <div className={`${styles.kpiCard} ${styles.kpiOrange}`}><div className={styles.kpiIcon}><FiStar /></div><div className={styles.kpiBody}><span className={styles.kpiValue}>{kpi?.avgRating || 0}/5</span><span className={styles.kpiLabel}>Rating ({kpi?.totalFeedbacks || 0})</span></div></div>
-                <div className={`${styles.kpiCard} ${styles.kpiTeal}`}><div className={styles.kpiIcon}><FiEdit3 /></div><div className={styles.kpiBody}><span className={styles.kpiValue}>{kpi?.totalJournals || 0}</span><span className={styles.kpiLabel}>Journals</span></div></div>
-                <div className={`${styles.kpiCard} ${styles.kpiSlate}`}><div className={styles.kpiIcon}><FiTarget /></div><div className={styles.kpiBody}><span className={styles.kpiValue}>{kpi?.totalChallenges || 0}</span><span className={styles.kpiLabel}>Challenges</span></div></div>
-                <div className={`${styles.kpiCard} ${styles.kpiIndigo}`}><div className={styles.kpiIcon}><FiFileText /></div><div className={styles.kpiBody}><span className={styles.kpiValue}>{kpi?.totalTranscripts || 0}</span><span className={styles.kpiLabel}>Transcripts</span></div></div>
-                <div className={`${styles.kpiCard} ${styles.kpiBlue}`}><div className={styles.kpiIcon}><FiDatabase /></div><div className={styles.kpiBody}><span className={styles.kpiValue}>{kpi?.totalLearningProfiles || 0}</span><span className={styles.kpiLabel}>Learning Profiles</span></div></div>
-                <div className={`${styles.kpiCard} ${styles.kpiGreen}`}><div className={styles.kpiIcon}><FiTrendingUp /></div><div className={styles.kpiBody}><span className={styles.kpiValue}>{kpi?.onboardingCompletionRate || 0}%</span><span className={styles.kpiLabel}>Onboarding Rate</span></div></div>
+                <div className={`${styles.kpiCard} ${styles.kpiTeal}`}><div className={styles.kpiIcon}><FiEdit3 /></div><div className={styles.kpiBody}><span className={styles.kpiValue}>{kpi?.totalJournals || 0}</span><span className={styles.kpiLabel}>Jurnal</span></div></div>
+                <div className={`${styles.kpiCard} ${styles.kpiSlate}`}><div className={styles.kpiIcon}><FiTarget /></div><div className={styles.kpiBody}><span className={styles.kpiValue}>{kpi?.totalChallenges || 0}</span><span className={styles.kpiLabel}>Tantangan</span></div></div>
+                <div className={`${styles.kpiCard} ${styles.kpiIndigo}`}><div className={styles.kpiIcon}><FiFileText /></div><div className={styles.kpiBody}><span className={styles.kpiValue}>{kpi?.totalTranscripts || 0}</span><span className={styles.kpiLabel}>Transkrip</span></div></div>
+                <div className={`${styles.kpiCard} ${styles.kpiBlue}`}><div className={styles.kpiIcon}><FiDatabase /></div><div className={styles.kpiBody}><span className={styles.kpiValue}>{kpi?.totalLearningProfiles || 0}</span><span className={styles.kpiLabel}>Profil Belajar</span></div></div>
+                <div className={`${styles.kpiCard} ${styles.kpiGreen}`}><div className={styles.kpiIcon}><FiTrendingUp /></div><div className={styles.kpiBody}><span className={styles.kpiValue}>{kpi?.onboardingCompletionRate || 0}%</span><span className={styles.kpiLabel}>Tingkat Onboarding</span></div></div>
               </section>
 
               {rm2 && (
                 <div className={styles.researchBadgeRow}>
                   <span className={`${styles.researchBadge} ${rm2.hasResearchData ? styles.researchActive : styles.researchFallback}`}>
-                    <FiDatabase /> {rm2.hasResearchData ? 'RM2: Research data' : 'RM2: Heuristic fallback'}
+                    <FiDatabase /> {rm2.hasResearchData ? 'RM2: Data riset' : 'RM2: Fallback heuristik'}
                   </span>
                   {rm3 && (
                     <span className={`${styles.researchBadge} ${rm3.hasResearchData ? styles.researchActive : styles.researchFallback}`}>
-                      <FiDatabase /> {rm3.hasResearchData ? 'RM3: Research data' : 'RM3: Heuristic fallback'}
+                      <FiDatabase /> {rm3.hasResearchData ? 'RM3: Data riset' : 'RM3: Fallback heuristik'}
                     </span>
                   )}
-                  {rm2.avgStageScore > 0 && <span className={styles.avgScoreBadge}>Avg Score: {rm2.avgStageScore}/4</span>}
+                  {rm2.avgStageScore > 0 && <span className={styles.avgScoreBadge}>Skor Rata-rata: {rm2.avgStageScore}/4</span>}
                 </div>
               )}
 
@@ -214,7 +204,7 @@ export default function AdminDashboardPage() {
                             <CartesianGrid strokeDasharray="3 3" stroke="#e2e8f0" />
                             <XAxis dataKey="name" fontSize={13} fontWeight={600} />
                             <YAxis fontSize={12} />
-                            <Tooltip formatter={(v) => [v, 'Count']} labelFormatter={(l) => STAGE_LABELS[l as string] || l} />
+                            <Tooltip formatter={(v) => [v, 'Jumlah']} labelFormatter={(l) => STAGE_LABELS[l as string] || l} />
                             <Bar dataKey="count" name="Prompts" radius={[6, 6, 0, 0]}>
                               {stageData.map(e => <Cell key={e.name} fill={STAGE_COLORS[e.name] || '#94a3b8'} />)}
                             </Bar>
@@ -230,7 +220,7 @@ export default function AdminDashboardPage() {
                           ))}
                         </div>
                       </>
-                    ) : <p className={styles.emptyChart}>No prompt data yet</p>}
+                    ) : <p className={styles.emptyChart}>Belum ada data prompt</p>}
                   </div>
                 </div>
 
@@ -240,8 +230,8 @@ export default function AdminDashboardPage() {
                     {rm3?.hasResearchData && rm3.avgCTScore !== undefined ? (
                       <>
                         <div className={styles.ctScores}>
-                          <div className={styles.ctScoreCard}><span className={styles.ctScoreValue}>{rm3.avgCTScore}</span><span className={styles.ctScoreMax}>/12</span><span className={styles.ctScoreLabel}>CT Score</span></div>
-                          {rm3.avgCThScore !== undefined && <div className={styles.ctScoreCard}><span className={styles.ctScoreValue}>{rm3.avgCThScore}</span><span className={styles.ctScoreMax}>/12</span><span className={styles.ctScoreLabel}>CTh Score</span></div>}
+                          <div className={styles.ctScoreCard}><span className={styles.ctScoreValue}>{rm3.avgCTScore}</span><span className={styles.ctScoreMax}>/12</span><span className={styles.ctScoreLabel}>Skor CT</span></div>
+                          {rm3.avgCThScore !== undefined && <div className={styles.ctScoreCard}><span className={styles.ctScoreValue}>{rm3.avgCThScore}</span><span className={styles.ctScoreMax}>/12</span><span className={styles.ctScoreLabel}>Skor CTh</span></div>}
                         </div>
                         {ctRadar && (
                           <ResponsiveContainer width="100%" height={200}>
@@ -259,17 +249,17 @@ export default function AdminDashboardPage() {
                         <div className={styles.ctMetrics}>
                           <div className={styles.ctMetricCard}>
                             <div className={styles.ctRing} style={{ background: `conic-gradient(#6366f1 ${rm3?.quizAccuracy || 0}%, #e2e8f0 0%)` }}><span>{rm3?.quizAccuracy || 0}%</span></div>
-                            <span className={styles.ctLabel}>Quiz Accuracy</span>
+                            <span className={styles.ctLabel}>Akurasi Kuis</span>
                           </div>
                           <div className={styles.ctMetricCard}>
                             <div className={styles.ctRing} style={{ background: `conic-gradient(#10b981 ${rm3?.ctCoverageRate || 0}%, #e2e8f0 0%)` }}><span>{rm3?.ctCoverageRate || 0}%</span></div>
-                            <span className={styles.ctLabel}>CT Coverage</span>
-                            <small>{rm3?.coveredGoals || 0}/{rm3?.totalGoals || 0} goals</small>
+                            <span className={styles.ctLabel}>Cakupan CT</span>
+                            <small>{rm3?.coveredGoals || 0}/{rm3?.totalGoals || 0} tujuan</small>
                           </div>
                         </div>
                         <div className={styles.ctStats}>
-                          <div className={styles.ctStatItem}><FiTarget className={styles.ctStatIcon} /><div><strong>{kpi?.totalChallenges || 0}</strong><span>Challenges</span></div></div>
-                          <div className={styles.ctStatItem}><FiFileText className={styles.ctStatIcon} /><div><strong>{kpi?.totalJournals || 0}</strong><span>Journals</span></div></div>
+                          <div className={styles.ctStatItem}><FiTarget className={styles.ctStatIcon} /><div><strong>{kpi?.totalChallenges || 0}</strong><span>Tantangan</span></div></div>
+                          <div className={styles.ctStatItem}><FiFileText className={styles.ctStatIcon} /><div><strong>{kpi?.totalJournals || 0}</strong><span>Jurnal</span></div></div>
                           <div className={styles.ctStatItem}><FiStar className={styles.ctStatIcon} /><div><strong>{kpi?.avgRating || 0}/5</strong><span>Rating</span></div></div>
                         </div>
                       </>
@@ -291,85 +281,65 @@ export default function AdminDashboardPage() {
             </>
           )}
 
-          {/* ═══ STUDENTS TAB ═══ */}
-          {activeTab === 'students' && (
-            <section className={styles.studentsTab}>
-              <div className={styles.tablePanelHeader}>
-                <h2>👥 Student Summary</h2>
-                <div className={styles.tableMeta}>
-                  <span>{students.length} students</span>
-                  <button className={styles.viewAllBtn} onClick={() => router.push('/admin/users')}>View Details <FiArrowRight /></button>
+          {/* ═══ QUICK NAVIGATION + RECENT ACTIVITY (on overview) ═══ */}
+          {activeTab === 'overview' && (
+            <>
+              <section className={styles.quickNav}>
+                <div className={styles.quickNavCard} onClick={() => router.push('/admin/siswa')}>
+                  <FiUsers className={styles.quickNavIcon} />
+                  <div><strong>Siswa</strong><p>Kelola dan inspeksi siswa</p></div>
+                  <FiArrowRight />
                 </div>
-              </div>
-              <div className={styles.tableWrap}>
-                <table className={styles.table}>
-                  <thead><tr><th>Student</th><th>Stage</th><th>Courses</th><th>Ask Q</th><th>Quiz Acc.</th><th>Challenges</th><th>Discussions</th><th>Journals</th><th>Last Active</th></tr></thead>
-                  <tbody>
-                    {students.length === 0 ? (
-                      <tr><td colSpan={9} className={styles.emptyRow}>No students yet</td></tr>
-                    ) : students.map(s => (
-                      <tr key={s.id} className={styles.studentRow} onClick={() => router.push('/admin/users')}>
-                        <td className={styles.emailCell}>{s.email}</td>
-                        <td><span className={`${styles.stageBadge} ${stageClass(s.promptStage)}`}>{s.promptStage}</span></td>
-                        <td>{s.courses}</td>
-                        <td>{s.askQuestions || 0}</td>
-                        <td><span className={`${styles.accuracyBadge} ${s.quizAccuracy >= 70 ? styles.accGood : s.quizAccuracy >= 40 ? styles.accMedium : styles.accLow}`}>{s.quizAccuracy}%</span></td>
-                        <td>{s.challenges}</td>
-                        <td>{s.discussions}</td>
-                        <td>{s.journals}</td>
-                        <td className={styles.timeCell}>{s.lastActivity ? formatTime(s.lastActivity) : '—'}</td>
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
-              </div>
-            </section>
-          )}
+                <div className={styles.quickNavCard} onClick={() => router.push('/admin/aktivitas')}>
+                  <FiActivity className={styles.quickNavIcon} />
+                  <div><strong>Aktivitas</strong><p>Lihat log interaksi belajar</p></div>
+                  <FiArrowRight />
+                </div>
+                <div className={styles.quickNavCard} onClick={() => router.push('/admin/riset')}>
+                  <FiClipboard className={styles.quickNavIcon} />
+                  <div><strong>Riset</strong><p>Analisis RM2 & RM3</p></div>
+                  <FiArrowRight />
+                </div>
+              </section>
 
-          {/* ═══ ACTIVITY TAB ═══ */}
-          {activeTab === 'activity' && (
-            <section className={styles.activityTab}>
-              <div className={styles.activityHeader}><h2>🕐 Recent Activity</h2><span className={styles.activityCount}>{recentActivity.length} items</span></div>
-              <div className={styles.activityLegend}>
-                {Object.entries(ACTIVITY_LABELS).map(([type, label]) => (
-                  <div key={type} className={styles.activityLegendItem}><span className={styles.activityLegendDot} style={{ background: ACTIVITY_COLORS[type] }} /><span>{label}</span></div>
-                ))}
-              </div>
-              <div className={styles.activityList}>
-                {recentActivity.length === 0 ? <p className={styles.emptyActivity}>No recent activity</p> : recentActivity.map((item, i) => (
-                  <div key={i} className={styles.activityItem}>
-                    <div className={styles.activityDot} style={{ background: ACTIVITY_COLORS[item.type] || '#94a3b8' }}>{ACTIVITY_ICONS[item.type] || <FiClock />}</div>
-                    <div className={styles.activityContent}>
-                      <span className={styles.activityEmail}>{item.email}</span>
-                      <span className={styles.activityDetail}>{item.detail || item.type}</span>
+              <section className={styles.activityTab}>
+                <div className={styles.activityHeader}><h2>🕐 Aktivitas Terbaru</h2><span className={styles.activityCount}>{recentActivity.length} item</span></div>
+                <div className={styles.activityList}>
+                  {recentActivity.length === 0 ? <p className={styles.emptyActivity}>Belum ada aktivitas</p> : recentActivity.slice(0, 10).map((item, i) => (
+                    <div key={i} className={styles.activityItem}>
+                      <div className={styles.activityDot} style={{ background: ACTIVITY_COLORS[item.type] || '#94a3b8' }}>{ACTIVITY_ICONS[item.type] || <FiClock />}</div>
+                      <div className={styles.activityContent}>
+                        <span className={styles.activityEmail}>{item.email}</span>
+                        <span className={styles.activityDetail}>{item.detail || item.type}</span>
+                      </div>
+                      <div className={styles.activityRight}>
+                        <span className={styles.activityTypeBadge} style={{ color: ACTIVITY_COLORS[item.type] }}>{ACTIVITY_LABELS[item.type] || item.type}</span>
+                        <span className={styles.activityTime}>{formatTime(item.timestamp)}</span>
+                      </div>
                     </div>
-                    <div className={styles.activityRight}>
-                      <span className={styles.activityTypeBadge} style={{ color: ACTIVITY_COLORS[item.type] }}>{ACTIVITY_LABELS[item.type] || item.type}</span>
-                      <span className={styles.activityTime}>{formatTime(item.timestamp)}</span>
-                    </div>
-                  </div>
-                ))}
-              </div>
-            </section>
+                  ))}
+                </div>
+              </section>
+            </>
           )}
 
           {/* ═══ SYSTEM HEALTH TAB ═══ */}
           {activeTab === 'system' && (
             <section className={styles.systemTab}>
               <div className={styles.systemHeader}>
-                <h2>🛡️ System Health</h2>
-                <button className={styles.refreshBtn} onClick={fetchSystemHealth}><FiRefreshCw /> Refresh</button>
+                <h2>🛡️ Kesehatan Sistem</h2>
+                <button className={styles.refreshBtn} onClick={fetchSystemHealth}><FiRefreshCw /> Perbarui</button>
               </div>
-              {!systemHealth ? <div className={styles.loadingScreen}>Loading system health...</div> : (
+              {!systemHealth ? <div className={styles.loadingScreen}>Memuat kesehatan sistem...</div> : (
                 <>
                   <div className={styles.systemKpiRow}>
-                    <div className={styles.systemKpiCard}><span className={styles.systemKpiValue}>{systemHealth.totalRequests}</span><span className={styles.systemKpiLabel}>Total Requests ({systemHealth.periodDays}d)</span></div>
-                    <div className={styles.systemKpiCard}><span className={styles.systemKpiValue}>{systemHealth.totalSuccess}</span><span className={styles.systemKpiLabel}>Successful</span></div>
-                    <div className={`${styles.systemKpiCard} ${systemHealth.failureRate > 5 ? styles.systemKpiDanger : ''}`}><span className={styles.systemKpiValue}>{systemHealth.totalFailures}</span><span className={styles.systemKpiLabel}>Failures ({systemHealth.failureRate}%)</span></div>
+                    <div className={styles.systemKpiCard}><span className={styles.systemKpiValue}>{systemHealth.totalRequests}</span><span className={styles.systemKpiLabel}>Total Permintaan ({systemHealth.periodDays}d)</span></div>
+                    <div className={styles.systemKpiCard}><span className={styles.systemKpiValue}>{systemHealth.totalSuccess}</span><span className={styles.systemKpiLabel}>Berhasil</span></div>
+                    <div className={`${styles.systemKpiCard} ${systemHealth.failureRate > 5 ? styles.systemKpiDanger : ''}`}><span className={styles.systemKpiValue}>{systemHealth.totalFailures}</span><span className={styles.systemKpiLabel}>Gagal ({systemHealth.failureRate}%)</span></div>
                   </div>
                   {systemHealth.alerts.length > 0 && (
                     <div className={styles.alertsSection}>
-                      <h3><FiAlertTriangle /> Alerts</h3>
+                      <h3><FiAlertTriangle /> Peringatan</h3>
                       <div className={styles.alertsList}>
                         {systemHealth.alerts.map((a, i) => (
                           <div key={i} className={`${styles.alertItem} ${a.severity === 'high' ? styles.alertHigh : styles.alertMedium}`}>
@@ -383,10 +353,10 @@ export default function AdminDashboardPage() {
                   )}
                   {systemHealth.topFailingEndpoints.length > 0 && (
                     <div className={styles.failingEndpointsSection}>
-                      <h3>Top Failing Endpoints</h3>
+                      <h3>Endpoint Paling Sering Gagal</h3>
                       <div className={styles.tableWrap}>
                         <table className={styles.table}>
-                          <thead><tr><th>Endpoint</th><th>Total</th><th>Success</th><th>Failed</th><th>Fail Rate</th></tr></thead>
+                          <thead><tr><th>Endpoint</th><th>Total</th><th>Berhasil</th><th>Gagal</th><th>Tingkat Gagal</th></tr></thead>
                           <tbody>
                             {systemHealth.topFailingEndpoints.map((ep, i) => (
                               <tr key={i}>
@@ -403,7 +373,7 @@ export default function AdminDashboardPage() {
                     </div>
                   )}
                   {systemHealth.alerts.length === 0 && systemHealth.topFailingEndpoints.length === 0 && (
-                    <div className={styles.systemOk}><p>✅ All systems operational. No alerts detected.</p></div>
+                    <div className={styles.systemOk}><p>✅ Semua sistem berjalan normal. Tidak ada peringatan.</p></div>
                   )}
                 </>
               )}

@@ -4,10 +4,16 @@ import React, { useEffect, useState, useCallback } from 'react'
 import { useRouter } from 'next/navigation'
 import {
     FiBarChart2, FiArrowLeft, FiPlus, FiX,
-    FiEye, FiEdit2, FiInbox, FiTrash2, FiChevronLeft, FiChevronRight
+    FiEye, FiEdit2, FiInbox, FiTrash2, FiChevronLeft, FiChevronRight,
+    FiGrid, FiChevronDown, FiChevronUp
 } from 'react-icons/fi'
 import { useAdmin } from '@/hooks/useAdmin'
+import type { PromptStage, ResearchAnalytics } from '@/types/research'
 import styles from './page.module.scss'
+
+// ============================================
+// INTERFACES
+// ============================================
 
 type IndicatorType = 'computational_thinking' | 'critical_thinking'
 
@@ -68,6 +74,10 @@ interface ClassificationOption {
 
 type ModalMode = 'add' | 'edit' | 'view'
 
+// ============================================
+// CONSTANTS
+// ============================================
+
 const ITEMS_PER_PAGE = 10
 
 const DEFAULT_CT: CTIndicators = {
@@ -88,9 +98,19 @@ const DEFAULT_CRITICAL: CriticalIndicators = {
     self_regulation: 0
 }
 
-export default function IndicatorsPage() {
+const STAGES: PromptStage[] = ['SCP', 'SRP', 'MQP', 'REFLECTIVE']
+
+export default function KognitifPage() {
     const router = useRouter()
     const { admin, loading: authLoading } = useAdmin()
+
+    // Section toggle
+    const [indicatorSectionOpen, setIndicatorSectionOpen] = useState(true)
+    const [matrixSectionOpen, setMatrixSectionOpen] = useState(true)
+
+    // ============================================
+    // INDICATOR STATE
+    // ============================================
     const [indicators, setIndicators] = useState<CognitiveIndicator[]>([])
     const [loading, setLoading] = useState(true)
     const [error, setError] = useState<string | null>(null)
@@ -109,6 +129,17 @@ export default function IndicatorsPage() {
         evidence_notes: '',
         assessed_by: 'admin'
     })
+
+    // ============================================
+    // MATRIX STATE
+    // ============================================
+    const [analytics, setAnalytics] = useState<ResearchAnalytics | null>(null)
+    const [matrixLoading, setMatrixLoading] = useState(true)
+    const [matrixError, setMatrixError] = useState<string | null>(null)
+
+    // ============================================
+    // FETCH FUNCTIONS
+    // ============================================
 
     const fetchClassifications = useCallback(async () => {
         try {
@@ -155,12 +186,40 @@ export default function IndicatorsPage() {
         }
     }, [filterType])
 
+    const fetchAnalytics = useCallback(async () => {
+        try {
+            setMatrixLoading(true)
+            setMatrixError(null)
+
+            const res = await fetch('/api/admin/research/analytics', { credentials: 'include' })
+            const data = await res.json()
+
+            if (!res.ok) {
+                throw new Error(data.error || 'Gagal memuat data analitik')
+            }
+
+            if (data.data) {
+                setAnalytics(data.data)
+            }
+        } catch (err) {
+            console.error('Error fetching analytics:', err)
+            setMatrixError(err instanceof Error ? err.message : 'Gagal memuat data analitik')
+        } finally {
+            setMatrixLoading(false)
+        }
+    }, [])
+
     useEffect(() => {
         if (!authLoading && admin) {
             fetchIndicators()
             fetchClassifications()
+            fetchAnalytics()
         }
-    }, [authLoading, admin, fetchIndicators, fetchClassifications])
+    }, [authLoading, admin, fetchIndicators, fetchClassifications, fetchAnalytics])
+
+    // ============================================
+    // INDICATOR HANDLERS
+    // ============================================
 
     const resetForm = () => {
         setFormData({
@@ -261,6 +320,10 @@ export default function IndicatorsPage() {
         }
     }
 
+    // ============================================
+    // HELPERS
+    // ============================================
+
     // Pagination
     const totalPages = Math.ceil(indicators.length / ITEMS_PER_PAGE)
     const paginatedIndicators = indicators.slice(
@@ -292,8 +355,33 @@ export default function IndicatorsPage() {
         })
     }
 
+    const getCellColor = (value: number, maxValue: number) => {
+        if (maxValue === 0) return styles.cellNeutral
+        const ratio = value / maxValue
+        if (ratio >= 0.7) return styles.cellHigh
+        if (ratio >= 0.4) return styles.cellMedium
+        if (ratio > 0) return styles.cellLow
+        return styles.cellNeutral
+    }
+
     if (authLoading) {
         return <div className={styles.loading}>Memuat...</div>
+    }
+
+    // Compute max values for heatmap coloring
+    const heatmapData = analytics?.stage_heatmap
+    let maxSessions = 0
+    let maxAvgCt = 0
+    let maxAvgCth = 0
+    if (heatmapData) {
+        for (const stage of STAGES) {
+            const d = heatmapData[stage]
+            if (d) {
+                if (d.sessions > maxSessions) maxSessions = d.sessions
+                if (d.avg_ct > maxAvgCt) maxAvgCt = d.avg_ct
+                if (d.avg_cth > maxAvgCth) maxAvgCth = d.avg_cth
+            }
+        }
     }
 
     return (
@@ -303,7 +391,7 @@ export default function IndicatorsPage() {
                 <div>
                     <h2>
                         <span className={styles.headerIcon}><FiBarChart2 /></span>
-                        Indikator Kognitif
+                        Indikator Kognitif (RM3)
                     </h2>
                     <p className={styles.headerSub}>
                         Penilaian indikator Computational Thinking dan Critical Thinking
@@ -312,182 +400,301 @@ export default function IndicatorsPage() {
                 <div className={styles.headerActions}>
                     <button
                         className={styles.backBtn}
-                        onClick={() => router.push('/admin/research')}
+                        onClick={() => router.push('/admin/riset')}
                     >
                         <FiArrowLeft /> Kembali
                     </button>
-                    <button
-                        className={styles.addBtn}
-                        onClick={openAddModal}
-                    >
-                        <FiPlus /> Tambah Penilaian
-                    </button>
                 </div>
             </div>
 
-            {error && <div className={styles.errorCard}>{error}</div>}
-
-            {/* Filters */}
-            <div className={styles.filters}>
-                <div className={styles.filterGroup}>
-                    <label>Tipe Indikator</label>
-                    <select
-                        value={filterType}
-                        onChange={(e) => setFilterType(e.target.value)}
-                    >
-                        <option value="">Semua Tipe</option>
-                        <option value="computational_thinking">Computational Thinking</option>
-                        <option value="critical_thinking">Critical Thinking</option>
-                    </select>
+            {/* ============================================ */}
+            {/* SECTION 1: Penilaian Indikator */}
+            {/* ============================================ */}
+            <div className={styles.section}>
+                <div
+                    className={styles.sectionHeader}
+                    onClick={() => setIndicatorSectionOpen(!indicatorSectionOpen)}
+                >
+                    <h3 className={styles.sectionTitle}>
+                        <FiBarChart2 /> Penilaian Indikator
+                    </h3>
+                    <div className={styles.sectionToggle}>
+                        {indicatorSectionOpen ? <FiChevronUp /> : <FiChevronDown />}
+                    </div>
                 </div>
+
+                {indicatorSectionOpen && (
+                    <div className={styles.sectionBody}>
+                        <div className={styles.sectionToolbar}>
+                            <div className={styles.filters}>
+                                <div className={styles.filterGroup}>
+                                    <label>Tipe Indikator</label>
+                                    <select
+                                        value={filterType}
+                                        onChange={(e) => setFilterType(e.target.value)}
+                                    >
+                                        <option value="">Semua Tipe</option>
+                                        <option value="computational_thinking">Computational Thinking</option>
+                                        <option value="critical_thinking">Critical Thinking</option>
+                                    </select>
+                                </div>
+                            </div>
+                            <button
+                                className={styles.addBtn}
+                                onClick={openAddModal}
+                            >
+                                <FiPlus /> Tambah Penilaian
+                            </button>
+                        </div>
+
+                        {error && <div className={styles.errorCard}>{error}</div>}
+
+                        <div className={styles.tableContainer}>
+                            {loading ? (
+                                <div className={styles.loading}>Memuat data...</div>
+                            ) : indicators.length === 0 ? (
+                                <div className={styles.emptyState}>
+                                    <FiInbox />
+                                    <h3>Belum ada penilaian</h3>
+                                    <p>Klik &quot;Tambah Penilaian&quot; untuk menambah data baru</p>
+                                </div>
+                            ) : (
+                                <>
+                                    <table className={styles.table}>
+                                        <thead>
+                                            <tr>
+                                                <th>Klasifikasi</th>
+                                                <th>Tipe</th>
+                                                <th>Indikator</th>
+                                                <th>Penilai</th>
+                                                <th>Tanggal</th>
+                                                <th>Aksi</th>
+                                            </tr>
+                                        </thead>
+                                        <tbody>
+                                            {paginatedIndicators.map((item) => (
+                                                <tr key={item.id}>
+                                                    <td>
+                                                        <div style={{ maxWidth: '200px', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                                                            {item.prompt_classifications?.prompt_text || '-'}
+                                                        </div>
+                                                        <div style={{ fontSize: '0.7rem', color: '#94a3b8' }}>
+                                                            {item.prompt_classifications?.prompt_stage} - Sesi #{item.prompt_classifications?.learning_sessions?.session_number}
+                                                        </div>
+                                                    </td>
+                                                    <td>{getTypeBadge(item.indicator_type)}</td>
+                                                    <td>
+                                                        {item.indicator_type === 'computational_thinking' && item.ct_indicators ? (
+                                                            <div className={styles.indicatorGrid}>
+                                                                <div className={styles.indicatorCell}>
+                                                                    <div className={styles.indicatorLabel}>Dec</div>
+                                                                    {getScoreBadge(item.ct_indicators.decomposition)}
+                                                                </div>
+                                                                <div className={styles.indicatorCell}>
+                                                                    <div className={styles.indicatorLabel}>Pat</div>
+                                                                    {getScoreBadge(item.ct_indicators.pattern_recognition)}
+                                                                </div>
+                                                                <div className={styles.indicatorCell}>
+                                                                    <div className={styles.indicatorLabel}>Abs</div>
+                                                                    {getScoreBadge(item.ct_indicators.abstraction)}
+                                                                </div>
+                                                                <div className={styles.indicatorCell}>
+                                                                    <div className={styles.indicatorLabel}>Alg</div>
+                                                                    {getScoreBadge(item.ct_indicators.algorithm_design)}
+                                                                </div>
+                                                                <div className={styles.indicatorCell}>
+                                                                    <div className={styles.indicatorLabel}>Eva</div>
+                                                                    {getScoreBadge(item.ct_indicators.evaluation_debugging)}
+                                                                </div>
+                                                                <div className={styles.indicatorCell}>
+                                                                    <div className={styles.indicatorLabel}>Gen</div>
+                                                                    {getScoreBadge(item.ct_indicators.generalization)}
+                                                                </div>
+                                                            </div>
+                                                        ) : item.critical_indicators ? (
+                                                            <div className={styles.indicatorGrid}>
+                                                                <div className={styles.indicatorCell}>
+                                                                    <div className={styles.indicatorLabel}>Int</div>
+                                                                    {getScoreBadge(item.critical_indicators.interpretation)}
+                                                                </div>
+                                                                <div className={styles.indicatorCell}>
+                                                                    <div className={styles.indicatorLabel}>Ana</div>
+                                                                    {getScoreBadge(item.critical_indicators.analysis)}
+                                                                </div>
+                                                                <div className={styles.indicatorCell}>
+                                                                    <div className={styles.indicatorLabel}>Eva</div>
+                                                                    {getScoreBadge(item.critical_indicators.evaluation)}
+                                                                </div>
+                                                                <div className={styles.indicatorCell}>
+                                                                    <div className={styles.indicatorLabel}>Inf</div>
+                                                                    {getScoreBadge(item.critical_indicators.inference)}
+                                                                </div>
+                                                                <div className={styles.indicatorCell}>
+                                                                    <div className={styles.indicatorLabel}>Exp</div>
+                                                                    {getScoreBadge(item.critical_indicators.explanation)}
+                                                                </div>
+                                                                <div className={styles.indicatorCell}>
+                                                                    <div className={styles.indicatorLabel}>Reg</div>
+                                                                    {getScoreBadge(item.critical_indicators.self_regulation)}
+                                                                </div>
+                                                            </div>
+                                                        ) : '-'}
+                                                    </td>
+                                                    <td>{item.assessed_by}</td>
+                                                    <td>{formatDate(item.assessment_date)}</td>
+                                                    <td>
+                                                        <div className={styles.actionBtns}>
+                                                            <button
+                                                                className={`${styles.actionBtn} ${styles.viewBtn}`}
+                                                                onClick={() => openViewModal(item)}
+                                                            >
+                                                                <FiEye />
+                                                            </button>
+                                                            <button
+                                                                className={`${styles.actionBtn} ${styles.editBtn}`}
+                                                                onClick={() => openEditModal(item)}
+                                                            >
+                                                                <FiEdit2 />
+                                                            </button>
+                                                            <button
+                                                                className={`${styles.actionBtn} ${styles.deleteBtn}`}
+                                                                onClick={() => handleDelete(item.id)}
+                                                            >
+                                                                <FiTrash2 />
+                                                            </button>
+                                                        </div>
+                                                    </td>
+                                                </tr>
+                                            ))}
+                                        </tbody>
+                                    </table>
+
+                                    {totalPages > 1 && (
+                                        <div className={styles.pagination}>
+                                            <button
+                                                className={styles.pageBtn}
+                                                onClick={() => setCurrentPage(p => Math.max(1, p - 1))}
+                                                disabled={currentPage === 1}
+                                            >
+                                                <FiChevronLeft />
+                                            </button>
+                                            <span className={styles.pageInfo}>
+                                                Halaman {currentPage} dari {totalPages}
+                                            </span>
+                                            <button
+                                                className={styles.pageBtn}
+                                                onClick={() => setCurrentPage(p => Math.min(totalPages, p + 1))}
+                                                disabled={currentPage === totalPages}
+                                            >
+                                                <FiChevronRight />
+                                            </button>
+                                        </div>
+                                    )}
+                                </>
+                            )}
+                        </div>
+                    </div>
+                )}
             </div>
 
-            {/* Table */}
-            <div className={styles.tableContainer}>
-                {loading ? (
-                    <div className={styles.loading}>Memuat data...</div>
-                ) : indicators.length === 0 ? (
-                    <div className={styles.emptyState}>
-                        <FiInbox />
-                        <h3>Belum ada penilaian</h3>
-                        <p>Klik &quot;Tambah Penilaian&quot; untuk menambah data baru</p>
+            {/* ============================================ */}
+            {/* SECTION 2: Matriks Silang */}
+            {/* ============================================ */}
+            <div className={styles.section}>
+                <div
+                    className={styles.sectionHeader}
+                    onClick={() => setMatrixSectionOpen(!matrixSectionOpen)}
+                >
+                    <h3 className={styles.sectionTitle}>
+                        <FiGrid /> Matriks Silang (Tahap vs Indikator)
+                    </h3>
+                    <div className={styles.sectionToggle}>
+                        {matrixSectionOpen ? <FiChevronUp /> : <FiChevronDown />}
                     </div>
-                ) : (
-                    <table className={styles.table}>
-                        <thead>
-                            <tr>
-                                <th>Klasifikasi</th>
-                                <th>Tipe</th>
-                                <th>Indikator</th>
-                                <th>Penilai</th>
-                                <th>Tanggal</th>
-                                <th>Aksi</th>
-                            </tr>
-                        </thead>
-                        <tbody>
-                            {paginatedIndicators.map((item) => (
-                                <tr key={item.id}>
-                                    <td>
-                                        <div style={{ maxWidth: '200px', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
-                                            {item.prompt_classifications?.prompt_text || '-'}
-                                        </div>
-                                        <div style={{ fontSize: '0.7rem', color: '#94a3b8' }}>
-                                            {item.prompt_classifications?.prompt_stage} - Sesi #{item.prompt_classifications?.learning_sessions?.session_number}
-                                        </div>
-                                    </td>
-                                    <td>{getTypeBadge(item.indicator_type)}</td>
-                                    <td>
-                                        {item.indicator_type === 'computational_thinking' && item.ct_indicators ? (
-                                            <div className={styles.indicatorGrid}>
-                                                <div className={styles.indicatorCell}>
-                                                    <div className={styles.indicatorLabel}>Dec</div>
-                                                    {getScoreBadge(item.ct_indicators.decomposition)}
-                                                </div>
-                                                <div className={styles.indicatorCell}>
-                                                    <div className={styles.indicatorLabel}>Pat</div>
-                                                    {getScoreBadge(item.ct_indicators.pattern_recognition)}
-                                                </div>
-                                                <div className={styles.indicatorCell}>
-                                                    <div className={styles.indicatorLabel}>Abs</div>
-                                                    {getScoreBadge(item.ct_indicators.abstraction)}
-                                                </div>
-                                                <div className={styles.indicatorCell}>
-                                                    <div className={styles.indicatorLabel}>Alg</div>
-                                                    {getScoreBadge(item.ct_indicators.algorithm_design)}
-                                                </div>
-                                                <div className={styles.indicatorCell}>
-                                                    <div className={styles.indicatorLabel}>Eva</div>
-                                                    {getScoreBadge(item.ct_indicators.evaluation_debugging)}
-                                                </div>
-                                                <div className={styles.indicatorCell}>
-                                                    <div className={styles.indicatorLabel}>Gen</div>
-                                                    {getScoreBadge(item.ct_indicators.generalization)}
-                                                </div>
-                                            </div>
-                                        ) : item.critical_indicators ? (
-                                            <div className={styles.indicatorGrid}>
-                                                <div className={styles.indicatorCell}>
-                                                    <div className={styles.indicatorLabel}>Int</div>
-                                                    {getScoreBadge(item.critical_indicators.interpretation)}
-                                                </div>
-                                                <div className={styles.indicatorCell}>
-                                                    <div className={styles.indicatorLabel}>Ana</div>
-                                                    {getScoreBadge(item.critical_indicators.analysis)}
-                                                </div>
-                                                <div className={styles.indicatorCell}>
-                                                    <div className={styles.indicatorLabel}>Eva</div>
-                                                    {getScoreBadge(item.critical_indicators.evaluation)}
-                                                </div>
-                                                <div className={styles.indicatorCell}>
-                                                    <div className={styles.indicatorLabel}>Inf</div>
-                                                    {getScoreBadge(item.critical_indicators.inference)}
-                                                </div>
-                                                <div className={styles.indicatorCell}>
-                                                    <div className={styles.indicatorLabel}>Exp</div>
-                                                    {getScoreBadge(item.critical_indicators.explanation)}
-                                                </div>
-                                                <div className={styles.indicatorCell}>
-                                                    <div className={styles.indicatorLabel}>Reg</div>
-                                                    {getScoreBadge(item.critical_indicators.self_regulation)}
-                                                </div>
-                                            </div>
-                                        ) : '-'}
-                                    </td>
-                                    <td>{item.assessed_by}</td>
-                                    <td>{formatDate(item.assessment_date)}</td>
-                                    <td>
-                                        <div className={styles.actionBtns}>
-                                            <button
-                                                className={`${styles.actionBtn} ${styles.viewBtn}`}
-                                                onClick={() => openViewModal(item)}
-                                            >
-                                                <FiEye />
-                                            </button>
-                                            <button
-                                                className={`${styles.actionBtn} ${styles.editBtn}`}
-                                                onClick={() => openEditModal(item)}
-                                            >
-                                                <FiEdit2 />
-                                            </button>
-                                            <button
-                                                className={`${styles.actionBtn} ${styles.deleteBtn}`}
-                                                onClick={() => handleDelete(item.id)}
-                                            >
-                                                <FiTrash2 />
-                                            </button>
-                                        </div>
-                                    </td>
-                                </tr>
-                            ))}
-                        </tbody>
-                    </table>
-                )}
+                </div>
 
-                {/* Pagination */}
-                {totalPages > 1 && (
-                    <div className={styles.pagination}>
-                        <button
-                            className={styles.pageBtn}
-                            onClick={() => setCurrentPage(p => Math.max(1, p - 1))}
-                            disabled={currentPage === 1}
-                        >
-                            <FiChevronLeft />
-                        </button>
-                        <span className={styles.pageInfo}>
-                            Halaman {currentPage} dari {totalPages}
-                        </span>
-                        <button
-                            className={styles.pageBtn}
-                            onClick={() => setCurrentPage(p => Math.min(totalPages, p + 1))}
-                            disabled={currentPage === totalPages}
-                        >
-                            <FiChevronRight />
-                        </button>
+                {matrixSectionOpen && (
+                    <div className={styles.sectionBody}>
+                        {matrixError && <div className={styles.errorCard}>{matrixError}</div>}
+
+                        {matrixLoading ? (
+                            <div className={styles.loading}>Memuat data matriks...</div>
+                        ) : !heatmapData ? (
+                            <div className={styles.emptyState}>
+                                <FiGrid />
+                                <h3>Data belum tersedia</h3>
+                                <p>Matriks silang akan muncul setelah data analitik tersedia</p>
+                            </div>
+                        ) : (
+                            <>
+                                <p className={styles.matrixDesc}>
+                                    Tabel berikut menampilkan hubungan antara tahap prompt (baris) dan indikator kognitif rata-rata (kolom).
+                                    Warna sel menunjukkan intensitas: hijau = tinggi, kuning = sedang, merah = rendah.
+                                </p>
+                                <div className={styles.matrixTableWrap}>
+                                    <table className={styles.matrixTable}>
+                                        <thead>
+                                            <tr>
+                                                <th>Tahap</th>
+                                                <th>Jumlah Sesi</th>
+                                                <th>Rata-rata CT</th>
+                                                <th>Rata-rata CTh</th>
+                                            </tr>
+                                        </thead>
+                                        <tbody>
+                                            {STAGES.map((stage) => {
+                                                const d = heatmapData[stage] || { sessions: 0, avg_ct: 0, avg_cth: 0 }
+                                                return (
+                                                    <tr key={stage}>
+                                                        <td>
+                                                            <span className={`${styles.matrixStage} ${styles[`matrixStage${stage}`]}`}>
+                                                                {stage}
+                                                            </span>
+                                                        </td>
+                                                        <td>
+                                                            <span className={`${styles.matrixCell} ${getCellColor(d.sessions, maxSessions)}`}>
+                                                                {d.sessions}
+                                                            </span>
+                                                        </td>
+                                                        <td>
+                                                            <span className={`${styles.matrixCell} ${getCellColor(d.avg_ct, maxAvgCt)}`}>
+                                                                {d.avg_ct.toFixed(2)}
+                                                            </span>
+                                                        </td>
+                                                        <td>
+                                                            <span className={`${styles.matrixCell} ${getCellColor(d.avg_cth, maxAvgCth)}`}>
+                                                                {d.avg_cth.toFixed(2)}
+                                                            </span>
+                                                        </td>
+                                                    </tr>
+                                                )
+                                            })}
+                                        </tbody>
+                                    </table>
+                                </div>
+                                <div className={styles.matrixLegend}>
+                                    <span className={styles.legendItem}>
+                                        <span className={`${styles.legendDot} ${styles.cellHigh}`}></span> Tinggi
+                                    </span>
+                                    <span className={styles.legendItem}>
+                                        <span className={`${styles.legendDot} ${styles.cellMedium}`}></span> Sedang
+                                    </span>
+                                    <span className={styles.legendItem}>
+                                        <span className={`${styles.legendDot} ${styles.cellLow}`}></span> Rendah
+                                    </span>
+                                    <span className={styles.legendItem}>
+                                        <span className={`${styles.legendDot} ${styles.cellNeutral}`}></span> Tidak ada
+                                    </span>
+                                </div>
+                            </>
+                        )}
                     </div>
                 )}
             </div>
 
-            {/* Modal */}
+            {/* ============================================ */}
+            {/* MODAL */}
+            {/* ============================================ */}
             {showModal && (
                 <div className={styles.modalOverlay} onClick={() => setShowModal(false)}>
                     <div className={styles.modal} onClick={(e) => e.stopPropagation()}>
@@ -523,7 +730,7 @@ export default function IndicatorsPage() {
                                         <span>{formatDate(selectedIndicator.assessment_date)}</span>
                                     </div>
                                     <div className={styles.viewItem}>
-                                        <label>Stage</label>
+                                        <label>Tahap</label>
                                         <span>{selectedIndicator.prompt_classifications?.prompt_stage || '-'}</span>
                                     </div>
                                 </div>
@@ -531,7 +738,7 @@ export default function IndicatorsPage() {
                                 {/* CT Indicators View */}
                                 {selectedIndicator.indicator_type === 'computational_thinking' && selectedIndicator.ct_indicators && (
                                     <div className={`${styles.indicatorSection} ${styles.ctSection}`}>
-                                        <h4>🧠 Computational Thinking Indicators</h4>
+                                        <h4>Indikator Computational Thinking</h4>
                                         <div className={styles.viewGrid}>
                                             <div className={styles.viewItem}>
                                                 <label>Decomposition</label>
@@ -564,7 +771,7 @@ export default function IndicatorsPage() {
                                 {/* Critical Indicators View */}
                                 {selectedIndicator.indicator_type === 'critical_thinking' && selectedIndicator.critical_indicators && (
                                     <div className={`${styles.indicatorSection} ${styles.criticalSection}`}>
-                                        <h4>💡 Critical Thinking Indicators</h4>
+                                        <h4>Indikator Critical Thinking</h4>
                                         <div className={styles.viewGrid}>
                                             <div className={styles.viewItem}>
                                                 <label>Interpretation</label>
@@ -595,7 +802,7 @@ export default function IndicatorsPage() {
                                 )}
 
                                 {selectedIndicator.evidence_notes && (
-                                    <div className={`${styles.viewItem} ${styles.fullWidth}`}>
+                                    <div className={`${styles.viewItem} ${styles.fullWidth}`} style={{ marginTop: '1rem' }}>
                                         <label>Catatan Bukti</label>
                                         <span>{selectedIndicator.evidence_notes}</span>
                                     </div>
@@ -669,7 +876,7 @@ export default function IndicatorsPage() {
                                     {/* CT Indicators */}
                                     {formData.indicator_type === 'computational_thinking' && (
                                         <div className={`${styles.indicatorSection} ${styles.ctSection}`}>
-                                            <h4>🧠 Computational Thinking Indicators</h4>
+                                            <h4>Indikator Computational Thinking</h4>
                                             <div className={styles.indicatorInputGrid}>
                                                 <div className={styles.indicatorInput}>
                                                     <label>Decomposition</label>
@@ -757,9 +964,9 @@ export default function IndicatorsPage() {
                                                 </div>
                                             </div>
                                             <div className={styles.scoreGuide}>
-                                                <span>🔴 0 = Tidak Muncul</span>
-                                                <span>🟡 1 = Muncul Sebagian</span>
-                                                <span>🟢 2 = Muncul Penuh</span>
+                                                <span>0 = Tidak Muncul</span>
+                                                <span>1 = Muncul Sebagian</span>
+                                                <span>2 = Muncul Penuh</span>
                                             </div>
                                         </div>
                                     )}
@@ -767,7 +974,7 @@ export default function IndicatorsPage() {
                                     {/* Critical Thinking Indicators */}
                                     {formData.indicator_type === 'critical_thinking' && (
                                         <div className={`${styles.indicatorSection} ${styles.criticalSection}`}>
-                                            <h4>💡 Critical Thinking Indicators</h4>
+                                            <h4>Indikator Critical Thinking</h4>
                                             <div className={styles.indicatorInputGrid}>
                                                 <div className={styles.indicatorInput}>
                                                     <label>Interpretation</label>
@@ -855,9 +1062,9 @@ export default function IndicatorsPage() {
                                                 </div>
                                             </div>
                                             <div className={styles.scoreGuide}>
-                                                <span>🔴 0 = Tidak Muncul</span>
-                                                <span>🟡 1 = Muncul Sebagian</span>
-                                                <span>🟢 2 = Muncul Penuh</span>
+                                                <span>0 = Tidak Muncul</span>
+                                                <span>1 = Muncul Sebagian</span>
+                                                <span>2 = Muncul Penuh</span>
                                             </div>
                                         </div>
                                     )}

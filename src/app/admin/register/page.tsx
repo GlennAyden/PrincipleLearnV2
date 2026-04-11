@@ -27,10 +27,10 @@ export default function AdminRegisterPage() {
         router.push('/admin/login')
       } else {
         const data = await res.json()
-        setError(data.error || 'Registration failed')
+        setError(data.error || 'Pendaftaran gagal')
       }
     } catch {
-      setError('An unexpected error occurred.')
+      setError('Terjadi kesalahan tidak terduga.')
     } finally {
       setLoading(false)
     }
@@ -38,7 +38,7 @@ export default function AdminRegisterPage() {
 
   return (
     <form className={styles.form} onSubmit={handleSubmit}>
-      <h1 className={styles.title}>Sign up Admin</h1>
+      <h1 className={styles.title}>Daftar Admin</h1>
 
       {error && <div className={styles.error}>{error}</div>}
 
@@ -55,11 +55,11 @@ export default function AdminRegisterPage() {
       </label>
 
       <label className={styles.label}>
-        Password
+        Kata Sandi
         <input
           type="password"
           className={styles.input}
-          placeholder="Password"
+          placeholder="Kata Sandi"
           value={password}
           onChange={(e) => setPassword(e.target.value)}
           required
@@ -71,11 +71,11 @@ export default function AdminRegisterPage() {
         className={styles.button}
         disabled={loading}
       >
-        {loading ? 'Signing up...' : 'Sign up'}
+        {loading ? 'Mendaftar...' : 'Daftar'}
       </button>
 
       <div className={styles.back}>
-        <Link href="/admin/login">Back to Sign In</Link>
+        <Link href="/admin/login">Kembali ke Login</Link>
       </div>
     </form>
   )

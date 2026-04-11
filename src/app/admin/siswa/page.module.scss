@@ -1,4 +1,4 @@
-/* src/app/admin/users/page.module.scss */
+/* src/app/admin/siswa/page.module.scss */
 
 .page {
   --bg-shell: #f0f2f5;
@@ -50,36 +50,6 @@
   color: rgba(226, 232, 240, 0.9);
   max-width: 860px;
   font-size: 0.96rem;
-}
-
-.headerActions {
-  display: flex;
-  gap: 8px;
-  flex-shrink: 0;
-}
-
-.exportBtn {
-  display: inline-flex;
-  align-items: center;
-  gap: 6px;
-  padding: 0.5rem 0.85rem;
-  border: 1px solid rgba(255, 255, 255, 0.25);
-  border-radius: 10px;
-  background: rgba(255, 255, 255, 0.1);
-  color: #e2e8f0;
-  font-size: 0.82rem;
-  font-weight: 600;
-  cursor: pointer;
-  transition: background 0.2s;
-}
-
-.exportBtn:hover {
-  background: rgba(255, 255, 255, 0.2);
-}
-
-.exportBtn:disabled {
-  opacity: 0.5;
-  cursor: not-allowed;
 }
 
 /* ─── Control Bar ────────────────────────────────────────────────── */
