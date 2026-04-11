@@ -1,66 +1,24 @@
 /* src/app/admin/riset/page.module.scss — Dashboard Riset */
+@use '../tokens' as *;
 
 /* ========================================
-   DESIGN TOKENS
+   LOCAL TOKENS (not in shared tokens)
    ======================================== */
-$primary-50: #eff6ff;
-$primary-100: #dbeafe;
-$primary-200: #bfdbfe;
-$primary-500: #3b82f6;
-$primary-600: #2563eb;
-
-$gray-50: #f8fafc;
-$gray-100: #f1f5f9;
-$gray-200: #e2e8f0;
-$gray-300: #cbd5e1;
-$gray-400: #94a3b8;
-$gray-500: #64748b;
-$gray-600: #475569;
-$gray-700: #334155;
-$gray-800: #1e293b;
-$gray-900: #0f172a;
-
-$green-50: #f0fdf4;
-$green-100: #dcfce7;
-$green-500: #22c55e;
-$green-600: #16a34a;
-$green-700: #15803d;
-
-$purple-50: #faf5ff;
-$purple-100: #f3e8ff;
-$purple-500: #8b5cf6;
-$purple-600: #7c3aed;
-
-$indigo-50: #eef2ff;
-$indigo-100: #e0e7ff;
-$indigo-500: #6366f1;
-$indigo-600: #4f46e5;
-
-$amber-50: #fffbeb;
-$amber-100: #fef3c7;
-$amber-500: #f59e0b;
-$amber-600: #d97706;
-$amber-700: #b45309;
-
 $teal-50: #f0fdfa;
 $teal-100: #ccfbf1;
 $teal-500: #14b8a6;
 $teal-600: #0d9488;
 
-$red-50: #fef2f2;
+$green-100: #dcfce7;
+$purple-100: #f3e8ff;
+$indigo-100: #e0e7ff;
+$amber-100: #fef3c7;
+$amber-700: #b45309;
 $red-100: #fee2e2;
-$red-500: #ef4444;
-$red-600: #dc2626;
 $red-700: #b91c1c;
+$primary-100: #dbeafe;
 
-$radius-sm: 8px;
-$radius-md: 12px;
-$radius-lg: 16px;
 $radius-full: 9999px;
-
-$shadow-sm: 0 1px 2px rgba(0, 0, 0, 0.05);
-$shadow-md: 0 4px 6px -1px rgba(0, 0, 0, 0.07), 0 2px 4px -2px rgba(0, 0, 0, 0.05);
-$shadow-lg: 0 10px 25px -3px rgba(0, 0, 0, 0.08), 0 4px 6px -4px rgba(0, 0, 0, 0.04);
 
 /* ========================================
    KEYFRAMES
@@ -109,8 +67,8 @@ $shadow-lg: 0 10px 25px -3px rgba(0, 0, 0, 0.08), 0 4px 6px -4px rgba(0, 0, 0, 0
    PAGE LAYOUT
    ======================================== */
 .page {
-    padding: 2rem;
-    max-width: 1400px;
+    padding: $page-padding;
+    max-width: $page-max-width;
     margin: 0 auto;
     width: 100%;
     animation: fadeIn 0.4s ease-out;
@@ -379,7 +337,7 @@ $shadow-lg: 0 10px 25px -3px rgba(0, 0, 0, 0.08), 0 4px 6px -4px rgba(0, 0, 0, 0
     padding: 1.25rem;
     border-radius: $radius-md;
     text-align: center;
-    transition: all 0.2s ease;
+    transition: all $transition-normal;
 
     &:hover {
         transform: scale(1.02);
@@ -616,7 +574,7 @@ $shadow-lg: 0 10px 25px -3px rgba(0, 0, 0, 0.08), 0 4px 6px -4px rgba(0, 0, 0, 0
     padding: 1rem;
     background: $gray-50;
     border-radius: $radius-md;
-    transition: all 0.2s ease;
+    transition: all $transition-normal;
 
     &:hover {
         background: $gray-100;

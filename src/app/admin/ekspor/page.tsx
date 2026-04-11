@@ -178,6 +178,7 @@ export default function EksporPage() {
             document.body.removeChild(a)
 
             setSuccess(`Berhasil mengunduh ${filename}`)
+            setTimeout(() => setSuccess(null), 5000)
         } catch (err) {
             console.error('Export error:', err)
             setError(err instanceof Error ? err.message : 'Gagal mengunduh data')
@@ -201,7 +202,7 @@ export default function EksporPage() {
                 <div>
                     <h2>
                         <span className={styles.headerIcon}><FiDownload /></span>
-                        Export Data
+                        Ekspor Data
                     </h2>
                     <p className={styles.headerSub}>
                         Unduh data siswa, aktivitas, dan penelitian dalam format JSON atau CSV

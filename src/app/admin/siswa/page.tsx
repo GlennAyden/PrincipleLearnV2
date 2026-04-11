@@ -7,19 +7,13 @@ import { useRouter } from 'next/navigation'
 import {
   FiTrash2,
   FiAlertCircle,
-  FiBookOpen,
   FiCheckSquare,
-  FiMessageCircle,
   FiFileText,
   FiSearch,
   FiUsers,
   FiClock,
   FiTrendingUp,
   FiExternalLink,
-  FiZap,
-  FiHelpCircle,
-  FiTarget,
-  FiStar,
   FiActivity,
 } from 'react-icons/fi'
 import { useAdmin } from '@/hooks/useAdmin'
@@ -44,6 +38,7 @@ export default function AdminSiswaPage() {
   const [isLoading, setIsLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
   const [deleteInProgress, setDeleteInProgress] = useState<string | null>(null)
+  const [deleteConfirm, setDeleteConfirm] = useState<{ id: string; email: string } | null>(null)
   const [selectedUserId, setSelectedUserId] = useState<string | null>(null)
   const [activitySummary, setActivitySummary] = useState<ActivitySummary | null>(null)
   const [activityLoading, setActivityLoading] = useState(false)
@@ -97,17 +92,23 @@ export default function AdminSiswaPage() {
 
   const formatDate = (s: string) => new Date(s).toLocaleDateString('id-ID')
 
-  const handleDelete = async (id: string, email: string) => {
-    if (!confirm(`Hapus pengguna ${email}? SEMUA data akan dihapus secara permanen.`)) return
+  const handleDeleteRequest = (id: string, email: string) => {
+    setDeleteConfirm({ id, email })
+  }
+
+  const handleDeleteConfirm = async () => {
+    if (!deleteConfirm) return
+    const { id, email } = deleteConfirm
     try {
       setDeleteInProgress(id)
       const res = await fetch(`/api/admin/users/${id}`, { method: 'DELETE', credentials: 'include' })
       if (!res.ok) { const d = await res.json(); throw new Error(d.error || 'Gagal menghapus') }
       setUsers((prev) => prev.filter((u) => u.id !== id))
       if (selectedUserId === id) setSelectedUserId(null)
-      alert(`Pengguna ${email} telah dihapus.`)
+      setDeleteConfirm(null)
     } catch (err: unknown) {
-      alert(`Gagal: ${err instanceof Error ? err.message : 'Kesalahan tidak diketahui'}`)
+      setError(`Gagal menghapus ${email}: ${err instanceof Error ? err.message : 'Kesalahan tidak diketahui'}`)
+      setDeleteConfirm(null)
     } finally {
       setDeleteInProgress(null)
     }
@@ -163,10 +164,8 @@ export default function AdminSiswaPage() {
   return (
     <div className={styles.page}>
       <header className={styles.header}>
-        <div>
-          <h1 className={styles.pageTitle}>Ruang Kerja Siswa</h1>
-          <p className={styles.pageSubtitle}>Pantau keterlibatan, periksa jejak belajar, dan kelola data siswa.</p>
-        </div>
+        <h1 className={styles.pageTitle}>Ruang Kerja Siswa</h1>
+        <p className={styles.pageSubtitle}>Pantau keterlibatan, periksa jejak belajar, dan kelola data siswa.</p>
       </header>
 
       <section className={styles.controlBar}>
@@ -206,6 +205,27 @@ export default function AdminSiswaPage() {
         </article>
       </section>
 
+      {deleteConfirm && (
+        <div className={styles.deleteConfirmBanner}>
+          <FiAlertCircle style={{ color: '#dc2626', flexShrink: 0 }} />
+          <p className={styles.deleteConfirmText}>
+            Hapus pengguna <strong>{deleteConfirm.email}</strong>? SEMUA data akan dihapus secara permanen.
+          </p>
+          <div className={styles.deleteConfirmActions}>
+            <button className={`${styles.deleteConfirmBtn} ${styles.cancel}`} onClick={() => setDeleteConfirm(null)}>
+              Batal
+            </button>
+            <button
+              className={`${styles.deleteConfirmBtn} ${styles.danger}`}
+              onClick={handleDeleteConfirm}
+              disabled={!!deleteInProgress}
+            >
+              {deleteInProgress ? 'Menghapus...' : 'Ya, Hapus'}
+            </button>
+          </div>
+        </div>
+      )}
+
       {isLoading ? (
         <div className={styles.loading}>Memuat data siswa...</div>
       ) : error ? (
@@ -241,27 +261,20 @@ export default function AdminSiswaPage() {
                         <span className={`${styles.statusPill} ${styles[`status_${status.tone}`]}`}>{status.label}</span>
                         <span>Bergabung {formatDate(u.createdAt)}</span>
                       </div>
+                      <div className={styles.keyStatsRow}>
+                        <span className={styles.keyStat}>
+                          <FiFileText />{u.totalCourses}<span className={styles.keyStatLabel}>kursus</span>
+                        </span>
+                        <span className={styles.keyStat}>
+                          <FiCheckSquare />{u.totalQuizzes}<span className={styles.keyStatLabel}>kuis</span>
+                        </span>
+                      </div>
                       <div className={styles.progressRow}>
                         <div className={styles.miniProgress}>
                           <span className={styles.miniLabel}>Eng</span>
                           <div className={styles.miniBar}><div className={styles.miniFill} style={{ width: `${u.engagementScore}%` }} /></div>
                           <span className={styles.miniValue}>{u.engagementScore}%</span>
                         </div>
-                        <div className={styles.miniProgress}>
-                          <span className={styles.miniLabel}>Komp</span>
-                          <div className={styles.miniBar}><div className={styles.miniFillGreen} style={{ width: `${u.courseCompletionRate}%` }} /></div>
-                          <span className={styles.miniValue}>{u.courseCompletionRate}%</span>
-                        </div>
-                      </div>
-                      <div className={styles.countGrid}>
-                        <span title="Kursus"><FiFileText /> {u.totalCourses}</span>
-                        <span title="Kuis"><FiCheckSquare /> {u.totalQuizzes}</span>
-                        <span title="Jurnal"><FiBookOpen /> {u.totalJournals}</span>
-                        <span title="Transkrip"><FiMessageCircle /> {u.totalTranscripts}</span>
-                        <span title="Pertanyaan"><FiHelpCircle /> {u.totalAskQuestions}</span>
-                        <span title="Tantangan"><FiTarget /> {u.totalChallenges}</span>
-                        <span title="Diskusi"><FiZap /> {u.totalDiscussions}</span>
-                        <span title="Umpan Balik"><FiStar /> {u.totalFeedbacks}</span>
                       </div>
                       <div className={styles.cardFooter}>
                         <small>Terakhir: {u.lastActivity || 'N/A'}</small>
@@ -271,8 +284,8 @@ export default function AdminSiswaPage() {
                           </button>
                           <button
                             className={`${styles.deleteBtn} ${u.role.toUpperCase() === 'ADMIN' ? styles.disabled : ''}`}
-                            onClick={(e) => { e.stopPropagation(); if (u.role.toUpperCase() !== 'ADMIN') handleDelete(u.id, u.email) }}
-                            disabled={u.role.toUpperCase() === 'ADMIN' || deleteInProgress === u.id}
+                            onClick={(e) => { e.stopPropagation(); if (u.role.toUpperCase() !== 'ADMIN') handleDeleteRequest(u.id, u.email) }}
+                            disabled={u.role.toUpperCase() === 'ADMIN' || !!deleteInProgress}
                             title="Hapus pengguna"
                           >
                             {deleteInProgress === u.id ? '...' : <FiTrash2 />}
@@ -313,8 +326,8 @@ export default function AdminSiswaPage() {
                 </div>
 
                 <div className={styles.tabs}>
-                  <button className={activeTab === 'overview' ? styles.tabActive : ''} onClick={() => setActiveTab('overview')}>Ringkasan</button>
-                  <button className={activeTab === 'activity' ? styles.tabActive : ''} onClick={() => setActiveTab('activity')}>Lini Masa</button>
+                  <button className={`${styles.tabBtn} ${activeTab === 'overview' ? styles.tabActive : ''}`} onClick={() => setActiveTab('overview')}>Ringkasan</button>
+                  <button className={`${styles.tabBtn} ${activeTab === 'activity' ? styles.tabActive : ''}`} onClick={() => setActiveTab('activity')}>Lini Masa</button>
                 </div>
 
                 {activityLoading && <div className={styles.loading}>Memuat aktivitas...</div>}

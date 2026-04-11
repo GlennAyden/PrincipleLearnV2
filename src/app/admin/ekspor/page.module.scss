@@ -1,21 +1,21 @@
+/* src/app/admin/ekspor/page.module.scss — Ekspor Data */
+@use '../tokens' as *;
+
 .page {
-    padding: 2rem;
-    max-width: 1200px;
+    padding: $page-padding;
+    max-width: $page-max-width;
     margin: 0 auto;
 }
 
 .header {
+    @include page-header;
     display: flex;
     justify-content: space-between;
     align-items: flex-start;
-    margin-bottom: 2rem;
     flex-wrap: wrap;
     gap: 1rem;
 
     h2 {
-        font-size: 1.5rem;
-        font-weight: 700;
-        color: #1e293b;
         display: flex;
         align-items: center;
         gap: 0.5rem;
@@ -23,79 +23,59 @@
 }
 
 .headerIcon {
-    color: #f59e0b;
+    color: $amber-500;
 }
 
 .headerSub {
-    color: #64748b;
+    color: $gray-500;
     font-size: 0.95rem;
     margin-top: 0.25rem;
 }
 
 .backBtn {
-    display: flex;
-    align-items: center;
-    gap: 0.5rem;
-    padding: 0.5rem 1rem;
-    background: #f1f5f9;
-    border: 1px solid #e2e8f0;
-    border-radius: 8px;
-    color: #475569;
+    @include secondary-button;
     font-size: 0.875rem;
-    cursor: pointer;
-    transition: all 0.2s;
-
-    &:hover {
-        background: #e2e8f0;
-    }
 }
 
 .loading {
-    display: flex;
-    justify-content: center;
-    align-items: center;
-    padding: 4rem;
-    color: #64748b;
+    @include loading-state;
 }
 
 .errorCard {
-    background: #fef2f2;
-    border: 1px solid #fecaca;
-    border-radius: 8px;
+    background: $red-50;
+    border: 1px solid rgba($red-500, 0.3);
+    border-radius: $radius-sm;
     padding: 1rem;
-    color: #dc2626;
+    color: $red-600;
     margin-bottom: 1.5rem;
 }
 
 .successCard {
-    background: #f0fdf4;
-    border: 1px solid #bbf7d0;
-    border-radius: 8px;
+    background: $green-50;
+    border: 1px solid rgba($green-500, 0.3);
+    border-radius: $radius-sm;
     padding: 1rem;
-    color: #16a34a;
+    color: $green-600;
     margin-bottom: 1.5rem;
     display: flex;
     align-items: center;
     gap: 0.5rem;
 }
 
-/* Filters */
+/* ========================================
+   FILTERS
+   ======================================== */
 .filterSection {
     background: white;
-    border-radius: 12px;
-    box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
+    border-radius: $radius-md;
+    border: 1px solid $gray-200;
+    box-shadow: $shadow-sm;
     padding: 1.5rem;
-    margin-bottom: 1.5rem;
+    margin-bottom: $section-gap;
 }
 
 .filterTitle {
-    font-size: 1rem;
-    font-weight: 600;
-    color: #1e293b;
-    margin-bottom: 1rem;
-    display: flex;
-    align-items: center;
-    gap: 0.5rem;
+    @include section-title;
 }
 
 .filterGrid {
@@ -116,24 +96,26 @@
     label {
         font-size: 0.8rem;
         font-weight: 500;
-        color: #64748b;
+        color: $gray-500;
     }
 
     input,
     select {
         padding: 0.5rem 0.75rem;
-        border: 1px solid #e2e8f0;
-        border-radius: 6px;
+        border: 1px solid $gray-200;
+        border-radius: $radius-sm;
         font-size: 0.875rem;
 
         &:focus {
             outline: none;
-            border-color: #f59e0b;
+            border-color: $amber-500;
         }
     }
 }
 
-/* Export Cards Grid */
+/* ========================================
+   EXPORT CARDS GRID
+   ======================================== */
 .exportGrid {
     display: grid;
     grid-template-columns: repeat(2, 1fr);
@@ -151,15 +133,16 @@
 
 .exportCard {
     background: white;
-    border-radius: 12px;
-    box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
+    border-radius: $radius-md;
+    border: 1px solid $gray-200;
+    box-shadow: $shadow-sm;
     padding: 1.5rem;
-    border: 2px solid transparent;
-    transition: all 0.2s;
+    transition: all $transition-normal;
 
     &:hover {
-        border-color: #e2e8f0;
-        box-shadow: 0 4px 12px rgba(0, 0, 0, 0.08);
+        border-color: $gray-300;
+        box-shadow: $shadow-md;
+        transform: translateY(-2px);
     }
 }
 
@@ -173,7 +156,7 @@
 .exportIcon {
     width: 48px;
     height: 48px;
-    border-radius: 12px;
+    border-radius: $radius-md;
     display: flex;
     align-items: center;
     justify-content: center;
@@ -182,8 +165,8 @@
 }
 
 .iconUsers {
-    background: #ede9fe;
-    color: #7c3aed;
+    background: $indigo-50;
+    color: $indigo-600;
 }
 
 .iconActivity {
@@ -192,23 +175,23 @@
 }
 
 .iconSessions {
-    background: #dbeafe;
-    color: #2563eb;
+    background: $primary-100;
+    color: $primary-600;
 }
 
 .iconClassifications {
-    background: #f3e8ff;
-    color: #7c3aed;
+    background: $purple-50;
+    color: $purple-600;
 }
 
 .iconIndicators {
-    background: #dcfce7;
-    color: #16a34a;
+    background: $green-50;
+    color: $green-600;
 }
 
 .iconFull {
-    background: #fef3c7;
-    color: #d97706;
+    background: $amber-50;
+    color: $amber-600;
 }
 
 .iconSpss {
@@ -219,12 +202,12 @@
 .exportTitle {
     font-size: 1.125rem;
     font-weight: 600;
-    color: #1e293b;
+    color: $gray-800;
 }
 
 .exportDesc {
     font-size: 0.875rem;
-    color: #64748b;
+    color: $gray-500;
     margin-bottom: 1.25rem;
     line-height: 1.5;
     min-height: 2.625rem;
@@ -236,16 +219,17 @@
 }
 
 .downloadBtn {
-    display: flex;
+    display: inline-flex;
     align-items: center;
-    gap: 0.5rem;
+    justify-content: center;
+    gap: 0.4rem;
     padding: 0.5rem 1rem;
     border: none;
-    border-radius: 8px;
+    border-radius: $radius-sm;
     font-size: 0.875rem;
+    font-weight: 600;
     cursor: pointer;
-    transition: all 0.2s;
-    font-weight: 500;
+    transition: all $transition-fast;
 
     &:disabled {
         opacity: 0.5;
@@ -254,24 +238,26 @@
 }
 
 .btnJson {
-    background: #3b82f6;
+    background: $primary-500;
     color: white;
 
     &:hover:not(:disabled) {
-        background: #2563eb;
+        background: $primary-600;
     }
 }
 
 .btnCsv {
-    background: #10b981;
+    background: $green-500;
     color: white;
 
     &:hover:not(:disabled) {
-        background: #059669;
+        background: $green-600;
     }
 }
 
-/* Loading Spinner */
+/* ========================================
+   LOADING SPINNER
+   ======================================== */
 .spinner {
     display: inline-block;
     width: 14px;

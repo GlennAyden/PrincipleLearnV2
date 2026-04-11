@@ -592,14 +592,14 @@ export default function AdminAktivitasPage() {
   // ── Render ──
   return (
     <div className={styles.page}>
-      {/* Hero */}
-      <header className={styles.hero}>
-        <h1>Aktivitas Mahasiswa</h1>
+      {/* Header */}
+      <div className={styles.header}>
+        <h2>Aktivitas Mahasiswa</h2>
         <p>
           Pantau interaksi mahasiswa: tanya jawab, tantangan berpikir, kuis, refleksi, dan diskusi
           terpandu.
         </p>
-      </header>
+      </div>
 
       {/* Summary Cards */}
       <div className={styles.summaryStrip}>
@@ -648,7 +648,7 @@ export default function AdminAktivitasPage() {
 
           <input
             type="date"
-            className={styles.select}
+            className={styles.dateInput}
             value={selectedDateFrom}
             onChange={(e) => setSelectedDateFrom(e.target.value)}
             aria-label="Tanggal mulai"
@@ -656,7 +656,7 @@ export default function AdminAktivitasPage() {
           />
           <input
             type="date"
-            className={styles.select}
+            className={styles.dateInput}
             value={selectedDateTo}
             onChange={(e) => setSelectedDateTo(e.target.value)}
             aria-label="Tanggal akhir"
@@ -679,10 +679,10 @@ export default function AdminAktivitasPage() {
           <button
             key={tab.id}
             type="button"
-            className={`${styles.tabBtn} ${activeTab === tab.id ? styles.tabBtnActive : ''}`}
+            className={[styles.tabBtn, activeTab === tab.id ? styles.tabBtnActive : ''].filter(Boolean).join(' ')}
             onClick={() => setActiveTab(tab.id)}
           >
-            <span className={styles.cardIcon}><tab.icon /></span>
+            <tab.icon />
             <span>{tab.label}</span>
           </button>
         ))}

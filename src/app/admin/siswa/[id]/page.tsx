@@ -25,7 +25,7 @@ const STAGE_CONFIG: Record<string, { label: string; color: string; bg: string }>
   SCP: { label: 'Klarifikasi Sederhana', color: '#b45309', bg: 'rgba(245,158,11,0.14)' },
   SRP: { label: 'Reformulasi Terstruktur', color: '#0369a1', bg: 'rgba(14,165,233,0.14)' },
   MQP: { label: 'Multi-Pertanyaan', color: '#7c3aed', bg: 'rgba(124,58,237,0.14)' },
-  REFLECTIVE: { label: 'Reflektif', color: '#059669', bg: 'rgba(16,185,129,0.14)' },
+  REFLECTIVE: { label: 'Reflective', color: '#059669', bg: 'rgba(16,185,129,0.14)' },
   'N/A': { label: 'Tidak Tersedia', color: '#64748b', bg: '#f1f5f9' },
 }
 
@@ -234,7 +234,7 @@ export default function StudentDetailPage() {
             <div className={styles.headerInfo}>
               <div className={styles.avatar}><FiUser /></div>
               <div>
-                <h1>{student.name !== 'Unknown' && student.name !== 'Tidak Diketahui' ? student.name : student.email}</h1>
+                <h2>{student.name !== 'Unknown' && student.name !== 'Tidak Diketahui' ? student.name : student.email}</h2>
                 {student.name !== 'Unknown' && student.name !== 'Tidak Diketahui' && <p className={styles.emailText}>{student.email}</p>}
                 <div className={styles.headerMeta}>
                   <span className={styles.roleBadge}>{student.role}</span>
@@ -291,23 +291,20 @@ export default function StudentDetailPage() {
 
           {/* Tab Bagian */}
           <div className={styles.tabs}>
-            <button className={activeSection === 'activity' ? styles.tabActive : ''} onClick={() => setActiveSection('activity')}>
+            <button className={`${styles.tabBtn} ${activeSection === 'activity' ? styles.tabActive : ''}`} onClick={() => setActiveSection('activity')}>
               Aktivitas Terbaru
             </button>
-            <button className={activeSection === 'evolusi' ? styles.tabActive : ''} onClick={() => setActiveSection('evolusi')}>
+            <button className={`${styles.tabBtn} ${activeSection === 'evolusi' ? styles.tabActive : ''}`} onClick={() => setActiveSection('evolusi')}>
               Evolusi Prompt
             </button>
-            <button
-              className={`${styles.tabBtn} ${activeSection === 'kognitif' ? styles.tabActive : ''}`}
-              onClick={() => setActiveSection('kognitif')}
-            >
+            <button className={`${styles.tabBtn} ${activeSection === 'kognitif' ? styles.tabActive : ''}`} onClick={() => setActiveSection('kognitif')}>
               <FiActivity size={14} />
               Kognitif
             </button>
-            <button className={activeSection === 'courses' ? styles.tabActive : ''} onClick={() => setActiveSection('courses')}>
+            <button className={`${styles.tabBtn} ${activeSection === 'courses' ? styles.tabActive : ''}`} onClick={() => setActiveSection('courses')}>
               Kursus ({student.courses.length})
             </button>
-            <button className={activeSection === 'profile' ? styles.tabActive : ''} onClick={() => setActiveSection('profile')}>
+            <button className={`${styles.tabBtn} ${activeSection === 'profile' ? styles.tabActive : ''}`} onClick={() => setActiveSection('profile')}>
               Profil Belajar
             </button>
           </div>
@@ -461,11 +458,15 @@ export default function StudentDetailPage() {
                     </div>
                     <div className={styles.kognitifCard}>
                       <span className={styles.kognitifLabel}>Rata-rata CT</span>
-                      <span className={styles.kognitifValue}>{kognitifData.overall.avg_ct}/12</span>
+                      <span className={`${styles.kognitifValue} ${kognitifData.overall.avg_ct >= 8 ? styles.scoreGreen : kognitifData.overall.avg_ct >= 4 ? styles.scoreAmber : styles.scoreRed}`}>
+                        {kognitifData.overall.avg_ct}/12
+                      </span>
                     </div>
                     <div className={styles.kognitifCard}>
                       <span className={styles.kognitifLabel}>Rata-rata CrT</span>
-                      <span className={styles.kognitifValue}>{kognitifData.overall.avg_crt}/12</span>
+                      <span className={`${styles.kognitifValue} ${kognitifData.overall.avg_crt >= 8 ? styles.scoreGreen : kognitifData.overall.avg_crt >= 4 ? styles.scoreAmber : styles.scoreRed}`}>
+                        {kognitifData.overall.avg_crt}/12
+                      </span>
                     </div>
                   </div>
 

@@ -1,25 +1,15 @@
 /* src/app/admin/siswa/[id]/page.module.scss — Student Detail Page */
+@use '../../tokens' as *;
 
 .page {
-  --bg-shell: #f0f2f5;
-  --panel: #ffffff;
-  --ink-1: #1e293b;
-  --ink-2: #64748b;
-  --line: #e2e8f0;
-  --accent: #6366f1;
-  --accent-soft: rgba(99, 102, 241, 0.12);
-
   min-height: 100%;
   padding: 24px 26px 40px;
   margin: 0 auto;
   width: 100%;
-  max-width: 1200px;
-  font-family: 'Plus Jakarta Sans', 'Segoe UI', sans-serif;
-  color: var(--ink-1);
-  background:
-    radial-gradient(circle at 4% 8%, rgba(99, 102, 241, 0.07) 0%, transparent 24%),
-    radial-gradient(circle at 96% 95%, rgba(59, 130, 246, 0.06) 0%, transparent 20%),
-    var(--bg-shell);
+  max-width: $page-max-width;
+  font-family: $font-sans;
+  color: $gray-800;
+  background: $gray-100;
 }
 
 /* ─── Back Button ────────────────────────────────────────────────── */
@@ -29,31 +19,28 @@
   align-items: center;
   gap: 6px;
   padding: 0.45rem 0.8rem;
-  border: 1px solid var(--line);
-  border-radius: 10px;
-  background: var(--panel);
-  color: var(--ink-2);
+  border: 1px solid $gray-200;
+  border-radius: $radius-sm;
+  background: white;
+  color: $gray-500;
   font-size: 0.85rem;
   font-weight: 600;
   cursor: pointer;
-  transition: background 0.2s, border-color 0.2s;
+  transition: background $transition-normal, border-color $transition-normal;
   margin-bottom: 16px;
-}
 
-.backBtn:hover {
-  background: #f8faff;
-  border-color: #c7d2fe;
-  color: var(--accent);
+  &:hover {
+    background: #f8faff;
+    border-color: #c7d2fe;
+    color: $indigo-500;
+  }
 }
 
 /* ─── Header ─────────────────────────────────────────────────────── */
 
 .header {
-  background: linear-gradient(135deg, #1a1d2e 0%, #20243a 55%, #2b3160 100%);
-  padding: 20px 22px;
-  border-radius: 20px;
-  color: #f6fff8;
-  box-shadow: 0 12px 24px rgba(17, 46, 37, 0.18);
+  @include page-header;
+  margin-bottom: 14px;
 }
 
 .headerInfo {
@@ -65,24 +52,28 @@
 .avatar {
   width: 52px;
   height: 52px;
-  border-radius: 16px;
-  background: rgba(255, 255, 255, 0.15);
+  border-radius: $radius-lg;
+  background: $indigo-50;
+  border: 1px solid $gray-200;
   display: flex;
   align-items: center;
   justify-content: center;
   font-size: 1.4rem;
+  color: $indigo-500;
   flex-shrink: 0;
 }
 
 .header h1 {
   margin: 0;
   font-size: clamp(1.2rem, 1.6vw, 1.7rem);
-  font-family: 'Space Grotesk', 'Plus Jakarta Sans', sans-serif;
+  font-weight: 700;
+  color: $gray-800;
+  font-family: $font-sans;
 }
 
 .emailText {
   margin: 0.25rem 0 0;
-  color: rgba(226, 232, 240, 0.8);
+  color: $gray-500;
   font-size: 0.88rem;
 }
 
@@ -101,8 +92,8 @@
   font-weight: 700;
   text-transform: uppercase;
   letter-spacing: 0.05em;
-  background: rgba(99, 102, 241, 0.2);
-  color: #c7d2fe;
+  background: rgba($indigo-500, 0.1);
+  color: $indigo-600;
 }
 
 .stageBadge {
@@ -116,7 +107,7 @@
 
 .joinDate {
   font-size: 0.78rem;
-  color: rgba(226, 232, 240, 0.7);
+  color: $gray-400;
 }
 
 /* ─── Stats Grid ─────────────────────────────────────────────────── */
@@ -126,37 +117,38 @@
   display: grid;
   grid-template-columns: repeat(4, minmax(0, 1fr));
   gap: 10px;
+
+  @media (max-width: 768px) {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
 }
 
 .statItem {
-  border: 1px solid var(--line);
-  background: var(--panel);
-  border-radius: 14px;
-  padding: 12px;
+  @include stat-card;
   display: flex;
   align-items: center;
   gap: 10px;
+
+  svg {
+    font-size: 1.2rem;
+    flex-shrink: 0;
+  }
 }
 
-.statItem svg {
-  font-size: 1.2rem;
-  flex-shrink: 0;
-}
-
-.statIconPurple { color: #7c3aed; }
-.statIconGreen { color: #059669; }
-.statIconBlue { color: #2563eb; }
-.statIconTeal { color: #0d9488; }
-.statIconOrange { color: #d97706; }
-.statIconRed { color: #dc2626; }
+.statIconPurple { color: $purple-600; }
+.statIconGreen  { color: #059669; }
+.statIconBlue   { color: $primary-600; }
+.statIconTeal   { color: $teal-500; }
+.statIconOrange { color: $amber-600; }
+.statIconRed    { color: $red-600; }
 .statIconYellow { color: #ca8a04; }
-.statIconPink { color: #db2777; }
+.statIconPink   { color: #db2777; }
 
 .statNum {
   display: block;
   font-size: 1.3rem;
   font-weight: 700;
-  font-family: 'Space Grotesk', 'Plus Jakarta Sans', sans-serif;
+  font-family: $font-sans;
   line-height: 1;
 }
 
@@ -165,7 +157,7 @@
   font-size: 0.7rem;
   text-transform: uppercase;
   letter-spacing: 0.04em;
-  color: #94a3b8;
+  color: $gray-400;
   margin-top: 2px;
 }
 
@@ -179,9 +171,9 @@
 }
 
 .progressCard {
-  border: 1px solid var(--line);
-  background: var(--panel);
-  border-radius: 14px;
+  border: 1px solid $gray-200;
+  background: white;
+  border-radius: $radius-md;
   padding: 14px;
   display: flex;
   align-items: center;
@@ -194,14 +186,14 @@
   gap: 6px;
   font-size: 0.84rem;
   font-weight: 600;
-  color: var(--ink-2);
+  color: $gray-500;
   white-space: nowrap;
 }
 
 .progressBarOuter {
   flex: 1;
   height: 8px;
-  background: #f1f5f9;
+  background: $gray-100;
   border-radius: 999px;
   overflow: hidden;
 }
@@ -209,7 +201,7 @@
 .progressBarFill {
   height: 100%;
   border-radius: 999px;
-  background: linear-gradient(90deg, #6366f1, #818cf8);
+  background: linear-gradient(90deg, $indigo-500, $indigo-400);
   transition: width 0.4s ease;
 }
 
@@ -223,7 +215,7 @@
 .progressValue {
   font-size: 0.88rem;
   font-weight: 700;
-  color: var(--ink-1);
+  color: $gray-800;
   min-width: 40px;
   text-align: right;
 }
@@ -231,33 +223,16 @@
 /* ─── Tabs ────────────────────────────────────────────────────────── */
 
 .tabs {
+  @include tab-strip;
   margin-top: 18px;
-  display: flex;
-  gap: 8px;
-  flex-wrap: wrap;
 }
 
-.tabs button {
-  border: 1px solid #dbe3ef;
-  background: #f8fafc;
-  color: #475569;
-  border-radius: 999px;
-  padding: 0.45rem 0.9rem;
-  font-weight: 700;
-  font-size: 0.82rem;
-  cursor: pointer;
-  transition: background 0.2s, border-color 0.2s;
-}
-
-.tabs button:hover {
-  background: #eef2ff;
-  border-color: #c7d2fe;
+.tabBtn {
+  @include tab-button;
 }
 
 .tabActive {
-  background: rgba(99, 102, 241, 0.14) !important;
-  color: #4f46e5 !important;
-  border-color: #a5b4fc !important;
+  @include tab-button-active;
 }
 
 /* ─── Activity Section ───────────────────────────────────────────── */
@@ -270,8 +245,8 @@
   display: flex;
   flex-direction: column;
   gap: 0;
-  border: 1px solid var(--line);
-  border-radius: 16px;
+  border: 1px solid $gray-200;
+  border-radius: $radius-lg;
   overflow: hidden;
 }
 
@@ -279,17 +254,17 @@
   display: flex;
   gap: 12px;
   padding: 12px 14px;
-  background: var(--panel);
-  border-bottom: 1px solid #edf2f7;
-  transition: background 0.15s;
-}
+  background: white;
+  border-bottom: 1px solid $gray-100;
+  transition: background $transition-fast;
 
-.activityItem:last-child {
-  border-bottom: 0;
-}
+  &:last-child {
+    border-bottom: 0;
+  }
 
-.activityItem:hover {
-  background: #f8faff;
+  &:hover {
+    background: #f8faff;
+  }
 }
 
 .activityIcon {
@@ -309,6 +284,12 @@
   justify-content: space-between;
   gap: 8px;
   align-items: center;
+
+  time {
+    font-size: 0.74rem;
+    color: $gray-500;
+    white-space: nowrap;
+  }
 }
 
 .activityType {
@@ -316,16 +297,10 @@
   font-weight: 700;
   text-transform: uppercase;
   letter-spacing: 0.06em;
-  color: var(--accent);
-  background: var(--accent-soft);
+  color: $indigo-500;
+  background: rgba($indigo-500, 0.1);
   padding: 0.12rem 0.4rem;
   border-radius: 6px;
-}
-
-.activityTop time {
-  font-size: 0.74rem;
-  color: var(--ink-2);
-  white-space: nowrap;
 }
 
 .activityTitle {
@@ -337,7 +312,7 @@
 .activityDetail {
   margin: 0.2rem 0 0;
   font-size: 0.8rem;
-  color: var(--ink-2);
+  color: $gray-500;
   overflow: hidden;
   text-overflow: ellipsis;
   display: -webkit-box;
@@ -355,13 +330,13 @@
   margin: 0 0 10px;
   font-size: 0.95rem;
   font-weight: 700;
-  color: var(--ink-1);
+  color: $gray-800;
 }
 
 .evolusiDistribution {
-  background: var(--panel);
-  border: 1px solid var(--line);
-  border-radius: 16px;
+  background: white;
+  border: 1px solid $gray-200;
+  border-radius: $radius-lg;
   padding: 16px;
   margin-bottom: 14px;
 }
@@ -397,12 +372,12 @@
 .stageCount {
   font-size: 0.78rem;
   font-weight: 600;
-  color: var(--ink-2);
+  color: $gray-500;
 }
 
 .stageBarTrack {
   height: 8px;
-  background: #f1f5f9;
+  background: $gray-100;
   border-radius: 999px;
   overflow: hidden;
 }
@@ -414,53 +389,25 @@
 }
 
 .evolusiSessions {
-  background: var(--panel);
-  border: 1px solid var(--line);
-  border-radius: 16px;
+  background: white;
+  border: 1px solid $gray-200;
+  border-radius: $radius-lg;
   padding: 16px;
   margin-bottom: 14px;
 }
 
 .tableWrap {
-  overflow-x: auto;
+  @include table-wrap;
 }
 
 .evolusiTable {
-  width: 100%;
-  border-collapse: collapse;
-  font-size: 0.85rem;
-}
-
-.evolusiTable th {
-  text-align: left;
-  padding: 8px 10px;
-  font-size: 0.72rem;
-  text-transform: uppercase;
-  letter-spacing: 0.05em;
-  color: var(--ink-2);
-  font-weight: 700;
-  border-bottom: 2px solid var(--line);
-  white-space: nowrap;
-}
-
-.evolusiTable td {
-  padding: 8px 10px;
-  border-bottom: 1px solid #edf2f7;
-  vertical-align: middle;
-}
-
-.evolusiTable tbody tr:hover {
-  background: #f8faff;
-}
-
-.evolusiTable tbody tr:last-child td {
-  border-bottom: 0;
+  @include data-table;
 }
 
 .evolusiHistory {
-  background: var(--panel);
-  border: 1px solid var(--line);
-  border-radius: 16px;
+  background: white;
+  border: 1px solid $gray-200;
+  border-radius: $radius-lg;
   padding: 16px;
 }
 
@@ -472,11 +419,11 @@
 
 .promptItem {
   padding: 10px 0;
-  border-bottom: 1px solid #edf2f7;
-}
+  border-bottom: 1px solid $gray-100;
 
-.promptItem:last-child {
-  border-bottom: 0;
+  &:last-child {
+    border-bottom: 0;
+  }
 }
 
 .promptMeta {
@@ -484,28 +431,28 @@
   gap: 8px;
   align-items: center;
   flex-wrap: wrap;
+
+  time {
+    font-size: 0.72rem;
+    color: $gray-500;
+    margin-left: auto;
+  }
 }
 
 .promptSession {
   font-size: 0.72rem;
   font-weight: 600;
-  color: var(--ink-2);
-  background: #f1f5f9;
+  color: $gray-500;
+  background: $gray-100;
   padding: 0.12rem 0.4rem;
   border-radius: 6px;
-}
-
-.promptMeta time {
-  font-size: 0.72rem;
-  color: var(--ink-2);
-  margin-left: auto;
 }
 
 .promptText {
   margin: 0.4rem 0 0;
   font-size: 0.88rem;
   line-height: 1.5;
-  color: var(--ink-1);
+  color: $gray-800;
 }
 
 .microMarkers {
@@ -521,8 +468,8 @@
   border-radius: 6px;
   font-size: 0.66rem;
   font-weight: 600;
-  background: rgba(99, 102, 241, 0.08);
-  color: #6366f1;
+  background: rgba($indigo-500, 0.08);
+  color: $indigo-500;
   letter-spacing: 0.02em;
 }
 
@@ -539,27 +486,20 @@
 }
 
 .courseCard {
-  border: 1px solid var(--line);
-  background: var(--panel);
-  border-radius: 16px;
-  padding: 14px;
-  transition: box-shadow 0.2s;
-}
+  @include stat-card;
+  border-radius: $radius-lg;
 
-.courseCard:hover {
-  box-shadow: 0 2px 10px rgba(0, 0, 0, 0.06);
-}
-
-.courseCard h4 {
-  margin: 0;
-  font-size: 0.95rem;
-  line-height: 1.3;
+  h4 {
+    margin: 0;
+    font-size: 0.95rem;
+    line-height: 1.3;
+  }
 }
 
 .courseDate {
   margin: 0.3rem 0;
   font-size: 0.76rem;
-  color: var(--ink-2);
+  color: $gray-500;
 }
 
 .courseStats {
@@ -572,13 +512,13 @@
 .courseStatNum {
   font-size: 0.92rem;
   font-weight: 700;
-  font-family: 'Space Grotesk', 'Plus Jakarta Sans', sans-serif;
+  font-family: $font-sans;
 }
 
 .courseStatLabel {
   margin-left: 6px;
   font-size: 0.72rem;
-  color: var(--ink-2);
+  color: $gray-500;
   text-transform: uppercase;
   letter-spacing: 0.03em;
 }
@@ -586,7 +526,7 @@
 .courseBar {
   margin-top: 4px;
   height: 6px;
-  background: #f1f5f9;
+  background: $gray-100;
   border-radius: 999px;
   overflow: hidden;
 }
@@ -594,7 +534,7 @@
 .courseBarFill {
   height: 100%;
   border-radius: 999px;
-  background: linear-gradient(90deg, #6366f1, #818cf8);
+  background: linear-gradient(90deg, $indigo-500, $indigo-400);
   transition: width 0.3s ease;
 }
 
@@ -618,89 +558,56 @@
 }
 
 .profileField {
-  border: 1px solid var(--line);
-  background: var(--panel);
-  border-radius: 14px;
+  border: 1px solid $gray-200;
+  background: white;
+  border-radius: $radius-md;
   padding: 14px;
+
+  label {
+    font-size: 0.72rem;
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+    color: $gray-500;
+    font-weight: 700;
+  }
+
+  p {
+    margin: 0.4rem 0 0;
+    font-size: 0.92rem;
+    line-height: 1.5;
+  }
 }
 
-.profileField label {
-  font-size: 0.72rem;
-  text-transform: uppercase;
-  letter-spacing: 0.05em;
-  color: var(--ink-2);
-  font-weight: 700;
-}
+/* ─── Utility States (consolidated) ─────────────────────────────── */
 
-.profileField p {
-  margin: 0.4rem 0 0;
-  font-size: 0.92rem;
-  line-height: 1.5;
-}
-
-/* ─── Utility States ─────────────────────────────────────────────── */
-
-.loading {
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  min-height: 200px;
-  font-size: 0.96rem;
-  color: #64748b;
-}
-
-.error {
-  display: flex;
-  align-items: center;
-  gap: 0.5rem;
-  background: #ffeaea;
-  color: #a32929;
-  border: 1px solid #ffcaca;
-  padding: 0.8rem 0.9rem;
-  border-radius: 12px;
-  font-weight: 600;
-  margin-top: 12px;
-}
-
-.noData {
-  color: #64748b;
-  text-align: center;
-  padding: 2rem 1rem;
-  font-size: 0.92rem;
-}
-
-// ── Kognitif Tab ──
-.sectionContent {
-  margin-top: 14px;
-}
-
+.loading,
 .loadingState {
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  min-height: 200px;
-  font-size: 0.96rem;
-  color: #64748b;
+  @include loading-state;
 }
 
+.error,
 .errorState {
   display: flex;
   align-items: center;
   gap: 0.5rem;
-  background: #ffeaea;
+  background: $red-50;
   color: #a32929;
   border: 1px solid #ffcaca;
   padding: 0.8rem 0.9rem;
-  border-radius: 12px;
+  border-radius: $radius-md;
   font-weight: 600;
   margin-top: 12px;
 }
 
+.noData,
 .emptyState {
-  color: #64748b;
-  text-align: center;
-  padding: 2rem 1rem;
-  font-size: 0.92rem;
+  @include empty-state;
+}
+
+/* ─── Kognitif Tab ───────────────────────────────────────────────── */
+
+.sectionContent {
+  margin-top: 14px;
 }
 
 .kognitifOverview {
@@ -708,47 +615,57 @@
   grid-template-columns: repeat(3, 1fr);
   gap: 1rem;
   margin-bottom: 1.5rem;
+
+  @media (max-width: 640px) {
+    grid-template-columns: 1fr;
+  }
 }
 
 .kognitifCard {
-  background: #f8fafc;
-  border: 1px solid #e2e8f0;
-  border-radius: 10px;
-  padding: 1rem 1.2rem;
+  @include stat-card;
   display: flex;
   flex-direction: column;
   gap: 0.3rem;
+  border-radius: $radius-md;
 }
 
 .kognitifLabel {
   font-size: 0.8rem;
-  color: #64748b;
+  color: $gray-500;
 }
 
 .kognitifValue {
   font-size: 1.5rem;
   font-weight: 700;
-  color: #0f172a;
+  color: $gray-900;
 }
+
+.scoreGreen { color: #059669; }
+.scoreAmber { color: #b45309; }
+.scoreRed   { color: $red-600; }
 
 .indicatorGrid {
   display: grid;
   grid-template-columns: 1fr 1fr;
   gap: 1.5rem;
   margin-bottom: 1.5rem;
+
+  @media (max-width: 768px) {
+    grid-template-columns: 1fr;
+  }
 }
 
 .indicatorGroup {
-  background: #f8fafc;
-  border: 1px solid #e2e8f0;
-  border-radius: 10px;
+  background: $gray-50;
+  border: 1px solid $gray-200;
+  border-radius: $radius-md;
   padding: 1rem 1.2rem;
 }
 
 .indicatorGroupTitle {
   font-size: 0.85rem;
   font-weight: 600;
-  color: #334155;
+  color: $gray-700;
   margin-bottom: 0.8rem;
 }
 
@@ -761,7 +678,7 @@
 
 .indicatorName {
   font-size: 0.78rem;
-  color: #475569;
+  color: $gray-600;
   width: 120px;
   flex-shrink: 0;
 }
@@ -769,7 +686,7 @@
 .indicatorBar {
   flex: 1;
   height: 8px;
-  background: #e2e8f0;
+  background: $gray-200;
   border-radius: 4px;
   overflow: hidden;
 }
@@ -778,16 +695,16 @@
   height: 100%;
   border-radius: 4px;
   transition: width 0.3s ease;
-  background: #94a3b8;
+  background: $gray-400;
 
-  &[data-level="1"] { background: #f59e0b; }
-  &[data-level="2"] { background: #10b981; }
+  &[data-level="1"] { background: $amber-500; }
+  &[data-level="2"] { background: $green-500; }
 }
 
 .indicatorScore {
   font-size: 0.78rem;
   font-weight: 600;
-  color: #334155;
+  color: $gray-700;
   width: 30px;
   text-align: right;
 }
@@ -800,13 +717,11 @@
 }
 
 .followUpCard {
-  background: #f8fafc;
-  border: 1px solid #e2e8f0;
-  border-radius: 10px;
-  padding: 1rem 1.2rem;
+  @include stat-card;
   display: flex;
   flex-direction: column;
   gap: 0.2rem;
+  border-radius: $radius-md;
 
   &[data-highlight="true"] {
     background: rgba(16, 185, 129, 0.06);
@@ -816,64 +731,30 @@
 
 .followUpLabel {
   font-size: 0.8rem;
-  color: #64748b;
+  color: $gray-500;
 }
 
 .followUpCount {
   font-size: 1.3rem;
   font-weight: 700;
-  color: #0f172a;
+  color: $gray-900;
 }
 
 .followUpScore {
   font-size: 0.85rem;
   font-weight: 600;
-  color: #334155;
+  color: $gray-700;
 }
 
 .subHeading {
   font-size: 0.95rem;
   font-weight: 600;
-  color: #1e293b;
+  color: $gray-800;
   margin: 1.2rem 0 0.8rem;
 }
 
 .dataTable {
-  width: 100%;
-  border-collapse: collapse;
-  font-size: 0.85rem;
-
-  th {
-    text-align: left;
-    padding: 8px 10px;
-    font-size: 0.72rem;
-    text-transform: uppercase;
-    letter-spacing: 0.05em;
-    color: var(--ink-2);
-    font-weight: 700;
-    border-bottom: 2px solid var(--line);
-    white-space: nowrap;
-  }
-
-  td {
-    padding: 8px 10px;
-    border-bottom: 1px solid #edf2f7;
-    vertical-align: middle;
-  }
-
-  tbody tr:hover {
-    background: #f8faff;
-  }
-
-  tbody tr:last-child td {
-    border-bottom: 0;
-  }
-}
-
-.tabBtn {
-  display: inline-flex;
-  align-items: center;
-  gap: 5px;
+  @include data-table;
 }
 
 /* ─── Responsive ─────────────────────────────────────────────────── */
@@ -887,10 +768,6 @@
 @media (max-width: 768px) {
   .page {
     padding: 16px 12px 24px;
-  }
-
-  .statsGrid {
-    grid-template-columns: 1fr 1fr;
   }
 
   .progressSection {
@@ -916,14 +793,5 @@
 
   .progressCard {
     flex-wrap: wrap;
-  }
-
-  .evolusiTable {
-    font-size: 0.78rem;
-  }
-
-  .evolusiTable th,
-  .evolusiTable td {
-    padding: 6px 8px;
   }
 }

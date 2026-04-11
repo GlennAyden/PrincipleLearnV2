@@ -21,8 +21,8 @@ import type {
   ActivityItem, StudentRow, SystemHealth, DashboardAPIResponse,
 } from '@/types/dashboard'
 
-const STAGE_COLORS: Record<string, string> = { SCP: '#ef4444', SRP: '#f59e0b', MQP: '#3b82f6', Reflektif: '#10b981' }
-const STAGE_LABELS: Record<string, string> = { SCP: 'Simple Copy-Paste', SRP: 'Structured Prompt', MQP: 'Multi-Quality Prompt', Reflektif: 'Reflective Prompt' }
+const STAGE_COLORS: Record<string, string> = { SCP: '#ef4444', SRP: '#f59e0b', MQP: '#3b82f6', REFLECTIVE: '#10b981' }
+const STAGE_LABELS: Record<string, string> = { SCP: 'Simple Copy-Paste', SRP: 'Structured Prompt', MQP: 'Multi-Quality Prompt', REFLECTIVE: 'Reflective Prompt' }
 
 const ACTIVITY_ICONS: Record<string, React.ReactNode> = {
   course: <FiBook />, ask: <FiHelpCircle />, challenge: <FiTarget />, quiz: <FiCheckSquare />,
@@ -156,17 +156,22 @@ export default function AdminDashboardPage() {
         </div>
       </nav>
 
-      {error && <div className={styles.errorBanner}><p>⚠️ {error}</p><button onClick={fetchDashboard}>Coba Lagi</button></div>}
+      {error && <div className={styles.errorBanner}><p><FiAlertTriangle style={{ display: 'inline', marginRight: 6 }} />{error}</p><button onClick={fetchDashboard}>Coba Lagi</button></div>}
 
       {loading ? <div className={styles.loadingScreen}>Memuat data dashboard...</div> : (
         <>
           {/* ═══ OVERVIEW TAB ═══ */}
           {activeTab === 'overview' && (
             <>
-              <section className={styles.kpiGrid}>
-                <div className={`${styles.kpiCard} ${styles.kpiIndigo}`}><div className={styles.kpiIcon}><FiUsers /></div><div className={styles.kpiBody}><span className={styles.kpiValue}>{kpi?.activeStudents || 0}</span><span className={styles.kpiLabel}>Siswa Aktif</span></div></div>
-                <div className={`${styles.kpiCard} ${styles.kpiBlue}`}><div className={styles.kpiIcon}><FiBook /></div><div className={styles.kpiBody}><span className={styles.kpiValue}>{kpi?.totalCourses || 0}</span><span className={styles.kpiLabel}>Total Kursus</span></div></div>
-                <div className={`${styles.kpiCard} ${styles.kpiGreen}`}><div className={styles.kpiIcon}><FiCheckSquare /></div><div className={styles.kpiBody}><span className={styles.kpiValue}>{kpi?.quizAccuracy || 0}%</span><span className={styles.kpiLabel}>Akurasi Kuis</span></div></div>
+              {/* Primary KPIs — hero row */}
+              <div className={styles.kpiPrimary}>
+                <div className={`${styles.kpiPrimaryCard} ${styles.kpiIndigo}`}><div className={styles.kpiIcon}><FiUsers /></div><div className={styles.kpiBody}><span className={styles.kpiValue}>{kpi?.activeStudents || 0}</span><span className={styles.kpiLabel}>Siswa Aktif</span></div></div>
+                <div className={`${styles.kpiPrimaryCard} ${styles.kpiBlue}`}><div className={styles.kpiIcon}><FiBook /></div><div className={styles.kpiBody}><span className={styles.kpiValue}>{kpi?.totalCourses || 0}</span><span className={styles.kpiLabel}>Total Kursus</span></div></div>
+                <div className={`${styles.kpiPrimaryCard} ${styles.kpiGreen}`}><div className={styles.kpiIcon}><FiCheckSquare /></div><div className={styles.kpiBody}><span className={styles.kpiValue}>{kpi?.quizAccuracy || 0}%</span><span className={styles.kpiLabel}>Akurasi Kuis</span></div></div>
+              </div>
+
+              {/* Secondary KPIs — supporting metrics */}
+              <div className={styles.kpiSecondary}>
                 <div className={`${styles.kpiCard} ${styles.kpiAmber}`}><div className={styles.kpiIcon}><FiTarget /></div><div className={styles.kpiBody}><span className={styles.kpiValue}>{kpi?.ctCoverageRate || 0}%</span><span className={styles.kpiLabel}>Cakupan CT</span></div></div>
                 <div className={`${styles.kpiCard} ${styles.kpiPurple}`}><div className={styles.kpiIcon}><FiMessageCircle /></div><div className={styles.kpiBody}><span className={styles.kpiValue}>{kpi?.totalDiscussions || 0}</span><span className={styles.kpiLabel}>Diskusi</span></div></div>
                 <div className={`${styles.kpiCard} ${styles.kpiRose}`}><div className={styles.kpiIcon}><FiTrendingUp /></div><div className={styles.kpiBody}><span className={styles.kpiValue}>{rm2?.totalPrompts || 0}</span><span className={styles.kpiLabel}>Total Prompt</span></div></div>
@@ -177,7 +182,7 @@ export default function AdminDashboardPage() {
                 <div className={`${styles.kpiCard} ${styles.kpiIndigo}`}><div className={styles.kpiIcon}><FiFileText /></div><div className={styles.kpiBody}><span className={styles.kpiValue}>{kpi?.totalTranscripts || 0}</span><span className={styles.kpiLabel}>Transkrip</span></div></div>
                 <div className={`${styles.kpiCard} ${styles.kpiBlue}`}><div className={styles.kpiIcon}><FiDatabase /></div><div className={styles.kpiBody}><span className={styles.kpiValue}>{kpi?.totalLearningProfiles || 0}</span><span className={styles.kpiLabel}>Profil Belajar</span></div></div>
                 <div className={`${styles.kpiCard} ${styles.kpiGreen}`}><div className={styles.kpiIcon}><FiTrendingUp /></div><div className={styles.kpiBody}><span className={styles.kpiValue}>{kpi?.onboardingCompletionRate || 0}%</span><span className={styles.kpiLabel}>Tingkat Onboarding</span></div></div>
-              </section>
+              </div>
 
               {rm2 && (
                 <div className={styles.researchBadgeRow}>
@@ -195,7 +200,7 @@ export default function AdminDashboardPage() {
 
               <section className={styles.chartsRow}>
                 <div className={styles.chartPanel}>
-                  <div className={styles.chartHeader}><h2>📈 RM2 — Prompt Stages</h2><p>SCP → SRP → MQP → Reflektif</p></div>
+                  <div className={styles.chartHeader}><h2>RM2 — Prompt Stages</h2><p>SCP → SRP → MQP → REFLECTIVE</p></div>
                   <div className={styles.chartBody}>
                     {stageData.some(d => d.count > 0) ? (
                       <>
@@ -225,7 +230,7 @@ export default function AdminDashboardPage() {
                 </div>
 
                 <div className={styles.chartPanel}>
-                  <div className={styles.chartHeader}><h2>🧠 RM3 — Critical Thinking</h2><p>CT &amp; CTh Indicators</p></div>
+                  <div className={styles.chartHeader}><h2>RM3 — Critical Thinking</h2><p>CT &amp; CTh Indicators</p></div>
                   <div className={styles.chartBody}>
                     {rm3?.hasResearchData && rm3.avgCTScore !== undefined ? (
                       <>
@@ -270,7 +275,7 @@ export default function AdminDashboardPage() {
 
               {rm2?.microMarkerDistribution && Object.keys(rm2.microMarkerDistribution).length > 0 && (
                 <section className={styles.microMarkersSection}>
-                  <h3>🔬 Micro Marker Distribution</h3>
+                  <h3>Micro Marker Distribution</h3>
                   <div className={styles.microMarkerCards}>
                     {Object.entries(rm2.microMarkerDistribution).map(([m, c]) => (
                       <div key={m} className={styles.microMarkerCard}><span className={styles.microMarkerName}>{m}</span><span className={styles.microMarkerCount}>{c}</span></div>
@@ -303,7 +308,7 @@ export default function AdminDashboardPage() {
               </section>
 
               <section className={styles.activityTab}>
-                <div className={styles.activityHeader}><h2>🕐 Aktivitas Terbaru</h2><span className={styles.activityCount}>{recentActivity.length} item</span></div>
+                <div className={styles.activityHeader}><h2>Aktivitas Terbaru</h2><span className={styles.activityCount}>{recentActivity.length} item</span></div>
                 <div className={styles.activityList}>
                   {recentActivity.length === 0 ? <p className={styles.emptyActivity}>Belum ada aktivitas</p> : recentActivity.slice(0, 10).map((item, i) => (
                     <div key={i} className={styles.activityItem}>
@@ -327,7 +332,7 @@ export default function AdminDashboardPage() {
           {activeTab === 'system' && (
             <section className={styles.systemTab}>
               <div className={styles.systemHeader}>
-                <h2>🛡️ Kesehatan Sistem</h2>
+                <h2>Kesehatan Sistem</h2>
                 <button className={styles.refreshBtn} onClick={fetchSystemHealth}><FiRefreshCw /> Perbarui</button>
               </div>
               {!systemHealth ? <div className={styles.loadingScreen}>Memuat kesehatan sistem...</div> : (
@@ -373,7 +378,7 @@ export default function AdminDashboardPage() {
                     </div>
                   )}
                   {systemHealth.alerts.length === 0 && systemHealth.topFailingEndpoints.length === 0 && (
-                    <div className={styles.systemOk}><p>✅ Semua sistem berjalan normal. Tidak ada peringatan.</p></div>
+                    <div className={styles.systemOk}><p>Semua sistem berjalan normal. Tidak ada peringatan.</p></div>
                   )}
                 </>
               )}
