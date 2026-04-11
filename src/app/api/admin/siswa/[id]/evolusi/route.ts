@@ -29,7 +29,7 @@ interface SessionRow {
 interface ClassificationRow {
   id: string
   prompt_stage: string | null
-  session_number: number | null
+  learning_session_id: string | null
   created_at: string
 }
 
@@ -80,7 +80,7 @@ export async function GET(
 
     if (!sessionError) {
       sessions = (sessionData ?? []) as unknown as SessionRow[]
-    } else if (sessionError.code !== 'PGRST205' && sessionError.code !== '42P01') {
+    } else if (sessionError.code !== 'PGRST205' && sessionError.code !== '42P01' && sessionError.code !== '42703') {
       console.warn('[Evolusi] Error fetching learning_sessions:', sessionError.message)
     }
 
@@ -88,13 +88,13 @@ export async function GET(
     let classifications: ClassificationRow[] = []
     const { data: classData, error: classError } = await adminDb
       .from('prompt_classifications')
-      .select('id, prompt_stage, session_number, created_at')
+      .select('id, prompt_stage, learning_session_id, created_at')
       .eq('user_id', userId)
       .order('created_at', { ascending: true })
 
     if (!classError) {
       classifications = (classData ?? []) as unknown as ClassificationRow[]
-    } else if (classError.code !== 'PGRST205' && classError.code !== '42P01') {
+    } else if (classError.code !== 'PGRST205' && classError.code !== '42P01' && classError.code !== '42703') {
       console.warn('[Evolusi] Error fetching prompt_classifications:', classError.message)
     }
 
