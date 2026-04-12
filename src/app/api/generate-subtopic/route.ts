@@ -602,31 +602,38 @@ async function syncQuizQuestions({
       return;
     }
 
+    // Insert-first, delete-later to avoid wiping the subtopic's quiz
+    // if the insert fails. Without transactions, this ordering is the safest
+    // approximation: readers may briefly see both old and new rows, but never
+    // an empty state. Old rows are identified via created_at <= syncMarkedAt.
+    const syncMarkedAt = new Date().toISOString();
+    const { error: insertError } = await adminDb.from('quiz').insert(quizInserts);
+
+    if (insertError) {
+      console.warn('[GenerateSubtopic] Quiz insert failed — leaving old quiz intact', insertError);
+      return;
+    }
+
     try {
       const { error: deleteError } = await adminDb
         .from('quiz')
         .eq('course_id', courseId)
         .eq('subtopic_id', resolvedSubtopicId)
+        .lt('created_at', syncMarkedAt)
         .delete();
 
       if (deleteError) {
-        console.warn('[GenerateSubtopic] Failed to clean existing quiz entries', deleteError);
+        console.warn('[GenerateSubtopic] Failed to clean old quiz entries after insert', deleteError);
       }
     } catch (cleanupError) {
       console.warn('[GenerateSubtopic] Quiz cleanup threw unexpectedly', cleanupError);
     }
 
-    const { error: insertError } = await adminDb.from('quiz').insert(quizInserts);
-
-    if (insertError) {
-      console.warn('[GenerateSubtopic] Quiz insert failed', insertError);
-    } else {
-      console.log('[GenerateSubtopic] Quiz questions synced to database', {
-        courseId,
-        subtopicId: resolvedSubtopicId,
-        count: quizInserts.length,
-      });
-    }
+    console.log('[GenerateSubtopic] Quiz questions synced to database', {
+      courseId,
+      subtopicId: resolvedSubtopicId,
+      count: quizInserts.length,
+    });
   } catch (quizSyncError) {
     console.warn('[GenerateSubtopic] Sync quiz questions failed', quizSyncError);
   }

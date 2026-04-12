@@ -452,8 +452,18 @@ class SupabaseQueryBuilder {
     return this;
   }
 
+  gt(column: string, value: string | number) {
+    this.filters.push({ method: 'gt', args: [column, value] });
+    return this;
+  }
+
   gte(column: string, value: string | number) {
     this.filters.push({ method: 'gte', args: [column, value] });
+    return this;
+  }
+
+  lt(column: string, value: string | number) {
+    this.filters.push({ method: 'lt', args: [column, value] });
     return this;
   }
 

@@ -4,6 +4,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { adminDb } from '@/lib/database'
 import { verifyToken } from '@/lib/jwt'
+import { computeEngagementScore } from '@/lib/engagement'
 
 // ── Row Interfaces ──
 interface UserDetailRow { id: string; email: string; name?: string; role: string; created_at: string; updated_at?: string }
@@ -205,17 +206,17 @@ export async function GET(
     })
 
     // ── Engagement score ──────────────────────────────────────────────
-    const totalInteractions =
-      courses.length * 3 +
-      quizSubmissions.length * 2 +
-      journals.length * 2 +
-      transcripts.length +
-      askQuestions.length * 2 +
-      challenges.length * 3 +
-      discussions.length * 3 +
-      feedbacks.length
-
-    const engagementScore = Math.min(100, Math.round((totalInteractions / 50) * 100))
+    // Shared formula — see src/lib/engagement.ts
+    const engagementScore = computeEngagementScore({
+      courses: courses.length,
+      quizzes: quizSubmissions.length,
+      journals: journals.length,
+      transcripts: transcripts.length,
+      askQuestions: askQuestions.length,
+      challenges: challenges.length,
+      discussions: discussions.length,
+      feedbacks: feedbacks.length,
+    })
 
     // ── Prompt stage heuristic ────────────────────────────────────────
     const interactionCount = askQuestions.length + challenges.length + discussions.length

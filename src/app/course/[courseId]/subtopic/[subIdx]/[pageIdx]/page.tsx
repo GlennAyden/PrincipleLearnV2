@@ -137,14 +137,18 @@ export default function SubtopicPage() {
   const [challengeQ, setChallengeQ] = useState<string>('');
   const [challengeAnswer, setChallengeAnswer] = useState<string>('');
   const [challengeReasoning, setChallengeReasoning] = useState<string>('');
-  const [, setChallengeFeedback] = useState<string>('');
   const [activeChallengeIndex, setActiveChallengeIndex] = useState<number>(-1);
 
   const [examplesData, setExamplesData] = useSessionStorage<string[]>(
     `${keyBase}-examples`,
     []
   );
-  const [activeExampleIndex, setActiveExampleIndex] = useState<number>(0);
+  // Default to the most-recent example so re-landing on the tab shows the
+  // newest generation, not the oldest.
+  const [activeExampleIndex, setActiveExampleIndex] = useState<number>(() =>
+    examplesData.length > 0 ? examplesData.length - 1 : 0
+  );
+  const [examplesError, setExamplesError] = useState<string | null>(null);
 
   const [activeTab, setActiveTab] = useState<'ask' | 'challenge' | 'examples' | null>(
     null
@@ -387,8 +391,8 @@ export default function SubtopicPage() {
         }
       } catch (error) {
         console.error('Error loading challenge history from database:', error);
-        // Fall back to empty array if load fails
-        setChallengeData([]);
+        // Intentionally do NOT wipe sessionStorage on transient errors —
+        // that would destroy any in-session progress the user just made.
       }
     }
 
@@ -428,7 +432,6 @@ export default function SubtopicPage() {
     setChallengeQ('');
     setChallengeAnswer('');
     setChallengeReasoning('');
-    setChallengeFeedback('');
   };
 
   // Generate a challenge question
@@ -437,9 +440,8 @@ export default function SubtopicPage() {
     setChallengeQ('');
     setChallengeAnswer('');
     setChallengeReasoning('');
-    setChallengeFeedback('');
     setActiveChallengeIndex(-1);
-    
+
     try {
       const response = await apiFetch('/api/challenge-thinking', {
         method: 'POST',
@@ -451,12 +453,9 @@ export default function SubtopicPage() {
 
       if (!response.ok) throw new Error('Failed to fetch challenge question');
 
-      const contentType = response.headers.get('content-type') || '';
-      if (contentType.includes('text/plain') && response.body) {
+      // /api/challenge-thinking always streams text/plain; no JSON fallback.
+      if (response.body) {
         await readStream(response, setChallengeQ);
-      } else {
-        const responseData = await response.json();
-        setChallengeQ(responseData.question);
       }
     } catch (error) {
       console.error('Error fetching challenge question:', error);
@@ -487,10 +486,9 @@ export default function SubtopicPage() {
       });
       
       if (!response.ok) throw new Error('Failed to get feedback');
-      
+
       const responseData = await response.json();
-      setChallengeFeedback(responseData.feedback);
-      
+
       // Save to challenge history in state
       const newChallengeItem = {
         question: challengeQ,
@@ -535,6 +533,7 @@ export default function SubtopicPage() {
 
   const fetchExamples = async () => {
     setLoadingExamples(true);
+    setExamplesError(null);
     try {
       const res = await apiFetch('/api/generate-examples', {
         method: 'POST',
@@ -545,14 +544,16 @@ export default function SubtopicPage() {
       const text = await res.text();
       if (!res.ok) throw new Error(text);
       const { examples } = JSON.parse(text) as { examples: string[] };
-      
+
       // Add new example to history and set it as active
-      const updatedExamples = [...examplesData, ...examples]; 
+      const updatedExamples = [...examplesData, ...examples];
       setExamplesData(updatedExamples);
       setActiveExampleIndex(updatedExamples.length - 1); // Select the newest example
     } catch (e: unknown) {
       console.error(e);
-      alert('Gagal generate contoh: ' + (e instanceof Error ? e.message : 'Unknown error'));
+      setExamplesError(
+        'Gagal generate contoh: ' + (e instanceof Error ? e.message : 'Unknown error')
+      );
     } finally {
       setLoadingExamples(false);
     }
@@ -796,8 +797,13 @@ export default function SubtopicPage() {
                 )}
                 {activeTab === 'examples' && (
                   <>
-                    <ExampleList 
-                      examples={examplesData.length > 0 ? [examplesData[activeExampleIndex]] : []} 
+                    {examplesError && (
+                      <div className={styles.examplesError} role="alert">
+                        {examplesError}
+                      </div>
+                    )}
+                    <ExampleList
+                      examples={examplesData.length > 0 ? [examplesData[activeExampleIndex]] : []}
                       onRegenerate={fetchExamples}
                       isLoading={loadingExamples}
                       onPrev={examplesData.length > 1 && activeExampleIndex > 0 ? prevExample : undefined}

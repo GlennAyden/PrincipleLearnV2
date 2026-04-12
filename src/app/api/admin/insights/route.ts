@@ -12,7 +12,7 @@ const JWT_SECRET = process.env.JWT_SECRET!;
 interface PromptRow { id: string; user_id: string; question: string; prompt_components: unknown; prompt_version: string; session_number: number; reasoning_note: string; created_at: string }
 interface QuizRow { id: string; user_id: string; is_correct: boolean; reasoning_note: string; created_at: string }
 interface JournalRow { id: string; user_id: string; content: unknown; type: string; created_at: string }
-interface ChallengeRow { id: string; user_id: string; reasoning_note: string; created_at: string }
+interface ChallengeRow { id: string; user_id: string; created_at: string }
 interface DiscussionRow { id: string; user_id: string; status: string; created_at: string }
 interface PromptClassificationRow { id: string; user_id: string; prompt_stage: string; prompt_stage_score: number; created_at: string; [key: string]: unknown }
 interface InsightsUserRow { id: string; email: string; created_at: string }
@@ -102,7 +102,7 @@ export async function GET(request: NextRequest) {
       safeQuery<PromptRow>('ask_question_history', 'id, user_id, question, prompt_components, prompt_version, session_number, reasoning_note, created_at', userId ? { user_id: userId } : {}),
       safeQuery<QuizRow>('quiz_submissions', 'id, user_id, is_correct, reasoning_note, created_at', userId ? { user_id: userId } : {}),
       safeQuery<JournalRow>('jurnal', 'id, user_id, content, type, created_at', userId ? { user_id: userId } : {}),
-      safeQuery<ChallengeRow>('challenge_responses', 'id, user_id, reasoning_note, created_at', userId ? { user_id: userId } : {}),
+      safeQuery<ChallengeRow>('challenge_responses', 'id, user_id, created_at', userId ? { user_id: userId } : {}),
       safeQuery<DiscussionRow>('discussion_sessions', 'id, user_id, status, created_at'),
       safeQuery<PromptClassificationRow>('prompt_classifications', '*'),
     ]);
@@ -232,7 +232,8 @@ export async function GET(request: NextRequest) {
 
     // ── 4. Challenge Responses ──
     const challengeList = challenges;
-    const challengesWithReasoning = challengeList.filter(c => c.reasoning_note?.trim()).length;
+    // Note: challenge_responses table has no reasoning_note column; always 0.
+    const challengesWithReasoning = 0;
 
     // ── 5. Per-student summary ──
     let studentSummary: { userId: string; email: string; totalPrompts: number; totalQuizzes: number; quizAccuracy: number; totalReflections: number; totalChallenges: number; joinedAt: string }[] = [];

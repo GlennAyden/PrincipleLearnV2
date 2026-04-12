@@ -109,6 +109,16 @@ $transition: 0.25s cubic-bezier(0.4, 0, 0.2, 1);
   flex-wrap: wrap;
 }
 
+.examplesError {
+  background: #fef2f2;
+  border: 1px solid #fecaca;
+  color: #b91c1c;
+  padding: 0.65rem 0.9rem;
+  border-radius: $radius-sm;
+  font-size: 0.85rem;
+  margin-bottom: 0.75rem;
+}
+
 .initialBtn {
   display: flex;
   align-items: center;

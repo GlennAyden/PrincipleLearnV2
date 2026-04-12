@@ -56,6 +56,9 @@ async function postHandler(req: NextRequest) {
     // Try to save challenge response to database
     try {
       const timestamp = new Date().toISOString();
+      // Note: `reasoning_note` is intentionally NOT persisted to challenge_responses
+      // — the column does not exist on this table. The reasoning note is still
+      // forwarded to the cognitive scoring service below as extra context.
       const challengeData = {
         id: challengeId,
         user_id: userId,
@@ -66,7 +69,6 @@ async function postHandler(req: NextRequest) {
         question: normalizedQuestion,
         answer: normalizedAnswer,
         feedback: normalizedFeedback,
-        reasoning_note: normalizedReasoning,
         created_at: timestamp,
         updated_at: timestamp
       };
@@ -84,6 +86,9 @@ async function postHandler(req: NextRequest) {
       after(async () => {
         try {
           const { scoreAndSave } = await import('@/services/cognitive-scoring.service');
+          const contextSummary = normalizedReasoning
+            ? `Reasoning: ${normalizedReasoning.slice(0, 300)}`
+            : undefined;
           await scoreAndSave({
             source: 'challenge_response',
             user_id: userId,
@@ -92,6 +97,7 @@ async function postHandler(req: NextRequest) {
             user_text: normalizedAnswer,
             prompt_or_question: normalizedQuestion,
             ai_response: normalizedFeedback.slice(0, 500),
+            context_summary: contextSummary,
           });
         } catch (scoreError) {
           console.warn('[ChallengeResponse] Cognitive scoring failed:', scoreError);

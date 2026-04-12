@@ -167,6 +167,12 @@ async function postHandler(req: NextRequest) {
         const reasoningFromAnswer = normalizeText(answer.reasoningNote);
         const reasoningFromArray = normalizeText(data.reasoningNotes?.[i]);
         const quizId = matchingQuiz.id as string;
+        const userAnswerText = normalizeText(answer.userAnswer);
+        // Server-side verify correctness against the DB's stored correct_answer,
+        // rather than trusting the client's `answer.isCorrect`.
+        const correctAnswerText = normalizeText(matchingQuiz.correct_answer);
+        const serverIsCorrect = correctAnswerText.length > 0
+          && userAnswerText.toLowerCase() === correctAnswerText.toLowerCase();
 
         matchedRows.push({
           user_id: user.id,
@@ -175,8 +181,8 @@ async function postHandler(req: NextRequest) {
           subtopic_id: subtopicId,
           module_index: normalizeIndex(data.moduleIndex),
           subtopic_index: normalizeIndex(data.subtopicIndex),
-          answer: normalizeText(answer.userAnswer),
-          is_correct: answer.isCorrect,
+          answer: userAnswerText,
+          is_correct: serverIsCorrect,
           reasoning_note: reasoningFromAnswer || reasoningFromArray || null,
         });
 
@@ -187,7 +193,12 @@ async function postHandler(req: NextRequest) {
           quizId,
           question: answer.question.substring(0, 50) + '...'
         });
-        
+
+        if (serverIsCorrect !== answer.isCorrect) {
+          console.warn(
+            `[QuizSubmit] Client/server is_correct mismatch for q${i + 1}: client=${answer.isCorrect} server=${serverIsCorrect}`
+          );
+        }
         console.log(`✅ Matched submission ${i + 1}/${answers.length} (${matchMethod}):`, answer.question.substring(0, 50) + '...');
       } else {
         matchingResults.push({
@@ -201,14 +212,21 @@ async function postHandler(req: NextRequest) {
     }
 
     const failedMatches = matchingResults.filter((r) => !r.matched);
-    if (failedMatches.length > 0) {
+    const warnings = failedMatches.map((fm) => ({
+      questionIndex: fm.questionIndex,
+      question: fm.question,
+      reason: 'Tidak dapat dicocokkan dengan pertanyaan kuis di database',
+    }));
+
+    if (matchedRows.length === 0) {
       return NextResponse.json(
         {
-          error: 'Beberapa jawaban kuis tidak dapat dicocokkan dengan pertanyaan kuis',
+          error: 'Tidak ada jawaban yang dapat dicocokkan dengan pertanyaan kuis',
           matchingResults,
+          warnings,
           details: {
             totalAnswers: answers.length,
-            successfulMatches: matchedRows.length,
+            successfulMatches: 0,
             failedMatches: failedMatches.length,
           },
         },
@@ -230,15 +248,23 @@ async function postHandler(req: NextRequest) {
         ? [insertedRows]
         : [];
     const submissionIds = insertedRowList.map((row: Record<string, unknown>) => row.id);
-    
+
+    // Server-computed score — authoritative, overrides client's self-reported score.
+    const serverCorrectCount = matchedRows.filter((r) => r.is_correct).length;
+    const serverScore = matchedRows.length > 0
+      ? Math.round((serverCorrectCount / matchedRows.length) * 100)
+      : 0;
+
     console.log(`Quiz submission saved to database:`, {
       user: data.userId,
       course: data.courseId,
       subtopic: data.subtopic,
       subtopicTitle: data.subtopicTitle,
-      score: data.score,
+      clientScore: data.score,
+      serverScore,
       submissionCount: submissionIds.length,
-      matchingResults: matchingResults
+      warningCount: warnings.length,
+      matchingResults,
     });
 
     const successfulMatches = matchedRows.length;
@@ -277,7 +303,7 @@ async function postHandler(req: NextRequest) {
           source_id: quizBatchId,
           user_text: qaText,
           prompt_or_question: `Kuis subtopik: ${data.subtopicTitle || ''}`,
-          context_summary: `Skor: ${data.score}, ${matchedRows.filter(r => r.is_correct).length}/${matchedRows.length} benar`,
+          context_summary: `Skor: ${serverScore}, ${serverCorrectCount}/${matchedRows.length} benar`,
         });
       } catch (scoreError) {
         console.warn('[QuizSubmit] Cognitive scoring failed:', scoreError);
@@ -288,14 +314,19 @@ async function postHandler(req: NextRequest) {
       success: true,
       submissionIds,
       matchingResults,
-      message: `Saved ${successfulMatches}/${data.answers.length} quiz answers to database`,
+      warnings,
+      score: serverScore,
+      correctCount: serverCorrectCount,
+      message: warnings.length > 0
+        ? `Saved ${successfulMatches}/${data.answers.length} quiz answers (${warnings.length} unmatched)`
+        : `Saved ${successfulMatches}/${data.answers.length} quiz answers to database`,
       details: {
         totalAnswers: answers.length,
         successfulMatches,
-        failedMatches: 0,
+        failedMatches: warnings.length,
         subtopicId,
-        quizQuestionsFound: quizQuestions.length
-      }
+        quizQuestionsFound: quizQuestions.length,
+      },
     });
   } catch (error: unknown) {
     console.error('Error saving quiz attempt:', error);

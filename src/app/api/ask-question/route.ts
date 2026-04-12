@@ -229,26 +229,30 @@ Please answer in the same language as the question above. Base your answer stric
           // Generate a deterministic source_id for cognitive scoring
           const sourceId = `aq_${userId}_${courseId}_${Date.now()}`;
 
-          try {
-            const { scoreAndSave } = await import('@/services/cognitive-scoring.service');
-            await scoreAndSave({
-              source: 'ask_question',
-              user_id: userId,
-              course_id: courseId,
-              source_id: sourceId,
-              user_text: normalizedQuestion,
-              prompt_or_question: 'Pertanyaan mahasiswa ke AI',
-              ai_response: answer.slice(0, 500),
-              context_summary: context?.slice(0, 300),
-              is_follow_up: isFollowUp,
-              previous_interaction: previousInteraction
-                ? `Q: ${previousInteraction.question}\nA: ${(previousInteraction.answer || '').slice(0, 300)}`
-                : undefined,
-              prompt_stage: classification.stage,
-            });
-          } catch (scoreError) {
-            console.warn('[AskQuestion] Cognitive scoring failed (non-blocking):', scoreError);
-          }
+          // Fire-and-forget so the stream's controller.close() isn't blocked
+          // by the scoring call (which can take up to 20s per its own timeout).
+          void (async () => {
+            try {
+              const { scoreAndSave } = await import('@/services/cognitive-scoring.service');
+              await scoreAndSave({
+                source: 'ask_question',
+                user_id: userId,
+                course_id: courseId,
+                source_id: sourceId,
+                user_text: normalizedQuestion,
+                prompt_or_question: 'Pertanyaan mahasiswa ke AI',
+                ai_response: answer.slice(0, 500),
+                context_summary: context?.slice(0, 300),
+                is_follow_up: isFollowUp,
+                previous_interaction: previousInteraction
+                  ? `Q: ${previousInteraction.question}\nA: ${(previousInteraction.answer || '').slice(0, 300)}`
+                  : undefined,
+                prompt_stage: classification.stage,
+              });
+            } catch (scoreError) {
+              console.warn('[AskQuestion] Cognitive scoring failed (non-blocking):', scoreError);
+            }
+          })();
         }
       },
     });

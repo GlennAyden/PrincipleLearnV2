@@ -4,6 +4,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { adminDb } from '@/lib/database'
 import { verifyToken } from '@/lib/jwt'
+import { computeEngagementScore } from '@/lib/engagement'
 import type { StudentListItem } from '@/types/student'
 
 // ─── Auth Helper ──────────────────────────────────────────────────────────────
@@ -75,17 +76,17 @@ export async function GET(request: NextRequest) {
         ? Math.round((row.completed_progress / row.total_progress) * 100)
         : 0
 
-      // Engagement score (0–100): weighted composite
-      const totalActivities =
-        row.total_courses * 5 +
-        row.total_quizzes * 2 +
-        row.total_journals * 3 +
-        row.total_transcripts * 2 +
-        row.total_ask_questions * 2 +
-        row.total_challenges * 3 +
-        row.total_discussions * 4 +
-        row.total_feedbacks * 1
-      const engagementScore = Math.min(100, Math.round(totalActivities * 2))
+      // Engagement score (0–100): shared formula — see src/lib/engagement.ts
+      const engagementScore = computeEngagementScore({
+        courses: row.total_courses,
+        quizzes: row.total_quizzes,
+        journals: row.total_journals,
+        transcripts: row.total_transcripts,
+        askQuestions: row.total_ask_questions,
+        challenges: row.total_challenges,
+        discussions: row.total_discussions,
+        feedbacks: row.total_feedbacks,
+      })
 
       // Prompt stage heuristic
       const interactionCount = row.total_ask_questions + row.total_challenges + row.total_discussions
