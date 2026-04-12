@@ -63,7 +63,9 @@ interface ChallengeLogItem {
 interface QuizLogItem {
   id: string
   timestamp: string
+  rawTimestamp?: string | null
   topic: string
+  subtopicId?: string | null
   question: string
   options: string[]
   userAnswer: string
@@ -73,6 +75,68 @@ interface QuizLogItem {
   userEmail: string
   userId: string
   courseTitle: string
+  attemptNumber?: number
+  quizAttemptId?: string | null
+}
+
+interface QuizAttemptGroup {
+  key: string
+  userEmail: string
+  userId: string
+  courseTitle: string
+  topic: string
+  attemptNumber: number
+  quizAttemptId: string | null
+  timestamp: string
+  rawTimestamp: string | null
+  correctCount: number
+  totalCount: number
+  score: number
+  items: QuizLogItem[]
+}
+
+function groupQuizByAttempt(logs: QuizLogItem[]): QuizAttemptGroup[] {
+  const groups = new Map<string, QuizAttemptGroup>()
+  for (const log of logs) {
+    // Group key: quiz_attempt_id if present, else fall back to userId+subtopic+timestamp
+    const key = log.quizAttemptId
+      ?? `${log.userId}::${log.subtopicId ?? log.topic}::${log.rawTimestamp ?? log.timestamp}::${log.attemptNumber ?? 1}`
+    const existing = groups.get(key)
+    if (existing) {
+      existing.items.push(log)
+      existing.totalCount++
+      if (log.isCorrect) existing.correctCount++
+    } else {
+      groups.set(key, {
+        key,
+        userEmail: log.userEmail,
+        userId: log.userId,
+        courseTitle: log.courseTitle,
+        topic: log.topic,
+        attemptNumber: log.attemptNumber ?? 1,
+        quizAttemptId: log.quizAttemptId ?? null,
+        timestamp: log.timestamp,
+        rawTimestamp: log.rawTimestamp ?? null,
+        correctCount: log.isCorrect ? 1 : 0,
+        totalCount: 1,
+        score: 0,
+        items: [log],
+      })
+    }
+  }
+  // Compute score and sort by rawTimestamp DESC (fallback lexical)
+  const result: QuizAttemptGroup[] = []
+  for (const g of groups.values()) {
+    g.score = g.totalCount > 0 ? Math.round((g.correctCount / g.totalCount) * 100) : 0
+    result.push(g)
+  }
+  result.sort((a, b) => {
+    const ta = a.rawTimestamp ?? ''
+    const tb = b.rawTimestamp ?? ''
+    if (ta && tb) return tb.localeCompare(ta)
+    return 0
+  })
+  return result
 }
 
 interface JurnalLogItem {
@@ -823,7 +887,7 @@ export default function AdminAktivitasPage() {
         )}
 
         {/* ────────────────────────────────────────────────
-            Tab 3: Kuis
+            Tab 3: Kuis — grouped by attempt
         ──────────────────────────────────────────────── */}
         {activeTab === 'quiz' && (
           logsLoading ? <Skeleton /> : (
@@ -831,64 +895,72 @@ export default function AdminAktivitasPage() {
               {quizLogs.length === 0 ? (
                 <EmptyState message="Belum ada pengerjaan kuis" />
               ) : (
-                quizLogs.map((log) => (
-                  <article key={log.id} className={styles.quizCard}>
+                groupQuizByAttempt(quizLogs).map((group) => (
+                  <article key={group.key} className={styles.quizCard}>
                     <header>
                       <div>
-                        <h3>{log.topic}</h3>
-                        <p>{log.courseTitle}</p>
+                        <h3>
+                          {group.topic}
+                          <span style={{ marginLeft: 8, fontSize: '0.75rem', padding: '2px 8px', background: '#eef2ff', color: '#4338ca', borderRadius: 999, fontWeight: 600 }}>
+                            Attempt #{group.attemptNumber}
+                          </span>
+                        </h3>
+                        <p>{group.courseTitle}</p>
                       </div>
-                      <div className={log.isCorrect ? styles.pillSuccess : styles.pillMuted}>
-                        {log.isCorrect ? 'Benar' : 'Belum Tepat'}
+                      <div className={group.score >= 80 ? styles.pillSuccess : styles.pillMuted}>
+                        {group.correctCount}/{group.totalCount} benar · {group.score}%
                       </div>
                     </header>
 
-                    <div className={styles.questionBox}>
-                      <strong>Pertanyaan</strong>
-                      <p>{log.question}</p>
-                    </div>
+                    {group.items.map((log) => (
+                      <div key={log.id} style={{ borderTop: '1px solid #e5e7eb', paddingTop: '0.85rem', marginTop: '0.85rem' }}>
+                        <div className={styles.questionBox}>
+                          <strong>Pertanyaan</strong>
+                          <p>{log.question}</p>
+                        </div>
 
-                    {/* Options list */}
-                    {log.options && log.options.length > 0 && (
-                      <div className={styles.optionsList}>
-                        {log.options.map((opt, idx) => {
-                          const isUserAnswer = opt === log.userAnswer
-                          const isCorrectAnswer = opt === log.correctAnswer
-                          let optClass = styles.optionItem
-                          if (isCorrectAnswer) optClass += ` ${styles.optionItemCorrect}`
-                          else if (isUserAnswer && !log.isCorrect) optClass += ` ${styles.optionItemWrong}`
-                          return (
-                            <div key={idx} className={optClass}>
-                              {String.fromCharCode(65 + idx)}. {opt}
-                              {isUserAnswer && !isCorrectAnswer && ' (jawaban siswa)'}
-                            </div>
-                          )
-                        })}
-                      </div>
-                    )}
+                        {log.options && log.options.length > 0 && (
+                          <div className={styles.optionsList}>
+                            {log.options.map((opt, idx) => {
+                              const isUserAnswer = opt === log.userAnswer
+                              const isCorrectAnswer = opt === log.correctAnswer
+                              let optClass = styles.optionItem
+                              if (isCorrectAnswer) optClass += ` ${styles.optionItemCorrect}`
+                              else if (isUserAnswer && !log.isCorrect) optClass += ` ${styles.optionItemWrong}`
+                              return (
+                                <div key={idx} className={optClass}>
+                                  {String.fromCharCode(65 + idx)}. {opt}
+                                  {isUserAnswer && !isCorrectAnswer && ' (jawaban siswa)'}
+                                </div>
+                              )
+                            })}
+                          </div>
+                        )}
 
-                    <div className={styles.answerCompare}>
-                      <div>
-                        <span>Jawaban Siswa</span>
-                        <p>{log.userAnswer || '-'}</p>
-                      </div>
-                      <div>
-                        <span>Kunci Jawaban</span>
-                        <p>{log.correctAnswer || '-'}</p>
-                      </div>
-                    </div>
+                        <div className={styles.answerCompare}>
+                          <div>
+                            <span>Jawaban Siswa</span>
+                            <p>{log.userAnswer || '-'}</p>
+                          </div>
+                          <div>
+                            <span>Kunci Jawaban</span>
+                            <p>{log.correctAnswer || '-'}</p>
+                          </div>
+                        </div>
 
-                    {log.reasoningNote && (
-                      <div className={styles.feedbackBox}>
-                        <strong>Reasoning Siswa:</strong>
-                        <p>{log.reasoningNote}</p>
+                        {log.reasoningNote && (
+                          <div className={styles.feedbackBox}>
+                            <strong>Reasoning Siswa:</strong>
+                            <p>{log.reasoningNote}</p>
+                          </div>
+                        )}
                       </div>
-                    )}
+                    ))}
 
-                    <RawDetail title="Lihat Detail" data={log} />
+                    <RawDetail title="Lihat Detail" data={group} />
                     <footer>
-                      <span>{log.userEmail}</span>
-                      <span>{log.timestamp}</span>
+                      <span>{group.userEmail}</span>
+                      <span>{group.timestamp}</span>
                     </footer>
                   </article>
                 ))

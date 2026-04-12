@@ -1,5 +1,6 @@
 import { NextResponse, after } from 'next/server';
 import type { NextRequest } from 'next/server';
+import { randomUUID } from 'crypto';
 import { DatabaseService, DatabaseError, adminDb } from '@/lib/database';
 import { withApiLogging } from '@/lib/api-logger';
 import { QuizSubmitSchema, parseBody } from '@/lib/schemas';
@@ -104,6 +105,32 @@ async function postHandler(req: NextRequest) {
       );
     }
 
+    // Determine the next attempt number for this (user, subtopic) pair.
+    // First attempt → 1, second → 2, etc. Uses max(attempt_number) from DB.
+    let nextAttemptNumber = 1;
+    if (subtopicId) {
+      try {
+        const { data: maxRow } = await adminDb
+          .from('quiz_submissions')
+          .select('attempt_number')
+          .eq('user_id', user.id)
+          .eq('subtopic_id', subtopicId)
+          .order('attempt_number', { ascending: false })
+          .limit(1)
+          .maybeSingle();
+        const existingMax = (maxRow as { attempt_number?: number } | null)?.attempt_number;
+        if (typeof existingMax === 'number' && existingMax > 0) {
+          nextAttemptNumber = existingMax + 1;
+        }
+      } catch (attemptLookupError) {
+        console.warn('[QuizSubmit] Failed to determine next attempt number, defaulting to 1', attemptLookupError);
+      }
+    }
+
+    // One UUID groups all answer rows from this submission batch.
+    // Used as the `source_id` for cognitive scoring and for admin attempt grouping.
+    const quizAttemptId = randomUUID();
+
     // Save each quiz answer to database with improved matching
     const matchingResults: Array<{ questionIndex: number; matched: boolean; method: string; quizId?: string; question: string }> = [];
     const matchedRows: Array<{
@@ -116,6 +143,8 @@ async function postHandler(req: NextRequest) {
       answer: string;
       is_correct: boolean;
       reasoning_note: string | null;
+      attempt_number: number;
+      quiz_attempt_id: string;
     }> = [];
 
     for (let i = 0; i < answers.length; i++) {
@@ -184,6 +213,8 @@ async function postHandler(req: NextRequest) {
           answer: userAnswerText,
           is_correct: serverIsCorrect,
           reasoning_note: reasoningFromAnswer || reasoningFromArray || null,
+          attempt_number: nextAttemptNumber,
+          quiz_attempt_id: quizAttemptId,
         });
 
         matchingResults.push({
@@ -285,7 +316,6 @@ async function postHandler(req: NextRequest) {
       });
     }
     
-    const quizBatchId = `quiz_${user.id}_${data.courseId}_${Date.now()}`;
     after(async () => {
       try {
         const qaText = matchedRows.map((row, i) => {
@@ -300,10 +330,10 @@ async function postHandler(req: NextRequest) {
           source: 'quiz_submission',
           user_id: user.id,
           course_id: data.courseId,
-          source_id: quizBatchId,
+          source_id: quizAttemptId,
           user_text: qaText,
-          prompt_or_question: `Kuis subtopik: ${data.subtopicTitle || ''}`,
-          context_summary: `Skor: ${serverScore}, ${serverCorrectCount}/${matchedRows.length} benar`,
+          prompt_or_question: `Kuis subtopik: ${data.subtopicTitle || ''} (attempt ${nextAttemptNumber})`,
+          context_summary: `Skor: ${serverScore}, ${serverCorrectCount}/${matchedRows.length} benar, attempt ${nextAttemptNumber}`,
         });
       } catch (scoreError) {
         console.warn('[QuizSubmit] Cognitive scoring failed:', scoreError);
@@ -317,9 +347,11 @@ async function postHandler(req: NextRequest) {
       warnings,
       score: serverScore,
       correctCount: serverCorrectCount,
+      attemptNumber: nextAttemptNumber,
+      quizAttemptId,
       message: warnings.length > 0
-        ? `Saved ${successfulMatches}/${data.answers.length} quiz answers (${warnings.length} unmatched)`
-        : `Saved ${successfulMatches}/${data.answers.length} quiz answers to database`,
+        ? `Saved ${successfulMatches}/${data.answers.length} quiz answers (${warnings.length} unmatched) — attempt #${nextAttemptNumber}`
+        : `Saved ${successfulMatches}/${data.answers.length} quiz answers — attempt #${nextAttemptNumber}`,
       details: {
         totalAnswers: answers.length,
         successfulMatches,

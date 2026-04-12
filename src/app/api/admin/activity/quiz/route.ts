@@ -16,6 +16,8 @@ interface QuizSubmission {
   answer: string;
   is_correct: boolean;
   reasoning_note?: string | null;
+  attempt_number?: number | null;
+  quiz_attempt_id?: string | null;
   submitted_at?: string;
   created_at?: string;
 }
@@ -124,9 +126,11 @@ export async function GET(req: NextRequest) {
         timestamp: submissionTimestamp
           ? submissionTimestamp.toLocaleString('id-ID')
           : 'Unknown time',
+        rawTimestamp: submissionTimestamp ? submissionTimestamp.toISOString() : null,
         userEmail: user?.email ?? 'Unknown User',
         userId: submission.user_id,
         topic: topicName,
+        subtopicId: submission.subtopic_id ?? quiz.subtopic_id ?? null,
         courseTitle: course?.title ?? 'Tanpa Kursus',
         question: quiz.question,
         options: Array.isArray(quiz.options) ? quiz.options : [],
@@ -136,6 +140,8 @@ export async function GET(req: NextRequest) {
         reasoningNote: submission.reasoning_note ?? '',
         moduleIndex: submission.module_index ?? null,
         subtopicIndex: submission.subtopic_index ?? null,
+        attemptNumber: submission.attempt_number ?? 1,
+        quizAttemptId: submission.quiz_attempt_id ?? null,
       })
     }
     

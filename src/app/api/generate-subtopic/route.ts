@@ -5,6 +5,7 @@ import { generateDiscussionTemplate, generateModuleDiscussionTemplate } from '@/
 import { aiRateLimiter } from '@/lib/rate-limit';
 import { GenerateSubtopicSchema, parseBody } from '@/lib/schemas';
 import { chatCompletion } from '@/services/ai.service';
+import { syncQuizQuestions as syncQuizQuestionsHelper } from '@/lib/quiz-sync';
 import type { ChatCompletionMessageParam } from 'openai/resources/chat/completions';
 
 export async function POST(request: Request) {
@@ -470,172 +471,22 @@ interface QuizItem {
   correctIndex?: number;
 }
 
-interface SupabaseClient {
-  from(table: string): ReturnType<typeof import('@/lib/database').adminDb.from>;
-}
-
-interface SyncQuizParams {
-  adminDb: SupabaseClient;
+// Delegates to src/lib/quiz-sync.ts — which now preserves old quiz rows
+// when they are referenced by existing quiz_submissions (to keep the admin
+// display's FK join intact).
+async function syncQuizQuestions(params: {
+  adminDb: typeof import('@/lib/database').adminDb;
   courseId?: string;
   moduleTitle?: string;
   subtopicTitle?: string;
   quizItems?: QuizItem[];
   subtopicId?: string;
   subtopicData?: { id?: string; title?: string; content?: string | null };
-}
-
-async function syncQuizQuestions({
-  adminDb,
-  courseId,
-  moduleTitle,
-  subtopicTitle,
-  quizItems,
-  subtopicId,
-  subtopicData,
-}: SyncQuizParams) {
+}) {
   try {
-    if (!adminDb || !courseId || !Array.isArray(quizItems) || quizItems.length === 0) {
-      return;
-    }
-
-    let resolvedSubtopic = subtopicData ?? null;
-
-    if (!resolvedSubtopic?.id) {
-      try {
-        // Try direct title match first (fast)
-        if (moduleTitle) {
-          const { data: directMatch } = await adminDb
-            .from('subtopics')
-            .select('id, title')
-            .eq('course_id', courseId)
-            .eq('title', moduleTitle)
-            .maybeSingle();
-          if (directMatch) resolvedSubtopic = directMatch;
-        }
-
-        // Fallback: try subtopic title
-        if (!resolvedSubtopic && subtopicTitle) {
-          const { data: fallbackSubtopic } = await adminDb
-            .from('subtopics')
-            .select('id, title')
-            .eq('course_id', courseId)
-            .eq('title', subtopicTitle)
-            .maybeSingle();
-          if (fallbackSubtopic) resolvedSubtopic = fallbackSubtopic;
-        }
-
-        // Last resort: scan content JSON
-        if (!resolvedSubtopic && moduleTitle) {
-          const { data: allSubtopics } = await adminDb
-            .from('subtopics')
-            .select('id, title, content')
-            .eq('course_id', courseId);
-
-          if (allSubtopics) {
-            for (const sub of allSubtopics) {
-              try {
-                const parsed = sub?.content ? JSON.parse(sub.content) : null;
-                if (parsed?.module === moduleTitle) {
-                  resolvedSubtopic = sub;
-                  break;
-                }
-              } catch {
-                // Skip unparseable entries
-              }
-            }
-          }
-        }
-      } catch (lookupError) {
-        console.warn('[GenerateSubtopic] Subtopic lookup for quiz sync failed', lookupError);
-      }
-    }
-
-    const resolvedSubtopicId = subtopicId ?? resolvedSubtopic?.id;
-    if (!resolvedSubtopicId) {
-      console.warn('[GenerateSubtopic] Unable to resolve subtopic for quiz persistence', {
-        courseId,
-        moduleTitle,
-        subtopicTitle,
-      });
-      return;
-    }
-
-    const quizInserts = quizItems
-      .map((q: QuizItem, index: number) => {
-        if (!q || typeof q !== 'object') return null;
-
-        const rawQuestion = typeof q.question === 'string' && q.question.trim().length > 0
-          ? q.question.trim()
-          : `Quiz ${index + 1}: Pertanyaan opsional`;
-
-        const optionsArray = Array.isArray(q.options)
-          ? q.options.map((opt: unknown) => (typeof opt === 'string' ? opt.trim() : `${opt}`)).filter(Boolean)
-          : [];
-
-        if (optionsArray.length < 4) {
-          while (optionsArray.length < 4) {
-            optionsArray.push(`Opsi ${optionsArray.length + 1}`);
-          }
-        } else if (optionsArray.length > 4) {
-          optionsArray.length = 4;
-        }
-
-        const candidateIndex = typeof q.correctIndex === 'number' ? q.correctIndex : 0;
-        const boundedIndex =
-          candidateIndex >= 0 && candidateIndex < optionsArray.length ? candidateIndex : 0;
-        const correctAnswer = optionsArray[boundedIndex] ?? optionsArray[0] ?? '';
-
-        return {
-          course_id: courseId,
-          subtopic_id: resolvedSubtopicId,
-          question: rawQuestion,
-          options: optionsArray,
-          correct_answer: correctAnswer,
-          explanation: correctAnswer ? `The correct answer is: ${correctAnswer}` : null,
-          created_at: new Date().toISOString(),
-        };
-      })
-      .filter((item): item is NonNullable<typeof item> => item !== null);
-
-    if (quizInserts.length === 0) {
-      console.warn('[GenerateSubtopic] Quiz sync skipped because sanitized quiz data is empty');
-      return;
-    }
-
-    // Insert-first, delete-later to avoid wiping the subtopic's quiz
-    // if the insert fails. Without transactions, this ordering is the safest
-    // approximation: readers may briefly see both old and new rows, but never
-    // an empty state. Old rows are identified via created_at <= syncMarkedAt.
-    const syncMarkedAt = new Date().toISOString();
-    const { error: insertError } = await adminDb.from('quiz').insert(quizInserts);
-
-    if (insertError) {
-      console.warn('[GenerateSubtopic] Quiz insert failed — leaving old quiz intact', insertError);
-      return;
-    }
-
-    try {
-      const { error: deleteError } = await adminDb
-        .from('quiz')
-        .eq('course_id', courseId)
-        .eq('subtopic_id', resolvedSubtopicId)
-        .lt('created_at', syncMarkedAt)
-        .delete();
-
-      if (deleteError) {
-        console.warn('[GenerateSubtopic] Failed to clean old quiz entries after insert', deleteError);
-      }
-    } catch (cleanupError) {
-      console.warn('[GenerateSubtopic] Quiz cleanup threw unexpectedly', cleanupError);
-    }
-
-    console.log('[GenerateSubtopic] Quiz questions synced to database', {
-      courseId,
-      subtopicId: resolvedSubtopicId,
-      count: quizInserts.length,
-    });
-  } catch (quizSyncError) {
-    console.warn('[GenerateSubtopic] Sync quiz questions failed', quizSyncError);
+    await syncQuizQuestionsHelper(params);
+  } catch (err) {
+    console.warn('[GenerateSubtopic] Sync quiz questions failed', err);
   }
 }
 
@@ -693,8 +544,10 @@ function isDiscussionLabel(label: string): boolean {
   return normalized.includes('diskusi penutup') || normalized.includes('closing discussion');
 }
 
+type AdminDbType = typeof import('@/lib/database').adminDb;
+
 interface ModuleDiscussionContextParams {
-  adminDb: SupabaseClient;
+  adminDb: AdminDbType;
   courseId: string;
   moduleTitle: string;
   moduleRecord: { id?: string; title?: string; content?: string | null };

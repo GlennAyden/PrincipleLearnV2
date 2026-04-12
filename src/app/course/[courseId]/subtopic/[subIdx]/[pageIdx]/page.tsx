@@ -1,7 +1,7 @@
 // src/app/course/[courseId]/subtopic/[subIdx]/[pageIdx]/page.tsx
 'use client';
 
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import dynamic from 'next/dynamic';
 import { useRouter, useParams, useSearchParams } from 'next/navigation';
 import { useLocalStorage } from '@/hooks/useLocalStorage';
@@ -162,6 +162,23 @@ export default function SubtopicPage() {
   const [data, setData] = useState<SubtopicResponse | null>(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string>('');
+
+  // Quiz: status + reshuffle
+  interface QuizStatus {
+    completed: boolean;
+    attemptCount: number;
+    latest: {
+      attemptNumber: number;
+      quizAttemptId: string;
+      score: number;
+      correctCount: number;
+      totalQuestions: number;
+      submittedAt: string;
+    } | null;
+  }
+  const [quizStatus, setQuizStatus] = useState<QuizStatus | null>(null);
+  const [quizQuestionsOverride, setQuizQuestionsOverride] = useState<SubtopicResponse['quiz'] | null>(null);
+  const [reshuffling, setReshuffling] = useState(false);
 
   const activeModule = course?.outline?.[moduleIndex];
   const activeSubtopic = activeModule?.subtopics?.[subtopicIndex];
@@ -398,6 +415,61 @@ export default function SubtopicPage() {
 
     loadChallengeHistory();
   }, [user?.id, courseId, moduleIndex, subtopicIndex, pageNumber]);
+
+  // Load quiz completion status whenever user lands on the quiz page
+  useEffect(() => {
+    async function loadQuizStatus() {
+      if (!user?.id || !courseId || !quizSubtopicTitle) return;
+      if (pageNumber !== (data?.pages?.length ?? 0) + 1) return;
+
+      try {
+        const response = await apiFetch(
+          `/api/quiz/status?courseId=${encodeURIComponent(courseId)}&subtopicTitle=${encodeURIComponent(quizSubtopicTitle)}`
+        );
+        if (response.ok) {
+          const result = await response.json();
+          setQuizStatus(result);
+        }
+      } catch (err) {
+        console.warn('Failed to load quiz status:', err);
+      }
+    }
+    loadQuizStatus();
+  }, [user?.id, courseId, quizSubtopicTitle, pageNumber, data?.pages?.length]);
+
+  // Reshuffle: generate new quiz questions for this subtopic
+  const handleQuizReshuffle = useCallback(async () => {
+    if (!courseId || !quizModuleTitle || !quizSubtopicTitle) return;
+    setReshuffling(true);
+    try {
+      const response = await apiFetch('/api/quiz/regenerate', {
+        method: 'POST',
+        body: JSON.stringify({
+          courseId,
+          moduleTitle: quizModuleTitle,
+          subtopicTitle: quizSubtopicTitle,
+        }),
+      });
+      if (!response.ok) {
+        const err = await response.json().catch(() => ({}));
+        throw new Error(err.error || 'Gagal membuat kuis baru');
+      }
+      const result = await response.json();
+      if (Array.isArray(result.quiz) && result.quiz.length > 0) {
+        setQuizQuestionsOverride(result.quiz);
+        // Reset status so Quiz component exits the summary view and shows
+        // the fresh interactive quiz.
+        setQuizStatus(null);
+      }
+    } catch (err) {
+      console.error('Quiz reshuffle failed:', err);
+      if (typeof window !== 'undefined') {
+        window.alert(err instanceof Error ? err.message : 'Gagal membuat kuis baru');
+      }
+    } finally {
+      setReshuffling(false);
+    }
+  }, [courseId, quizModuleTitle, quizSubtopicTitle]);
 
   if (courseLoading) return <div className={styles.loading}>Memuat kursus…</div>;
   if (!course) return <div className={styles.error}>Kursus tidak ditemukan</div>;
@@ -842,13 +914,20 @@ export default function SubtopicPage() {
             </p>
           </div>
           <Quiz
-            questions={data.quiz}
+            questions={quizQuestionsOverride ?? data.quiz}
             courseId={courseId}
             moduleTitle={quizModuleTitle}
             subtopic={`Module ${moduleIndex + 1}, Subtopic ${subtopicIndex + 1}`}
             subtopicTitle={quizSubtopicTitle}
             moduleIndex={moduleIndex}
             subtopicIndex={subtopicIndex}
+            completedState={
+              quizStatus?.completed && quizStatus.latest && !quizQuestionsOverride
+                ? { attemptCount: quizStatus.attemptCount, latest: quizStatus.latest }
+                : null
+            }
+            onReshuffle={handleQuizReshuffle}
+            reshuffling={reshuffling}
           />
         </div>
       )}

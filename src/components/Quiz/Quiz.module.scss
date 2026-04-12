@@ -109,6 +109,100 @@ $transition: 0.25s cubic-bezier(0.4, 0, 0.2, 1);
   &:active { transform: scale(0.98); }
 }
 
+.buttonRow {
+  display: flex;
+  gap: 0.75rem;
+  flex-wrap: wrap;
+  align-items: center;
+  margin-top: 0.75rem;
+}
+
+.reshuffleButtonSecondary {
+  background: white;
+  color: $primary-700;
+  padding: 0.6rem 1.1rem;
+  border: 1.5px solid $primary-200;
+  border-radius: $radius-md;
+  cursor: pointer;
+  font-size: 0.85rem;
+  font-weight: 600;
+  transition: all $transition;
+
+  &:hover {
+    background: $primary-50;
+    border-color: $primary-500;
+  }
+  &:disabled { opacity: 0.5; cursor: not-allowed; }
+}
+
+.completionPanel {
+  padding: 1.75rem 1.5rem;
+  background: linear-gradient(135deg, $green-50 0%, #ecfdf5 100%);
+  border: 1.5px solid #86efac;
+  border-radius: $radius-lg;
+  text-align: center;
+}
+
+.completionCheck {
+  width: 48px;
+  height: 48px;
+  margin: 0 auto 0.75rem;
+  border-radius: 50%;
+  background: $green-500;
+  color: white;
+  font-size: 1.6rem;
+  font-weight: 700;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.completionTitle {
+  font-size: 1.1rem;
+  font-weight: 700;
+  color: #065f46;
+  margin-bottom: 0.4rem;
+}
+
+.completionScore {
+  font-size: 1rem;
+  color: $gray-700;
+  margin-bottom: 0.3rem;
+
+  strong {
+    color: #047857;
+    font-size: 1.15rem;
+  }
+}
+
+.completionMeta {
+  font-size: 0.82rem;
+  color: $gray-500;
+  margin-bottom: 1.1rem;
+}
+
+.reshuffleButton {
+  background: $primary-600;
+  color: white;
+  padding: 0.7rem 1.4rem;
+  border: none;
+  border-radius: $radius-md;
+  cursor: pointer;
+  font-size: 0.9rem;
+  font-weight: 600;
+  transition: all $transition;
+
+  &:hover { background: $primary-700; }
+  &:disabled { opacity: 0.5; cursor: not-allowed; }
+}
+
+.completionHint {
+  margin-top: 0.85rem;
+  font-size: 0.78rem;
+  color: $gray-500;
+  font-style: italic;
+}
+
 .noQuizMessage {
   padding: 1rem;
   background: $gray-50;
