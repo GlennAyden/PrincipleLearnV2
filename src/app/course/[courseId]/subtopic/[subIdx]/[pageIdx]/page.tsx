@@ -416,6 +416,33 @@ export default function SubtopicPage() {
     loadChallengeHistory();
   }, [user?.id, courseId, moduleIndex, subtopicIndex, pageNumber]);
 
+  // Load ask-question history from database on initial render so prior
+  // conversations restore after refresh / new session (parallels challenge).
+  useEffect(() => {
+    async function loadAskHistory() {
+      if (!user?.id) return;
+      try {
+        const response = await apiFetch(
+          `/api/ask-question?userId=${encodeURIComponent(user.id)}&courseId=${courseId}&moduleIndex=${moduleIndex}&subtopicIndex=${subtopicIndex}&pageNumber=${pageNumber}`
+        );
+        if (response.ok) {
+          const result = await response.json();
+          if (result.success && Array.isArray(result.responses) && result.responses.length > 0) {
+            const transformed = result.responses.map((r: { question: string; answer: string }) => ({
+              question: r.question,
+              answer: r.answer,
+            }));
+            setAskData(transformed);
+          }
+        }
+      } catch (err) {
+        console.error('Error loading ask-question history from database:', err);
+        // Intentionally do NOT wipe sessionStorage on transient errors.
+      }
+    }
+    loadAskHistory();
+  }, [user?.id, courseId, moduleIndex, subtopicIndex, pageNumber]);
+
   // Load quiz completion status whenever user lands on the quiz page
   useEffect(() => {
     async function loadQuizStatus() {

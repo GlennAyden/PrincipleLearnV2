@@ -267,3 +267,71 @@ Please answer in the same language as the question above. Base your answer stric
 export const POST = withApiLogging(postHandler, {
   label: 'ask-question',
 });
+
+// GET /api/ask-question?userId=X&courseId=Y&moduleIndex=M&subtopicIndex=S&pageNumber=P
+// Returns the authenticated user's ask-question history for a specific page,
+// so the frontend can restore prior conversations on mount (parallels
+// /api/challenge-response GET).
+async function getHandler(request: NextRequest) {
+  try {
+    const { searchParams } = new URL(request.url);
+    const userIdParam = searchParams.get('userId');
+    const courseId = searchParams.get('courseId');
+    const moduleIndex = searchParams.get('moduleIndex');
+    const subtopicIndex = searchParams.get('subtopicIndex');
+    const pageNumber = searchParams.get('pageNumber');
+
+    if (!userIdParam) {
+      return NextResponse.json({ error: 'Parameter userId diperlukan' }, { status: 400 });
+    }
+
+    const accessToken = request.cookies.get('access_token')?.value;
+    const tokenPayload = accessToken ? verifyToken(accessToken) : null;
+
+    if (!tokenPayload) {
+      return NextResponse.json({ error: 'Tidak terautentikasi' }, { status: 401 });
+    }
+
+    if (tokenPayload.userId !== userIdParam) {
+      return NextResponse.json({ error: 'Pengguna tidak cocok' }, { status: 403 });
+    }
+
+    let query = adminDb
+      .from('ask_question_history')
+      .select('id, question, answer, module_index, subtopic_index, page_number, created_at')
+      .eq('user_id', userIdParam)
+      .order('created_at', { ascending: true })
+      .limit(100);
+
+    if (courseId) query = query.eq('course_id', courseId);
+
+    const parseIntMaybe = (raw: string | null) => {
+      if (raw == null) return null;
+      const n = parseInt(raw, 10);
+      return Number.isNaN(n) ? null : n;
+    };
+    const moduleIdxNum = parseIntMaybe(moduleIndex);
+    const subtopicIdxNum = parseIntMaybe(subtopicIndex);
+    const pageNumberNum = parseIntMaybe(pageNumber);
+    if (moduleIdxNum !== null) query = query.eq('module_index', moduleIdxNum);
+    if (subtopicIdxNum !== null) query = query.eq('subtopic_index', subtopicIdxNum);
+    if (pageNumberNum !== null) query = query.eq('page_number', pageNumberNum);
+
+    const { data, error: selectError } = await query;
+
+    if (selectError) {
+      console.error('[AskQuestion] GET query error:', selectError);
+      return NextResponse.json({ error: 'Gagal memuat riwayat pertanyaan' }, { status: 500 });
+    }
+
+    const responses = Array.isArray(data) ? data : [];
+    return NextResponse.json({ success: true, responses });
+  } catch (error: unknown) {
+    console.error('[AskQuestion] GET unexpected error:', error);
+    return NextResponse.json({ error: 'Gagal memuat riwayat pertanyaan' }, { status: 500 });
+  }
+}
+
+export const GET = withApiLogging(getHandler, {
+  label: 'ask-question-history',
+});
