@@ -1,0 +1,249 @@
+{
+  "config": {
+    "configFile": "C:\\Data\\S2 Magister\\Thesis\\Media V3\\playwright.config.ts",
+    "rootDir": "C:/Data/S2 Magister/Thesis/Media V3/tests/e2e",
+    "forbidOnly": false,
+    "fullyParallel": true,
+    "globalSetup": null,
+    "globalTeardown": null,
+    "globalTimeout": 0,
+    "grep": {},
+    "grepInvert": null,
+    "maxFailures": 0,
+    "metadata": {
+      "actualWorkers": 1
+    },
+    "preserveOutput": "always",
+    "projects": [
+      {
+        "outputDir": "C:/Data/S2 Magister/Thesis/Media V3/tests/e2e-results",
+        "repeatEach": 1,
+        "retries": 0,
+        "metadata": {
+          "actualWorkers": 1
+        },
+        "id": "chromium",
+        "name": "chromium",
+        "testDir": "C:/Data/S2 Magister/Thesis/Media V3/tests/e2e",
+        "testIgnore": [],
+        "testMatch": [
+          "**/*.spec.ts"
+        ],
+        "timeout": 600000
+      }
+    ],
+    "quiet": false,
+    "reporter": [
+      [
+        "html",
+        {
+          "outputFolder": "tests/e2e-report"
+        }
+      ],
+      [
+        "json",
+        {
+          "outputFile": "tests/e2e-results.json"
+        }
+      ],
+      [
+        "list",
+        null
+      ]
+    ],
+    "reportSlowTests": {
+      "max": 5,
+      "threshold": 300000
+    },
+    "runAgents": "none",
+    "shard": null,
+    "tags": [],
+    "updateSnapshots": "missing",
+    "updateSourceMethod": "patch",
+    "version": "1.58.2",
+    "workers": 6,
+    "webServer": null
+  },
+  "suites": [
+    {
+      "title": "user\\full-learning-flow.spec.ts",
+      "file": "user/full-learning-flow.spec.ts",
+      "column": 0,
+      "line": 0,
+      "specs": [],
+      "suites": [
+        {
+          "title": "Full Learning Flow → Admin Verification",
+          "file": "user/full-learning-flow.spec.ts",
+          "line": 61,
+          "column": 6,
+          "specs": [
+            {
+              "title": "complete learning journey and verify in admin panel",
+              "ok": false,
+              "tags": [],
+              "tests": [
+                {
+                  "timeout": 600000,
+                  "annotations": [],
+                  "expectedStatus": "passed",
+                  "projectId": "chromium",
+                  "projectName": "chromium",
+                  "results": [
+                    {
+                      "workerIndex": 0,
+                      "parallelIndex": 0,
+                      "status": "failed",
+                      "duration": 162335,
+                      "error": {
+                        "message": "Error: \u001b[2mexpect(\u001b[22m\u001b[31mreceived\u001b[39m\u001b[2m).\u001b[22mtoBeTruthy\u001b[2m()\u001b[22m\n\nReceived: \u001b[31mfalse\u001b[39m",
+                        "stack": "Error: \u001b[2mexpect(\u001b[22m\u001b[31mreceived\u001b[39m\u001b[2m).\u001b[22mtoBeTruthy\u001b[2m()\u001b[22m\n\nReceived: \u001b[31mfalse\u001b[39m\n    at C:\\Data\\S2 Magister\\Thesis\\Media V3\\tests\\e2e\\user\\full-learning-flow.spec.ts:403:22\n    at C:\\Data\\S2 Magister\\Thesis\\Media V3\\tests\\e2e\\user\\full-learning-flow.spec.ts:381:5",
+                        "location": {
+                          "file": "C:\\Data\\S2 Magister\\Thesis\\Media V3\\tests\\e2e\\user\\full-learning-flow.spec.ts",
+                          "column": 22,
+                          "line": 403
+                        },
+                        "snippet": "\u001b[0m \u001b[90m 401 |\u001b[39m       })\u001b[33m;\u001b[39m\n \u001b[90m 402 |\u001b[39m\n\u001b[31m\u001b[1m>\u001b[22m\u001b[39m\u001b[90m 403 |\u001b[39m       expect(res\u001b[33m.\u001b[39mok)\u001b[33m.\u001b[39mtoBeTruthy()\u001b[33m;\u001b[39m\n \u001b[90m     |\u001b[39m                      \u001b[31m\u001b[1m^\u001b[22m\u001b[39m\n \u001b[90m 404 |\u001b[39m       \u001b[36mconst\u001b[39m data \u001b[33m=\u001b[39m res\u001b[33m.\u001b[39mdata \u001b[36mas\u001b[39m { success\u001b[33m:\u001b[39m boolean\u001b[33m;\u001b[39m id\u001b[33m?\u001b[39m\u001b[33m:\u001b[39m string }\u001b[33m;\u001b[39m\n \u001b[90m 405 |\u001b[39m       expect(data\u001b[33m.\u001b[39msuccess)\u001b[33m.\u001b[39mtoBe(\u001b[36mtrue\u001b[39m)\u001b[33m;\u001b[39m\n \u001b[90m 406 |\u001b[39m\u001b[0m"
+                      },
+                      "errors": [
+                        {
+                          "location": {
+                            "file": "C:\\Data\\S2 Magister\\Thesis\\Media V3\\tests\\e2e\\user\\full-learning-flow.spec.ts",
+                            "column": 22,
+                            "line": 403
+                          },
+                          "message": "Error: \u001b[2mexpect(\u001b[22m\u001b[31mreceived\u001b[39m\u001b[2m).\u001b[22mtoBeTruthy\u001b[2m()\u001b[22m\n\nReceived: \u001b[31mfalse\u001b[39m\n\n  401 |       });\n  402 |\n> 403 |       expect(res.ok).toBeTruthy();\n      |                      ^\n  404 |       const data = res.data as { success: boolean; id?: string };\n  405 |       expect(data.success).toBe(true);\n  406 |\n    at C:\\Data\\S2 Magister\\Thesis\\Media V3\\tests\\e2e\\user\\full-learning-flow.spec.ts:403:22\n    at C:\\Data\\S2 Magister\\Thesis\\Media V3\\tests\\e2e\\user\\full-learning-flow.spec.ts:381:5"
+                        }
+                      ],
+                      "stdout": [
+                        {
+                          "text": "\n✓ [Auth] e2e-flow-test@principlelearn.com → userId=620bfbe9-a923-4889-b329-4ef408270b2a\n"
+                        },
+                        {
+                          "text": "\n✓ [Generate Course] courseId=5553dce9-eaa0-49a9-b75e-07688c1f0f07, module=\"1. Pengantar Algoritma dan Struktur Data\", subtopic=\"1.1 Apa itu Algoritma?\"\n"
+                        },
+                        {
+                          "text": "\n✓ [Course Outline] 5 modules, 31 subtopics\n"
+                        },
+                        {
+                          "text": "\n✓ [Generate Subtopic] 3 pages, 5 quiz questions\n"
+                        },
+                        {
+                          "text": "\n✓ [Ask Question] Answer length: 1893 chars\n"
+                        },
+                        {
+                          "text": "\n✓ [Challenge Thinking] Question: \"Mengapa sebuah algoritma harus memiliki ketetapan langkah (definiteness) dan keterhentian (finitenes...\"\n"
+                        },
+                        {
+                          "text": "  ⚠ Challenge feedback returned empty (AI may have returned no content) — continuing\n"
+                        },
+                        {
+                          "text": "\n✓ [Generate Examples] 1 example(s) generated\n"
+                        },
+                        {
+                          "text": "  ⚠ Quiz submit failed (401): {\"error\":\"Autentikasi diperlukan\"}\n"
+                        },
+                        {
+                          "text": "  Retrying after 5s wait...\n"
+                        },
+                        {
+                          "text": "  ⚠ Quiz retry also failed (401): {\"error\":\"Autentikasi diperlukan\"}\n"
+                        },
+                        {
+                          "text": "\n✓ [Quiz Submit (retry)] success=undefined, matched=undefined/undefined\n"
+                        }
+                      ],
+                      "stderr": [],
+                      "retry": 0,
+                      "steps": [
+                        {
+                          "title": "1. Register or login student account",
+                          "duration": 6176
+                        },
+                        {
+                          "title": "2. Generate course via API",
+                          "duration": 41593
+                        },
+                        {
+                          "title": "3. Generate subtopic content",
+                          "duration": 53627
+                        },
+                        {
+                          "title": "4. Ask a question",
+                          "duration": 16367
+                        },
+                        {
+                          "title": "5. Challenge my thinking",
+                          "duration": 7586
+                        },
+                        {
+                          "title": "6. Get challenge feedback",
+                          "duration": 12184
+                        },
+                        {
+                          "title": "7. Generate examples",
+                          "duration": 17493
+                        },
+                        {
+                          "title": "8. Submit quiz answers",
+                          "duration": 6365
+                        },
+                        {
+                          "title": "9. Save journal entry",
+                          "duration": 607,
+                          "error": {
+                            "message": "Error: \u001b[2mexpect(\u001b[22m\u001b[31mreceived\u001b[39m\u001b[2m).\u001b[22mtoBeTruthy\u001b[2m()\u001b[22m\n\nReceived: \u001b[31mfalse\u001b[39m",
+                            "stack": "Error: \u001b[2mexpect(\u001b[22m\u001b[31mreceived\u001b[39m\u001b[2m).\u001b[22mtoBeTruthy\u001b[2m()\u001b[22m\n\nReceived: \u001b[31mfalse\u001b[39m\n    at C:\\Data\\S2 Magister\\Thesis\\Media V3\\tests\\e2e\\user\\full-learning-flow.spec.ts:403:22\n    at C:\\Data\\S2 Magister\\Thesis\\Media V3\\tests\\e2e\\user\\full-learning-flow.spec.ts:381:5",
+                            "location": {
+                              "file": "C:\\Data\\S2 Magister\\Thesis\\Media V3\\tests\\e2e\\user\\full-learning-flow.spec.ts",
+                              "column": 22,
+                              "line": 403
+                            },
+                            "snippet": "\u001b[0m \u001b[90m 401 |\u001b[39m       })\u001b[33m;\u001b[39m\n \u001b[90m 402 |\u001b[39m\n\u001b[31m\u001b[1m>\u001b[22m\u001b[39m\u001b[90m 403 |\u001b[39m       expect(res\u001b[33m.\u001b[39mok)\u001b[33m.\u001b[39mtoBeTruthy()\u001b[33m;\u001b[39m\n \u001b[90m     |\u001b[39m                      \u001b[31m\u001b[1m^\u001b[22m\u001b[39m\n \u001b[90m 404 |\u001b[39m       \u001b[36mconst\u001b[39m data \u001b[33m=\u001b[39m res\u001b[33m.\u001b[39mdata \u001b[36mas\u001b[39m { success\u001b[33m:\u001b[39m boolean\u001b[33m;\u001b[39m id\u001b[33m?\u001b[39m\u001b[33m:\u001b[39m string }\u001b[33m;\u001b[39m\n \u001b[90m 405 |\u001b[39m       expect(data\u001b[33m.\u001b[39msuccess)\u001b[33m.\u001b[39mtoBe(\u001b[36mtrue\u001b[39m)\u001b[33m;\u001b[39m\n \u001b[90m 406 |\u001b[39m\u001b[0m"
+                          }
+                        }
+                      ],
+                      "startTime": "2026-04-11T14:29:23.026Z",
+                      "annotations": [],
+                      "attachments": [
+                        {
+                          "name": "screenshot",
+                          "contentType": "image/png",
+                          "path": "C:\\Data\\S2 Magister\\Thesis\\Media V3\\tests\\e2e-results\\user-full-learning-flow-Fu-213bd-y-and-verify-in-admin-panel-chromium\\test-failed-1.png"
+                        },
+                        {
+                          "name": "error-context",
+                          "contentType": "text/markdown",
+                          "path": "C:\\Data\\S2 Magister\\Thesis\\Media V3\\tests\\e2e-results\\user-full-learning-flow-Fu-213bd-y-and-verify-in-admin-panel-chromium\\error-context.md"
+                        }
+                      ],
+                      "errorLocation": {
+                        "file": "C:\\Data\\S2 Magister\\Thesis\\Media V3\\tests\\e2e\\user\\full-learning-flow.spec.ts",
+                        "column": 22,
+                        "line": 403
+                      }
+                    }
+                  ],
+                  "status": "unexpected"
+                }
+              ],
+              "id": "fd7f679cc15b4eb7863f-8e8a1788a7a42b3e0e0b",
+              "file": "user/full-learning-flow.spec.ts",
+              "line": 65,
+              "column": 7
+            }
+          ]
+        }
+      ]
+    }
+  ],
+  "errors": [],
+  "stats": {
+    "startTime": "2026-04-11T14:29:20.559Z",
+    "duration": 167054.75,
+    "expected": 0,
+    "skipped": 0,
+    "unexpected": 1,
+    "flaky": 0
+  }
+}

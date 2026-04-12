@@ -1,27 +1,29 @@
-RM2 — Tahapan perkembangan struktur prompt siswa (longitudinal)
+Rumusan Masalah
+RM1: Bagaimana proses dan hasil pengembangan media pembelajaran algoritma berbasis AI dengan pendekatan personalized learning pada pembelajaran Informatika Fase E?
 
-Fokus RM2: memetakan perubahan kualitas prompt antarsesi (SCP→SRP→MQP→Reflektif). bab3.tex:101
-Metode yang dipakai:
-Pengumpulan data multi-sumber: log interaksi siswa–AI, logbook observasi, dan wawancara pendalaman. bab3.tex:101
-Unit analisis: prompt yang lolos audit mutu, lalu dikategorikan secara induktif (familiarisasi → open coding → kategorisasi → abstraksi). bab3.tex:1062
-Keandalan coding: collaborative coding (sampel minimal 25%) dengan ambang konsistensi kappa dan Po. bab3.tex:1074
-Analisis longitudinal: hitung indikator sesi (p(k,t), L_t, s̄_t, Δ_t, N_t) + quality gate data valid. bab3.tex:1220
-Penetapan pola perkembangan: naik stabil, stagnan, fluktuatif, anomali, atau missing/low-information. bab3.tex:1283
-Validasi lintas sumber (triangulasi) sebelum transisi tahap disahkan. bab3.tex:1334
-Output akhir RM2:
-Peta lintasan perkembangan prompt per siswa/per sesi.
-Status pola perkembangan (naik/stagnan/fluktuatif/anomali).
-Dasar model tahap perkembangan prompt yang kredibel. bab3.tex:101
-RM3 — Manifestasi CT dan Critical Thinking pada tiap tahap prompt
+RM2: Bagaimana tahapan perkembangan struktur prompt siswa SMA dalam interaksi dengan AI pada pembelajaran algoritma?
 
-Fokus RM3: membaca indikator CT + critical thinking pada setiap tahap perkembangan prompt. bab3.tex:103
-Metode yang dipakai:
-Input utama: unit prompt terkode + artefak solusi/pseudocode + wawancara klarifikasi. bab3.tex:103
-Analisis terarah (directed): pemetaan unit prompt ke domain CT dan Facione (a priori coding frame). bab3.tex:1138
-Pemetaan tahap prompt ↔ indikator berpikir (SCP, SRP, MQP, Reflektif) dengan kode primer-sekunder. bab3.tex:1150
-Interpretasi kedalaman kognitif menggunakan rubrik level 1–4. bab3.tex:1195
-Konsistensi penilai dan integrasi hasil sebelum sintesis akhir. bab3.tex:1200
-Output akhir RM3:
-Profil manifestasi indikator CT dan critical thinking pada tiap tahap prompt.
-Matriks bukti operasional tahap–indikator (termasuk dimensi regulasi/agensi sebagai pendukung).
-Landasan sintesis model konseptual akhir penelitian. bab2.tex:1088, bab3.tex:103
+RM3: Bagaimana indikator computational thinking dan critical thinking termanifestasi dalam setiap tahapan perkembangan struktur prompt tersebut?
+
+Pemetaan RM → Metodologi Pengambilan Data (Bab 3)
+RM1 — Pengembangan Media (Validitas & Praktikalitas)
+Aspek	Detail
+Data	Skor validitas pakar (LORI), skor praktikalitas pengguna (SUS), catatan revisi ahli, komentar pengguna
+Instrumen	Lembar expert appraisal, LORI, SUS, rekap keputusan revisi
+Teknik Pengumpulan	Penilaian ahli + survei praktikalitas setelah implementasi terbatas
+Teknik Analisis	Analisis deskriptif LORI dan SUS, integrasi hasil untuk keputusan revisi produk
+Luaran	Status kelayakan media (valid-praktis) dan rekomendasi revisi minor/mayor
+RM2 — Perkembangan Struktur Prompt (Longitudinal)
+Aspek	Detail
+Data	Log interaksi siswa–AI antarsesi, logbook observasi konteks kelas, data wawancara pendalaman
+Instrumen	Sistem digital logging, logbook observasi, rubrik strategi prompting (SCP→SRP→MQP→Reflektif)
+Teknik Pengumpulan	Perekaman log multi-sesi naturalistik, observasi, wawancara semiterstruktur berbasis pola kasus
+Teknik Analisis	Inductive content analysis untuk pembentukan kategori, dilanjutkan analisis longitudinal per sesi dan per partisipan
+Luaran	Peta lintasan perkembangan struktur prompt siswa + identifikasi pola (naik, stagnan, fluktuatif, anomali)
+RM3 — Manifestasi CT & Critical Thinking
+Aspek	Detail
+Data	Unit prompt terkode, artefak solusi, narasi klarifikasi dari wawancara
+Instrumen	Crosswalk operasional RM3, matriks indikator CT, matriks indikator critical thinking (Facione), lembar analisis artefak
+Teknik Pengumpulan	Pengodean unit log, dokumentasi artefak belajar, wawancara triangulasi untuk kasus kunci
+Teknik Analisis	Directed content analysis berbasis kerangka CT dan Facione, diikuti triangulasi lintas sumber
+Luaran	Profil manifestasi CT dan critical thinking pada setiap tahap prompt sebagai dasar sintesis model konseptual akhir
