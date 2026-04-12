@@ -12,6 +12,7 @@ import { aiRateLimiter } from '@/lib/rate-limit';
 import { chatCompletion } from '@/services/ai.service';
 import { appendNewQuizQuestions } from '@/lib/quiz-sync';
 import { parseBody } from '@/lib/schemas';
+import { verifyToken } from '@/lib/jwt';
 import type { ChatCompletionMessageParam } from 'openai/resources/chat/completions';
 
 const QuizRegenerateSchema = z.object({
@@ -27,16 +28,24 @@ interface QuizOutputItem {
 }
 
 async function postHandler(req: NextRequest) {
-  const userId = req.headers.get('x-user-id') || 'unknown';
+  // Prefer middleware-injected header; fall back to JWT cookie directly.
+  let userId = req.headers.get('x-user-id');
+  if (!userId) {
+    const accessToken = req.cookies.get('access_token')?.value;
+    const tokenPayload = accessToken ? verifyToken(accessToken) : null;
+    if (tokenPayload?.userId) {
+      userId = tokenPayload.userId;
+    }
+  }
+  if (!userId) {
+    return NextResponse.json({ error: 'Autentikasi diperlukan' }, { status: 401 });
+  }
+
   if (!(await aiRateLimiter.isAllowed(userId))) {
     return NextResponse.json(
       { error: 'Terlalu banyak permintaan. Coba lagi sebentar.' },
       { status: 429 },
     );
-  }
-
-  if (!userId || userId === 'unknown') {
-    return NextResponse.json({ error: 'Autentikasi diperlukan' }, { status: 401 });
   }
 
   const parsed = parseBody(QuizRegenerateSchema, await req.json());

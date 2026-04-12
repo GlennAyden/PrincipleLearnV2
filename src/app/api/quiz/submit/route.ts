@@ -3,6 +3,7 @@ import type { NextRequest } from 'next/server';
 import { randomUUID } from 'crypto';
 import { DatabaseService, DatabaseError, adminDb } from '@/lib/database';
 import { withApiLogging } from '@/lib/api-logger';
+import { verifyToken } from '@/lib/jwt';
 import { QuizSubmitSchema, parseBody } from '@/lib/schemas';
 import { resolveUserByIdentifier } from '@/services/auth.service';
 
@@ -21,9 +22,18 @@ function normalizeIndex(value: unknown) {
 
 async function postHandler(req: NextRequest) {
   try {
-    // Use middleware-injected user ID from verified JWT (prevents IDOR)
-    const headerUserId = req.headers.get('x-user-id');
-    if (!headerUserId) {
+    // Prefer middleware-injected header; fall back to JWT cookie directly.
+    // Middleware header propagation has proven unreliable in production, so
+    // we mirror the cookie-based pattern used by the working routes.
+    let authUserId = req.headers.get('x-user-id');
+    if (!authUserId) {
+      const accessToken = req.cookies.get('access_token')?.value;
+      const tokenPayload = accessToken ? verifyToken(accessToken) : null;
+      if (tokenPayload?.userId) {
+        authUserId = tokenPayload.userId;
+      }
+    }
+    if (!authUserId) {
       return NextResponse.json(
         { error: 'Autentikasi diperlukan' },
         { status: 401 }
@@ -36,7 +46,7 @@ async function postHandler(req: NextRequest) {
     const answers = data.answers;
 
     // Find user in database using authenticated user ID from JWT
-    const user = await resolveUserByIdentifier(headerUserId);
+    const user = await resolveUserByIdentifier(authUserId);
 
     if (!user) {
       return NextResponse.json(

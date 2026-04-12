@@ -7,6 +7,7 @@ import { NextResponse } from 'next/server';
 import type { NextRequest } from 'next/server';
 import { adminDb } from '@/lib/database';
 import { withApiLogging } from '@/lib/api-logger';
+import { verifyToken } from '@/lib/jwt';
 import { resolveUserByIdentifier } from '@/services/auth.service';
 
 interface SubmissionRow {
@@ -17,8 +18,19 @@ interface SubmissionRow {
 }
 
 async function getHandler(req: NextRequest) {
-  const headerUserId = req.headers.get('x-user-id');
-  if (!headerUserId) {
+  // Prefer middleware-injected header; fall back to the JWT cookie directly.
+  // The header injection has proven unreliable in production (likely a Next.js
+  // middleware→handler header-propagation quirk), so we mirror the
+  // cookie-based pattern used by /api/challenge-response, /api/ask-question, etc.
+  let authUserId = req.headers.get('x-user-id');
+  if (!authUserId) {
+    const accessToken = req.cookies.get('access_token')?.value;
+    const tokenPayload = accessToken ? verifyToken(accessToken) : null;
+    if (tokenPayload?.userId) {
+      authUserId = tokenPayload.userId;
+    }
+  }
+  if (!authUserId) {
     return NextResponse.json({ error: 'Autentikasi diperlukan' }, { status: 401 });
   }
 
@@ -30,7 +42,7 @@ async function getHandler(req: NextRequest) {
     return NextResponse.json({ error: 'courseId wajib' }, { status: 400 });
   }
 
-  const user = await resolveUserByIdentifier(headerUserId);
+  const user = await resolveUserByIdentifier(authUserId);
   if (!user) {
     return NextResponse.json({ error: 'Pengguna tidak ditemukan' }, { status: 404 });
   }
