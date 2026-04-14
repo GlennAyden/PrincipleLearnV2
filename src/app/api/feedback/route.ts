@@ -3,6 +3,7 @@ import type { NextRequest } from 'next/server';
 import { DatabaseService } from '@/lib/database';
 import { withApiLogging } from '@/lib/api-logger';
 import { FeedbackSchema, parseBody } from '@/lib/schemas';
+import { resolveAuthUserId } from '@/lib/auth-helper';
 import { resolveUserByIdentifier } from '@/services/auth.service';
 
 function normalizeText(value: unknown) {
@@ -25,8 +26,10 @@ function parseRating(value: unknown) {
 
 async function postHandler(req: NextRequest) {
   try {
-    // Use middleware-injected user ID from verified JWT (prevents IDOR)
-    const headerUserId = req.headers.get('x-user-id');
+    // Resolve authenticated user ID — prefers middleware-injected header,
+    // falls back to decoding the access_token cookie directly because the
+    // header occasionally fails to propagate in Next.js 15 production.
+    const headerUserId = resolveAuthUserId(req);
     if (!headerUserId) {
       return NextResponse.json(
         { error: 'Autentikasi diperlukan' },

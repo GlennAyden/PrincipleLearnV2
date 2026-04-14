@@ -1,10 +1,13 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { DatabaseService } from '@/lib/database';
+import { resolveAuthUserId } from '@/lib/auth-helper';
 
 export async function POST(req: NextRequest) {
   try {
-    // Use middleware-injected user ID from verified JWT (prevents IDOR)
-    const userId = req.headers.get('x-user-id');
+    // Resolve authenticated user ID — prefers middleware-injected header,
+    // falls back to decoding the access_token cookie directly because the
+    // header occasionally fails to propagate in Next.js 15 production.
+    const userId = resolveAuthUserId(req);
     if (!userId) {
       return NextResponse.json(
         { error: 'Authentication required' },
@@ -74,8 +77,10 @@ export async function POST(req: NextRequest) {
 
 export async function GET(req: NextRequest) {
   try {
-    // Use middleware-injected user ID from verified JWT (prevents IDOR)
-    const userId = req.headers.get('x-user-id');
+    // Resolve authenticated user ID — prefers middleware-injected header,
+    // falls back to decoding the access_token cookie directly because the
+    // header occasionally fails to propagate in Next.js 15 production.
+    const userId = resolveAuthUserId(req);
     if (!userId) {
       return NextResponse.json(
         { error: 'Authentication required' },

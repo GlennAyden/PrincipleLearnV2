@@ -8,6 +8,7 @@ import { GenerateCourseSchema, parseBody } from '@/lib/schemas';
 import { resolveUserByIdentifier } from '@/services/auth.service';
 import { createCourseWithSubtopics } from '@/services/course.service';
 import { chatCompletionWithRetry, parseAndValidateAIResponse, CourseOutlineResponseSchema, sanitizePromptInput } from '@/services/ai.service';
+import { resolveAuthContext } from '@/lib/auth-helper';
 
 // Add CORS headers for API — restrict to same origin in production
 const allowedOrigin = process.env.NEXT_PUBLIC_APP_URL
@@ -44,9 +45,14 @@ async function postHandler(req: NextRequest) {
     if (!parsed.success) return parsed.response;
     const { topic, goal, level, extraTopics, problem, assumption, userId, userEmail } = parsed.data;
 
-    // Use middleware-injected user ID from verified JWT as authoritative source (prevents IDOR)
-    const headerUserId = req.headers.get('x-user-id');
-    const headerUserEmail = req.headers.get('x-user-email');
+    // Resolve authenticated user context — prefers middleware-injected
+    // headers, falls back to decoding the access_token cookie directly
+    // because the headers occasionally fail to propagate in Next.js 15
+    // production. Header/cookie values take precedence over body-supplied
+    // identifiers to prevent IDOR.
+    const authContext = resolveAuthContext(req);
+    const headerUserId = authContext?.userId ?? null;
+    const headerUserEmail = authContext?.email || null;
     const actorIdentifier = headerUserId || headerUserEmail || userId || userEmail || null;
 
     // Rate limit AI calls per user
