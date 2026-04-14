@@ -451,9 +451,16 @@ export default function SubtopicPage() {
       if (!user?.id || !courseId || !quizSubtopicTitle) return;
 
       try {
-        const response = await apiFetch(
-          `/api/quiz/status?courseId=${encodeURIComponent(courseId)}&subtopicTitle=${encodeURIComponent(quizSubtopicTitle)}`
-        );
+        // Pass moduleTitle too — `subtopics` table is keyed per module, so
+        // without it the server falls back to subtopicTitle-only lookup and
+        // fails on any mismatch.
+        const params = new URLSearchParams({
+          courseId,
+          subtopicTitle: quizSubtopicTitle,
+        });
+        if (quizModuleTitle) params.set('moduleTitle', quizModuleTitle);
+
+        const response = await apiFetch(`/api/quiz/status?${params.toString()}`);
         if (response.ok) {
           const result = await response.json();
           setQuizStatus(result);
@@ -463,7 +470,7 @@ export default function SubtopicPage() {
       }
     }
     loadQuizStatus();
-  }, [user?.id, courseId, quizSubtopicTitle]);
+  }, [user?.id, courseId, quizSubtopicTitle, quizModuleTitle]);
 
   // Reshuffle: generate new quiz questions for this subtopic
   const handleQuizReshuffle = useCallback(async () => {

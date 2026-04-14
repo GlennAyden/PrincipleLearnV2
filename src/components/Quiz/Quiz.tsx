@@ -170,7 +170,7 @@ export default function Quiz({
     [submitted, user, courseId, moduleTitle, subtopic, subtopicTitle, moduleIndex, subtopicIndex, reasoningNotes],
   );
 
-  const handleCheck = async () => {
+  const buildAnswersFromState = useCallback(() => {
     let correctCount = 0;
     const answers = safeItems.map((q, index) => {
       const userAnswerIndex = selectedAnswers[index] ?? -1;
@@ -186,8 +186,12 @@ export default function Quiz({
         reasoningNote: reasoningNotes[index] || '',
       };
     });
+    const score = Math.round((correctCount / Math.max(safeItems.length, 1)) * 100);
+    return { answers, score };
+  }, [safeItems, selectedAnswers, reasoningNotes]);
 
-    const score = Math.round((correctCount / safeItems.length) * 100);
+  const handleCheck = async () => {
+    const { answers, score } = buildAnswersFromState();
 
     // Gate the inline result view on successful server persistence so the
     // UI cannot claim "results saved" while the DB insert silently failed.
@@ -201,6 +205,17 @@ export default function Quiz({
     } else {
       setShowResults(true);
     }
+  };
+
+  // Retry the most recent submit (used by the "Coba lagi" button shown in
+  // the error banner). Re-invokes the lazy-seed path on the server so a
+  // missing `quiz` table row gets re-seeded from subtopic_cache before the
+  // insert is attempted the second time.
+  const handleRetrySubmit = async () => {
+    if (!user?.id || !courseId) return;
+    const { answers, score } = buildAnswersFromState();
+    const ok = await submitQuizToServer(answers, score);
+    if (ok) setShowResults(true);
   };
 
   const handleReshuffleClick = async () => {
@@ -321,8 +336,18 @@ export default function Quiz({
       {submitError && (
         <div className={styles.submitError} role="alert">
           <span aria-hidden="true">⚠️</span>
-          <div>
-            <strong>Simpan gagal.</strong> {submitError}
+          <div className={styles.submitErrorBody}>
+            <div>
+              <strong>Simpan gagal.</strong> {submitError}
+            </div>
+            <button
+              type="button"
+              className={styles.submitRetryButton}
+              onClick={handleRetrySubmit}
+              disabled={loading}
+            >
+              {loading ? 'Mencoba ulang...' : '↻ Coba lagi'}
+            </button>
           </div>
         </div>
       )}

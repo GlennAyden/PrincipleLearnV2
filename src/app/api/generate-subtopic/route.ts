@@ -45,21 +45,83 @@ export async function POST(request: Request) {
 
         if (cached?.content) {
           console.log('[GenerateSubtopic] Returning cached subtopic data');
-          // Defer quiz sync to after response — no need to block the user
-          after(async () => {
+
+          // Pre-resolve the subtopic row (subtopics table is keyed per MODULE)
+          // so we can both (a) check whether quiz rows already exist for the
+          // specific (module, subtopic) pair and (b) hand the resolved id to
+          // syncQuizQuestions without making it redo the fragile title lookup.
+          const trimmedModuleTitle = moduleTitle?.trim() ?? '';
+          const trimmedSubtopicLabel = subtopic?.trim() ?? '';
+          let preResolvedSubtopicId: string | null = null;
+          try {
+            if (trimmedModuleTitle) {
+              const { data: moduleRow } = await adminDb
+                .from('subtopics')
+                .select('id')
+                .eq('course_id', courseId)
+                .ilike('title', trimmedModuleTitle)
+                .maybeSingle();
+              preResolvedSubtopicId = (moduleRow as { id?: string } | null)?.id ?? null;
+            }
+          } catch (lookupError) {
+            console.warn('[GenerateSubtopic] Pre-resolve subtopic id failed', lookupError);
+          }
+
+          // If the quiz table already has rows for this (subtopic_id,
+          // subtopic_label) pair, we can defer the sync (background refresh).
+          // Otherwise we MUST block until sync completes — returning early
+          // would let the user submit against an empty `quiz` table and hit
+          // "Pertanyaan kuis tidak ditemukan di database".
+          let quizAlreadySeeded = false;
+          if (preResolvedSubtopicId && trimmedSubtopicLabel) {
             try {
-              const { adminDb: bgAdminDb } = await import('@/lib/database');
+              const { data: existingQuiz } = await adminDb
+                .from('quiz')
+                .select('id')
+                .eq('course_id', courseId)
+                .eq('subtopic_id', preResolvedSubtopicId)
+                .eq('subtopic_label', trimmedSubtopicLabel)
+                .limit(1);
+              quizAlreadySeeded = Array.isArray(existingQuiz) && existingQuiz.length > 0;
+            } catch (existsError) {
+              console.warn('[GenerateSubtopic] Quiz existence probe failed', existsError);
+            }
+          }
+
+          if (!quizAlreadySeeded) {
+            // Blocking inline sync — short critical path (single INSERT).
+            try {
               await syncQuizQuestions({
-                adminDb: bgAdminDb,
+                adminDb,
                 courseId,
                 moduleTitle,
                 subtopicTitle: subtopic,
                 quizItems: cached.content?.quiz,
+                subtopicId: preResolvedSubtopicId ?? undefined,
               });
             } catch (syncError) {
-              console.warn('[GenerateSubtopic] Quiz sync from cache failed', syncError);
+              console.warn('[GenerateSubtopic] Inline quiz seed from cache failed', syncError);
             }
-          });
+          } else {
+            // Already seeded — refresh in the background so stale quiz rows
+            // get rotated without blocking the response.
+            after(async () => {
+              try {
+                const { adminDb: bgAdminDb } = await import('@/lib/database');
+                await syncQuizQuestions({
+                  adminDb: bgAdminDb,
+                  courseId,
+                  moduleTitle,
+                  subtopicTitle: subtopic,
+                  quizItems: cached.content?.quiz,
+                  subtopicId: preResolvedSubtopicId ?? undefined,
+                });
+              } catch (syncError) {
+                console.warn('[GenerateSubtopic] Background quiz sync from cache failed', syncError);
+              }
+            });
+          }
+
           const response = NextResponse.json(cached.content);
           response.headers.set('Cache-Control', 'private, max-age=300, stale-while-revalidate=600');
           return response;

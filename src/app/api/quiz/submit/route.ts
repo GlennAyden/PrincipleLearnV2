@@ -6,6 +6,7 @@ import { withApiLogging } from '@/lib/api-logger';
 import { verifyToken } from '@/lib/jwt';
 import { QuizSubmitSchema, parseBody } from '@/lib/schemas';
 import { resolveUserByIdentifier } from '@/services/auth.service';
+import { syncQuizQuestions } from '@/lib/quiz-sync';
 
 function normalizeText(value: unknown) {
   return typeof value === 'string' ? value.trim() : '';
@@ -68,66 +69,147 @@ async function postHandler(req: NextRequest) {
       );
     }
 
-    // First, try to find the specific subtopic ID if we have subtopicTitle.
-    // Use case-insensitive lookup + trim so whitespace/casing drift between
-    // the client-side outline and the DB row does not cause a silent miss
-    // (which would force the quiz-question fallback to course-wide search).
+    // subtopics table is keyed per MODULE (subtopics.title = module title),
+    // so we look up by moduleTitle first. subtopicTitle is kept as a
+    // fallback for callers that only pass the subtopic label.
     let subtopicId: string | null = null;
-    const trimmedSubtopicTitle = data.subtopicTitle?.trim() ?? '';
-    if (trimmedSubtopicTitle) {
+    const trimmedModuleTitle = data.moduleTitle?.trim() ?? '';
+    const trimmedSubtopicLabel = data.subtopicTitle?.trim() ?? '';
+
+    if (trimmedModuleTitle) {
+      const { data: moduleRow } = await adminDb
+        .from('subtopics')
+        .select('id')
+        .eq('course_id', data.courseId)
+        .ilike('title', trimmedModuleTitle)
+        .maybeSingle();
+      subtopicId = (moduleRow as { id?: string } | null)?.id ?? null;
+    }
+
+    if (!subtopicId && trimmedSubtopicLabel) {
       const { data: subRow } = await adminDb
         .from('subtopics')
         .select('id')
         .eq('course_id', data.courseId)
-        .ilike('title', trimmedSubtopicTitle)
+        .ilike('title', trimmedSubtopicLabel)
         .maybeSingle();
       subtopicId = (subRow as { id?: string } | null)?.id ?? null;
     }
 
-    // Find quiz questions in database - try multiple strategies
-    let quizQuestions: Array<Record<string, unknown>> = [];
-    
-    // Strategy 1: Use subtopic_id if we found it
-    if (subtopicId) {
-      quizQuestions = await DatabaseService.getRecords('quiz', {
-        filter: { 
-          course_id: data.courseId,
-          subtopic_id: subtopicId 
-        },
-        orderBy: { column: 'created_at', ascending: true }
-      });
-      console.log(`Found ${quizQuestions.length} quiz questions using subtopic_id: ${subtopicId}`);
+    // Lazy-seed helper: if the quiz table is empty for this (subtopic, label)
+    // pair, try to re-insert from subtopic_cache before giving up. This
+    // recovers from legacy/stale cache entries whose background sync never
+    // succeeded and avoids discarding the user's in-flight answers.
+    async function lazySeedQuizFromCache(): Promise<number> {
+      if (!trimmedModuleTitle || !trimmedSubtopicLabel) return 0;
+      try {
+        const cacheKey = `${data.courseId}-${trimmedModuleTitle}-${trimmedSubtopicLabel}`;
+        const { data: cacheRow } = await adminDb
+          .from('subtopic_cache')
+          .select('content')
+          .eq('cache_key', cacheKey)
+          .maybeSingle();
+        const cachedContent = (cacheRow as { content?: { quiz?: unknown } } | null)?.content ?? null;
+        const cachedQuiz = Array.isArray(cachedContent?.quiz) ? cachedContent.quiz : null;
+        if (!cachedQuiz || cachedQuiz.length === 0) return 0;
+
+        const seedResult = await syncQuizQuestions({
+          adminDb,
+          courseId: data.courseId,
+          moduleTitle: trimmedModuleTitle,
+          subtopicTitle: trimmedSubtopicLabel,
+          quizItems: cachedQuiz,
+          subtopicId: subtopicId ?? undefined,
+        });
+
+        if (seedResult?.resolvedSubtopicId && !subtopicId) {
+          subtopicId = seedResult.resolvedSubtopicId;
+        }
+        return seedResult?.insertedCount ?? 0;
+      } catch (seedError) {
+        console.warn('[QuizSubmit] Lazy seed from cache failed', seedError);
+        return 0;
+      }
     }
-    
-    // Strategy 2: Fallback to all quiz questions for this course if no subtopic-specific questions found
-    if (quizQuestions.length === 0) {
-      quizQuestions = await DatabaseService.getRecords('quiz', {
+
+    async function loadQuizQuestions(): Promise<Array<Record<string, unknown>>> {
+      // Strategy 1: subtopic_id + subtopic_label (most specific). Wrapped
+      // in try/catch so environments that haven't applied the subtopic_label
+      // migration yet still work via Strategy 2.
+      if (subtopicId && trimmedSubtopicLabel) {
+        try {
+          const scoped = await DatabaseService.getRecords<Record<string, unknown>>('quiz', {
+            filter: {
+              course_id: data.courseId,
+              subtopic_id: subtopicId,
+              subtopic_label: trimmedSubtopicLabel,
+            },
+            orderBy: { column: 'created_at', ascending: true },
+          });
+          if (scoped.length > 0) return scoped;
+        } catch (scopedError) {
+          console.warn('[QuizSubmit] subtopic_label filter failed (missing column?), falling back', scopedError);
+        }
+      }
+
+      // Strategy 2: subtopic_id only (covers legacy rows with NULL label).
+      if (subtopicId) {
+        const byModule = await DatabaseService.getRecords<Record<string, unknown>>('quiz', {
+          filter: { course_id: data.courseId, subtopic_id: subtopicId },
+          orderBy: { column: 'created_at', ascending: true },
+        });
+        if (byModule.length > 0) return byModule;
+      }
+
+      // Strategy 3: course-wide fallback.
+      return DatabaseService.getRecords<Record<string, unknown>>('quiz', {
         filter: { course_id: data.courseId },
-        orderBy: { column: 'created_at', ascending: true }
+        orderBy: { column: 'created_at', ascending: true },
       });
-      console.log(`Fallback: Found ${quizQuestions.length} quiz questions for course: ${data.courseId}`);
+    }
+
+    let quizQuestions = await loadQuizQuestions();
+    console.log(
+      `[QuizSubmit] Initial load: ${quizQuestions.length} quiz rows (subtopic_id=${subtopicId ?? 'null'}, label=${trimmedSubtopicLabel || 'null'})`,
+    );
+
+    // Lazy seed if empty — do NOT return 404 until we've tried to recover.
+    if (quizQuestions.length === 0) {
+      const seeded = await lazySeedQuizFromCache();
+      if (seeded > 0) {
+        quizQuestions = await loadQuizQuestions();
+        console.log(`[QuizSubmit] Lazy-seeded ${seeded} quiz rows, re-loaded ${quizQuestions.length}`);
+      }
     }
 
     if (quizQuestions.length === 0) {
       return NextResponse.json(
-        { error: "Pertanyaan kuis tidak ditemukan di database. Silakan generate ulang konten subtopik." },
+        { error: "Pertanyaan kuis tidak ditemukan di database. Silakan muat ulang halaman subtopik." },
         { status: 404 }
       );
     }
 
-    // Determine the next attempt number for this (user, subtopic) pair.
-    // First attempt → 1, second → 2, etc. Uses max(attempt_number) from DB.
+    // Determine the next attempt number for this (user, subtopic_id,
+    // subtopic_label) tuple. Scoping by subtopic_label ensures sibling
+    // subtopics inside the same module have independent attempt counters.
     let nextAttemptNumber = 1;
     if (subtopicId) {
       try {
-        const { data: maxRow } = await adminDb
+        const attemptQuery = adminDb
           .from('quiz_submissions')
           .select('attempt_number')
           .eq('user_id', user.id)
-          .eq('subtopic_id', subtopicId)
-          .order('attempt_number', { ascending: false })
-          .limit(1)
-          .maybeSingle();
+          .eq('subtopic_id', subtopicId);
+        const { data: maxRow } = trimmedSubtopicLabel
+          ? await attemptQuery
+              .eq('subtopic_label', trimmedSubtopicLabel)
+              .order('attempt_number', { ascending: false })
+              .limit(1)
+              .maybeSingle()
+          : await attemptQuery
+              .order('attempt_number', { ascending: false })
+              .limit(1)
+              .maybeSingle();
         const existingMax = (maxRow as { attempt_number?: number } | null)?.attempt_number;
         if (typeof existingMax === 'number' && existingMax > 0) {
           nextAttemptNumber = existingMax + 1;
@@ -148,6 +230,7 @@ async function postHandler(req: NextRequest) {
       quiz_id: string;
       course_id: string;
       subtopic_id: string | null;
+      subtopic_label: string | null;
       module_index: number | null;
       subtopic_index: number | null;
       answer: string;
@@ -218,6 +301,7 @@ async function postHandler(req: NextRequest) {
           quiz_id: quizId,
           course_id: data.courseId,
           subtopic_id: subtopicId,
+          subtopic_label: trimmedSubtopicLabel || null,
           module_index: normalizeIndex(data.moduleIndex),
           subtopic_index: normalizeIndex(data.subtopicIndex),
           answer: userAnswerText,

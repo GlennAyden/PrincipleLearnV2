@@ -37,6 +37,7 @@ async function getHandler(req: NextRequest) {
   const { searchParams } = new URL(req.url);
   const courseId = searchParams.get('courseId');
   const subtopicTitle = searchParams.get('subtopicTitle');
+  const moduleTitle = searchParams.get('moduleTitle');
 
   if (!courseId) {
     return NextResponse.json({ error: 'courseId wajib' }, { status: 400 });
@@ -47,19 +48,33 @@ async function getHandler(req: NextRequest) {
     return NextResponse.json({ error: 'Pengguna tidak ditemukan' }, { status: 404 });
   }
 
-  // Resolve subtopic_id from (courseId, subtopicTitle). If no title provided,
-  // we can't narrow it down — return "not completed" as a safe default.
-  // Use case-insensitive match + trim to survive whitespace/casing drift
-  // between the outline cached on the client and the DB row.
+  // subtopics table is keyed per MODULE — prefer moduleTitle lookup, then
+  // fall back to subtopicTitle for older callers that don't send moduleTitle.
   let subtopicId: string | null = null;
-  const trimmedTitle = subtopicTitle?.trim() ?? '';
-  if (trimmedTitle) {
+  const trimmedModuleTitle = moduleTitle?.trim() ?? '';
+  const trimmedSubtopicLabel = subtopicTitle?.trim() ?? '';
+
+  if (trimmedModuleTitle) {
+    try {
+      const { data: moduleRow } = await adminDb
+        .from('subtopics')
+        .select('id')
+        .eq('course_id', courseId)
+        .ilike('title', trimmedModuleTitle)
+        .maybeSingle();
+      subtopicId = (moduleRow as { id?: string } | null)?.id ?? null;
+    } catch (lookupError) {
+      console.warn('[QuizStatus] Module row lookup failed', lookupError);
+    }
+  }
+
+  if (!subtopicId && trimmedSubtopicLabel) {
     try {
       const { data: sub } = await adminDb
         .from('subtopics')
         .select('id')
         .eq('course_id', courseId)
-        .ilike('title', trimmedTitle)
+        .ilike('title', trimmedSubtopicLabel)
         .maybeSingle();
       subtopicId = (sub as { id?: string } | null)?.id ?? null;
     } catch (lookupError) {
@@ -76,12 +91,41 @@ async function getHandler(req: NextRequest) {
   }
 
   try {
-    const { data: submissions, error } = await adminDb
+    // Scope by subtopic_label so sibling subtopics inside the same module
+    // show independent completion state. Fall back gracefully when the
+    // column is missing (pre-migration env).
+    const submissionsQuery = adminDb
       .from('quiz_submissions')
       .select('attempt_number, quiz_attempt_id, is_correct, created_at')
       .eq('user_id', user.id)
-      .eq('subtopic_id', subtopicId)
-      .order('attempt_number', { ascending: false });
+      .eq('subtopic_id', subtopicId);
+
+    let submissions: unknown = null;
+    let error: unknown = null;
+
+    if (trimmedSubtopicLabel) {
+      const scopedResult = await submissionsQuery
+        .eq('subtopic_label', trimmedSubtopicLabel)
+        .order('attempt_number', { ascending: false });
+      if (scopedResult.error) {
+        console.warn('[QuizStatus] subtopic_label filter failed, falling back', scopedResult.error);
+        const fallbackResult = await adminDb
+          .from('quiz_submissions')
+          .select('attempt_number, quiz_attempt_id, is_correct, created_at')
+          .eq('user_id', user.id)
+          .eq('subtopic_id', subtopicId)
+          .order('attempt_number', { ascending: false });
+        submissions = fallbackResult.data;
+        error = fallbackResult.error;
+      } else {
+        submissions = scopedResult.data;
+        error = null;
+      }
+    } else {
+      const plainResult = await submissionsQuery.order('attempt_number', { ascending: false });
+      submissions = plainResult.data;
+      error = plainResult.error;
+    }
 
     if (error) {
       console.warn('[QuizStatus] Query failed', error);

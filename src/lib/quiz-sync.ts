@@ -31,8 +31,17 @@ export interface SyncQuizParams {
 
 export interface SyncQuizResult {
   resolvedSubtopicId: string | null;
+  subtopicLabel: string;
   insertedCount: number;
   skippedDelete: boolean;
+}
+
+// subtopic_label = per-subtopic scoping key stored on every quiz row.
+// The `subtopics` table is keyed per MODULE, so without this label every
+// sibling subtopic inside the same module collides on the same subtopic_id.
+export function normalizeSubtopicLabel(value: unknown): string {
+  if (typeof value !== 'string') return '';
+  return value.trim();
 }
 
 async function resolveSubtopic(
@@ -103,6 +112,7 @@ function buildQuizInserts(
   quizItems: QuizItem[],
   courseId: string,
   resolvedSubtopicId: string,
+  subtopicLabel: string,
 ): Array<Record<string, unknown>> {
   return quizItems
     .map((q, index) => {
@@ -135,6 +145,7 @@ function buildQuizInserts(
       return {
         course_id: courseId,
         subtopic_id: resolvedSubtopicId,
+        subtopic_label: subtopicLabel,
         question: rawQuestion,
         options: optionsArray,
         correct_answer: correctAnswer,
@@ -159,6 +170,7 @@ export async function syncQuizQuestions(params: SyncQuizParams): Promise<SyncQui
 
   const resolvedSubtopic = await resolveSubtopic(adminDb, courseId, moduleTitle, subtopicTitle, subtopicData);
   const resolvedSubtopicId = subtopicId ?? resolvedSubtopic?.id;
+  const subtopicLabel = normalizeSubtopicLabel(subtopicTitle);
 
   if (!resolvedSubtopicId) {
     console.warn('[quiz-sync] Unable to resolve subtopic for quiz persistence', {
@@ -169,22 +181,26 @@ export async function syncQuizQuestions(params: SyncQuizParams): Promise<SyncQui
     return null;
   }
 
-  const quizInserts = buildQuizInserts(quizItems, courseId, resolvedSubtopicId);
+  const quizInserts = buildQuizInserts(quizItems, courseId, resolvedSubtopicId, subtopicLabel);
   if (quizInserts.length === 0) {
     console.warn('[quiz-sync] Sync skipped — sanitized quiz data is empty');
-    return { resolvedSubtopicId, insertedCount: 0, skippedDelete: true };
+    return { resolvedSubtopicId, subtopicLabel, insertedCount: 0, skippedDelete: true };
   }
 
-  // Check if any quiz_submissions reference existing quiz rows for this subtopic.
-  // If so, we MUST keep the old rows — deleting them would break the FK join
-  // that the admin display relies on.
+  // Check if any quiz_submissions reference existing quiz rows for THIS
+  // specific (subtopic_id, subtopic_label) pair. Scoping by subtopic_label is
+  // critical: sibling subtopics inside the same module share subtopic_id, so
+  // an un-scoped check would incorrectly preserve OR delete their rows.
   let hasExistingSubmissions = false;
   try {
-    const { data: oldQuizIds } = await adminDb
+    const oldQuizQuery = adminDb
       .from('quiz')
       .select('id')
       .eq('course_id', courseId)
       .eq('subtopic_id', resolvedSubtopicId);
+    const { data: oldQuizIds } = subtopicLabel
+      ? await oldQuizQuery.eq('subtopic_label', subtopicLabel)
+      : await oldQuizQuery.is('subtopic_label', null);
 
     if (Array.isArray(oldQuizIds) && oldQuizIds.length > 0) {
       const ids = (oldQuizIds as Array<{ id: string }>).map((q) => q.id);
@@ -205,24 +221,29 @@ export async function syncQuizQuestions(params: SyncQuizParams): Promise<SyncQui
 
   if (insertError) {
     console.warn('[quiz-sync] Insert failed — leaving old quiz intact', insertError);
-    return { resolvedSubtopicId, insertedCount: 0, skippedDelete: true };
+    return { resolvedSubtopicId, subtopicLabel, insertedCount: 0, skippedDelete: true };
   }
 
   if (hasExistingSubmissions) {
     console.log('[quiz-sync] Preserved old quiz rows (existing submissions reference them)', {
       courseId,
       subtopicId: resolvedSubtopicId,
+      subtopicLabel,
     });
-    return { resolvedSubtopicId, insertedCount: quizInserts.length, skippedDelete: true };
+    return { resolvedSubtopicId, subtopicLabel, insertedCount: quizInserts.length, skippedDelete: true };
   }
 
+  // Scoped cleanup: only remove stale rows that belong to THIS subtopic_label.
+  // Rows from sibling subtopics (same module, different label) stay intact.
   try {
-    const { error: deleteError } = await adminDb
+    const deleteQuery = adminDb
       .from('quiz')
       .eq('course_id', courseId)
       .eq('subtopic_id', resolvedSubtopicId)
-      .lt('created_at', syncMarkedAt)
-      .delete();
+      .lt('created_at', syncMarkedAt);
+    const { error: deleteError } = subtopicLabel
+      ? await deleteQuery.eq('subtopic_label', subtopicLabel).delete()
+      : await deleteQuery.is('subtopic_label', null).delete();
 
     if (deleteError) {
       console.warn('[quiz-sync] Failed to clean old quiz entries after insert', deleteError);
@@ -234,10 +255,11 @@ export async function syncQuizQuestions(params: SyncQuizParams): Promise<SyncQui
   console.log('[quiz-sync] Quiz questions synced to database', {
     courseId,
     subtopicId: resolvedSubtopicId,
+    subtopicLabel,
     count: quizInserts.length,
   });
 
-  return { resolvedSubtopicId, insertedCount: quizInserts.length, skippedDelete: false };
+  return { resolvedSubtopicId, subtopicLabel, insertedCount: quizInserts.length, skippedDelete: false };
 }
 
 /**
@@ -256,6 +278,7 @@ export async function appendNewQuizQuestions(
 
   const resolvedSubtopic = await resolveSubtopic(adminDb, courseId, moduleTitle, subtopicTitle, subtopicData);
   const resolvedSubtopicId = subtopicId ?? resolvedSubtopic?.id;
+  const subtopicLabel = normalizeSubtopicLabel(subtopicTitle);
 
   if (!resolvedSubtopicId) {
     console.warn('[quiz-sync] Unable to resolve subtopic for append', {
@@ -266,22 +289,23 @@ export async function appendNewQuizQuestions(
     return null;
   }
 
-  const quizInserts = buildQuizInserts(quizItems, courseId, resolvedSubtopicId);
+  const quizInserts = buildQuizInserts(quizItems, courseId, resolvedSubtopicId, subtopicLabel);
   if (quizInserts.length === 0) {
-    return { resolvedSubtopicId, insertedCount: 0, skippedDelete: true };
+    return { resolvedSubtopicId, subtopicLabel, insertedCount: 0, skippedDelete: true };
   }
 
   const { error: insertError } = await adminDb.from('quiz').insert(quizInserts);
   if (insertError) {
     console.warn('[quiz-sync] Append insert failed', insertError);
-    return { resolvedSubtopicId, insertedCount: 0, skippedDelete: true };
+    return { resolvedSubtopicId, subtopicLabel, insertedCount: 0, skippedDelete: true };
   }
 
   console.log('[quiz-sync] New quiz questions appended (history preserved)', {
     courseId,
     subtopicId: resolvedSubtopicId,
+    subtopicLabel,
     count: quizInserts.length,
   });
 
-  return { resolvedSubtopicId, insertedCount: quizInserts.length, skippedDelete: true };
+  return { resolvedSubtopicId, subtopicLabel, insertedCount: quizInserts.length, skippedDelete: true };
 }
