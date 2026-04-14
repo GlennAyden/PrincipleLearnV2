@@ -316,24 +316,31 @@ export async function POST(request: Request) {
             // Find subtopic record — try direct title match first (fast), then fallback to scan
             let subtopicData = null;
 
-            // Attempt 1: Direct match by module title
-            const { data: directMatch } = await adminDb
-              .from('subtopics')
-              .select('id, title, content')
-              .eq('course_id', courseId)
-              .eq('title', moduleTitle)
-              .maybeSingle();
+            // Attempt 1: Direct match by module title (case-insensitive, trimmed)
+            const trimmedModuleTitle = moduleTitle?.trim() ?? '';
+            const trimmedSubtopicLabel = subtopic?.trim() ?? '';
+
+            const { data: directMatch } = trimmedModuleTitle
+              ? await adminDb
+                  .from('subtopics')
+                  .select('id, title, content')
+                  .eq('course_id', courseId)
+                  .ilike('title', trimmedModuleTitle)
+                  .maybeSingle()
+              : { data: null };
 
             if (directMatch) {
               subtopicData = directMatch;
             } else {
-              // Attempt 2: Direct match by subtopic title
-              const { data: fallbackMatch } = await adminDb
-                .from('subtopics')
-                .select('id, title, content')
-                .eq('course_id', courseId)
-                .eq('title', subtopic)
-                .maybeSingle();
+              // Attempt 2: Direct match by subtopic title (case-insensitive, trimmed)
+              const { data: fallbackMatch } = trimmedSubtopicLabel
+                ? await adminDb
+                    .from('subtopics')
+                    .select('id, title, content')
+                    .eq('course_id', courseId)
+                    .ilike('title', trimmedSubtopicLabel)
+                    .maybeSingle()
+                : { data: null };
 
               if (fallbackMatch) {
                 subtopicData = fallbackMatch;
@@ -362,19 +369,36 @@ export async function POST(request: Request) {
 
             const moduleRecord = subtopicData;
 
-            const subtopicId = subtopicData?.id;
+            const localSubtopicId = subtopicData?.id;
 
-            if (subtopicId) {
-              await syncQuizQuestions({
-                adminDb,
+            // Always attempt quiz sync — syncQuizQuestions has its own
+            // resilient subtopic lookup (resolveSubtopic), so we must not
+            // skip it when the inline lookup above missed. Otherwise the
+            // `quiz` table stays empty and first-attempt submits fail with
+            // "Pertanyaan kuis tidak ditemukan di database", causing the
+            // submit to silently fail and the user's results to vanish on
+            // re-entry to the quiz page.
+            const syncResult = await syncQuizQuestions({
+              adminDb,
+              courseId,
+              moduleTitle,
+              subtopicTitle: subtopic,
+              quizItems: data.quiz,
+              subtopicId: localSubtopicId,
+              subtopicData: subtopicData ?? undefined,
+            });
+
+            const resolvedSubtopicId = localSubtopicId ?? syncResult?.resolvedSubtopicId ?? null;
+
+            if (!resolvedSubtopicId) {
+              console.warn('Subtopic not found for quiz saving:', {
                 courseId,
                 moduleTitle,
-                subtopicTitle: subtopic,
-                quizItems: data.quiz,
-                subtopicId,
-                subtopicData,
+                subtopic,
               });
+            }
 
+            if (resolvedSubtopicId) {
               // Defer discussion template generation to after response is sent
               // This prevents Vercel timeout since these OpenAI calls can take 15-30s
               after(async () => {
@@ -382,7 +406,7 @@ export async function POST(request: Request) {
                   const { adminDb: bgAdminDb } = await import('@/lib/database');
                   const templateResult = await generateDiscussionTemplate({
                     courseId,
-                    subtopicId,
+                    subtopicId: resolvedSubtopicId,
                     moduleTitle,
                     subtopicTitle: subtopic,
                     learningObjectives: Array.isArray(data.objectives) ? data.objectives : [],
@@ -393,7 +417,7 @@ export async function POST(request: Request) {
 
                   if (templateResult) {
                     console.log('[GenerateSubtopic] Discussion template stored (background)', {
-                      subtopicId,
+                      subtopicId: resolvedSubtopicId,
                       templateId: templateResult.templateId,
                       version: templateResult.templateVersion,
                     });
@@ -438,12 +462,6 @@ export async function POST(request: Request) {
                   console.error('[GenerateSubtopic] Background discussion template generation failed', discussionError);
                 }
               });
-            } else {
-              console.warn('Subtopic not found for quiz saving:', {
-                courseId,
-                moduleTitle,
-                subtopic,
-              });
             }
           } catch (quizSaveError) {
             console.warn('Quiz database save failed:', quizSaveError);
@@ -473,7 +491,8 @@ interface QuizItem {
 
 // Delegates to src/lib/quiz-sync.ts — which now preserves old quiz rows
 // when they are referenced by existing quiz_submissions (to keep the admin
-// display's FK join intact).
+// display's FK join intact). Returns the helper's result so callers can
+// recover the resolved subtopic id even when the inline lookup missed.
 async function syncQuizQuestions(params: {
   adminDb: typeof import('@/lib/database').adminDb;
   courseId?: string;
@@ -484,9 +503,10 @@ async function syncQuizQuestions(params: {
   subtopicData?: { id?: string; title?: string; content?: string | null };
 }) {
   try {
-    await syncQuizQuestionsHelper(params);
+    return await syncQuizQuestionsHelper(params);
   } catch (err) {
     console.warn('[GenerateSubtopic] Sync quiz questions failed', err);
+    return null;
   }
 }
 

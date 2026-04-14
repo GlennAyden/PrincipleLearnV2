@@ -68,20 +68,20 @@ async function postHandler(req: NextRequest) {
       );
     }
 
-    // First, try to find the specific subtopic ID if we have subtopicTitle
-    let subtopicId = null;
-    if (data.subtopicTitle) {
-      const subtopics = await DatabaseService.getRecords<{ id: string }>('subtopics', {
-        filter: { 
-          course_id: data.courseId,
-          title: data.subtopicTitle
-        },
-        limit: 1
-      });
-      
-      if (subtopics.length > 0) {
-        subtopicId = subtopics[0].id;
-      }
+    // First, try to find the specific subtopic ID if we have subtopicTitle.
+    // Use case-insensitive lookup + trim so whitespace/casing drift between
+    // the client-side outline and the DB row does not cause a silent miss
+    // (which would force the quiz-question fallback to course-wide search).
+    let subtopicId: string | null = null;
+    const trimmedSubtopicTitle = data.subtopicTitle?.trim() ?? '';
+    if (trimmedSubtopicTitle) {
+      const { data: subRow } = await adminDb
+        .from('subtopics')
+        .select('id')
+        .eq('course_id', data.courseId)
+        .ilike('title', trimmedSubtopicTitle)
+        .maybeSingle();
+      subtopicId = (subRow as { id?: string } | null)?.id ?? null;
     }
 
     // Find quiz questions in database - try multiple strategies

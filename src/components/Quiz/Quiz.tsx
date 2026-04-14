@@ -63,6 +63,7 @@ export default function Quiz({
   const [showResults, setShowResults] = useState(false);
   const [submitted, setSubmitted] = useState(false);
   const [loading, setLoading] = useState(false);
+  const [submitError, setSubmitError] = useState<string | null>(null);
   // If completedState is set on initial mount, show the completion summary.
   // After the user clicks Reshuffle, the parent passes new questions + clears
   // completedState, so we bypass the summary view for the fresh attempt.
@@ -75,6 +76,7 @@ export default function Quiz({
     setShowResults(false);
     setSubmitted(false);
     setLoading(false);
+    setSubmitError(null);
   }, [safeItems.length, safeItems]);
 
   // If the parent flips completedState back to non-null (e.g. after a submit
@@ -116,11 +118,12 @@ export default function Quiz({
         reasoningNote: string;
       }>,
       score: number,
-    ) => {
-      if (submitted || !user?.id) return;
+    ): Promise<boolean> => {
+      if (submitted || !user?.id) return false;
 
       try {
         setLoading(true);
+        setSubmitError(null);
         const response = await apiFetch('/api/quiz/submit', {
           method: 'POST',
           body: JSON.stringify({
@@ -142,12 +145,24 @@ export default function Quiz({
           const result = await response.json();
           setSubmitted(true);
           console.log('Quiz attempt saved successfully:', result.message);
-        } else {
-          const errorResult = await response.json();
-          console.error('Failed to save quiz attempt:', errorResult);
+          return true;
         }
+
+        const errorResult = await response.json().catch(() => ({}));
+        console.error('Failed to save quiz attempt:', errorResult);
+        const reason =
+          (errorResult && typeof errorResult.error === 'string' && errorResult.error) ||
+          `Server mengembalikan status ${response.status}`;
+        setSubmitError(
+          `Gagal menyimpan hasil kuis: ${reason}. Silakan coba lagi atau muat ulang halaman.`,
+        );
+        return false;
       } catch (error) {
         console.error('Error saving quiz attempt:', error);
+        setSubmitError(
+          'Gagal menyimpan hasil kuis: koneksi terputus. Silakan coba lagi.',
+        );
+        return false;
       } finally {
         setLoading(false);
       }
@@ -156,8 +171,6 @@ export default function Quiz({
   );
 
   const handleCheck = async () => {
-    setShowResults(true);
-
     let correctCount = 0;
     const answers = safeItems.map((q, index) => {
       const userAnswerIndex = selectedAnswers[index] ?? -1;
@@ -176,8 +189,17 @@ export default function Quiz({
 
     const score = Math.round((correctCount / safeItems.length) * 100);
 
+    // Gate the inline result view on successful server persistence so the
+    // UI cannot claim "results saved" while the DB insert silently failed.
+    // If the user is anonymous (no user.id), keep the legacy local-only
+    // flow so the feature still works in demo mode.
     if (user?.id && courseId) {
-      await submitQuizToServer(answers, score);
+      const ok = await submitQuizToServer(answers, score);
+      if (ok) {
+        setShowResults(true);
+      }
+    } else {
+      setShowResults(true);
     }
   };
 
@@ -295,6 +317,15 @@ export default function Quiz({
           )}
         </div>
       ))}
+
+      {submitError && (
+        <div className={styles.submitError} role="alert">
+          <span aria-hidden="true">⚠️</span>
+          <div>
+            <strong>Simpan gagal.</strong> {submitError}
+          </div>
+        </div>
+      )}
 
       <div className={styles.buttonRow}>
         <button

@@ -49,14 +49,17 @@ async function getHandler(req: NextRequest) {
 
   // Resolve subtopic_id from (courseId, subtopicTitle). If no title provided,
   // we can't narrow it down — return "not completed" as a safe default.
+  // Use case-insensitive match + trim to survive whitespace/casing drift
+  // between the outline cached on the client and the DB row.
   let subtopicId: string | null = null;
-  if (subtopicTitle) {
+  const trimmedTitle = subtopicTitle?.trim() ?? '';
+  if (trimmedTitle) {
     try {
       const { data: sub } = await adminDb
         .from('subtopics')
         .select('id')
         .eq('course_id', courseId)
-        .eq('title', subtopicTitle)
+        .ilike('title', trimmedTitle)
         .maybeSingle();
       subtopicId = (sub as { id?: string } | null)?.id ?? null;
     } catch (lookupError) {

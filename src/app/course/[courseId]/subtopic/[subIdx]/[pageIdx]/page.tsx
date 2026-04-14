@@ -443,11 +443,12 @@ export default function SubtopicPage() {
     loadAskHistory();
   }, [user?.id, courseId, moduleIndex, subtopicIndex, pageNumber]);
 
-  // Load quiz completion status whenever user lands on the quiz page
+  // Load quiz completion status whenever the user/course/subtopic changes.
+  // Runs independently of `data` loading so that navigating back to the quiz
+  // page immediately re-fetches prior attempts (mirrors loadAskHistory).
   useEffect(() => {
     async function loadQuizStatus() {
       if (!user?.id || !courseId || !quizSubtopicTitle) return;
-      if (pageNumber !== (data?.pages?.length ?? 0) + 1) return;
 
       try {
         const response = await apiFetch(
@@ -462,7 +463,7 @@ export default function SubtopicPage() {
       }
     }
     loadQuizStatus();
-  }, [user?.id, courseId, quizSubtopicTitle, pageNumber, data?.pages?.length]);
+  }, [user?.id, courseId, quizSubtopicTitle]);
 
   // Reshuffle: generate new quiz questions for this subtopic
   const handleQuizReshuffle = useCallback(async () => {

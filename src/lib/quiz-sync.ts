@@ -44,38 +44,46 @@ async function resolveSubtopic(
 ): Promise<{ id?: string; title?: string } | null> {
   if (subtopicData?.id) return subtopicData;
 
+  // Use ilike + trim so whitespace/casing drift between the outline
+  // cached on the client and the persisted `subtopics.title` value does
+  // not cause a silent miss (which would leave the `quiz` table empty).
+  const trimmedModuleTitle = moduleTitle?.trim() ?? '';
+  const trimmedSubtopicTitle = subtopicTitle?.trim() ?? '';
+
   try {
-    if (moduleTitle) {
+    if (trimmedModuleTitle) {
       const { data: directMatch } = await adminDb
         .from('subtopics')
         .select('id, title')
         .eq('course_id', courseId)
-        .eq('title', moduleTitle)
+        .ilike('title', trimmedModuleTitle)
         .maybeSingle();
       if (directMatch) return directMatch;
     }
 
-    if (subtopicTitle) {
+    if (trimmedSubtopicTitle) {
       const { data: fallbackSubtopic } = await adminDb
         .from('subtopics')
         .select('id, title')
         .eq('course_id', courseId)
-        .eq('title', subtopicTitle)
+        .ilike('title', trimmedSubtopicTitle)
         .maybeSingle();
       if (fallbackSubtopic) return fallbackSubtopic;
     }
 
-    if (moduleTitle) {
+    if (trimmedModuleTitle) {
       const { data: allSubtopics } = await adminDb
         .from('subtopics')
         .select('id, title, content')
         .eq('course_id', courseId);
 
       if (allSubtopics) {
+        const normalizedTarget = trimmedModuleTitle.toLowerCase();
         for (const sub of allSubtopics as Array<{ id: string; title: string; content: string | null }>) {
           try {
             const parsed = sub?.content ? JSON.parse(sub.content) : null;
-            if (parsed?.module === moduleTitle) {
+            const parsedModule = typeof parsed?.module === 'string' ? parsed.module.trim().toLowerCase() : '';
+            if (parsedModule && parsedModule === normalizedTarget) {
               return sub;
             }
           } catch {
