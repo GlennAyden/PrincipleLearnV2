@@ -102,7 +102,12 @@ async function resolveSubtopic(
       }
     }
   } catch (lookupError) {
-    console.warn('[quiz-sync] Subtopic lookup failed', lookupError);
+    console.error('[quiz-sync] Subtopic lookup failed', {
+      error: lookupError,
+      courseId,
+      moduleTitle,
+      subtopicTitle,
+    });
   }
 
   return null;
@@ -173,17 +178,24 @@ export async function syncQuizQuestions(params: SyncQuizParams): Promise<SyncQui
   const subtopicLabel = normalizeSubtopicLabel(subtopicTitle);
 
   if (!resolvedSubtopicId) {
-    console.warn('[quiz-sync] Unable to resolve subtopic for quiz persistence', {
+    console.error('[quiz-sync] Unable to resolve subtopic for quiz persistence', {
       courseId,
       moduleTitle,
       subtopicTitle,
+      subtopicIdProvided: !!subtopicId,
+      resolveSubtopicReturned: !!resolvedSubtopic,
     });
     return null;
   }
 
   const quizInserts = buildQuizInserts(quizItems, courseId, resolvedSubtopicId, subtopicLabel);
   if (quizInserts.length === 0) {
-    console.warn('[quiz-sync] Sync skipped — sanitized quiz data is empty');
+    console.error('[quiz-sync] Sync skipped — sanitized quiz data is empty', {
+      quizItemsCount: Array.isArray(quizItems) ? quizItems.length : 'not-array',
+      courseId,
+      subtopicId: resolvedSubtopicId,
+      subtopicLabel,
+    });
     return { resolvedSubtopicId, subtopicLabel, insertedCount: 0, skippedDelete: true };
   }
 
@@ -212,7 +224,12 @@ export async function syncQuizQuestions(params: SyncQuizParams): Promise<SyncQui
       hasExistingSubmissions = Array.isArray(refSubs) && refSubs.length > 0;
     }
   } catch (checkError) {
-    console.warn('[quiz-sync] Failed to probe submission references, defaulting to preserve-history', checkError);
+    console.error('[quiz-sync] Failed to probe submission references, defaulting to preserve-history', {
+      error: checkError,
+      courseId,
+      subtopicId: resolvedSubtopicId,
+      subtopicLabel,
+    });
     hasExistingSubmissions = true;
   }
 
@@ -220,7 +237,14 @@ export async function syncQuizQuestions(params: SyncQuizParams): Promise<SyncQui
   const { error: insertError } = await adminDb.from('quiz').insert(quizInserts);
 
   if (insertError) {
-    console.warn('[quiz-sync] Insert failed — leaving old quiz intact', insertError);
+    console.error('[quiz-sync] Insert failed — leaving old quiz intact', {
+      insertError,
+      insertCount: quizInserts.length,
+      courseId,
+      subtopicId: resolvedSubtopicId,
+      subtopicLabel,
+      samplePayload: quizInserts[0],
+    });
     return { resolvedSubtopicId, subtopicLabel, insertedCount: 0, skippedDelete: true };
   }
 

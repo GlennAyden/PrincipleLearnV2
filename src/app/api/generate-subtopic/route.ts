@@ -1,14 +1,16 @@
 // src/app/api/generate-subtopic/route.ts
 
 import { NextResponse, after } from 'next/server';
+import type { NextRequest } from 'next/server';
 import { generateDiscussionTemplate, generateModuleDiscussionTemplate } from '@/services/discussion/generateDiscussionTemplate';
 import { aiRateLimiter } from '@/lib/rate-limit';
 import { GenerateSubtopicSchema, parseBody } from '@/lib/schemas';
 import { chatCompletion } from '@/services/ai.service';
 import { syncQuizQuestions as syncQuizQuestionsHelper } from '@/lib/quiz-sync';
+import { withApiLogging } from '@/lib/api-logger';
 import type { ChatCompletionMessageParam } from 'openai/resources/chat/completions';
 
-export async function POST(request: Request) {
+async function postHandler(request: NextRequest) {
   try {
     // Rate limit AI calls per user
     const userId = request.headers.get('x-user-id') || request.headers.get('x-forwarded-for') || 'unknown';
@@ -64,8 +66,24 @@ export async function POST(request: Request) {
               preResolvedSubtopicId = (moduleRow as { id?: string } | null)?.id ?? null;
             }
           } catch (lookupError) {
-            console.warn('[GenerateSubtopic] Pre-resolve subtopic id failed', lookupError);
+            console.error('[GenerateSubtopic] Pre-resolve subtopic id failed', {
+              error: lookupError,
+              courseId,
+              moduleTitle: trimmedModuleTitle,
+            });
           }
+          console.log('[GenerateSubtopic] Cache-hit sync diagnostic', {
+            cacheKey,
+            courseId,
+            trimmedModuleTitle,
+            trimmedSubtopicLabel,
+            preResolvedSubtopicId,
+            quizType: typeof (cached.content as { quiz?: unknown } | null)?.quiz,
+            quizIsArray: Array.isArray((cached.content as { quiz?: unknown } | null)?.quiz),
+            quizLength: Array.isArray((cached.content as { quiz?: unknown[] } | null)?.quiz)
+              ? (cached.content as { quiz: unknown[] }).quiz.length
+              : null,
+          });
 
           // If the quiz table already has rows for this (subtopic_id,
           // subtopic_label) pair, we can defer the sync (background refresh).
@@ -91,7 +109,7 @@ export async function POST(request: Request) {
           if (!quizAlreadySeeded) {
             // Blocking inline sync — short critical path (single INSERT).
             try {
-              await syncQuizQuestions({
+              const inlineSyncResult = await syncQuizQuestions({
                 adminDb,
                 courseId,
                 moduleTitle,
@@ -99,8 +117,16 @@ export async function POST(request: Request) {
                 quizItems: cached.content?.quiz,
                 subtopicId: preResolvedSubtopicId ?? undefined,
               });
+              console.log('[GenerateSubtopic] Inline sync result', {
+                cacheKey,
+                result: inlineSyncResult,
+              });
             } catch (syncError) {
-              console.warn('[GenerateSubtopic] Inline quiz seed from cache failed', syncError);
+              console.error('[GenerateSubtopic] Inline quiz seed from cache failed', {
+                error: syncError,
+                cacheKey,
+                preResolvedSubtopicId,
+              });
             }
           } else {
             // Already seeded — refresh in the background so stale quiz rows
@@ -117,7 +143,11 @@ export async function POST(request: Request) {
                   subtopicId: preResolvedSubtopicId ?? undefined,
                 });
               } catch (syncError) {
-                console.warn('[GenerateSubtopic] Background quiz sync from cache failed', syncError);
+                console.error('[GenerateSubtopic] Background quiz sync from cache failed', {
+                  error: syncError,
+                  cacheKey,
+                  preResolvedSubtopicId,
+                });
               }
             });
           }
@@ -526,12 +556,22 @@ export async function POST(request: Request) {
               });
             }
           } catch (quizSaveError) {
-            console.warn('Quiz database save failed:', quizSaveError);
+            console.error('[GenerateSubtopic] Quiz database save failed', {
+              error: quizSaveError,
+              courseId,
+              moduleTitle,
+              subtopic,
+            });
           }
         }
       } catch (saveError) {
         // Don't fail the request if caching fails
-        console.warn('Cache save failed:', saveError);
+        console.error('[GenerateSubtopic] Cache save failed', {
+          error: saveError,
+          courseId,
+          moduleTitle,
+          subtopic,
+        });
       }
     }
 
@@ -544,6 +584,8 @@ export async function POST(request: Request) {
     );
   }
 }
+
+export const POST = withApiLogging(postHandler, { label: 'generate-subtopic' });
 
 interface QuizItem {
   question?: string;
