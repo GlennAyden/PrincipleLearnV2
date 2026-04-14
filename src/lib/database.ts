@@ -6,8 +6,40 @@
  */
 
 import { createClient, SupabaseClient } from '@supabase/supabase-js';
+import { config as loadEnv } from 'dotenv';
 
 const OPTIONAL_SUPABASE_TABLES = new Set(['discussion_admin_actions']);
+
+/**
+ * Ensure Supabase env vars are present. Falls back to loading .env.local / .env
+ * directly via dotenv when process.env is missing them — this covers cases where
+ * Next.js' automatic env loading hasn't populated the worker process (e.g. a stale
+ * build, or a server started before the env file was written).
+ */
+let _envFallbackAttempted = false;
+function ensureSupabaseEnv(): { url: string | undefined; serviceKey: string | undefined; anonKey: string | undefined } {
+  let url = process.env.NEXT_PUBLIC_SUPABASE_URL;
+  let serviceKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
+  let anonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
+
+  if ((!url || !serviceKey) && !_envFallbackAttempted) {
+    _envFallbackAttempted = true;
+    try {
+      loadEnv({ path: '.env', override: false });
+      loadEnv({ path: '.env.local', override: true });
+      url = process.env.NEXT_PUBLIC_SUPABASE_URL;
+      serviceKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
+      anonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
+      if (url && serviceKey) {
+        console.warn('[Database] Supabase env vars loaded from .env.local fallback');
+      }
+    } catch (err) {
+      console.warn('[Database] dotenv fallback failed:', (err as Error).message);
+    }
+  }
+
+  return { url, serviceKey, anonKey };
+}
 
 function isOptionalMissingTableError(error: unknown): boolean {
   const err = error as Record<string, unknown> | null | undefined;
@@ -33,8 +65,7 @@ let _supabaseAnon: SupabaseClient | null = null;
 function getSupabaseClient(): SupabaseClient {
   if (_supabase) return _supabase;
 
-  const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
-  const supabaseServiceRoleKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
+  const { url: supabaseUrl, serviceKey: supabaseServiceRoleKey } = ensureSupabaseEnv();
 
   if (!supabaseUrl || !supabaseServiceRoleKey) {
     throw new DatabaseError(
@@ -70,8 +101,7 @@ function getSupabaseClient(): SupabaseClient {
 function getAnonClient(): SupabaseClient {
   if (_supabaseAnon) return _supabaseAnon;
 
-  const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
-  const anonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
+  const { url: supabaseUrl, anonKey } = ensureSupabaseEnv();
 
   if (!supabaseUrl || !anonKey) {
     // Fall back to service-role if anon key is not configured
