@@ -308,7 +308,6 @@ export async function scoreCognitive(input: ScoringInput): Promise<CognitiveScor
         ],
         response_format: SCORING_JSON_SCHEMA,
         max_completion_tokens: 500,
-        temperature: 0.1,
       },
       { signal: controller.signal },
     );

@@ -327,7 +327,6 @@ export async function generateModuleDiscussionTemplate(
 
     const completion = await openai.chat.completions.create({
       model: defaultOpenAIModel,
-      temperature: 0.2,
       response_format: responseFormat,
       max_completion_tokens: 1600,
       messages: [

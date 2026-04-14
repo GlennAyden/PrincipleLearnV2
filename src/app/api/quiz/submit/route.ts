@@ -189,6 +189,26 @@ async function postHandler(req: NextRequest) {
       );
     }
 
+    // Legacy subtopics can hold multiple quiz rows per question (pre-d748282
+    // reshuffles appended instead of replacing). Collapse to the most-recent
+    // row per unique normalized question text so matching has a clean universe.
+    const dedupeByQuestion = (rows: Array<Record<string, unknown>>) => {
+      const byKey = new Map<string, Record<string, unknown>>();
+      for (const row of rows) {
+        const raw = typeof row.question === 'string' ? row.question : '';
+        const key = raw.replace(/\s+/g, ' ').toLowerCase().trim();
+        if (!key) continue;
+        byKey.set(key, row); // ASC order → later writes overwrite → newest wins
+      }
+      return byKey.size > 0 ? Array.from(byKey.values()) : rows;
+    };
+    const dedupedQuestions = dedupeByQuestion(quizQuestions);
+    if (dedupedQuestions.length !== quizQuestions.length) {
+      console.log(
+        `[QuizSubmit] Deduped ${quizQuestions.length} → ${dedupedQuestions.length} unique quiz questions`,
+      );
+    }
+
     // Determine the next attempt number for this (user, subtopic_id,
     // subtopic_label) tuple. Scoping by subtopic_label ensures sibling
     // subtopics inside the same module have independent attempt counters.
@@ -246,43 +266,73 @@ async function postHandler(req: NextRequest) {
       let matchMethod = '';
 
       // Strategy 1: Exact question text match
-      matchingQuiz = quizQuestions.find(q => (q.question as string).trim() === answer.question.trim());
+      matchingQuiz = dedupedQuestions.find(q => (q.question as string).trim() === answer.question.trim());
       if (matchingQuiz) {
         matchMethod = 'exact_text';
       }
-      
-      // Strategy 2: Fuzzy question text match (remove extra whitespace, punctuation)
+
+      // Strategy 2: Fuzzy question text match (collapse whitespace, drop punctuation)
       if (!matchingQuiz) {
         const normalizeQuizText = (text: string) => text.replace(/\s+/g, ' ').replace(/[^\w\s]/g, '').toLowerCase().trim();
         const normalizedAnswerQuestion = normalizeQuizText(answer.question);
 
-        matchingQuiz = quizQuestions.find(q =>
+        matchingQuiz = dedupedQuestions.find(q =>
           normalizeQuizText(q.question as string) === normalizedAnswerQuestion
         );
         if (matchingQuiz) {
           matchMethod = 'fuzzy_text';
         }
       }
-      
-      // Strategy 3: Match by index position if we have the right number of questions
-      if (!matchingQuiz && answers.length === quizQuestions.length && i < quizQuestions.length) {
-        matchingQuiz = quizQuestions[i];
-        matchMethod = 'index_position';
+
+      // Strategy 3: Options-signature match. The sorted+normalized option set
+      // is a strong fingerprint of the underlying question even when the
+      // prompt wording has drifted due to later regeneration, so it's our
+      // primary fallback whenever text-based strategies miss.
+      if (!matchingQuiz && Array.isArray(answer.options) && answer.options.length > 0) {
+        const optionsKey = (opts: unknown): string | null => {
+          if (!Array.isArray(opts) || opts.length === 0) return null;
+          return opts
+            .map((o) => String(o).replace(/\s+/g, ' ').trim().toLowerCase())
+            .sort()
+            .join('|');
+        };
+        const answerKey = optionsKey(answer.options);
+        if (answerKey) {
+          matchingQuiz = dedupedQuestions.find((q: Record<string, unknown>) => {
+            const quizKey = optionsKey(q.options);
+            return quizKey !== null && quizKey === answerKey;
+          });
+          if (matchingQuiz) {
+            matchMethod = 'options_signature';
+          }
+        }
       }
-      
-      // Strategy 4: Match by question content similarity (contains similar words)
+
+      // Strategy 4: Match by question content similarity. Tokens containing
+      // digits (e.g. "5-4-3-2-1") are kept regardless of length so numeric
+      // identifiers aren't stripped by the short-word filter.
       if (!matchingQuiz) {
-        const answerWords = answer.question.toLowerCase().split(/\s+/).filter((w: string) => w.length > 3);
+        const tokenize = (text: string) =>
+          text.toLowerCase().split(/\s+/).filter((w: string) => w.length > 3 || /\d/.test(w));
+        const answerWords = tokenize(answer.question);
         if (answerWords.length > 0) {
-          matchingQuiz = quizQuestions.find((q: Record<string, unknown>) => {
-            const quizWords = (q.question as string).toLowerCase().split(/\s+/).filter((w: string) => w.length > 3);
+          matchingQuiz = dedupedQuestions.find((q: Record<string, unknown>) => {
+            const quizWords = tokenize(q.question as string);
             const commonWords = answerWords.filter((word: string) => quizWords.includes(word));
-            return commonWords.length >= Math.min(2, answerWords.length * 0.5);
+            return commonWords.length >= Math.max(2, Math.ceil(answerWords.length * 0.5));
           });
           if (matchingQuiz) {
             matchMethod = 'content_similarity';
           }
         }
+      }
+
+      // Strategy 5 (last resort): positional match when counts line up.
+      // Moved to last position because reshuffled quiz UIs can deliver
+      // answers in a different order than DB insertion order.
+      if (!matchingQuiz && answers.length === dedupedQuestions.length && i < dedupedQuestions.length) {
+        matchingQuiz = dedupedQuestions[i];
+        matchMethod = 'index_position';
       }
       
       if (matchingQuiz) {
@@ -374,10 +424,19 @@ async function postHandler(req: NextRequest) {
         : [];
     const submissionIds = insertedRowList.map((row: Record<string, unknown>) => row.id);
 
-    // Server-computed score — authoritative, overrides client's self-reported score.
-    const serverCorrectCount = matchedRows.filter((r) => r.is_correct).length;
-    const serverScore = matchedRows.length > 0
-      ? Math.round((serverCorrectCount / matchedRows.length) * 100)
+    // Server-computed score. For answers we matched to a DB row we use the
+    // authoritative server-side verification; for unmatched answers (typically
+    // caused by stale/duplicate quiz rows the user can't control), we fall back
+    // to the client's self-reported correctness so learners aren't penalized
+    // for data drift. Denominator is the full answer count, not just matched.
+    const matchedCorrectCount = matchedRows.filter((r) => r.is_correct).length;
+    const unmatchedCorrectCount = matchingResults.reduce((acc, result, idx) => {
+      if (result.matched) return acc;
+      return acc + (answers[idx]?.isCorrect ? 1 : 0);
+    }, 0);
+    const serverCorrectCount = matchedCorrectCount + unmatchedCorrectCount;
+    const serverScore = answers.length > 0
+      ? Math.round((serverCorrectCount / answers.length) * 100)
       : 0;
 
     console.log(`Quiz submission saved to database:`, {

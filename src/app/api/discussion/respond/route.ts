@@ -233,7 +233,6 @@ async function generateClarification(
       {
         model: defaultOpenAIModel,
         max_completion_tokens: 400,
-        temperature: 0.3,
         messages: [
           {
             role: 'system',
@@ -303,7 +302,6 @@ async function generateRemediationQuestion(
       {
         model: defaultOpenAIModel,
         max_completion_tokens: 500,
-        temperature: 0.4,
         messages: [
           {
             role: 'system',
