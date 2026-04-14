@@ -4,6 +4,7 @@ import { NextResponse, after } from 'next/server';
 import type { NextRequest } from 'next/server';
 import { generateDiscussionTemplate, generateModuleDiscussionTemplate } from '@/services/discussion/generateDiscussionTemplate';
 import { aiRateLimiter } from '@/lib/rate-limit';
+import { verifyToken } from '@/lib/jwt';
 import { GenerateSubtopicSchema, parseBody } from '@/lib/schemas';
 import { chatCompletion } from '@/services/ai.service';
 import { syncQuizQuestions as syncQuizQuestionsHelper } from '@/lib/quiz-sync';
@@ -12,13 +13,20 @@ import type { ChatCompletionMessageParam } from 'openai/resources/chat/completio
 
 async function postHandler(request: NextRequest) {
   try {
-    // Rate limit AI calls per user
-    const userId = request.headers.get('x-user-id') || request.headers.get('x-forwarded-for') || 'unknown';
-    if (!(await aiRateLimiter.isAllowed(userId))) {
-      return NextResponse.json(
-        { error: 'Too many requests. Please try again later.' },
-        { status: 429 }
-      );
+    // Resolve rate-limit key: prefer the middleware-injected header, fall back
+    // to the JWT cookie directly (middleware propagation has been unreliable
+    // in production), and only use the IP as a last resort. Per-user keys
+    // prevent a single quota from being shared by everyone behind a NAT.
+    let rateLimitKey = request.headers.get('x-user-id');
+    if (!rateLimitKey) {
+      const accessToken = request.cookies.get('access_token')?.value;
+      const tokenPayload = accessToken ? verifyToken(accessToken) : null;
+      if (tokenPayload?.userId) {
+        rateLimitKey = tokenPayload.userId;
+      }
+    }
+    if (!rateLimitKey) {
+      rateLimitKey = request.headers.get('x-forwarded-for') || 'unknown';
     }
 
     const rawPayload = await request.json().catch(() => null);
@@ -199,6 +207,16 @@ async function postHandler(request: NextRequest) {
         'Return only the JSON object without any extra text.'
       ].join(' ')
     };
+
+    // Rate-limit only actual OpenAI generations. Cache hits above return
+    // without consuming quota because they incur no model cost, so a learner
+    // browsing previously-generated content can never be locked out.
+    if (!(await aiRateLimiter.isAllowed(rateLimitKey))) {
+      return NextResponse.json(
+        { error: 'Too many requests. Please try again later.' },
+        { status: 429 }
+      );
+    }
 
     const resp = await chatCompletion({
       messages: [systemMessage, userMessage],
