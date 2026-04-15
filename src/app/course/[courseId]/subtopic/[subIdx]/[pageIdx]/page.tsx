@@ -117,7 +117,7 @@ export default function SubtopicPage() {
     return s !== null && !isNaN(Number(s)) ? Number(s) : 0;
   })();
 
-  const keyBase = `pl-${courseId}-${moduleIndex}-${subtopicIndex}-${pageNumber}`;
+  const keyBase = `pl-${user?.id ?? 'anon'}-${courseId}-${moduleIndex}-${subtopicIndex}-${pageNumber}`;
   const [, setSubtopicProgress] = useLocalStorage<Record<string, boolean>>(
     'pl_subtopic_generated',
     {}
@@ -298,6 +298,16 @@ export default function SubtopicPage() {
             courseId: courseId
           }),
         });
+        if (res.status === 403) {
+          setError('Anda tidak memiliki akses ke subtopic ini');
+          setLoading(false);
+          return;
+        }
+        if (res.status === 404) {
+          setError('Course atau subtopic tidak ditemukan');
+          setLoading(false);
+          return;
+        }
         if (!res.ok) throw new Error('Failed to load subtopic');
         const json = (await res.json()) as SubtopicResponse;
         setData(json);
@@ -648,9 +658,15 @@ export default function SubtopicPage() {
           context: data.pages[pageNumber].paragraphs.join(' '),
         }),
       });
-      const text = await res.text();
-      if (!res.ok) throw new Error(text);
-      const { examples } = JSON.parse(text) as { examples: string[] };
+      if (!res.ok) {
+        const errText = await res.text().catch(() => '');
+        throw new Error(errText || `Request failed with status ${res.status}`);
+      }
+      const data2 = await res.json();
+      if (!Array.isArray(data2?.examples)) {
+        throw new Error('Invalid examples response format');
+      }
+      const examples = data2.examples as string[];
 
       // Add new example to history and set it as active
       const updatedExamples = [...examplesData, ...examples];

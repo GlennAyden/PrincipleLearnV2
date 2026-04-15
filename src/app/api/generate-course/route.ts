@@ -1,7 +1,8 @@
 // src/app/api/generate-course/route.ts
 import { NextRequest, NextResponse } from 'next/server';
-import { DatabaseService } from '@/lib/database';
+import { DatabaseService, DatabaseError } from '@/lib/database';
 import type { ChatCompletionMessageParam } from 'openai/resources/chat/completions';
+import { ZodError } from 'zod';
 import { withApiLogging } from '@/lib/api-logger';
 import { aiRateLimiter } from '@/lib/rate-limit';
 import { GenerateCourseSchema, parseBody } from '@/lib/schemas';
@@ -9,6 +10,38 @@ import { resolveUserByIdentifier } from '@/services/auth.service';
 import { createCourseWithSubtopics } from '@/services/course.service';
 import { chatCompletionWithRetry, parseAndValidateAIResponse, CourseOutlineResponseSchema, sanitizePromptInput } from '@/services/ai.service';
 import { resolveAuthContext } from '@/lib/auth-helper';
+
+/**
+ * Internal error tags used to differentiate failure modes inside the
+ * generate-course pipeline. The catch block below maps these to HTTP
+ * status codes and user-facing messages.
+ */
+class AIServiceError extends Error {
+  constructor(message: string, public readonly cause?: unknown) {
+    super(message);
+    this.name = 'AIServiceError';
+  }
+}
+class AIResponseInvalidError extends Error {
+  constructor(message: string, public readonly cause?: unknown) {
+    super(message);
+    this.name = 'AIResponseInvalidError';
+  }
+}
+class CoursePersistError extends Error {
+  constructor(message: string, public readonly cause?: unknown) {
+    super(message);
+    this.name = 'CoursePersistError';
+  }
+}
+
+/** Detect transient AI failures from error messages thrown by ai.service.ts. */
+function classifyAIError(err: unknown): 'timeout' | 'rate_limit' | 'other' {
+  const msg = (err instanceof Error ? err.message : String(err)).toLowerCase();
+  if (msg.includes('timeout') || msg.includes('aborted')) return 'timeout';
+  if (msg.includes('rate') || msg.includes('429') || msg.includes('quota')) return 'rate_limit';
+  return 'other';
+}
 
 // Add CORS headers for API — restrict to same origin in production
 const allowedOrigin = process.env.NEXT_PUBLIC_APP_URL
@@ -140,12 +173,20 @@ Important: Write all titles and overviews in the same language as the user's inp
     console.log('[Generate Course] Calling OpenAI API');
 
     // Call OpenAI with retry logic + timeout via service
-    const response = await chatCompletionWithRetry({
-      messages: [systemMessage, userMessage],
-      maxTokens: 8192,
-      timeoutMs: 90000,
-      maxAttempts: 3,
-    });
+    let response;
+    try {
+      response = await chatCompletionWithRetry({
+        messages: [systemMessage, userMessage],
+        maxTokens: 8192,
+        timeoutMs: 90000,
+        maxAttempts: 3,
+      });
+    } catch (aiErr) {
+      throw new AIServiceError(
+        aiErr instanceof Error ? aiErr.message : String(aiErr),
+        aiErr,
+      );
+    }
 
     console.log('[Generate Course] Received response from OpenAI');
 
@@ -153,7 +194,7 @@ Important: Write all titles and overviews in the same language as the user's inp
     const textRaw = response.choices?.[0]?.message?.content;
     if (!textRaw || !textRaw.trim()) {
       console.error('[Generate Course] Empty content! Full message:', JSON.stringify(response.choices?.[0]?.message));
-      throw new Error('Respons kosong dari model');
+      throw new AIResponseInvalidError('Respons kosong dari model');
     }
 
     let outline;
@@ -162,7 +203,7 @@ Important: Write all titles and overviews in the same language as the user's inp
       console.log(`[Generate Course] Validated outline with ${outline.length} modules`);
     } catch (parseErr: unknown) {
       console.error('[Generate Course] Failed to parse/validate AI response:', parseErr instanceof Error ? parseErr.message : parseErr);
-      throw new Error('Invalid or malformed AI response');
+      throw new AIResponseInvalidError('Invalid or malformed AI response', parseErr);
     }
 
     // 7.1 Tambahkan node diskusi penutup untuk setiap subtopik
@@ -180,10 +221,11 @@ Important: Write all titles and overviews in the same language as the user's inp
           (userEmail ? await resolveUserByIdentifier(userEmail) : null);
 
         if (!userRecord) {
-          throw new Error('Authenticated user could not be resolved from identifier');
+          throw new CoursePersistError('Authenticated user could not be resolved from identifier');
         }
 
-        // Create course + subtopics via service
+        // Create course + subtopics via service (now transactional: rolls
+        // back the course row if any subtopic insert fails).
         createdCourse = await createCourseWithSubtopics(
           {
             title: topic,
@@ -198,7 +240,7 @@ Important: Write all titles and overviews in the same language as the user's inp
         console.log(`[Generate Course] Course created with ID: ${createdCourse.id}`);
 
         if (!createdCourse?.id) {
-          throw new Error('Course creation failed before activity logging');
+          throw new CoursePersistError('Course creation failed before activity logging');
         }
 
         try {
@@ -217,7 +259,15 @@ Important: Write all titles and overviews in the same language as the user's inp
         console.error('[Generate Course] Error saving to database:', error);
         console.error('[Generate Course] Error details:', error instanceof Error ? error.message : error);
         console.error('[Generate Course] Error stack:', error instanceof Error ? error.stack : 'No stack');
-        throw error;
+        // Re-tag unknown DB errors as CoursePersistError so the outer
+        // catch can map them to a 500 with a specific code.
+        if (error instanceof CoursePersistError || error instanceof DatabaseError) {
+          throw error;
+        }
+        throw new CoursePersistError(
+          error instanceof Error ? error.message : String(error),
+          error,
+        );
       }
     } else {
       console.warn('[Generate Course] No userId provided, course not saved');
@@ -230,9 +280,72 @@ Important: Write all titles and overviews in the same language as the user's inp
     console.error('[Generate Course] Error generating course outline:', err);
     console.error('[Generate Course] Error details:', err instanceof Error ? err.message : err);
     console.error('[Generate Course] Error stack:', err instanceof Error ? err.stack : 'No stack');
+
+    // Zod validation error (defensive — parseBody normally catches this first)
+    if (err instanceof ZodError) {
+      return NextResponse.json(
+        {
+          error: 'Data permintaan tidak valid',
+          code: 'VALIDATION_ERROR',
+          fields: err.issues.map((i) => ({ path: i.path.join('.'), message: i.message })),
+        },
+        { status: 400, headers: corsHeaders },
+      );
+    }
+
+    // AI service failures — distinguish transient (timeout/rate limit) vs other
+    if (err instanceof AIServiceError) {
+      const kind = classifyAIError(err.cause ?? err);
+      if (kind === 'timeout') {
+        return NextResponse.json(
+          {
+            error: 'AI sedang sibuk atau waktu permintaan habis. Silakan coba lagi sebentar.',
+            code: 'AI_TIMEOUT',
+          },
+          { status: 503, headers: corsHeaders },
+        );
+      }
+      if (kind === 'rate_limit') {
+        return NextResponse.json(
+          {
+            error: 'Layanan AI sedang padat. Coba lagi dalam beberapa saat.',
+            code: 'AI_RATE_LIMIT',
+          },
+          { status: 503, headers: corsHeaders },
+        );
+      }
+      return NextResponse.json(
+        { error: 'Gagal memanggil layanan AI.', code: 'AI_SERVICE_ERROR' },
+        { status: 502, headers: corsHeaders },
+      );
+    }
+
+    // AI returned empty / malformed content
+    if (err instanceof AIResponseInvalidError) {
+      return NextResponse.json(
+        {
+          error: 'Respons AI tidak valid. Silakan coba lagi.',
+          code: 'AI_INVALID_RESPONSE',
+        },
+        { status: 502, headers: corsHeaders },
+      );
+    }
+
+    // DB persistence / transaction rollback
+    if (err instanceof CoursePersistError || err instanceof DatabaseError) {
+      return NextResponse.json(
+        {
+          error: 'Gagal menyimpan kursus ke database. Tidak ada data setengah jadi.',
+          code: err instanceof DatabaseError ? 'DB_ERROR' : 'COURSE_PERSIST_ERROR',
+        },
+        { status: 500, headers: corsHeaders },
+      );
+    }
+
+    // Fallback — unknown error
     return NextResponse.json(
-      { error: 'Gagal membuat outline' },
-      { status: 500, headers: corsHeaders }
+      { error: 'Gagal membuat outline', code: 'INTERNAL_ERROR' },
+      { status: 500, headers: corsHeaders },
     );
   }
 }

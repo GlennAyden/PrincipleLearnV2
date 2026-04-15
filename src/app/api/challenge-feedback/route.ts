@@ -1,12 +1,14 @@
 // src/app/api/challenge-feedback/route.ts
 import { NextRequest, NextResponse } from 'next/server';
 import { withProtection } from '@/lib/api-middleware';
+import { withApiLogging } from '@/lib/api-logger';
 import { aiRateLimiter } from '@/lib/rate-limit';
 import { ChallengeFeedbackSchema, parseBody } from '@/lib/schemas';
 import { chatCompletion, sanitizePromptInput } from '@/services/ai.service';
 import type { ChatCompletionMessageParam } from 'openai/resources/chat/completions';
 
-export const POST = withProtection(async (req: NextRequest) => {
+export const POST = withApiLogging(
+  withProtection(async (req: NextRequest) => {
   try {
     // Rate limit AI calls per user
     const userId = req.headers.get('x-user-id') || 'unknown';
@@ -114,4 +116,6 @@ Please provide appropriate feedback for this answer, considering the user's leve
     console.error('Error generating challenge feedback:', err);
     return NextResponse.json({ error: 'Gagal membuat umpan balik tantangan' }, { status: 500 });
   }
-}, { csrfProtection: false, requireAuth: true });
+}, { csrfProtection: false, requireAuth: true }),
+  { label: 'challenge-feedback' }
+);

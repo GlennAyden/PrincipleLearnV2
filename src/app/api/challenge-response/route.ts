@@ -56,9 +56,8 @@ async function postHandler(req: NextRequest) {
     // Try to save challenge response to database
     try {
       const timestamp = new Date().toISOString();
-      // Note: `reasoning_note` is intentionally NOT persisted to challenge_responses
-      // — the column does not exist on this table. The reasoning note is still
-      // forwarded to the cognitive scoring service below as extra context.
+      // `reasoning_note` is persisted so admins can review the learner's
+      // reasoning context. Stored as null when the user did not provide one.
       const challengeData = {
         id: challengeId,
         user_id: userId,
@@ -69,6 +68,7 @@ async function postHandler(req: NextRequest) {
         question: normalizedQuestion,
         answer: normalizedAnswer,
         feedback: normalizedFeedback,
+        reasoning_note: normalizedReasoning ? normalizedReasoning : null,
         created_at: timestamp,
         updated_at: timestamp
       };

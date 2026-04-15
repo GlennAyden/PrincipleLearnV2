@@ -167,10 +167,23 @@ const aiRateLimiter = new RateLimiter({
   maxRequests: 30,
 });
 
+/**
+ * Generic API endpoints: 300 requests per minute per user.
+ * Tuned for polling probes (e.g. quiz status) — ~5 req/sec average,
+ * loose enough to avoid tripping legitimate clients but still blocks
+ * enumeration/abuse patterns.
+ */
+const apiRateLimiter = new RateLimiter({
+  name: 'api',
+  interval: 60 * 1000,
+  maxRequests: 300,
+});
+
 export {
   loginRateLimiter,
   registerRateLimiter,
   resetPasswordRateLimiter,
   changePasswordRateLimiter,
   aiRateLimiter,
+  apiRateLimiter,
 };

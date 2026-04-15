@@ -1,10 +1,16 @@
 import { NextResponse } from 'next/server';
 import { cookies } from 'next/headers';
-import { verifyRefreshToken } from '@/lib/jwt';
+import {
+  ACCESS_TOKEN_MAX_AGE_SECONDS,
+  REFRESH_TOKEN_MAX_AGE_SECONDS,
+  verifyRefreshToken,
+} from '@/lib/jwt';
 import {
   findUserById,
   generateAuthTokens,
   generateCsrfToken,
+  hashRefreshToken,
+  updateUserRefreshTokenHash,
 } from '@/services/auth.service';
 
 export async function POST(_req: Request) {
@@ -53,10 +59,36 @@ export async function POST(_req: Request) {
       return response;
     }
 
-    // Rotate tokens: generate both new access + new refresh token
-    // The old refresh token is implicitly invalidated by being overwritten in the cookie
+    // Rotation-race defence: the presented refresh token must match the hash
+    // we persisted last time we issued one. If there is no stored hash, we
+    // tolerate it as a legacy session (a user whose hash predates this fix)
+    // and fall through to set a fresh one below. If there IS a stored hash
+    // and it doesn't match, treat the cookie as revoked.
+    const storedHash = user.refresh_token_hash ?? null;
+    if (storedHash) {
+      const presentedHash = hashRefreshToken(oldRefreshToken);
+      if (presentedHash !== storedHash) {
+        const response = NextResponse.json(
+          { error: 'Token refresh telah dicabut' },
+          { status: 401 }
+        );
+        response.cookies.delete('access_token');
+        response.cookies.delete('refresh_token');
+        response.cookies.delete('csrf_token');
+        // Defensive: clear the stored hash so any other in-flight replay
+        // attempts also fail even if the current one was already valid once.
+        await updateUserRefreshTokenHash(user.id, null);
+        return response;
+      }
+    }
+
+    // Rotate tokens: generate both new access + new refresh token.
     const { accessToken: newAccessToken, refreshToken: newRefreshToken } =
       generateAuthTokens(user);
+
+    // Persist the new refresh token hash BEFORE returning the new cookie so
+    // the next refresh call can verify it.
+    await updateUserRefreshTokenHash(user.id, hashRefreshToken(newRefreshToken));
 
     // Generate new CSRF token
     const csrfToken = generateCsrfToken();
@@ -72,7 +104,7 @@ export async function POST(_req: Request) {
       httpOnly: true,
       secure: process.env.NODE_ENV === 'production',
       sameSite: 'lax',
-      maxAge: 15 * 60, // 15 minutes
+      maxAge: ACCESS_TOKEN_MAX_AGE_SECONDS,
       path: '/',
     });
 
@@ -81,16 +113,17 @@ export async function POST(_req: Request) {
       httpOnly: true,
       secure: process.env.NODE_ENV === 'production',
       sameSite: 'lax',
-      maxAge: 7 * 24 * 60 * 60, // 7 days
+      maxAge: REFRESH_TOKEN_MAX_AGE_SECONDS,
       path: '/',
     });
 
-    // Set new CSRF token cookie
+    // Refresh flow implies a long-lived session — ride the refresh lifetime
+    // so the CSRF cookie doesn't expire before the access token does.
     response.cookies.set('csrf_token', csrfToken, {
       httpOnly: false, // Accessible from JavaScript
       secure: process.env.NODE_ENV === 'production',
       sameSite: 'lax',
-      maxAge: 15 * 60, // 15 minutes
+      maxAge: REFRESH_TOKEN_MAX_AGE_SECONDS,
       path: '/',
     });
 

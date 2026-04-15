@@ -1,5 +1,5 @@
 // src/components/Quiz/Quiz.tsx
-import React, { useState, useCallback, useEffect } from 'react';
+import React, { useState, useCallback, useEffect, useRef } from 'react';
 import styles from './Quiz.module.scss';
 import { useAuth } from '@/hooks/useAuth';
 import { apiFetch } from '@/lib/api-client';
@@ -57,6 +57,9 @@ export default function Quiz({
   const [selectedAnswers, setSelectedAnswers] = useState<(number | null)[]>(
     safeItems.map(() => null),
   );
+  // Per-question reasoning notes — kept in component state so the textarea
+  // is controlled, but ALWAYS sent embedded inside each `answers[i]` entry
+  // (no separate global array in the request payload).
   const [reasoningNotes, setReasoningNotes] = useState<string[]>(
     safeItems.map(() => ''),
   );
@@ -64,6 +67,10 @@ export default function Quiz({
   const [submitted, setSubmitted] = useState(false);
   const [loading, setLoading] = useState(false);
   const [submitError, setSubmitError] = useState<string | null>(null);
+  // Atomic double-submit guard. State updates are async so `submitted` can
+  // race when the user double-clicks; a ref flips synchronously and is the
+  // source of truth for "is a request in flight".
+  const submittingRef = useRef(false);
   // If completedState is set on initial mount, show the completion summary.
   // After the user clicks Reshuffle, the parent passes new questions + clears
   // completedState, so we bypass the summary view for the fresh attempt.
@@ -77,6 +84,7 @@ export default function Quiz({
     setSubmitted(false);
     setLoading(false);
     setSubmitError(null);
+    submittingRef.current = false;
   }, [safeItems.length, safeItems]);
 
   // If the parent flips completedState back to non-null (e.g. after a submit
@@ -119,7 +127,11 @@ export default function Quiz({
       }>,
       score: number,
     ): Promise<boolean> => {
+      // Atomic guard: ref flips synchronously so a double-click cannot
+      // squeeze a second request through before React commits `submitted`.
+      if (submittingRef.current) return false;
       if (submitted || !user?.id) return false;
+      submittingRef.current = true;
 
       try {
         setLoading(true);
@@ -137,7 +149,6 @@ export default function Quiz({
             subtopicIndex,
             score,
             answers,
-            reasoningNotes,
           }),
         });
 
@@ -165,9 +176,10 @@ export default function Quiz({
         return false;
       } finally {
         setLoading(false);
+        submittingRef.current = false;
       }
     },
-    [submitted, user, courseId, moduleTitle, subtopic, subtopicTitle, moduleIndex, subtopicIndex, reasoningNotes],
+    [submitted, user, courseId, moduleTitle, subtopic, subtopicTitle, moduleIndex, subtopicIndex],
   );
 
   const buildAnswersFromState = useCallback(() => {

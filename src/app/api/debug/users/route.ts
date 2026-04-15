@@ -1,15 +1,32 @@
-import { NextResponse } from 'next/server';
+import { NextRequest, NextResponse } from 'next/server';
 import { DatabaseService } from '@/lib/database';
 
-function guardProduction() {
-  if (process.env.NODE_ENV === 'production') {
+/**
+ * Debug routes are dual-gated:
+ *   1. Must be running outside production, OR `ENABLE_DEBUG_ROUTES=1`
+ *      must be explicitly set in the environment.
+ *   2. The calling JWT (propagated via middleware as `x-user-role`) must
+ *      have the admin role. This prevents any authenticated non-admin
+ *      user from probing the debug surface.
+ *
+ * Either condition failing returns a 404 (not 403) so the route does not
+ * leak its own existence to unauthorised callers.
+ */
+function guardDebugRoute(req: NextRequest) {
+  const envAllowed =
+    process.env.NODE_ENV !== 'production' || process.env.ENABLE_DEBUG_ROUTES === '1';
+  if (!envAllowed) {
+    return NextResponse.json({ error: 'Not available' }, { status: 404 });
+  }
+  const role = (req.headers.get('x-user-role') ?? '').toLowerCase();
+  if (role !== 'admin') {
     return NextResponse.json({ error: 'Not available' }, { status: 404 });
   }
   return null;
 }
 
-export async function GET() {
-  const blocked = guardProduction();
+export async function GET(req: NextRequest) {
+  const blocked = guardDebugRoute(req);
   if (blocked) return blocked;
 
   try {
@@ -38,8 +55,8 @@ export async function GET() {
   }
 }
 
-export async function POST() {
-  const blocked = guardProduction();
+export async function POST(req: NextRequest) {
+  const blocked = guardDebugRoute(req);
   if (blocked) return blocked;
 
   try {

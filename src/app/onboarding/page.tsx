@@ -47,7 +47,20 @@ export default function OnboardingPage() {
     fetch(`/api/learning-profile?userId=${user.id}`)
       .then(r => r.json())
       .then(data => {
-        if (data.exists) router.replace('/dashboard');
+        if (data.exists) {
+          // Backfill the middleware onboarding cookie for users who already
+          // completed onboarding before this gate existed, so they are not
+          // bounced back to /onboarding on the next navigation.
+          if (typeof document !== 'undefined') {
+            const maxAgeSeconds = 60 * 60 * 24 * 365; // 1 year
+            const secureFlag =
+              typeof window !== 'undefined' && window.location.protocol === 'https:'
+                ? '; Secure'
+                : '';
+            document.cookie = `onboarding_done=true; Path=/; Max-Age=${maxAgeSeconds}; SameSite=Lax${secureFlag}`;
+          }
+          router.replace('/dashboard');
+        }
       })
       .catch(() => {});
   }, [user?.id, router]);
@@ -73,6 +86,11 @@ export default function OnboardingPage() {
     setError('');
 
     try {
+      // Note: we still send `userId` because the current
+      // /api/learning-profile POST handler requires it to match the JWT
+      // payload (see src/app/api/learning-profile/route.ts). Once that route
+      // is updated to pull the user id from the JWT directly, the `userId`
+      // field can be removed from this payload.
       const res = await fetch('/api/learning-profile', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -89,6 +107,22 @@ export default function OnboardingPage() {
       if (!res.ok) {
         const data = await res.json();
         throw new Error(data.error || 'Failed to save profile');
+      }
+
+      // Mark onboarding as done for the middleware onboarding gate.
+      // The cookie is intentionally non-HttpOnly so it can be set from the
+      // client here. It is a UX signal, NOT a security boundary — the real
+      // source of truth is the `learning_profiles` row (and, after the
+      // add_users_onboarding_completed.sql migration runs, the
+      // `users.onboarding_completed` column). See middleware.ts for the
+      // exempt-route list.
+      if (typeof document !== 'undefined') {
+        const maxAgeSeconds = 60 * 60 * 24 * 365; // 1 year
+        const secureFlag =
+          typeof window !== 'undefined' && window.location.protocol === 'https:'
+            ? '; Secure'
+            : '';
+        document.cookie = `onboarding_done=true; Path=/; Max-Age=${maxAgeSeconds}; SameSite=Lax${secureFlag}`;
       }
 
       // Check if user has courses

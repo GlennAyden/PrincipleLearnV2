@@ -133,9 +133,8 @@ Please answer in the same language as the question above. Base your answer stric
     }
 
     // Auto-classify prompt stage (RM2)
-    const normalizedComponents = promptComponents && typeof promptComponents === 'object'
-      ? promptComponents as { tujuan?: string; konteks?: string; batasan?: string; reasoning?: string }
-      : null;
+    // promptComponents is now strictly typed by the Zod schema (Bug #13 fix).
+    const normalizedComponents = promptComponents ?? null;
     const classification = classifyPromptStage(normalizedQuestion, normalizedComponents);
 
     const readable = openAIStreamToReadable(stream, {

@@ -118,16 +118,18 @@ async function postHandler(req: NextRequest) {
       );
     }
 
-    // Find course in database
+    // Find course in database — enforce ownership: only the course owner
+    // (created_by) may attach a journal entry to it. This prevents User A
+    // from saving a jurnal record against User B's course.
     const courses = await DatabaseService.getRecords('courses', {
-      filter: { id: data.courseId },
+      filter: { id: data.courseId, created_by: user.id },
       limit: 1
     });
 
     if (courses.length === 0) {
       return NextResponse.json(
-        { error: "Course not found" },
-        { status: 404 }
+        { error: 'Course not found or access denied' },
+        { status: 403 }
       );
     }
 
@@ -164,7 +166,9 @@ async function postHandler(req: NextRequest) {
           : null,
     };
 
-    // Save journal to database
+    // Save journal to database — upsert by (user_id, course_id) so that
+    // re-submitting a reflection updates the existing row instead of
+    // creating duplicate journal records for the same course.
     const jurnalData = {
       user_id: user.id,
       course_id: data.courseId,
@@ -173,7 +177,18 @@ async function postHandler(req: NextRequest) {
       reflection: JSON.stringify(reflectionContext),
     };
 
-    const jurnal = await DatabaseService.insertRecord<{ id: string } & Record<string, unknown>>('jurnal', jurnalData);
+    const existingJurnal = await DatabaseService.getRecords<{ id: string }>('jurnal', {
+      filter: { user_id: user.id, course_id: data.courseId },
+      limit: 1,
+    });
+
+    const jurnal = existingJurnal.length > 0
+      ? await DatabaseService.updateRecord<{ id: string } & Record<string, unknown>>(
+          'jurnal',
+          existingJurnal[0].id,
+          jurnalData,
+        )
+      : await DatabaseService.insertRecord<{ id: string } & Record<string, unknown>>('jurnal', jurnalData);
     
     console.log(`Journal saved to database:`, {
       id: jurnal.id,

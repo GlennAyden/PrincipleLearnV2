@@ -94,6 +94,28 @@ export default function GeneratingPage() {
     generateCourse();
   }, [authLoading, isAuthenticated, user]);
 
+  // Warn user if they try to close/reload mid-generation so we don't
+  // accidentally fire a second OpenAI call on a fresh page mount.
+  useEffect(() => {
+    const handleBeforeUnload = (e: BeforeUnloadEvent) => {
+      if (stage !== 'complete' && stage !== 'error') {
+        e.preventDefault();
+        // Legacy Chrome still reads returnValue
+        e.returnValue = 'Kursusmu sedang dibuat. Keluar sekarang akan membatalkan proses.';
+        return e.returnValue;
+      }
+    };
+    window.addEventListener('beforeunload', handleBeforeUnload);
+    return () => window.removeEventListener('beforeunload', handleBeforeUnload);
+  }, [stage]);
+
+  // Abort any in-flight request if the component unmounts (user navigates away).
+  useEffect(() => {
+    return () => {
+      abortControllerRef.current?.abort();
+    };
+  }, []);
+
   const generateCourse = async () => {
     const abortController = new AbortController();
     abortControllerRef.current = abortController;

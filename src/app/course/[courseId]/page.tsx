@@ -278,10 +278,23 @@ export default function CourseOverviewPage() {
         const response = await fetch(`/api/courses/${courseId}`);
         console.log(`[Course Page] DEBUG: Response status:`, response.status);
         console.log(`[Course Page] DEBUG: Response ok:`, response.ok);
-        
+
+        if (response.status === 403) {
+          setError('Anda tidak memiliki akses ke kursus ini');
+          return;
+        }
+        if (response.status === 404) {
+          setError('Kursus tidak ditemukan');
+          return;
+        }
+        if (!response.ok) {
+          setError('Gagal memuat kursus');
+          return;
+        }
+
         const result = await response.json();
         console.log(`[Course Page] DEBUG: Response result:`, result);
-        
+
         if (result.success) {
           console.log(`[Course Page] DEBUG: Processing successful response`);
           console.log(`[Course Page] DEBUG: Course data:`, result.course);

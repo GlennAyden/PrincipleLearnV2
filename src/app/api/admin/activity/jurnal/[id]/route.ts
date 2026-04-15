@@ -41,7 +41,7 @@ export async function GET(req: NextRequest) {
       id: string;
       content: string;
       course_id: string;
-      subtopic: string;
+      reflection: unknown;
       created_at: string;
       user_id: string;
     }
@@ -55,12 +55,30 @@ export async function GET(req: NextRequest) {
 
     const userEmail = users && users.length > 0 ? (users[0] as { email: string }).email : 'Unknown'
 
+    // Extract subtopic from reflection (JSONB column). Supports either a
+    // structured object (preferred) or a JSON-encoded string (legacy).
+    let reflectionObj: Record<string, unknown> | null = null;
+    if (journal.reflection && typeof journal.reflection === 'object') {
+      reflectionObj = journal.reflection as Record<string, unknown>;
+    } else if (typeof journal.reflection === 'string') {
+      try {
+        const parsed = JSON.parse(journal.reflection);
+        if (parsed && typeof parsed === 'object') {
+          reflectionObj = parsed as Record<string, unknown>;
+        }
+      } catch {
+        // Not JSON — leave as null; subtopic will be null.
+      }
+    }
+    const subtopic =
+      typeof reflectionObj?.subtopic === 'string' ? reflectionObj.subtopic : null;
+
     // Format the response
     const response = {
       id: journal.id,
       content: journal.content,
       courseId: journal.course_id,
-      subtopic: journal.subtopic,
+      subtopic,
       createdAt: journal.created_at,
       userEmail
     }

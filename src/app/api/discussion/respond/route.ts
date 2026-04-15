@@ -337,19 +337,40 @@ async function generateRemediationQuestion(
   }
 }
 
-async function insertDiscussionMessage(payload: {
+type DiscussionMessagePayload = {
   session_id: string;
   role: 'agent' | 'student';
   content: string;
   step_key?: string | null;
   metadata?: Record<string, unknown>;
-}) {
+};
+
+async function insertDiscussionMessage(payload: DiscussionMessagePayload) {
   const { error } = await adminDb.from('discussion_messages').insert(payload);
   if (error) {
     const msg = typeof error === 'object' && error !== null && 'message' in error
       ? (error as { message: string }).message
       : String(error);
     throw new Error(`Failed to insert discussion message: ${msg}`);
+  }
+}
+
+/**
+ * Atomically insert a batch of discussion messages in a single Supabase
+ * round-trip. The Supabase JS SDK does not expose multi-statement
+ * transactions, but a single `.insert([...])` call is executed as one
+ * atomic INSERT on the Postgres side: either every row lands or none do.
+ * This lets us avoid the "student message saved, agent response orphaned"
+ * failure mode when a subsequent step errors out.
+ */
+async function insertDiscussionMessagesBatch(messages: DiscussionMessagePayload[]) {
+  if (!messages.length) return;
+  const { error } = await adminDb.from('discussion_messages').insert(messages);
+  if (error) {
+    const msg = typeof error === 'object' && error !== null && 'message' in error
+      ? (error as { message: string }).message
+      : String(error);
+    throw new Error(`Failed to insert discussion messages batch: ${msg}`);
   }
 }
 
@@ -562,6 +583,13 @@ async function postHandler(request: NextRequest) {
       templateRow.template?.learning_goals
     );
 
+    // ── Atomic-flow pattern (Option A) ──
+    // The Supabase JS SDK does not expose multi-statement transactions, so we
+    // avoid orphaned writes by (1) calling ALL AI endpoints first, (2) building
+    // a single pre-computed batch containing every message this turn produces,
+    // (3) inserting that batch in one `.insert([...])` call, and (4) updating
+    // the session row last. If any AI or preparation step throws, we exit the
+    // handler BEFORE any message has been written to the database.
     const evaluation = await evaluateStepResponse({
       responseText: trimmedAnswer,
       step: activeStep?.step,
@@ -570,7 +598,7 @@ async function postHandler(request: NextRequest) {
       currentGoals: learningGoals,
     });
 
-    await insertDiscussionMessage({
+    const studentMessagePayload: DiscussionMessagePayload = {
       session_id: session.id,
       role: 'student',
       content: trimmedAnswer,
@@ -582,20 +610,24 @@ async function postHandler(request: NextRequest) {
         quality_flag: evaluation.qualityFlag ?? 'adequate',
         attempt_number: currentAttemptNumber,
       },
-    });
+    };
 
-    if (evaluation.coachFeedback) {
-      await insertDiscussionMessage({
-        session_id: session.id,
-        role: 'agent',
-        content: evaluation.coachFeedback,
-        step_key: activeStep?.step?.key ? `${activeStep.step.key}-feedback` : 'feedback',
-        metadata: { type: 'coach_feedback', assessments: evaluation.assessments ?? [] },
-      });
-    }
+    const coachFeedbackMessagePayload: DiscussionMessagePayload | null = evaluation.coachFeedback
+      ? {
+          session_id: session.id,
+          role: 'agent',
+          content: evaluation.coachFeedback,
+          step_key: activeStep?.step?.key ? `${activeStep.step.key}-feedback` : 'feedback',
+          metadata: { type: 'coach_feedback', assessments: evaluation.assessments ?? [] },
+        }
+      : null;
 
     // ── STEP 4: Handle LLM-detected low quality ──
     if (evaluation.qualityFlag === 'off_topic' || evaluation.qualityFlag === 'low_effort') {
+      const batch: DiscussionMessagePayload[] = [studentMessagePayload];
+      if (coachFeedbackMessagePayload) batch.push(coachFeedbackMessagePayload);
+      await insertDiscussionMessagesBatch(batch);
+
       const updatedMessages = await fetchMessages(session.id);
       return NextResponse.json({
         session: { id: session.id, status: 'in_progress', phase: session.phase, learningGoals },
@@ -659,7 +691,10 @@ async function postHandler(request: NextRequest) {
       // ── RETRY: Stay on the same step ──
       const retryPromptText = buildRetryPrompt(activeStep.step, evaluation);
 
-      await insertDiscussionMessage({
+      // Atomic batch: student input + optional coach feedback + retry prompt.
+      const retryBatch: DiscussionMessagePayload[] = [studentMessagePayload];
+      if (coachFeedbackMessagePayload) retryBatch.push(coachFeedbackMessagePayload);
+      retryBatch.push({
         session_id: session.id,
         role: 'agent',
         content: retryPromptText,
@@ -673,6 +708,7 @@ async function postHandler(request: NextRequest) {
           original_step_key: activeStep.step.key,
         },
       });
+      await insertDiscussionMessagesBatch(retryBatch);
 
       const { error: retryUpdateError } = await adminDb
         .from('discussion_sessions')
@@ -704,7 +740,10 @@ async function postHandler(request: NextRequest) {
       // ── ADVANCE to next template step ──
       const nextStep = steps[nextStepCandidateIndex];
 
-      await insertDiscussionMessage({
+      // Atomic batch: student input + optional coach feedback + next prompt.
+      const advanceBatch: DiscussionMessagePayload[] = [studentMessagePayload];
+      if (coachFeedbackMessagePayload) advanceBatch.push(coachFeedbackMessagePayload);
+      advanceBatch.push({
         session_id: session.id,
         role: 'agent',
         content: nextStep.step.prompt,
@@ -716,6 +755,7 @@ async function postHandler(request: NextRequest) {
           options: nextStep.step.options ?? [],
         },
       });
+      await insertDiscussionMessagesBatch(advanceBatch);
 
       const { error: phaseUpdateError } = await adminDb
         .from('discussion_sessions')
@@ -744,17 +784,10 @@ async function postHandler(request: NextRequest) {
         const uncoveredGoals = learningGoals.filter((g) => !g.covered);
         const uncoveredGoalIds = uncoveredGoals.map((g) => g.id);
 
-        // Transition message (only on first remediation round)
-        if (remediationRound === 1) {
-          await insertDiscussionMessage({
-            session_id: session.id,
-            role: 'agent',
-            content: `Ada ${uncoveredGoals.length} tujuan pembelajaran yang belum sepenuhnya tercapai. Mari kita bahas lebih lanjut agar pemahamanmu lebih lengkap.`,
-            step_key: `remediation-intro-${remediationRound}`,
-            metadata: { type: 'coach_feedback', phase: 'remediation' },
-          });
-        }
-
+        // Call the second AI endpoint (generateRemediationQuestion) BEFORE any
+        // DB writes so a failure here leaves no orphaned rows. The function
+        // already has its own try/catch + fallback, but we keep the call
+        // outside the batch for belt-and-suspenders atomicity.
         const remediationQuestion = await generateRemediationQuestion(
           uncoveredGoals,
           templateRow.source,
@@ -763,7 +796,22 @@ async function postHandler(request: NextRequest) {
 
         const remediationStepKey = `remediation-${remediationRound}`;
 
-        await insertDiscussionMessage({
+        // Atomic batch: student input + coach feedback + optional intro + remediation prompt.
+        const remediationBatch: DiscussionMessagePayload[] = [studentMessagePayload];
+        if (coachFeedbackMessagePayload) remediationBatch.push(coachFeedbackMessagePayload);
+
+        // Transition message (only on first remediation round)
+        if (remediationRound === 1) {
+          remediationBatch.push({
+            session_id: session.id,
+            role: 'agent',
+            content: `Ada ${uncoveredGoals.length} tujuan pembelajaran yang belum sepenuhnya tercapai. Mari kita bahas lebih lanjut agar pemahamanmu lebih lengkap.`,
+            step_key: `remediation-intro-${remediationRound}`,
+            metadata: { type: 'coach_feedback', phase: 'remediation' },
+          });
+        }
+
+        remediationBatch.push({
           session_id: session.id,
           role: 'agent',
           content: remediationQuestion,
@@ -777,6 +825,8 @@ async function postHandler(request: NextRequest) {
             target_goal_ids: uncoveredGoalIds,
           },
         });
+
+        await insertDiscussionMessagesBatch(remediationBatch);
 
         const { error: remUpdateError } = await adminDb
           .from('discussion_sessions')
@@ -804,6 +854,18 @@ async function postHandler(request: NextRequest) {
     // ── SESSION COMPLETION (all goals covered OR max remediation exhausted) ──
     const closingMessage = buildDefaultClosingMessage(learningGoals);
 
+    // Atomic batch: student input + optional coach feedback + closing message.
+    const completionBatch: DiscussionMessagePayload[] = [studentMessagePayload];
+    if (coachFeedbackMessagePayload) completionBatch.push(coachFeedbackMessagePayload);
+    completionBatch.push({
+      session_id: session.id,
+      role: 'agent',
+      content: closingMessage,
+      step_key: 'closing',
+      metadata: { type: 'closing', goals: learningGoals },
+    });
+    await insertDiscussionMessagesBatch(completionBatch);
+
     const { error: completionUpdateError } = await adminDb
       .from('discussion_sessions')
       .eq('id', session.id)
@@ -812,14 +874,6 @@ async function postHandler(request: NextRequest) {
     if (completionUpdateError) {
       throw new Error(`Failed to complete discussion session: ${completionUpdateError.message}`);
     }
-
-    await insertDiscussionMessage({
-      session_id: session.id,
-      role: 'agent',
-      content: closingMessage,
-      step_key: 'closing',
-      metadata: { type: 'closing', goals: learningGoals },
-    });
 
     await markProgressCompleted(session.user_id, session.course_id, session.subtopic_id);
 

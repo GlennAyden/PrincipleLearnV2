@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { DatabaseService } from '@/lib/database';
+import { verifyToken } from '@/lib/jwt';
 
 interface LearningProfileRow {
   id: string;
@@ -28,6 +29,19 @@ const DATE_OPTIONS: Intl.DateTimeFormatOptions = {
 
 export async function GET(req: NextRequest) {
   try {
+    // Defense-in-depth auth check — middleware.ts already blocks non-admin
+    // callers on /api/admin/*, but we re-verify here because the route
+    // previously had NO in-handler guard at all and a misconfiguration of
+    // the matcher would have silently exposed every learning profile.
+    const accessToken = req.cookies.get('access_token')?.value;
+    const tokenPayload = accessToken ? verifyToken(accessToken) : null;
+    if (!tokenPayload) {
+      return NextResponse.json({ error: 'Tidak terautentikasi' }, { status: 401 });
+    }
+    if ((tokenPayload.role ?? '').toLowerCase() !== 'admin') {
+      return NextResponse.json({ error: 'Akses ditolak: admin required' }, { status: 403 });
+    }
+
     const { searchParams } = new URL(req.url);
     const userId = searchParams.get('userId');
     const date = searchParams.get('date');

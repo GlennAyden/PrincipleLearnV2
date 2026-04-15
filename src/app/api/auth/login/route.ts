@@ -2,10 +2,17 @@ import { NextResponse } from 'next/server';
 import { loginRateLimiter } from '@/lib/rate-limit';
 import { LoginSchema, parseBody } from '@/lib/schemas';
 import {
+  ACCESS_TOKEN_MAX_AGE_SECONDS,
+  REFRESH_TOKEN_MAX_AGE_SECONDS,
+} from '@/lib/jwt';
+import {
   findUserByEmail,
   verifyPassword,
+  runDummyPasswordCompare,
   generateAuthTokens,
   generateCsrfToken,
+  hashRefreshToken,
+  updateUserRefreshTokenHash,
 } from '@/services/auth.service';
 
 export async function POST(req: Request) {
@@ -29,6 +36,9 @@ export async function POST(req: Request) {
     // Find user by email (normalize to lowercase)
     const user = await findUserByEmail(email.toLowerCase().trim());
     if (!user || !user.password_hash) {
+      // Burn the same CPU cycles as a real compare to defeat user-enumeration
+      // via response-time analysis.
+      await runDummyPasswordCompare();
       return NextResponse.json(
         { error: 'Email atau kata sandi salah' },
         { status: 401 }
@@ -46,6 +56,14 @@ export async function POST(req: Request) {
 
     // Generate tokens
     const { accessToken, refreshToken } = generateAuthTokens(user);
+
+    // Persist the refresh token hash so future refresh calls can verify the
+    // presented token still matches the most recently-issued one. Only write
+    // when we'll actually set the cookie (rememberMe) so users without a
+    // refresh cookie don't get a stale hash stuck on the row.
+    if (rememberMe && refreshToken) {
+      await updateUserRefreshTokenHash(user.id, hashRefreshToken(refreshToken));
+    }
 
     // Log successful login
     console.log(`User logged in successfully: ${user.id}`);
@@ -69,26 +87,30 @@ export async function POST(req: Request) {
       httpOnly: true,
       secure: process.env.NODE_ENV === 'production',
       sameSite: 'lax',
-      maxAge: 15 * 60, // 15 minutes
+      maxAge: ACCESS_TOKEN_MAX_AGE_SECONDS,
       path: '/'
     });
-    
+
     // Set refresh token cookie if "remember me" is selected
     if (rememberMe && refreshToken) {
       response.cookies.set('refresh_token', refreshToken, {
         httpOnly: true,
         secure: process.env.NODE_ENV === 'production',
         sameSite: 'lax',
-        maxAge: 7 * 24 * 60 * 60, // 7 days
+        maxAge: REFRESH_TOKEN_MAX_AGE_SECONDS,
         path: '/'
       });
     }
-    
+
+    // CSRF cookie maxAge must track the effective session length or the
+    // frontend will POST with a missing csrf_token cookie while the access
+    // token is still valid (desync). When rememberMe we ride the refresh
+    // lifetime; otherwise we cap at the access token lifetime.
     response.cookies.set('csrf_token', csrfToken, {
-      httpOnly: false, // Accessible from JavaScript
+      httpOnly: false, // Accessible from JavaScript (double-submit pattern)
       secure: process.env.NODE_ENV === 'production',
       sameSite: 'lax',
-      maxAge: 15 * 60, // 15 minutes
+      maxAge: rememberMe ? REFRESH_TOKEN_MAX_AGE_SECONDS : ACCESS_TOKEN_MAX_AGE_SECONDS,
       path: '/'
     });
     

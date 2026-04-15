@@ -148,31 +148,59 @@ async function postHandler(request: NextRequest) {
     }
 
     let session = await fetchExistingSession(tokenPayload.userId, courseId, subtopicId);
+    let didCreate = false;
     if (!session) {
-      session = await createSession({
-        userId: tokenPayload.userId,
-        courseId,
-        subtopicId,
-        template: templateRow,
-        firstPhaseId: steps[0].phaseId,
-        goals: buildInitialGoals(templateRow.template?.learning_goals),
-      });
+      try {
+        session = await createSession({
+          userId: tokenPayload.userId,
+          courseId,
+          subtopicId,
+          template: templateRow,
+          firstPhaseId: steps[0].phaseId,
+          goals: buildInitialGoals(templateRow.template?.learning_goals),
+        });
+        didCreate = true;
+      } catch (createError) {
+        // TOCTOU: a concurrent request may have already created a session
+        // between our fetchExistingSession() and createSession() calls. The
+        // partial unique indexes on (user_id, course_id, subtopic_id) will
+        // reject the duplicate with Postgres code 23505 — swallow it and
+        // re-fetch the winning row so both callers converge on the same
+        // session instead of returning a 500.
+        if (isUniqueViolationError(createError)) {
+          const existing = await fetchExistingSession(
+            tokenPayload.userId,
+            courseId,
+            subtopicId,
+          );
+          if (!existing) {
+            throw createError;
+          }
+          session = existing;
+        } else {
+          throw createError;
+        }
+      }
 
-      const { error: initialMessageError } = await adminDb.from('discussion_messages').insert({
-        session_id: session.id,
-        role: 'agent',
-        content: steps[0].step.prompt,
-        step_key: steps[0].step.key,
-        metadata: {
-          type: 'agent_response',
-          phase: steps[0].phaseId,
-          expected_type: steps[0].step.expected_type ?? 'open',
-          options: steps[0].step.options ?? [],
-        },
-      });
+      if (didCreate && session) {
+        const { error: initialMessageError } = await adminDb
+          .from('discussion_messages')
+          .insert({
+            session_id: session.id,
+            role: 'agent',
+            content: steps[0].step.prompt,
+            step_key: steps[0].step.key,
+            metadata: {
+              type: 'agent_response',
+              phase: steps[0].phaseId,
+              expected_type: steps[0].step.expected_type ?? 'open',
+              options: steps[0].step.options ?? [],
+            },
+          });
 
-      if (initialMessageError) {
-        throw new Error('Failed to persist initial discussion prompt');
+        if (initialMessageError) {
+          throw new Error('Failed to persist initial discussion prompt');
+        }
       }
     }
 
@@ -255,6 +283,28 @@ async function fetchExistingSession(userId: string, courseId: string, subtopicId
   return data?.[0] ?? null;
 }
 
+class DiscussionSessionCreateError extends Error {
+  public readonly cause?: unknown;
+  constructor(message: string, cause?: unknown) {
+    super(message);
+    this.name = 'DiscussionSessionCreateError';
+    this.cause = cause;
+  }
+}
+
+function isUniqueViolationError(error: unknown): boolean {
+  if (!error || typeof error !== 'object') return false;
+  // Direct Postgres/PostgREST error
+  const direct = error as { code?: string };
+  if (direct.code === '23505') return true;
+  // Wrapped in DiscussionSessionCreateError
+  const wrapped = error as { cause?: { code?: string } };
+  if (wrapped.cause && typeof wrapped.cause === 'object' && wrapped.cause.code === '23505') {
+    return true;
+  }
+  return false;
+}
+
 async function createSession(params: {
   userId: string;
   courseId: string;
@@ -279,8 +329,14 @@ async function createSession(params: {
 
   const row = Array.isArray(data) ? data[0] : data;
 
-  if (error || !row) {
-    throw new Error('Failed to create discussion session');
+  if (error) {
+    // Preserve the Postgres error code so the caller can detect a unique
+    // violation (TOCTOU race) and recover by fetching the winning row.
+    throw new DiscussionSessionCreateError('Failed to create discussion session', error);
+  }
+
+  if (!row) {
+    throw new DiscussionSessionCreateError('Failed to create discussion session');
   }
 
   return row;

@@ -42,10 +42,10 @@ async function postHandler(req: NextRequest) {
     if (!parsed.success) return parsed.response;
     const {
       subtopicId, subtopic, moduleIndex, subtopicIndex,
-      feedback, comment, rating, courseId,
+      comment, rating, courseId,
     } = parsed.data;
 
-    const normalizedComment = normalizeText(comment ?? feedback);
+    const normalizedComment = normalizeText(comment);
     const normalizedUserId = normalizeText(headerUserId);
     const normalizedCourseId = normalizeText(courseId);
     const normalizedSubtopicId = normalizeText(subtopicId);

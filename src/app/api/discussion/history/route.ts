@@ -146,6 +146,7 @@ async function fetchLatestSession(userId: string, courseId: string, subtopicId: 
     .eq('course_id', courseId)
     .eq('subtopic_id', subtopicId)
     .order('created_at', { ascending: false })
+    .order('id', { ascending: false })
     .limit(1);
 
   if (error) {

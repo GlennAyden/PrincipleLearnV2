@@ -1,4 +1,5 @@
 import { NextRequest } from 'next/server';
+import { createHash } from 'crypto';
 import { adminDb } from '@/lib/database';
 
 interface ApiLogContext {
@@ -25,6 +26,18 @@ function extractUserAgent(req: NextRequest) {
   return req.headers.get('user-agent') ?? null;
 }
 
+/**
+ * Hash an email so analytics can group by user without storing raw PII.
+ * Prefixed with `h_` so the column value is obviously a hash, not a real
+ * address. Uses SHA-256 truncated to 16 hex chars (64 bits) — enough entropy
+ * for grouping, small enough to keep the log row lean.
+ */
+function hashEmail(email: string | null): string | null {
+  if (!email) return null;
+  const digest = createHash('sha256').update(email.toLowerCase()).digest('hex');
+  return `h_${digest.slice(0, 16)}`;
+}
+
 function extractUserIdentity(req: NextRequest) {
   return {
     userId: req.headers.get('x-user-id') ?? null,
@@ -44,6 +57,11 @@ export async function logApiCall({
   try {
     const url = request.nextUrl;
     const identity = extractUserIdentity(request);
+    // PII policy: we keep user_id (UUID, already a non-reversible surrogate)
+    // and user_role for analytics, but the raw email is replaced with a
+    // prefixed SHA-256 hash so logs can still be grouped/correlated per-user
+    // without storing plaintext email addresses. See
+    // docs/sql/fix_api_logs_schema.sql for the target column layout.
     await adminDb.from('api_logs').insert({
       method: request.method,
       path: url.pathname,
@@ -53,7 +71,7 @@ export async function logApiCall({
       ip_address: extractIpAddress(request),
       user_agent: extractUserAgent(request),
       user_id: identity.userId,
-      user_email: identity.userEmail,
+      user_email_hash: hashEmail(identity.userEmail),
       user_role: identity.userRole,
       label: label ?? null,
       metadata: metadata ?? null,

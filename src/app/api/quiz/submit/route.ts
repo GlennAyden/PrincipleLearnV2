@@ -337,7 +337,6 @@ async function postHandler(req: NextRequest) {
       
       if (matchingQuiz) {
         const reasoningFromAnswer = normalizeText(answer.reasoningNote);
-        const reasoningFromArray = normalizeText(data.reasoningNotes?.[i]);
         const quizId = matchingQuiz.id as string;
         const userAnswerText = normalizeText(answer.userAnswer);
         // Server-side verify correctness against the DB's stored correct_answer,
@@ -356,7 +355,7 @@ async function postHandler(req: NextRequest) {
           subtopic_index: normalizeIndex(data.subtopicIndex),
           answer: userAnswerText,
           is_correct: serverIsCorrect,
-          reasoning_note: reasoningFromAnswer || reasoningFromArray || null,
+          reasoning_note: reasoningFromAnswer || null,
           attempt_number: nextAttemptNumber,
           quiz_attempt_id: quizAttemptId,
         });
@@ -424,19 +423,22 @@ async function postHandler(req: NextRequest) {
         : [];
     const submissionIds = insertedRowList.map((row: Record<string, unknown>) => row.id);
 
-    // Server-computed score. For answers we matched to a DB row we use the
-    // authoritative server-side verification; for unmatched answers (typically
-    // caused by stale/duplicate quiz rows the user can't control), we fall back
-    // to the client's self-reported correctness so learners aren't penalized
-    // for data drift. Denominator is the full answer count, not just matched.
-    const matchedCorrectCount = matchedRows.filter((r) => r.is_correct).length;
-    const unmatchedCorrectCount = matchingResults.reduce((acc, result, idx) => {
-      if (result.matched) return acc;
-      return acc + (answers[idx]?.isCorrect ? 1 : 0);
-    }, 0);
-    const serverCorrectCount = matchedCorrectCount + unmatchedCorrectCount;
-    const serverScore = answers.length > 0
-      ? Math.round((serverCorrectCount / answers.length) * 100)
+    // Server-computed score. We ONLY count answers we successfully matched
+    // against an authoritative DB row. Unmatched answers are skipped from
+    // both numerator and denominator so a buggy client cannot inflate the
+    // score by flipping `isCorrect` on an orphan row. If literally every
+    // answer is unmatched the denominator collapses to 0 and we default
+    // the score to 0 (the early-return on `matchedRows.length === 0`
+    // above already handles the "all unmatched" case before we get here).
+    const unmatchedCount = matchingResults.length - matchedRows.length;
+    if (unmatchedCount > 0) {
+      console.warn(
+        `[quiz/submit] unmatched answers skipped from score: ${unmatchedCount}/${matchingResults.length}`,
+      );
+    }
+    const serverCorrectCount = matchedRows.filter((r) => r.is_correct).length;
+    const serverScore = matchedRows.length > 0
+      ? Math.round((serverCorrectCount / matchedRows.length) * 100)
       : 0;
 
     console.log(`Quiz submission saved to database:`, {

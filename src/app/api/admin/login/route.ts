@@ -2,9 +2,17 @@
 import { NextResponse } from 'next/server'
 import { AdminLoginSchema, parseBody } from '@/lib/schemas'
 import {
+  ADMIN_ACCESS_TOKEN_MAX_AGE_SECONDS,
+  REFRESH_TOKEN_MAX_AGE_SECONDS,
+} from '@/lib/jwt'
+import {
   findUserByEmail,
   verifyPassword,
-  generateAuthTokens,
+  runDummyPasswordCompare,
+  generateAdminAuthTokens,
+  generateCsrfToken,
+  hashRefreshToken,
+  updateUserRefreshTokenHash,
 } from '@/services/auth.service'
 
 export async function POST(request: Request) {
@@ -21,6 +29,8 @@ export async function POST(request: Request) {
 
     if (!user || !user.password_hash) {
       console.log(`[Admin Login] User not found: ${email}`)
+      // Burn cycles so timing doesn't distinguish "no user" from "bad pw".
+      await runDummyPasswordCompare()
       return NextResponse.json(
         { error: 'Email atau password salah' },
         { status: 401 }
@@ -51,31 +61,60 @@ export async function POST(request: Request) {
 
     console.log(`[Admin Login] Login successful for: ${email}`)
 
-    // Generate tokens via service
-    const { accessToken: token } = generateAuthTokens(user)
+    // Generate admin tokens (30m access + 7d refresh) via service
+    const { accessToken: token, refreshToken } = generateAdminAuthTokens(user)
 
-    // Send response with cookie and user data
+    // Persist the refresh token hash so the refresh endpoint can verify the
+    // presented token on the next rotation.
+    await updateUserRefreshTokenHash(user.id, hashRefreshToken(refreshToken))
+
+    // Generate CSRF token — previously admin login skipped this, which
+    // meant the CSRF middleware check effectively no-op'd on admin sessions
+    // because the frontend never had a csrf_token cookie to read.
+    const csrfToken = generateCsrfToken()
+
+    // Send response with cookies and user data. Prefer user.name from DB,
+    // fall back to email if name is null (no more hardcoded "Admin User").
     const response = NextResponse.json(
-      { 
-        user: { 
-          id: user.id, 
-          email: user.email, 
-          name: user.name || 'Admin User',
-          role: user.role 
-        } 
+      {
+        csrfToken,
+        user: {
+          id: user.id,
+          email: user.email,
+          name: user.name || user.email,
+          role: user.role
+        }
       },
       { status: 200 }
     )
-    
-    // Unified access_token cookie for both admin and user auth
+
+    // Unified access_token cookie for both admin and user auth. Admin
+    // sessions get the harmonized 30m lifetime (was 2h) — longer than
+    // regular users but short enough to narrow the stolen-token window.
     response.cookies.set('access_token', token, {
       httpOnly: true,
       secure: process.env.NODE_ENV === 'production',
       sameSite: 'lax',
       path: '/',
-      maxAge: 2 * 60 * 60, // 2 hours
+      maxAge: ADMIN_ACCESS_TOKEN_MAX_AGE_SECONDS,
     })
-    
+
+    response.cookies.set('refresh_token', refreshToken, {
+      httpOnly: true,
+      secure: process.env.NODE_ENV === 'production',
+      sameSite: 'lax',
+      path: '/',
+      maxAge: REFRESH_TOKEN_MAX_AGE_SECONDS,
+    })
+
+    response.cookies.set('csrf_token', csrfToken, {
+      httpOnly: false, // Double-submit: frontend must read and echo it back
+      secure: process.env.NODE_ENV === 'production',
+      sameSite: 'lax',
+      path: '/',
+      maxAge: REFRESH_TOKEN_MAX_AGE_SECONDS,
+    })
+
     return response
 
 

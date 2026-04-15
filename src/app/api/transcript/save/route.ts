@@ -81,22 +81,27 @@ async function postHandler(req: NextRequest) {
       );
     }
 
-    // Find course in database
+    // Find course in database — enforce ownership: only the course owner
+    // (created_by) may save a transcript against it. Prevents User A from
+    // writing transcript notes for User B's course.
     const courses = await DatabaseService.getRecords('courses', {
-      filter: { id: data.courseId },
+      filter: { id: data.courseId, created_by: user.id },
       limit: 1
     });
 
     if (courses.length === 0) {
       return NextResponse.json(
-        { error: "Course not found" },
-        { status: 404 }
+        { error: 'Course not found or access denied' },
+        { status: 403 }
       );
     }
 
     const subtopicId = await resolveSubtopicId(data.courseId, data.subtopic);
 
-    // Save transcript to database
+    // Save transcript to database — upsert by (user_id, course_id, subtopic_id)
+    // so that re-submitting a transcript for the same subtopic updates the
+    // existing row instead of duplicating it. This matches the schema doc
+    // ("notes per subtopic") and the only granularity columns available.
     const transcriptData = {
       user_id: user.id,
       course_id: data.courseId,
@@ -105,9 +110,25 @@ async function postHandler(req: NextRequest) {
       notes: `Subtopic: ${data.subtopic}`
     };
 
+    type TranscriptRow = { id: string; user_id: string; course_id: string; subtopic_id: string | null; content: string; notes: string };
+
+    const upsertTranscript = async (table: 'transcript' | 'transcripts'): Promise<TranscriptRow> => {
+      const existing = await DatabaseService.getRecords<{ id: string }>(table, {
+        filter: subtopicId
+          ? { user_id: user.id, course_id: data.courseId, subtopic_id: subtopicId }
+          : { user_id: user.id, course_id: data.courseId },
+        limit: 1,
+      });
+
+      if (existing.length > 0) {
+        return DatabaseService.updateRecord<TranscriptRow>(table, existing[0].id, transcriptData);
+      }
+      return DatabaseService.insertRecord<TranscriptRow>(table, transcriptData);
+    };
+
     let transcript: { id: string } | null = null;
     try {
-      transcript = await DatabaseService.insertRecord<{ id: string; user_id: string; course_id: string; subtopic_id: string | null; content: string; notes: string }>('transcript', transcriptData);
+      transcript = await upsertTranscript('transcript');
     } catch (primaryError: unknown) {
       const message = String(primaryError instanceof Error ? primaryError.message : '');
       if (!message.includes("public.transcript")) {
@@ -116,7 +137,7 @@ async function postHandler(req: NextRequest) {
 
       // Backward-compatible fallback for environments using plural table naming.
       try {
-        transcript = await DatabaseService.insertRecord<{ id: string; user_id: string; course_id: string; subtopic_id: string | null; content: string; notes: string }>('transcripts', transcriptData);
+        transcript = await upsertTranscript('transcripts');
       } catch (fallbackError) {
         console.error('[Transcript] Both table names failed:', { primaryError: message, fallbackError });
         throw primaryError; // throw original error for clearer diagnostics

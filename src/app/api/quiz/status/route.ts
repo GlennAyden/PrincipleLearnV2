@@ -9,6 +9,9 @@ import { adminDb } from '@/lib/database';
 import { withApiLogging } from '@/lib/api-logger';
 import { verifyToken } from '@/lib/jwt';
 import { resolveUserByIdentifier } from '@/services/auth.service';
+import { QuizStatusSchema, parseBody } from '@/lib/schemas';
+import { assertCourseOwnership, toOwnershipError } from '@/lib/ownership';
+import { apiRateLimiter } from '@/lib/rate-limit';
 
 interface SubmissionRow {
   attempt_number: number;
@@ -18,29 +21,57 @@ interface SubmissionRow {
 }
 
 async function getHandler(req: NextRequest) {
+  // Rate-limit BEFORE any DB work so abusive polling short-circuits cheaply.
+  // Keyed off the middleware-injected user id when present, otherwise a
+  // stable 'anonymous' bucket — unauthenticated callers are caught by the
+  // auth check below regardless.
+  const rateLimitKey = req.headers.get('x-user-id') ?? 'anonymous';
+  if (!(await apiRateLimiter.isAllowed(rateLimitKey))) {
+    return NextResponse.json({ error: 'Too many requests' }, { status: 429 });
+  }
+
   // Prefer middleware-injected header; fall back to the JWT cookie directly.
   // The header injection has proven unreliable in production (likely a Next.js
   // middleware→handler header-propagation quirk), so we mirror the
   // cookie-based pattern used by /api/challenge-response, /api/ask-question, etc.
   let authUserId = req.headers.get('x-user-id');
+  let authUserRole = req.headers.get('x-user-role') ?? undefined;
   if (!authUserId) {
     const accessToken = req.cookies.get('access_token')?.value;
     const tokenPayload = accessToken ? verifyToken(accessToken) : null;
     if (tokenPayload?.userId) {
       authUserId = tokenPayload.userId;
+      authUserRole = authUserRole ?? tokenPayload.role;
     }
   }
   if (!authUserId) {
     return NextResponse.json({ error: 'Autentikasi diperlukan' }, { status: 401 });
   }
 
+  // Validate query params via Zod — mirrors the parseBody() pattern used by
+  // POST routes, adapted for URLSearchParams.
   const { searchParams } = new URL(req.url);
-  const courseId = searchParams.get('courseId');
-  const subtopicTitle = searchParams.get('subtopicTitle');
-  const moduleTitle = searchParams.get('moduleTitle');
+  const rawQuery = {
+    courseId: searchParams.get('courseId') ?? undefined,
+    subtopicTitle: searchParams.get('subtopicTitle') ?? undefined,
+    moduleTitle: searchParams.get('moduleTitle') ?? undefined,
+  };
+  const parsed = parseBody(QuizStatusSchema, rawQuery);
+  if (!parsed.success) return parsed.response;
+  const { courseId, subtopicTitle, moduleTitle } = parsed.data;
 
-  if (!courseId) {
-    return NextResponse.json({ error: 'courseId wajib' }, { status: 400 });
+  // Ownership check — prevents scanning status for arbitrary course IDs.
+  try {
+    await assertCourseOwnership(authUserId, courseId, authUserRole);
+  } catch (ownershipErr) {
+    const asOwnership = toOwnershipError(ownershipErr);
+    if (asOwnership) {
+      return NextResponse.json(
+        { error: asOwnership.message },
+        { status: asOwnership.status },
+      );
+    }
+    throw ownershipErr;
   }
 
   const user = await resolveUserByIdentifier(authUserId);

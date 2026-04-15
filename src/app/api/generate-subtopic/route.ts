@@ -6,28 +6,40 @@ import { generateDiscussionTemplate, generateModuleDiscussionTemplate } from '@/
 import { aiRateLimiter } from '@/lib/rate-limit';
 import { verifyToken } from '@/lib/jwt';
 import { GenerateSubtopicSchema, parseBody } from '@/lib/schemas';
-import { chatCompletion } from '@/services/ai.service';
+import { chatCompletion, sanitizePromptInput } from '@/services/ai.service';
 import { syncQuizQuestions as syncQuizQuestionsHelper } from '@/lib/quiz-sync';
 import { withApiLogging } from '@/lib/api-logger';
+import { assertCourseOwnership, toOwnershipError } from '@/lib/ownership';
 import type { ChatCompletionMessageParam } from 'openai/resources/chat/completions';
+
+// Normalize cache key parts to avoid cache misses caused by trivial whitespace
+// or casing differences (e.g. "Module 1" vs "Module 1 " vs "module 1").
+const normalizeCacheKeyPart = (s: string) =>
+  s.trim().replace(/\s+/g, ' ').toLowerCase();
 
 async function postHandler(request: NextRequest) {
   try {
-    // Resolve rate-limit key: prefer the middleware-injected header, fall back
-    // to the JWT cookie directly (middleware propagation has been unreliable
-    // in production), and only use the IP as a last resort. Per-user keys
-    // prevent a single quota from being shared by everyone behind a NAT.
-    let rateLimitKey = request.headers.get('x-user-id');
-    if (!rateLimitKey) {
+    // Resolve caller identity: prefer the middleware-injected header, fall
+    // back to the JWT cookie directly (middleware propagation has been
+    // unreliable in production). Unlike the old fallback, we DO NOT allow
+    // anonymous/IP-based callers — ownership is enforced per user below.
+    let authUserId = request.headers.get('x-user-id');
+    let authUserRole = request.headers.get('x-user-role') ?? undefined;
+    if (!authUserId) {
       const accessToken = request.cookies.get('access_token')?.value;
       const tokenPayload = accessToken ? verifyToken(accessToken) : null;
       if (tokenPayload?.userId) {
-        rateLimitKey = tokenPayload.userId;
+        authUserId = tokenPayload.userId;
+        authUserRole = authUserRole ?? tokenPayload.role;
       }
     }
-    if (!rateLimitKey) {
-      rateLimitKey = request.headers.get('x-forwarded-for') || 'unknown';
+    if (!authUserId) {
+      return NextResponse.json(
+        { error: 'Autentikasi diperlukan' },
+        { status: 401 }
+      );
     }
+    const rateLimitKey = authUserId;
 
     const rawPayload = await request.json().catch(() => null);
     if (!rawPayload) {
@@ -38,15 +50,43 @@ async function postHandler(request: NextRequest) {
     }
     const parsed = parseBody(GenerateSubtopicSchema, rawPayload);
     if (!parsed.success) return parsed.response;
-    const { module: moduleTitle, subtopic, courseId } = parsed.data;
+    const { module: rawModuleTitle, subtopic: rawSubtopic, courseId } = parsed.data;
 
-    // Database caching for performance optimization
-    if (courseId) {
+    // Enforce ownership BEFORE any DB / AI work. Admins bypass.
+    try {
+      await assertCourseOwnership(authUserId, courseId, authUserRole);
+    } catch (ownershipErr) {
+      const asOwnership = toOwnershipError(ownershipErr);
+      if (asOwnership) {
+        return NextResponse.json(
+          { error: asOwnership.message },
+          { status: asOwnership.status },
+        );
+      }
+      throw ownershipErr;
+    }
+
+    // Sanitize user-provided prompt inputs before they reach the model.
+    // Defense-in-depth layered on top of the XML boundary markers.
+    const moduleTitle = sanitizePromptInput(rawModuleTitle);
+    const subtopic = sanitizePromptInput(rawSubtopic);
+    if (!moduleTitle || !subtopic) {
+      return NextResponse.json(
+        { error: 'module and subtopic must be non-empty after sanitization' },
+        { status: 400 },
+      );
+    }
+
+    // Database caching for performance optimization.
+    // `courseId` is guaranteed present (schema marks it required) so the
+    // previous `if (courseId)` guard has been removed. A bare block scopes
+    // the cacheKey/adminDb variables without widening the outer handler.
+    {
       try {
         const { adminDb } = await import('@/lib/database');
 
         // Check cache first (use adminDb — anon client has no RLS read policy on subtopic_cache)
-        const cacheKey = `${courseId}-${moduleTitle}-${subtopic}`;
+        const cacheKey = `${courseId}-${normalizeCacheKeyPart(moduleTitle)}-${normalizeCacheKeyPart(subtopic)}`;
         const { data: cached } = await adminDb
           .from('subtopic_cache')
           .select('content')
@@ -395,13 +435,14 @@ async function postHandler(request: NextRequest) {
       );
     }
 
-    // Save to cache for next time
-    if (courseId && data) {
+    // Save to cache for next time. `courseId` is always present (required by
+    // the schema), so the outer guard just checks that parsed `data` exists.
+    if (data) {
       try {
         // Use adminDb for elevated (service-role) database access
         const { adminDb } = await import('@/lib/database');
 
-        const cacheKey = `${courseId}-${moduleTitle}-${subtopic}`;
+        const cacheKey = `${courseId}-${normalizeCacheKeyPart(moduleTitle)}-${normalizeCacheKeyPart(subtopic)}`;
         const { error: cacheError } = await adminDb
           .from('subtopic_cache')
           .upsert(
@@ -500,6 +541,24 @@ async function postHandler(request: NextRequest) {
 
             const resolvedSubtopicId = localSubtopicId ?? syncResult?.resolvedSubtopicId ?? null;
 
+            // Hard fail when quiz seeding fails. Previously this merely
+            // logged a warning, which let the response succeed even though
+            // the next page load would hit "Pertanyaan kuis tidak ditemukan".
+            // `insertedCount === 0` covers both "sanitized payload empty"
+            // and "DB insert errored" branches in quiz-sync.
+            if (!syncResult || syncResult.insertedCount === 0) {
+              console.error('[GenerateSubtopic] Quiz seeding failed — failing request', {
+                courseId,
+                moduleTitle,
+                subtopic,
+                syncResult,
+              });
+              return NextResponse.json(
+                { error: 'Failed to seed quiz' },
+                { status: 500 },
+              );
+            }
+
             if (!resolvedSubtopicId) {
               console.warn('Subtopic not found for quiz saving:', {
                 courseId,
@@ -580,6 +639,10 @@ async function postHandler(request: NextRequest) {
               moduleTitle,
               subtopic,
             });
+            return NextResponse.json(
+              { error: 'Failed to seed quiz' },
+              { status: 500 },
+            );
           }
         }
       } catch (saveError) {
@@ -756,7 +819,7 @@ async function assembleModuleDiscussionContext({
       continue;
     }
 
-    const cacheKey = `${courseId}-${moduleTitle}-${subtopicTitle}`;
+    const cacheKey = `${courseId}-${normalizeCacheKeyPart(moduleTitle)}-${normalizeCacheKeyPart(subtopicTitle)}`;
     let cachedContent: SubtopicContent | null = null;
 
     try {

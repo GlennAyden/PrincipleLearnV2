@@ -50,7 +50,9 @@ export const AdminRegisterSchema = z.object({
 export const GenerateCourseSchema = z.object({
   topic: z.string().min(1, 'Topic is required'),
   goal: z.string().min(1, 'Goal is required'),
-  level: z.string().min(1, 'Level is required'),
+  level: z.enum(['Beginner', 'Intermediate', 'Advanced'], {
+    message: 'Level must be Beginner, Intermediate, or Advanced',
+  }),
   extraTopics: z.string().optional(),
   problem: z.string().optional(),
   assumption: z.string().optional(),
@@ -61,10 +63,26 @@ export const GenerateCourseSchema = z.object({
 export const GenerateSubtopicSchema = z.object({
   module: z.string().min(1, 'module is required'),
   subtopic: z.string().min(1, 'subtopic is required'),
-  courseId: z.string().optional(),
+  courseId: z.string().min(1, 'courseId is required'),
 });
 
 // ── Quiz schemas ────────────────────────────────────────────────────
+
+/**
+ * Query params accepted by GET /api/quiz/status.
+ * At least one of `subtopicTitle` / `moduleTitle` is required so the route
+ * can resolve the subtopic row before looking up submissions.
+ */
+export const QuizStatusSchema = z
+  .object({
+    courseId: z.string().min(1, 'courseId wajib'),
+    subtopicTitle: z.string().trim().min(1).optional(),
+    moduleTitle: z.string().trim().min(1).optional(),
+  })
+  .refine(
+    (data) => !!(data.subtopicTitle || data.moduleTitle),
+    { message: 'subtopicTitle atau moduleTitle wajib diisi' },
+  );
 
 const QuizAnswerSchema = z.object({
   question: z.string(),
@@ -85,10 +103,25 @@ export const QuizSubmitSchema = z.object({
   subtopicIndex: flexibleIndex,
   score: z.number(),
   answers: z.array(QuizAnswerSchema).min(1, 'Quiz answers are required'),
-  reasoningNotes: z.array(z.string()).optional(),
 });
 
 // ── AI feature schemas ──────────────────────────────────────────────
+
+/**
+ * Strict shape for the prompt-builder components sent by the AskQuestion
+ * frontend. Mirrors `PromptComponents` in
+ * `src/components/PromptBuilder/PromptBuilder.tsx`. `.strict()` rejects any
+ * unknown field so the schema fails fast on accidental drift between
+ * frontend and backend.
+ */
+export const PromptComponentsSchema = z
+  .object({
+    tujuan: z.string().optional(),
+    konteks: z.string().optional(),
+    batasan: z.string().optional(),
+    reasoning: z.string().optional(),
+  })
+  .strict();
 
 export const AskQuestionSchema = z.object({
   question: z.string().min(1, 'Question is required'),
@@ -99,7 +132,7 @@ export const AskQuestionSchema = z.object({
   moduleIndex: flexibleIndex,
   subtopicIndex: flexibleIndex,
   pageNumber: flexibleIndex,
-  promptComponents: z.record(z.string(), z.unknown()).optional().nullable(),
+  promptComponents: PromptComponentsSchema.optional().nullable(),
   reasoningNote: z.string().optional(),
   promptVersion: z.union([z.number(), z.string()]).optional(),
   sessionNumber: z.union([z.number(), z.string()]).optional(),
@@ -124,21 +157,35 @@ export const GenerateExamplesSchema = z.object({
 // ── Feedback & Jurnal schemas ───────────────────────────────────────
 // Note: "jurnal" uses Indonesian spelling, matching the DB table and API routes.
 
+/**
+ * Unified feedback schema (Bug #12 fix).
+ *
+ * The five canonical user-input fields for the feedback section are:
+ *   1. `comment`        — written feedback (required, replaces legacy `feedback`)
+ *   2. `rating`         — 1..5 star rating
+ *   3. `subtopicId`     — UUID of the subtopic being rated
+ *   4. `moduleIndex`    — module position
+ *   5. `subtopicIndex`  — subtopic position within the module
+ *
+ * `userId` and `courseId` are required identifiers (not user-typed inputs),
+ * and `subtopic` is an optional human-readable label fallback used when
+ * `subtopicId` cannot be resolved against the database.
+ */
 export const FeedbackSchema = z
   .object({
     userId: z.string().min(1, 'userId is required'),
     courseId: z.string().min(1, 'courseId is required'),
-    feedback: z.string().optional(),
-    comment: z.string().optional(),
-    subtopicId: z.string().optional(),
-    subtopic: z.string().optional(),
+    comment: z
+      .string()
+      .trim()
+      .min(1, 'Comment is required'),
+    rating: z.number().min(1).max(5).optional().nullable(),
+    subtopicId: z.string().optional().nullable(),
     moduleIndex: flexibleIndex,
     subtopicIndex: flexibleIndex,
-    rating: z.number().min(1).max(5).optional().nullable(),
+    subtopic: z.string().optional(),
   })
-  .refine((d) => (d.comment ?? '').trim() || (d.feedback ?? '').trim(), {
-    message: 'Comment is required',
-  });
+  .strict();
 
 export const JurnalSchema = z.object({
   userId: z.string().min(1, 'userId is required'),
@@ -154,6 +201,17 @@ export const JurnalSchema = z.object({
   promptEvolution: z.string().optional(),
   contentRating: z.number().optional(),
   contentFeedback: z.string().optional(),
+});
+
+// ── Learning profile schema ────────────────────────────────────────
+// Note: `userId` is intentionally NOT part of this schema — the API route
+// MUST derive it from the JWT payload to prevent IDOR-style overrides.
+export const LearningProfileSchema = z.object({
+  displayName: z.string().trim().min(1, 'displayName diperlukan'),
+  programmingExperience: z.string().trim().min(1, 'programmingExperience diperlukan'),
+  learningStyle: z.string().trim().min(1, 'learningStyle diperlukan'),
+  learningGoals: z.string().trim().optional().default(''),
+  challenges: z.string().trim().optional().default(''),
 });
 
 // ── Helper ──────────────────────────────────────────────────────────

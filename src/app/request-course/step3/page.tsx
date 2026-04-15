@@ -32,6 +32,15 @@ export default function RequestCourseStep3() {
       setError('Kamu harus masuk untuk membuat kursus');
       return;
     }
+    // Guard against context loss (e.g. sessionStorage cleared, direct nav).
+    // Without these the server returns a 400 that surfaces as a generic
+    // error on the loading page; redirect user to step1 instead.
+    const validLevels = ['Beginner', 'Intermediate', 'Advanced'];
+    if (!answers.topic?.trim() || !answers.goal?.trim() || !validLevels.includes(answers.level)) {
+      setError('Data topik/level belum lengkap. Kembali ke langkah 1.');
+      setTimeout(() => router.replace('/request-course/step1'), 1200);
+      return;
+    }
     setPartial({ problem, assumption });
     router.push('/request-course/generating');
   };

@@ -13,6 +13,7 @@ import { chatCompletion } from '@/services/ai.service';
 import { appendNewQuizQuestions } from '@/lib/quiz-sync';
 import { parseBody } from '@/lib/schemas';
 import { verifyToken } from '@/lib/jwt';
+import { assertCourseOwnership, toOwnershipError } from '@/lib/ownership';
 import type { ChatCompletionMessageParam } from 'openai/resources/chat/completions';
 
 const QuizRegenerateSchema = z.object({
@@ -30,11 +31,13 @@ interface QuizOutputItem {
 async function postHandler(req: NextRequest) {
   // Prefer middleware-injected header; fall back to JWT cookie directly.
   let userId = req.headers.get('x-user-id');
+  let userRole = req.headers.get('x-user-role') ?? undefined;
   if (!userId) {
     const accessToken = req.cookies.get('access_token')?.value;
     const tokenPayload = accessToken ? verifyToken(accessToken) : null;
     if (tokenPayload?.userId) {
       userId = tokenPayload.userId;
+      userRole = userRole ?? tokenPayload.role;
     }
   }
   if (!userId) {
@@ -51,6 +54,20 @@ async function postHandler(req: NextRequest) {
   const parsed = parseBody(QuizRegenerateSchema, await req.json());
   if (!parsed.success) return parsed.response;
   const { courseId, moduleTitle, subtopicTitle } = parsed.data;
+
+  // Enforce ownership BEFORE fetching or mutating any course data.
+  try {
+    await assertCourseOwnership(userId, courseId, userRole);
+  } catch (ownershipErr) {
+    const asOwnership = toOwnershipError(ownershipErr);
+    if (asOwnership) {
+      return NextResponse.json(
+        { error: asOwnership.message },
+        { status: asOwnership.status },
+      );
+    }
+    throw ownershipErr;
+  }
 
   // Pull cached subtopic content to use as context for the new questions.
   const cacheKey = `${courseId}-${moduleTitle}-${subtopicTitle}`;
@@ -151,13 +168,28 @@ async function postHandler(req: NextRequest) {
   }
 
   // Append new quiz rows to the `quiz` table (old rows preserved).
-  await appendNewQuizQuestions({
+  // Fail loudly when the insert did not land — previously this was awaited
+  // without inspecting the result, so a DB error would silently succeed.
+  const appendResult = await appendNewQuizQuestions({
     adminDb,
     courseId,
     moduleTitle,
     subtopicTitle,
     quizItems,
   });
+
+  if (!appendResult || appendResult.insertedCount === 0) {
+    console.error('[QuizRegenerate] Failed to persist new quiz rows', {
+      courseId,
+      moduleTitle,
+      subtopicTitle,
+      appendResult,
+    });
+    return NextResponse.json(
+      { error: 'Gagal menyimpan kuis baru ke database. Coba lagi.' },
+      { status: 500 },
+    );
+  }
 
   // Update subtopic_cache so the next page load serves the new questions.
   try {

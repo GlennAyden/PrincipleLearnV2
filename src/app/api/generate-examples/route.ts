@@ -9,6 +9,7 @@ import type { ChatCompletionMessageParam } from 'openai/resources/chat/completio
 export const POST = withProtection(async (req: NextRequest) => {
   try {
     // Rate limit AI calls per user
+    // x-user-id is injected by middleware after JWT verification (src/middleware.ts)
     const userId = req.headers.get('x-user-id') || 'unknown';
     if (!(await aiRateLimiter.isAllowed(userId))) {
       return NextResponse.json(

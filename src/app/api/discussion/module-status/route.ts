@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 
 import { verifyToken } from '@/lib/jwt';
-import { adminDb, publicDb } from '@/lib/database';
+import { adminDb } from '@/lib/database';
 import { withApiLogging } from '@/lib/api-logger';
 
 interface SubtopicNode {
@@ -127,7 +127,10 @@ async function getHandler(request: NextRequest) {
 
     let cacheEntries: Array<{ cache_key: string; content: CacheContent | null }> = [];
     if (cacheKeys.length > 0) {
-      const { data: cacheData, error: cacheError } = await publicDb
+      // adminDb (service role): subtopic_cache's RLS policy only grants
+      // SELECT to role `authenticated`, and this app uses custom JWT not
+      // Supabase Auth, so publicDb (anon role) silently returns zero rows.
+      const { data: cacheData, error: cacheError } = await adminDb
         .from('subtopic_cache')
         .select('cache_key, content')
         .in('cache_key', cacheKeys);
@@ -144,7 +147,9 @@ async function getHandler(request: NextRequest) {
       cacheMap.set(entry.cache_key, entry.content);
     });
 
-    const { data: templateRows, error: templateError } = await publicDb
+    // Same RLS caveat as subtopic_cache above: discussion_templates grants
+    // SELECT only to `authenticated`, so we must use the service-role client.
+    const { data: templateRows, error: templateError } = await adminDb
       .from('discussion_templates')
       .select('id, source, generated_by')
       .eq('course_id', courseId)
@@ -167,7 +172,7 @@ async function getHandler(request: NextRequest) {
 
   const { data: quizRows, error: quizError } = await adminDb
     .from('quiz')
-    .select('id, question, explanation, created_at')
+    .select('id, question, explanation, subtopic_label, created_at')
     .eq('course_id', courseId)
     .eq('subtopic_id', moduleId)
     .order('created_at', { ascending: false });
@@ -177,19 +182,29 @@ async function getHandler(request: NextRequest) {
       return NextResponse.json({ error: 'Failed to load quiz data' }, { status: 500 });
     }
 
-    const quizRowsByKey = new Map<
-      string,
-      { primaryId: string; ids: string[]; question: string }
-    >();
+    // Group quiz rows by (normalized) subtopic_label so each learning subtopic
+    // is matched against ONLY its own question set. Without this, legacy
+    // sibling rows from pre-d748282 cross-pollinate and either inflate or
+    // deflate the per-subtopic answered count. Rows with a null/empty label
+    // land in an "unlabeled" bucket used as a fallback for legacy data that
+    // predates the subtopic_label column.
+    type QuizBucket = { primaryId: string; ids: string[]; question: string };
+    const UNLABELED_KEY = '';
+    const quizRowsByLabel = new Map<string, Map<string, QuizBucket>>();
     (quizRows ?? []).forEach((row: Record<string, unknown>) => {
-      if (typeof row?.question === 'string') {
-        const key = normalizeString(row.question);
-        const id = row.id as string;
-        if (!quizRowsByKey.has(key)) {
-          quizRowsByKey.set(key, { primaryId: id, ids: [id], question: row.question });
-        } else {
-          quizRowsByKey.get(key)!.ids.push(id);
-        }
+      if (typeof row?.question !== 'string') return;
+      const labelKey = normalizeString((row?.subtopic_label as string | null) ?? '');
+      if (!quizRowsByLabel.has(labelKey)) {
+        quizRowsByLabel.set(labelKey, new Map());
+      }
+      const labelMap = quizRowsByLabel.get(labelKey)!;
+      const questionKey = normalizeString(row.question);
+      const id = row.id as string;
+      const existing = labelMap.get(questionKey);
+      if (!existing) {
+        labelMap.set(questionKey, { primaryId: id, ids: [id], question: row.question });
+      } else {
+        existing.ids.push(id);
       }
     });
 
@@ -223,6 +238,14 @@ async function getHandler(request: NextRequest) {
           ? cacheContent.quiz
           : [];
 
+      // Pick this subtopic's own label bucket; fall back to the "unlabeled"
+      // bucket when no scoped rows exist (e.g. pre-migration legacy rows).
+      const scopedBucket = quizRowsByLabel.get(normalizedTitle);
+      const resolvedBucket =
+        scopedBucket && scopedBucket.size > 0
+          ? scopedBucket
+          : quizRowsByLabel.get(UNLABELED_KEY);
+
       const questionBuckets: Array<{ ids: string[]; question: string }> = [];
       const missingQuestions: string[] = [];
 
@@ -233,8 +256,8 @@ async function getHandler(request: NextRequest) {
               ? questionItem.question
               : '';
           const normalized = normalizeString(questionText);
-          if (normalized && quizRowsByKey.has(normalized)) {
-            const bucket = quizRowsByKey.get(normalized)!;
+          if (normalized && resolvedBucket?.has(normalized)) {
+            const bucket = resolvedBucket.get(normalized)!;
             questionBuckets.push({ ids: bucket.ids, question: bucket.question });
           } else if (questionText) {
             missingQuestions.push(questionText);

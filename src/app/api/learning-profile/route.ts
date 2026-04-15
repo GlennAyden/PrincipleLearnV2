@@ -4,6 +4,8 @@ import type { NextRequest } from 'next/server';
 import { adminDb } from '@/lib/database';
 import { verifyToken } from '@/lib/jwt';
 import { withApiLogging } from '@/lib/api-logger';
+import { withProtection } from '@/lib/api-middleware';
+import { LearningProfileSchema, parseBody } from '@/lib/schemas';
 
 interface LearningProfileRow {
   id: string;
@@ -15,10 +17,6 @@ interface LearningProfileRow {
   challenges?: string;
   created_at?: string | null;
   updated_at?: string | null;
-}
-
-function normalizeText(value: unknown) {
-  return typeof value === 'string' ? value.trim() : '';
 }
 
 function sanitizeProfile(profile: LearningProfileRow | null) {
@@ -36,31 +34,29 @@ function sanitizeProfile(profile: LearningProfileRow | null) {
   };
 }
 
-// GET — check if learning profile exists for a user
+// GET — load the learning profile for the current user (or, for admins,
+// any user passed via the `userId` query param).
 export async function GET(request: NextRequest) {
   try {
     const token = request.cookies.get('access_token')?.value;
     const payload = token ? verifyToken(token) : null;
-    if (!payload) {
+    if (!payload?.userId) {
       return NextResponse.json({ error: 'Tidak terautentikasi' }, { status: 401 });
     }
 
     const { searchParams } = new URL(request.url);
     const requestedUserId = searchParams.get('userId');
-    const userId = requestedUserId || payload.userId;
+    const isAdmin = (payload.role ?? '').toLowerCase() === 'admin';
+    const effectiveUserId = isAdmin && requestedUserId ? requestedUserId : payload.userId;
 
-    if (!userId) {
-      return NextResponse.json({ error: 'userId diperlukan' }, { status: 400 });
-    }
-
-    if (userId !== payload.userId && (payload.role ?? '').toLowerCase() !== 'admin') {
+    if (!isAdmin && requestedUserId && requestedUserId !== payload.userId) {
       return NextResponse.json({ error: 'Akses ditolak' }, { status: 403 });
     }
 
     const { data: profile, error } = await adminDb
       .from('learning_profiles')
       .select('*')
-      .eq('user_id', userId)
+      .eq('user_id', effectiveUserId)
       .maybeSingle() as { data: LearningProfileRow | null; error: { message: string } | null };
 
     if (error) {
@@ -78,52 +74,45 @@ export async function GET(request: NextRequest) {
   }
 }
 
-// POST — save or update learning profile
+// POST — save or update learning profile. Always binds to the JWT user id;
+// clients cannot forge a `userId` in the body.
 async function postHandler(request: NextRequest) {
   try {
+    // `withProtection` has already verified CSRF + auth, but we still
+    // re-parse the JWT here because it is the single source of truth for
+    // the target user_id (the body MUST NOT carry one).
     const token = request.cookies.get('access_token')?.value;
     const payload = token ? verifyToken(token) : null;
-    if (!payload) {
+    if (!payload?.userId) {
       return NextResponse.json({ error: 'Tidak terautentikasi' }, { status: 401 });
     }
 
-    const body = await request.json();
+    const rawBody = await request.json().catch(() => null);
+    if (!rawBody) {
+      return NextResponse.json({ error: 'Invalid JSON payload' }, { status: 400 });
+    }
+    const parsed = parseBody(LearningProfileSchema, rawBody);
+    if (!parsed.success) return parsed.response;
     const {
-      userId,
       displayName,
       programmingExperience,
       learningStyle,
       learningGoals,
       challenges,
-    } = body;
+    } = parsed.data;
 
-    if (!userId || userId !== payload.userId) {
-      return NextResponse.json({ error: 'Pengguna tidak cocok' }, { status: 403 });
-    }
-
-    const normalizedDisplayName = normalizeText(displayName);
-    const normalizedProgrammingExperience = normalizeText(programmingExperience);
-    const normalizedLearningStyle = normalizeText(learningStyle);
-    const normalizedLearningGoals = normalizeText(learningGoals);
-    const normalizedChallenges = normalizeText(challenges);
-
-    if (!normalizedDisplayName || !normalizedProgrammingExperience || !normalizedLearningStyle) {
-      return NextResponse.json(
-        { error: 'displayName, programmingExperience, dan learningStyle diperlukan' },
-        { status: 400 }
-      );
-    }
+    const userId = payload.userId;
 
     // Upsert profile
     const { data, error } = await adminDb
       .from('learning_profiles')
       .upsert({
         user_id: userId,
-        display_name: normalizedDisplayName,
-        programming_experience: normalizedProgrammingExperience,
-        learning_style: normalizedLearningStyle,
-        learning_goals: normalizedLearningGoals,
-        challenges: normalizedChallenges,
+        display_name: displayName,
+        programming_experience: programmingExperience,
+        learning_style: learningStyle,
+        learning_goals: learningGoals,
+        challenges: challenges,
         updated_at: new Date().toISOString(),
       }, { onConflict: 'user_id' }) as { data: LearningProfileRow[] | LearningProfileRow | null; error: { message: string } | null };
 
@@ -146,6 +135,8 @@ async function postHandler(request: NextRequest) {
   }
 }
 
-export const POST = withApiLogging(postHandler, {
+// `withProtection` runs the CSRF double-submit check + ensures a valid JWT;
+// `withApiLogging` persists the call to api_logs for the admin dashboard.
+export const POST = withApiLogging(withProtection(postHandler), {
   label: 'learning-profile-save',
 });

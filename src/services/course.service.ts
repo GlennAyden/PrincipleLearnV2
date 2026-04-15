@@ -98,24 +98,36 @@ export async function createCourseWithSubtopics(
     created_by: userId,
   })) as unknown as { id: string };
 
-  const errors: Array<{ index: number; error: unknown }> = [];
-
-  for (let i = 0; i < modules.length; i++) {
-    try {
+  // Transactional subtopic insert: if ANY subtopic fails, roll back by
+  // deleting the parent course so we never leave orphaned course rows.
+  // Supabase JS has no multi-statement transactions from the client, so
+  // we compensate manually via DatabaseService.deleteRecord.
+  try {
+    for (let i = 0; i < modules.length; i++) {
       await DatabaseService.insertRecord('subtopics', {
         course_id: course.id,
         title: modules[i].module || `Module ${i + 1}`,
         content: JSON.stringify(modules[i]),
         order_index: i,
       });
-    } catch (err) {
-      console.error(`[CourseService] Failed to insert subtopic ${i + 1}/${modules.length}:`, err);
-      errors.push({ index: i, error: err });
     }
-  }
-
-  if (errors.length > 0) {
-    console.warn(`[CourseService] ${errors.length}/${modules.length} subtopics failed to insert for course ${course.id}`);
+  } catch (err) {
+    console.error(
+      `[CourseService] Subtopic insert failed for course ${course.id}, rolling back:`,
+      err,
+    );
+    try {
+      await DatabaseService.deleteRecord('courses', course.id);
+      console.log(`[CourseService] Rolled back course ${course.id} after subtopic failure`);
+    } catch (rollbackErr) {
+      console.error(
+        `[CourseService] CRITICAL: rollback failed for course ${course.id}:`,
+        rollbackErr,
+      );
+    }
+    throw new Error(
+      `Failed to create course subtopics: ${err instanceof Error ? err.message : String(err)}`,
+    );
   }
 
   return course;

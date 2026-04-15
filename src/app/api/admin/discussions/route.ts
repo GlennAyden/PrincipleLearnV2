@@ -68,14 +68,6 @@ async function getHandler(request: NextRequest) {
       );
     }
 
-    if (error) {
-      console.error('[AdminDiscussions] Failed to fetch sessions', error);
-      return NextResponse.json(
-        { error: 'Failed to load discussions' },
-        { status: 500 }
-      );
-    }
-
     interface DiscussionQueryRow {
       id: string; status: string; phase: string; learning_goals: unknown;
       created_at: string; updated_at: string; user_id: string; course_id: string;

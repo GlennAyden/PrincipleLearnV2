@@ -75,12 +75,18 @@ export async function GET(
       }, { status: 403 });
     }
 
+    // Strip sensitive fields before returning to client (prevents leaking owner id)
+    const { created_by: _ownerId, ...publicCourse } = courseWithSubtopics;
+    void _ownerId;
+
     const response = NextResponse.json({
       success: true,
-      course: courseWithSubtopics,
+      course: publicCourse,
     });
     // Course outline rarely changes — cache for 5 minutes
     response.headers.set('Cache-Control', 'private, max-age=300, stale-while-revalidate=600');
+    // Prevent cross-user cache collisions when browsers/proxies key on URL
+    response.headers.set('Vary', 'Cookie, Authorization');
     return response;
   } catch (error) {
     console.error('[Get Course] Error fetching course:', error);

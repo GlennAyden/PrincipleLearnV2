@@ -6,7 +6,12 @@ export async function GET(
   request: NextRequest,
   context: { params: Promise<{ id: string }> }
 ) {
-  if (process.env.NODE_ENV === 'production') {
+  // Debug route dual guard — env opt-in + admin role. See
+  // /api/debug/users/route.ts for the rationale behind returning 404.
+  const envAllowed =
+    process.env.NODE_ENV !== 'production' || process.env.ENABLE_DEBUG_ROUTES === '1';
+  const role = (request.headers.get('x-user-role') ?? '').toLowerCase();
+  if (!envAllowed || role !== 'admin') {
     return NextResponse.json({ error: 'Not available' }, { status: 404 });
   }
 

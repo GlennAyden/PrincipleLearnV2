@@ -33,25 +33,33 @@ function normalizePromptComponents(value: unknown) {
 
 export async function GET(request: NextRequest) {
   try {
-    const { searchParams } = new URL(request.url);
-    const userId = searchParams.get('userId');
-    const courseId = searchParams.get('courseId');
-
-    if (!userId) {
-      return NextResponse.json({ error: 'userId is required' }, { status: 400 });
-    }
-
+    // Identity ALWAYS comes from the JWT — callers may not forge it via
+    // query params. An admin is the only role allowed to request a
+    // different `userId`; for every other caller, the query param is
+    // silently ignored.
     const accessToken = request.cookies.get('access_token')?.value;
     const tokenPayload = accessToken ? verifyToken(accessToken) : null;
 
-    if (!tokenPayload) {
+    if (!tokenPayload?.userId) {
       return NextResponse.json({ error: 'Not authenticated' }, { status: 401 });
+    }
+
+    const { searchParams } = new URL(request.url);
+    const requestedUserId = searchParams.get('userId');
+    const courseId = searchParams.get('courseId');
+    const isAdmin = (tokenPayload.role ?? '').toLowerCase() === 'admin';
+    const effectiveUserId = isAdmin && requestedUserId ? requestedUserId : tokenPayload.userId;
+
+    // Non-admin attempting to view someone else's journey: explicit 403 so
+    // accidental UI bugs surface loudly instead of silently leaking data.
+    if (!isAdmin && requestedUserId && requestedUserId !== tokenPayload.userId) {
+      return NextResponse.json({ error: 'Akses ditolak' }, { status: 403 });
     }
 
     let query = adminDb
       .from('ask_question_history')
       .select('id, question, reasoning_note, prompt_components, prompt_version, session_number, subtopic_label, prompt_stage, stage_confidence, created_at')
-      .eq('user_id', userId)
+      .eq('user_id', effectiveUserId)
       .order('created_at', { ascending: true })
       .limit(200);
 

@@ -101,11 +101,30 @@ export async function GET(req: NextRequest) {
       orderBy: { column: 'updated_at', ascending: false }
     });
 
-    // Calculate statistics
+    const completedCount = progress.filter((p) => p.is_completed).length;
+    const inProgressCount = progress.filter((p) => !p.is_completed).length;
+
+    // Calculate statistics. When scoped to a specific course, total_subtopics
+    // must reflect the course's actual subtopic count (not just rows the user
+    // already has progress for) — otherwise percentage is misleading.
+    let totalSubtopics = progress.length;
+    if (courseId) {
+      const allSubtopics = await DatabaseService.getRecords<{ id: string }>('subtopics', {
+        filter: { course_id: courseId },
+        orderBy: { column: 'order_index', ascending: true },
+      });
+      totalSubtopics = allSubtopics.length;
+    }
+
+    const completionPercentage = totalSubtopics > 0
+      ? Math.round((completedCount / totalSubtopics) * 100)
+      : 0;
+
     const stats = {
-      total_subtopics: progress.length,
-      completed_subtopics: progress.filter((p) => p.is_completed).length,
-      in_progress_subtopics: progress.filter((p) => !p.is_completed).length,
+      total_subtopics: totalSubtopics,
+      completed_subtopics: completedCount,
+      in_progress_subtopics: inProgressCount,
+      completion_percentage: completionPercentage,
     };
 
     return NextResponse.json({

@@ -8,8 +8,17 @@ function getJwtSecret(): string {
   return secret;
 }
 
-const ACCESS_TOKEN_EXPIRY = '15m'; // 15 minutes
+const ACCESS_TOKEN_EXPIRY = '15m'; // 15 minutes (regular users)
+// Admin harmonized to 30m: longer than user access tokens (admins need continuity
+// across dashboard workflows) but far shorter than the previous 2h which widened
+// the window for stolen-token replay. Refresh flow still extends the session.
+const ADMIN_ACCESS_TOKEN_EXPIRY = '30m';
 const REFRESH_TOKEN_EXPIRY = '7d'; // 7 days
+
+// Access token lifetimes exposed as seconds for cookie maxAge alignment.
+export const ACCESS_TOKEN_MAX_AGE_SECONDS = 15 * 60;
+export const ADMIN_ACCESS_TOKEN_MAX_AGE_SECONDS = 30 * 60;
+export const REFRESH_TOKEN_MAX_AGE_SECONDS = 7 * 24 * 60 * 60;
 
 interface TokenPayload {
   userId: string;
@@ -20,6 +29,15 @@ interface TokenPayload {
 
 export function generateAccessToken(payload: TokenPayload): string {
   return jwt.sign({ ...payload, type: 'access' }, getJwtSecret(), { expiresIn: ACCESS_TOKEN_EXPIRY });
+}
+
+/**
+ * Generate an access token for admin sessions. Uses a 30m expiry (harmonized
+ * from the previous 2h) — admins need more continuity than regular users but
+ * benefit from a shorter stolen-token replay window than before.
+ */
+export function generateAdminAccessToken(payload: TokenPayload): string {
+  return jwt.sign({ ...payload, type: 'access' }, getJwtSecret(), { expiresIn: ADMIN_ACCESS_TOKEN_EXPIRY });
 }
 
 export function generateRefreshToken(payload: TokenPayload): string {

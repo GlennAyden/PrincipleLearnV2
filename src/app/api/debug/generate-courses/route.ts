@@ -1,7 +1,12 @@
-import { NextResponse } from 'next/server';
+import { NextRequest, NextResponse } from 'next/server';
 
-export async function GET() {
-  if (process.env.NODE_ENV === 'production') {
+export async function GET(req: NextRequest) {
+  // Debug route dual guard — env opt-in + admin role. See
+  // /api/debug/users/route.ts for the rationale behind returning 404.
+  const envAllowed =
+    process.env.NODE_ENV !== 'production' || process.env.ENABLE_DEBUG_ROUTES === '1';
+  const role = (req.headers.get('x-user-role') ?? '').toLowerCase();
+  if (!envAllowed || role !== 'admin') {
     return NextResponse.json({ error: 'Not available' }, { status: 404 });
   }
 

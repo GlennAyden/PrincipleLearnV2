@@ -25,11 +25,14 @@ export async function POST(req: Request) {
     // Normalize email to prevent case-sensitivity duplicates
     const normalizedEmail = email.toLowerCase().trim();
 
-    // Check if user already exists
+    // Check if user already exists. We deliberately return a generic message
+    // here (and in the unique-violation catch below) — no DB details leak to
+    // callers, and the status/wording are identical regardless of which path
+    // caught the duplicate first.
     const existingUser = await findUserByEmail(normalizedEmail);
     if (existingUser) {
       return NextResponse.json(
-        { error: 'Pengguna dengan email ini sudah terdaftar' },
+        { error: 'Email sudah terdaftar' },
         { status: 409 }
       );
     }
@@ -61,10 +64,13 @@ export async function POST(req: Request) {
       message: 'Pendaftaran berhasil. Silakan masuk.'
     });
   } catch (error: unknown) {
-    // Handle race condition: another request created the same email between check and insert
+    // Race condition: another request created the same email between the
+    // pre-check and the insert. Return the same generic message as the
+    // existence check above so callers can't distinguish races from lookups
+    // and we never leak the underlying Postgres error text.
     if (error instanceof DatabaseError && error.isUniqueViolation) {
       return NextResponse.json(
-        { error: 'Pengguna dengan email ini sudah terdaftar' },
+        { error: 'Email sudah terdaftar' },
         { status: 409 }
       );
     }

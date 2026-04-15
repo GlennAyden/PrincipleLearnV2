@@ -43,7 +43,7 @@ Run a single Playwright test: `npx playwright test tests/e2e/user/signup-login.s
 ## Coding Style & Naming Conventions
 
 - **TypeScript**: Strict mode enabled (`tsconfig.json`). Path alias `@/*` maps to `src/*`.
-- **ESLint**: Extends `next/core-web-vitals`. Rules off: `no-explicit-any`, `no-unused-vars`, `exhaustive-deps`, `prefer-const`. `rules-of-hooks` is error.
+- **ESLint**: Flat config ([eslint.config.mjs](eslint.config.mjs)) via `typescript-eslint`. `no-explicit-any`, `no-unused-vars` (ignores `_`-prefixed), and `prefer-const` are `warn`; most other TS rules are off. A legacy `.eslintrc.json` extending `next/core-web-vitals` exists but the flat config takes precedence under ESLint 10.
 - **Styling**: Sass modules (`.module.scss`) co-located with components. No Prettier configured.
 - **No pre-commit hooks** (no Husky or lint-staged).
 

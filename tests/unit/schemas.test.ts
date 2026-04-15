@@ -188,7 +188,7 @@ describe('GenerateCourseSchema', () => {
   const validData = {
     topic: 'Machine Learning',
     goal: 'Understand basics',
-    level: 'beginner',
+    level: 'Beginner',
   };
 
   it('should accept valid course generation data', () => {
@@ -204,6 +204,16 @@ describe('GenerateCourseSchema', () => {
       userEmail: 'u@t.com',
     });
     expect(result.success).toBe(true);
+  });
+
+  it('should accept each canonical level value (Beginner, Intermediate, Advanced)', () => {
+    for (const level of ['Beginner', 'Intermediate', 'Advanced'] as const) {
+      const result = GenerateCourseSchema.safeParse({ ...validData, level });
+      expect(result.success).toBe(true);
+      if (result.success) {
+        expect(result.data.level).toBe(level);
+      }
+    }
   });
 
   it('should reject missing topic', () => {
@@ -227,6 +237,39 @@ describe('GenerateCourseSchema', () => {
   it('should reject empty topic string', () => {
     const result = GenerateCourseSchema.safeParse({ ...validData, topic: '' });
     expect(result.success).toBe(false);
+  });
+
+  it('should reject an empty level string', () => {
+    const result = GenerateCourseSchema.safeParse({ ...validData, level: '' });
+    expect(result.success).toBe(false);
+  });
+
+  it('should reject a lowercase level (enum is case-sensitive)', () => {
+    const result = GenerateCourseSchema.safeParse({ ...validData, level: 'beginner' });
+    expect(result.success).toBe(false);
+    if (!result.success) {
+      // Zod enum error mentions the allowed values
+      const message = result.error.issues[0]?.message ?? '';
+      expect(message).toMatch(/Beginner|Intermediate|Advanced/);
+    }
+  });
+
+  it('should reject an out-of-enum level value like "Expert"', () => {
+    const result = GenerateCourseSchema.safeParse({ ...validData, level: 'Expert' });
+    expect(result.success).toBe(false);
+    if (!result.success) {
+      const message = result.error.issues[0]?.message ?? '';
+      expect(message).toMatch(/Beginner|Intermediate|Advanced/);
+    }
+  });
+
+  it('should reject an arbitrary random level string', () => {
+    const result = GenerateCourseSchema.safeParse({ ...validData, level: 'SuperAdvanced' });
+    expect(result.success).toBe(false);
+    if (!result.success) {
+      const message = result.error.issues[0]?.message ?? '';
+      expect(message).toMatch(/Beginner|Intermediate|Advanced/);
+    }
   });
 });
 
@@ -321,6 +364,35 @@ describe('AskQuestionSchema', () => {
   it('should reject missing courseId', () => {
     const { courseId: _, ...rest } = validData;
     const result = AskQuestionSchema.safeParse(rest);
+    expect(result.success).toBe(false);
+  });
+
+  it('should accept promptComponents with the canonical 4 fields', () => {
+    const result = AskQuestionSchema.safeParse({
+      ...validData,
+      promptComponents: {
+        tujuan: 'Memahami X',
+        konteks: 'Saya pemula',
+        batasan: 'Maks 3 paragraf',
+        reasoning: 'Karena ingin lulus ujian',
+      },
+    });
+    expect(result.success).toBe(true);
+  });
+
+  it('should accept promptComponents with a partial subset of fields', () => {
+    const result = AskQuestionSchema.safeParse({
+      ...validData,
+      promptComponents: { tujuan: 'Memahami X' },
+    });
+    expect(result.success).toBe(true);
+  });
+
+  it('should reject promptComponents containing unknown fields (Bug #13 — strict)', () => {
+    const result = AskQuestionSchema.safeParse({
+      ...validData,
+      promptComponents: { tujuan: 'X', evilField: 'should not pass' },
+    });
     expect(result.success).toBe(false);
   });
 });
@@ -424,33 +496,31 @@ describe('FeedbackSchema', () => {
     expect(result.success).toBe(true);
   });
 
-  it('should accept valid data with feedback field', () => {
+  it('should reject the legacy `feedback` field (Bug #12 — comment is canonical)', () => {
     const result = FeedbackSchema.safeParse({
       ...baseData,
       feedback: 'Helpful material',
     });
-    expect(result.success).toBe(true);
+    expect(result.success).toBe(false);
   });
 
-  it('should reject when neither comment nor feedback is provided', () => {
+  it('should reject when comment is missing', () => {
     const result = FeedbackSchema.safeParse(baseData);
     expect(result.success).toBe(false);
   });
 
-  it('should reject when both comment and feedback are empty strings', () => {
+  it('should reject when comment is an empty string', () => {
     const result = FeedbackSchema.safeParse({
       ...baseData,
       comment: '',
-      feedback: '',
     });
     expect(result.success).toBe(false);
   });
 
-  it('should reject when both comment and feedback are whitespace only', () => {
+  it('should reject when comment is whitespace only', () => {
     const result = FeedbackSchema.safeParse({
       ...baseData,
       comment: '   ',
-      feedback: '   ',
     });
     expect(result.success).toBe(false);
   });
@@ -469,6 +539,27 @@ describe('FeedbackSchema', () => {
       ...baseData,
       comment: 'Good',
       rating: 6,
+    });
+    expect(result.success).toBe(false);
+  });
+
+  it('should accept the full set of 5 user-input fields', () => {
+    const result = FeedbackSchema.safeParse({
+      ...baseData,
+      comment: 'Excellent material',
+      rating: 5,
+      subtopicId: 'subtopic-uuid',
+      moduleIndex: 0,
+      subtopicIndex: 1,
+    });
+    expect(result.success).toBe(true);
+  });
+
+  it('should reject unknown fields (strict mode)', () => {
+    const result = FeedbackSchema.safeParse({
+      ...baseData,
+      comment: 'Good',
+      unexpectedField: 'should not pass',
     });
     expect(result.success).toBe(false);
   });

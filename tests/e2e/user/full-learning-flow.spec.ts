@@ -416,7 +416,7 @@ test.describe('Full Learning Flow → Admin Verification', () => {
         moduleIndex: 0,
         subtopicIndex: 0,
         rating: 5,
-        feedback: 'Materi yang sangat bagus dan komprehensif. Penjelasan tentang algoritma sangat mudah dipahami.',
+        comment: 'Materi yang sangat bagus dan komprehensif. Penjelasan tentang algoritma sangat mudah dipahami.',
       });
 
       expect(res.ok).toBeTruthy();
