@@ -138,7 +138,14 @@ function buildQuizInserts(
   courseId: string,
   resolvedSubtopicId: string,
   subtopicLabel: string,
+  createdAt: string,
 ): Array<Record<string, unknown>> {
+  // NOTE: `createdAt` MUST be the caller's `syncMarkedAt` — the cleanup
+  // step below deletes rows with `created_at < syncMarkedAt`, so if this
+  // function captures a timestamp of its own (earlier than syncMarkedAt)
+  // the newly inserted rows would match the cleanup filter and get
+  // deleted immediately after insert. That was the original self-destroy
+  // bug that left the `quiz` table empty on every first-time sync.
   return quizItems
     .map((q, index) => {
       if (!q || typeof q !== 'object') return null;
@@ -175,7 +182,7 @@ function buildQuizInserts(
         options: optionsArray,
         correct_answer: correctAnswer,
         explanation: correctAnswer ? `The correct answer is: ${correctAnswer}` : null,
-        created_at: new Date().toISOString(),
+        created_at: createdAt,
       };
     })
     .filter((item): item is NonNullable<typeof item> => item !== null);
@@ -223,7 +230,20 @@ export async function syncQuizQuestions(params: SyncQuizParams): Promise<SyncQui
     return null;
   }
 
-  const quizInserts = buildQuizInserts(quizItems, courseId, resolvedSubtopicId, subtopicLabel);
+  // Capture the sync boundary BEFORE building the insert payload so the
+  // new rows' created_at can be stamped with the exact same value. The
+  // cleanup step below deletes rows with `created_at < syncMarkedAt`; if
+  // the new rows had an earlier timestamp they would get nuked by their
+  // own cleanup pass on every first-time sync (the "self-destroy" bug).
+  const syncMarkedAt = new Date().toISOString();
+
+  const quizInserts = buildQuizInserts(
+    quizItems,
+    courseId,
+    resolvedSubtopicId,
+    subtopicLabel,
+    syncMarkedAt,
+  );
   if (quizInserts.length === 0) {
     console.error('[quiz-sync] Sync skipped — sanitized quiz data is empty', {
       quizItemsCount: Array.isArray(quizItems) ? quizItems.length : 'not-array',
@@ -268,7 +288,6 @@ export async function syncQuizQuestions(params: SyncQuizParams): Promise<SyncQui
     hasExistingSubmissions = true;
   }
 
-  const syncMarkedAt = new Date().toISOString();
   const { error: insertError } = await adminDb.from('quiz').insert(quizInserts);
 
   if (insertError) {
@@ -348,7 +367,13 @@ export async function appendNewQuizQuestions(
     return null;
   }
 
-  const quizInserts = buildQuizInserts(quizItems, courseId, resolvedSubtopicId, subtopicLabel);
+  const quizInserts = buildQuizInserts(
+    quizItems,
+    courseId,
+    resolvedSubtopicId,
+    subtopicLabel,
+    new Date().toISOString(),
+  );
   if (quizInserts.length === 0) {
     return { resolvedSubtopicId, subtopicLabel, insertedCount: 0, skippedDelete: true };
   }
