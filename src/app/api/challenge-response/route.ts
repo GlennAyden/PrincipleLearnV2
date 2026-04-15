@@ -2,6 +2,8 @@ import { NextRequest, NextResponse, after } from 'next/server';
 import { adminDb, DatabaseError } from '@/lib/database';
 import { verifyToken } from '@/lib/jwt';
 import { withApiLogging } from '@/lib/api-logger';
+import { withProtection } from '@/lib/api-middleware';
+import { ChallengeResponseSchema, parseBody } from '@/lib/schemas';
 
 function normalizeIndex(value: unknown) {
   if (typeof value === 'number' && Number.isFinite(value)) return Math.floor(value);
@@ -12,29 +14,32 @@ function normalizeIndex(value: unknown) {
   return 0;
 }
 
-function normalizeText(value: unknown) {
-  return typeof value === 'string' ? value.trim() : '';
-}
-
 async function postHandler(req: NextRequest) {
   try {
-    const body = await req.json();
-    const { userId, courseId, moduleIndex, subtopicIndex, pageNumber, question, answer, feedback, reasoningNote } = body;
-
-    const normalizedQuestion = normalizeText(question);
-    const normalizedAnswer = normalizeText(answer);
-    const normalizedFeedback = normalizeText(feedback);
-    const normalizedReasoning = normalizeText(reasoningNote);
-
-    if (!userId || !courseId || !normalizedQuestion || !normalizedAnswer) {
-      return NextResponse.json(
-        { error: 'Field wajib tidak lengkap: userId, courseId, question, answer' },
-        { status: 400 }
-      );
-    }
+    // Zod validation ensures every required field is present and trimmed
+    // BEFORE we touch the DB — replaces the previous hand-rolled parser
+    // that silently accepted malformed payloads.
+    const parsed = parseBody(ChallengeResponseSchema, await req.json());
+    if (!parsed.success) return parsed.response;
+    const {
+      userId,
+      courseId,
+      moduleIndex,
+      subtopicIndex,
+      pageNumber,
+      question: normalizedQuestion,
+      answer: normalizedAnswer,
+      feedback: normalizedFeedback,
+      reasoningNote: normalizedReasoning,
+    } = parsed.data;
 
     const accessToken = req.cookies.get('access_token')?.value;
-    const tokenPayload = accessToken ? verifyToken(accessToken) : null;
+    let tokenPayload: ReturnType<typeof verifyToken> | null = null;
+    try {
+      tokenPayload = accessToken ? verifyToken(accessToken) : null;
+    } catch (tokenErr) {
+      console.warn('[ChallengeResponse] Token verification threw', tokenErr);
+    }
 
     if (!tokenPayload) {
       return NextResponse.json({ error: 'Tidak terautentikasi' }, { status: 401 });
@@ -101,6 +106,20 @@ async function postHandler(req: NextRequest) {
           });
         } catch (scoreError) {
           console.warn('[ChallengeResponse] Cognitive scoring failed:', scoreError);
+          try {
+            await adminDb.from('api_logs').insert({
+              path: '/api/challenge-response',
+              label: 'cognitive-scoring-failed',
+              method: 'POST',
+              status_code: 500,
+              user_id: userId,
+              error_message: `challenge_response cognitive scoring failed: ${scoreError instanceof Error ? scoreError.message : String(scoreError)}`,
+              metadata: { challenge_id: challengeId, course_id: courseId },
+              created_at: new Date().toISOString(),
+            });
+          } catch (logError) {
+            console.error('[ChallengeResponse] Failed to log scoring error to api_logs:', logError);
+          }
         }
       });
 
@@ -130,7 +149,7 @@ async function postHandler(req: NextRequest) {
   }
 }
 
-export const POST = withApiLogging(postHandler, {
+export const POST = withApiLogging(withProtection(postHandler), {
   label: 'challenge-response',
 });
 

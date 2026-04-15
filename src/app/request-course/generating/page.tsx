@@ -46,6 +46,13 @@ export default function GeneratingPage() {
   const [errorMsg, setErrorMsg] = useState('');
   const hasStarted = useRef(false);
 
+  // Idempotency guard. sessionStorage survives hard reloads (F5) but is
+  // cleared when the tab closes, so we use it to detect a duplicate run
+  // triggered by the user refreshing mid-generation. The timestamp lets
+  // us expire stale flags if a previous attempt crashed without cleanup.
+  const GENERATION_FLAG_KEY = 'course_generation_in_flight';
+  const GENERATION_FLAG_TTL_MS = 3 * 60 * 1000;
+
   // AbortController for cancelling long-running requests
   const abortControllerRef = useRef<AbortController | null>(null);
 
@@ -90,7 +97,35 @@ export default function GeneratingPage() {
       return;
     }
 
+    // Detect duplicate invocations caused by a hard reload during an
+    // in-flight generation. If a fresh flag exists in sessionStorage, we
+    // refuse to fire a second OpenAI call — the previous request is still
+    // running (or was abandoned). The user can hit retry to start over.
+    try {
+      const raw = sessionStorage.getItem(GENERATION_FLAG_KEY);
+      if (raw) {
+        const { startedAt } = JSON.parse(raw) as { startedAt: number };
+        if (Number.isFinite(startedAt) && Date.now() - startedAt < GENERATION_FLAG_TTL_MS) {
+          setStage('error');
+          setErrorMsg('Pembuatan kursus sudah berjalan di tab ini. Tunggu hingga selesai atau kembali ke step sebelumnya untuk mulai ulang.');
+          return;
+        }
+        // Stale flag — clear and proceed
+        sessionStorage.removeItem(GENERATION_FLAG_KEY);
+      }
+    } catch {
+      // Ignore sessionStorage errors (private mode, etc.)
+    }
+
     hasStarted.current = true;
+    try {
+      sessionStorage.setItem(
+        GENERATION_FLAG_KEY,
+        JSON.stringify({ startedAt: Date.now() }),
+      );
+    } catch {
+      // Non-fatal — idempotency guard is best-effort
+    }
     generateCourse();
   }, [authLoading, isAuthenticated, user]);
 
@@ -130,16 +165,15 @@ export default function GeneratingPage() {
       setPercent(STAGES['ai-generating'].basePercent);
       startAiProgress();
 
+      // Identity is derived server-side from the JWT cookie; never send
+      // userId/userEmail in the body (would be an IDOR vector) and the
+      // backend schema is .strict() so unknown keys would also 400.
       const res = await apiFetch('/api/generate-course', {
         method: 'POST',
         headers: {
           'Accept': 'application/json',
         },
-        body: JSON.stringify({
-          ...answers,
-          userId: user!.id,
-          userEmail: user!.email,
-        }),
+        body: JSON.stringify(answers),
         signal: abortController.signal,
       });
 
@@ -177,9 +211,12 @@ export default function GeneratingPage() {
       setStage('complete');
       setPercent(100);
 
+      try { sessionStorage.removeItem(GENERATION_FLAG_KEY); } catch { /* ignore */ }
+
       setTimeout(() => router.push(data.courseId ? `/course/${data.courseId}` : '/dashboard'), 1500);
     } catch (err: unknown) {
       stopAiProgress();
+      try { sessionStorage.removeItem(GENERATION_FLAG_KEY); } catch { /* ignore */ }
       if (err instanceof Error && err.name === 'AbortError') {
         setStage('error');
         setErrorMsg('Pembuatan kursus dibatalkan.');
@@ -191,6 +228,7 @@ export default function GeneratingPage() {
   };
 
   const handleRetry = () => {
+    try { sessionStorage.removeItem(GENERATION_FLAG_KEY); } catch { /* ignore */ }
     router.push('/request-course/step3');
   };
 

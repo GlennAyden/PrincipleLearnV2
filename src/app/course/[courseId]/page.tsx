@@ -307,30 +307,49 @@ export default function CourseOverviewPage() {
             return;
           }
           
-          // Transform subtopics to outline format
+          // Transform subtopics to outline format. We validate each
+          // module's JSON shape here — previously a malformed row silently
+          // degraded into an empty-children module, which surfaced as a
+          // blank course page with no hint that the data was corrupted.
           console.log(`[Course Page] DEBUG: Transforming ${result.course.subtopics.length} subtopics`);
+
+          const parseFailures: number[] = [];
           const outline: ModuleOutline[] = result.course.subtopics.map((subtopic: { id?: string; title?: string; content: string }, index: number) => {
-            console.log(`[Course Page] DEBUG: Processing subtopic ${index}:`, subtopic);
-            
-            let content;
+            let content: { module?: string; subtopics?: unknown[] } | null = null;
             try {
-              content = JSON.parse(subtopic.content);
-              console.log(`[Course Page] DEBUG: Parsed content for subtopic ${index}:`, content);
+              const parsed = JSON.parse(subtopic.content);
+              if (parsed && typeof parsed === 'object' && Array.isArray(parsed.subtopics)) {
+                content = parsed;
+              } else {
+                throw new Error('Parsed content missing subtopics array');
+              }
             } catch (parseError) {
               console.error(`[Course Page] ERROR: Failed to parse subtopic ${index} content:`, parseError);
+              parseFailures.push(index);
               content = { module: subtopic.title, subtopics: [] };
             }
-            
+
             const moduleData: ModuleOutline = {
               id: String(subtopic.id ?? `module-${index}`),
               rawTitle: subtopic.title ?? undefined,
-              module: content.module || subtopic.title || `Module ${index + 1}`,
-              subtopics: content.subtopics || []
+              module: content?.module || subtopic.title || `Module ${index + 1}`,
+              subtopics: (content?.subtopics as ModuleOutline['subtopics']) || []
             };
-            
-            console.log(`[Course Page] DEBUG: Module data ${index}:`, moduleData);
+
             return moduleData;
           });
+
+          // If every module failed to parse, treat the course as unusable
+          // and bail out with a diagnostic error instead of rendering an
+          // empty shell that confuses the user.
+          if (parseFailures.length === result.course.subtopics.length) {
+            console.error('[Course Page] All module outlines failed to parse', { parseFailures });
+            setError('Data kursus rusak. Silakan hubungi admin atau coba membuat kursus baru.');
+            return;
+          }
+          if (parseFailures.length > 0) {
+            console.warn(`[Course Page] ${parseFailures.length} of ${result.course.subtopics.length} modules failed to parse — showing partial outline`, { parseFailures });
+          }
           
           console.log(`[Course Page] DEBUG: Final outline:`, outline);
           

@@ -3,6 +3,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { verifyToken } from '@/lib/jwt';
 import { adminDb, publicDb } from '@/lib/database';
 import { withApiLogging } from '@/lib/api-logger';
+import { buildSubtopicCacheKey } from '@/lib/quiz-sync';
 import { resolveDiscussionSubtopicId } from '@/lib/discussion/resolveSubtopic';
 import {
   ThinkingSkillMeta,
@@ -430,7 +431,7 @@ async function tryRegenerateTemplate({
       return Boolean(result);
     }
 
-    const cacheKey = `${courseId}-${moduleName}-${focusTitle}`;
+    const cacheKey = buildSubtopicCacheKey(courseId, moduleName, focusTitle);
     const { data: cacheRow, error: cacheError } = await publicDb
       .from('subtopic_cache')
       .select('content')
@@ -718,7 +719,7 @@ async function assembleModuleDiscussionContextFromDb({
       continue;
     }
 
-    const cacheKey = `${courseId}-${moduleTitle}-${candidateTitle}`;
+    const cacheKey = buildSubtopicCacheKey(courseId, moduleTitle, candidateTitle);
     const { data: cacheRow, error: cacheError } = await publicDb
       .from('subtopic_cache')
       .select('content')

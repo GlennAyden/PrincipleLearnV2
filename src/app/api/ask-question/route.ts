@@ -3,6 +3,7 @@ import { NextResponse, NextRequest } from 'next/server';
 import { adminDb } from '@/lib/database';
 import { verifyToken } from '@/lib/jwt';
 import { withApiLogging } from '@/lib/api-logger';
+import { withProtection } from '@/lib/api-middleware';
 import { aiRateLimiter } from '@/lib/rate-limit';
 import { AskQuestionSchema, parseBody } from '@/lib/schemas';
 import { chatCompletionStream, openAIStreamToReadable, STREAM_HEADERS, sanitizePromptInput } from '@/services/ai.service';
@@ -215,7 +216,30 @@ Please answer in the same language as the question above. Base your answer stric
           .insert(transcriptData);
 
         if (insertError) {
+          // The stream's onComplete runs AFTER we've already returned the
+          // response, so we can't surface the failure as an HTTP error.
+          // Instead we explicitly record a row in api_logs with a
+          // dedicated label so the silent failure is visible in the
+          // admin dashboard and can be reconciled for research purposes.
           console.error('Failed to save QnA transcript:', insertError);
+          try {
+            await adminDb.from('api_logs').insert({
+              path: '/api/ask-question',
+              label: 'ask-question-history-save-failed',
+              method: 'POST',
+              status_code: 500,
+              user_id: userId,
+              error_message: `ask_question_history insert failed: ${(insertError as { message?: string })?.message || 'unknown'}`,
+              metadata: {
+                course_id: courseId,
+                module_index: transcriptData.module_index,
+                subtopic_index: transcriptData.subtopic_index,
+              },
+              created_at: new Date().toISOString(),
+            });
+          } catch (logError) {
+            console.error('[AskQuestion] Failed to also log to api_logs:', logError);
+          }
         } else {
           console.log('QnA transcript saved:', {
             user: userId,
@@ -250,20 +274,36 @@ Please answer in the same language as the question above. Base your answer stric
               });
             } catch (scoreError) {
               console.warn('[AskQuestion] Cognitive scoring failed (non-blocking):', scoreError);
+              // Also record this in api_logs so the admin dashboard can
+              // surface the silent scoring drop for thesis reconciliation.
+              try {
+                await adminDb.from('api_logs').insert({
+                  path: '/api/ask-question',
+                  label: 'cognitive-scoring-failed',
+                  method: 'POST',
+                  status_code: 500,
+                  user_id: userId,
+                  error_message: `ask_question cognitive scoring failed: ${scoreError instanceof Error ? scoreError.message : String(scoreError)}`,
+                  metadata: { source_id: sourceId, course_id: courseId },
+                  created_at: new Date().toISOString(),
+                });
+              } catch (logError) {
+                console.error('[AskQuestion] Failed to log scoring error to api_logs:', logError);
+              }
             }
           })();
         }
       },
     });
 
-    return new Response(readable, { headers: STREAM_HEADERS });
+    return new NextResponse(readable, { headers: STREAM_HEADERS });
   } catch (error: unknown) {
     console.error('Error generating answer:', error);
     return NextResponse.json({ error: error instanceof Error ? error.message : 'Unknown error' }, { status: 500 });
   }
 }
 
-export const POST = withApiLogging(postHandler, {
+export const POST = withApiLogging(withProtection(postHandler), {
   label: 'ask-question',
 });
 

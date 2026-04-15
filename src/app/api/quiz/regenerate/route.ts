@@ -10,7 +10,7 @@ import { adminDb } from '@/lib/database';
 import { withApiLogging } from '@/lib/api-logger';
 import { aiRateLimiter } from '@/lib/rate-limit';
 import { chatCompletion } from '@/services/ai.service';
-import { appendNewQuizQuestions } from '@/lib/quiz-sync';
+import { appendNewQuizQuestions, buildSubtopicCacheKey } from '@/lib/quiz-sync';
 import { parseBody } from '@/lib/schemas';
 import { verifyToken } from '@/lib/jwt';
 import { assertCourseOwnership, toOwnershipError } from '@/lib/ownership';
@@ -70,7 +70,9 @@ async function postHandler(req: NextRequest) {
   }
 
   // Pull cached subtopic content to use as context for the new questions.
-  const cacheKey = `${courseId}-${moduleTitle}-${subtopicTitle}`;
+  // Must use the canonical (normalized) cache key so generate-subtopic's
+  // writer and this reader land on the same row.
+  const cacheKey = buildSubtopicCacheKey(courseId, moduleTitle, subtopicTitle);
   const { data: cached } = await adminDb
     .from('subtopic_cache')
     .select('content')

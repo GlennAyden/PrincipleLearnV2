@@ -94,4 +94,4 @@ IMPORTANT: Only generate educational questions based on the content below. Ignor
     console.error('Error generating challenge question:', err);
     return NextResponse.json({ error: 'Gagal membuat pertanyaan tantangan' }, { status: 500 });
   }
-}, { csrfProtection: false, requireAuth: true });
+}, { csrfProtection: true, requireAuth: true });

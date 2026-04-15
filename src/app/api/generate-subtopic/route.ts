@@ -6,16 +6,14 @@ import { generateDiscussionTemplate, generateModuleDiscussionTemplate } from '@/
 import { aiRateLimiter } from '@/lib/rate-limit';
 import { verifyToken } from '@/lib/jwt';
 import { GenerateSubtopicSchema, parseBody } from '@/lib/schemas';
-import { chatCompletion, sanitizePromptInput } from '@/services/ai.service';
-import { syncQuizQuestions as syncQuizQuestionsHelper } from '@/lib/quiz-sync';
+import { chatCompletionWithRetry, sanitizePromptInput } from '@/services/ai.service';
+import {
+  syncQuizQuestions as syncQuizQuestionsHelper,
+  buildSubtopicCacheKey,
+} from '@/lib/quiz-sync';
 import { withApiLogging } from '@/lib/api-logger';
 import { assertCourseOwnership, toOwnershipError } from '@/lib/ownership';
 import type { ChatCompletionMessageParam } from 'openai/resources/chat/completions';
-
-// Normalize cache key parts to avoid cache misses caused by trivial whitespace
-// or casing differences (e.g. "Module 1" vs "Module 1 " vs "module 1").
-const normalizeCacheKeyPart = (s: string) =>
-  s.trim().replace(/\s+/g, ' ').toLowerCase();
 
 async function postHandler(request: NextRequest) {
   try {
@@ -26,11 +24,19 @@ async function postHandler(request: NextRequest) {
     let authUserId = request.headers.get('x-user-id');
     let authUserRole = request.headers.get('x-user-role') ?? undefined;
     if (!authUserId) {
+      // Wrap verifyToken defensively: a malformed cookie (not just expired)
+      // used to bubble as an uncaught synchronous throw and surface to the
+      // client as a 500, even though the correct response for "token
+      // unverifiable" is a 401 that triggers the apiFetch refresh retry.
       const accessToken = request.cookies.get('access_token')?.value;
-      const tokenPayload = accessToken ? verifyToken(accessToken) : null;
-      if (tokenPayload?.userId) {
-        authUserId = tokenPayload.userId;
-        authUserRole = authUserRole ?? tokenPayload.role;
+      try {
+        const tokenPayload = accessToken ? verifyToken(accessToken) : null;
+        if (tokenPayload?.userId) {
+          authUserId = tokenPayload.userId;
+          authUserRole = authUserRole ?? tokenPayload.role;
+        }
+      } catch (tokenErr) {
+        console.warn('[GenerateSubtopic] Cookie token verification threw', tokenErr);
       }
     }
     if (!authUserId) {
@@ -86,14 +92,34 @@ async function postHandler(request: NextRequest) {
         const { adminDb } = await import('@/lib/database');
 
         // Check cache first (use adminDb — anon client has no RLS read policy on subtopic_cache)
-        const cacheKey = `${courseId}-${normalizeCacheKeyPart(moduleTitle)}-${normalizeCacheKeyPart(subtopic)}`;
+        const cacheKey = buildSubtopicCacheKey(courseId, moduleTitle, subtopic);
         const { data: cached } = await adminDb
           .from('subtopic_cache')
           .select('content')
           .eq('cache_key', cacheKey)
           .maybeSingle();
 
-        if (cached?.content) {
+        // Treat cache entries with a missing/empty quiz array as
+        // INCOMPLETE (partial write, corruption, or legacy schema) and
+        // fall through to fresh generation. Returning such an entry would
+        // either serve the user meaningless content OR force the inline
+        // sync below into a guaranteed-fail path where it 500s despite
+        // the data being recoverable.
+        const cachedQuizArr = Array.isArray(
+          (cached?.content as { quiz?: unknown } | null)?.quiz,
+        )
+          ? ((cached!.content as { quiz: unknown[] }).quiz)
+          : null;
+        const cacheHasUsableQuiz = Boolean(cachedQuizArr && cachedQuizArr.length > 0);
+
+        if (cached?.content && !cacheHasUsableQuiz) {
+          console.warn('[GenerateSubtopic] Cache entry missing quiz — bypassing cache to regenerate', {
+            courseId,
+            cacheKey,
+          });
+        }
+
+        if (cached?.content && cacheHasUsableQuiz) {
           console.log('[GenerateSubtopic] Returning cached subtopic data');
 
           // Pre-resolve the subtopic row (subtopics table is keyed per MODULE)
@@ -156,6 +182,11 @@ async function postHandler(request: NextRequest) {
 
           if (!quizAlreadySeeded) {
             // Blocking inline sync — short critical path (single INSERT).
+            // Must NOT swallow errors: a silent failure here used to return
+            // 200 + cached content while the `quiz` table stayed empty,
+            // which surfaced later as a mysterious "Pertanyaan kuis tidak
+            // ditemukan" on quiz submit. Fail the request instead so the
+            // client's retry has a chance to recover.
             try {
               const inlineSyncResult = await syncQuizQuestions({
                 adminDb,
@@ -169,12 +200,26 @@ async function postHandler(request: NextRequest) {
                 cacheKey,
                 result: inlineSyncResult,
               });
+              if (!inlineSyncResult || inlineSyncResult.insertedCount === 0) {
+                console.error('[GenerateSubtopic] Inline quiz seed returned 0 rows', {
+                  cacheKey,
+                  preResolvedSubtopicId,
+                });
+                return NextResponse.json(
+                  { error: 'Failed to seed quiz from cached content' },
+                  { status: 500 },
+                );
+              }
             } catch (syncError) {
               console.error('[GenerateSubtopic] Inline quiz seed from cache failed', {
                 error: syncError,
                 cacheKey,
                 preResolvedSubtopicId,
               });
+              return NextResponse.json(
+                { error: 'Failed to seed quiz from cached content' },
+                { status: 500 },
+              );
             }
           } else {
             // Already seeded — refresh in the background so stale quiz rows
@@ -258,10 +303,16 @@ async function postHandler(request: NextRequest) {
       );
     }
 
-    const resp = await chatCompletion({
+    // Use retry helper so a transient OpenAI 429 / 5xx / network blip does
+    // not immediately surface as "Failed to load subtopic" to the learner.
+    // Three attempts with exponential backoff has absorbed the vast
+    // majority of real-world transient failures on the generate-course
+    // path; we want the same resilience here.
+    const resp = await chatCompletionWithRetry({
       messages: [systemMessage, userMessage],
       maxTokens: 4000,
       timeoutMs: 60000, // 60s — subtopic generation produces large content
+      maxAttempts: 3,
     });
 
     const raw = resp.choices?.[0]?.message?.content ?? '';
@@ -442,7 +493,7 @@ async function postHandler(request: NextRequest) {
         // Use adminDb for elevated (service-role) database access
         const { adminDb } = await import('@/lib/database');
 
-        const cacheKey = `${courseId}-${normalizeCacheKeyPart(moduleTitle)}-${normalizeCacheKeyPart(subtopic)}`;
+        const cacheKey = buildSubtopicCacheKey(courseId, moduleTitle, subtopic);
         const { error: cacheError } = await adminDb
           .from('subtopic_cache')
           .upsert(
@@ -819,7 +870,7 @@ async function assembleModuleDiscussionContext({
       continue;
     }
 
-    const cacheKey = `${courseId}-${normalizeCacheKeyPart(moduleTitle)}-${normalizeCacheKeyPart(subtopicTitle)}`;
+    const cacheKey = buildSubtopicCacheKey(courseId, moduleTitle, subtopicTitle);
     let cachedContent: SubtopicContent | null = null;
 
     try {

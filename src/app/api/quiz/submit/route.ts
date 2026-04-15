@@ -3,10 +3,11 @@ import type { NextRequest } from 'next/server';
 import { randomUUID } from 'crypto';
 import { DatabaseService, DatabaseError, adminDb } from '@/lib/database';
 import { withApiLogging } from '@/lib/api-logger';
+import { withProtection } from '@/lib/api-middleware';
 import { verifyToken } from '@/lib/jwt';
 import { QuizSubmitSchema, parseBody } from '@/lib/schemas';
 import { resolveUserByIdentifier } from '@/services/auth.service';
-import { syncQuizQuestions } from '@/lib/quiz-sync';
+import { syncQuizQuestions, buildSubtopicCacheKey } from '@/lib/quiz-sync';
 
 function normalizeText(value: unknown) {
   return typeof value === 'string' ? value.trim() : '';
@@ -103,7 +104,15 @@ async function postHandler(req: NextRequest) {
     async function lazySeedQuizFromCache(): Promise<number> {
       if (!trimmedModuleTitle || !trimmedSubtopicLabel) return 0;
       try {
-        const cacheKey = `${data.courseId}-${trimmedModuleTitle}-${trimmedSubtopicLabel}`;
+        // MUST use the same normalization as generate-subtopic's writer,
+        // otherwise every casing/whitespace drift silently misses the cache
+        // and leaves the `quiz` table empty — which surfaces to the user as
+        // a 404 on submit even though the content actually exists.
+        const cacheKey = buildSubtopicCacheKey(
+          data.courseId,
+          trimmedModuleTitle,
+          trimmedSubtopicLabel,
+        );
         const { data: cacheRow } = await adminDb
           .from('subtopic_cache')
           .select('content')
@@ -133,12 +142,16 @@ async function postHandler(req: NextRequest) {
     }
 
     async function loadQuizQuestions(): Promise<Array<Record<string, unknown>>> {
-      // Strategy 1: subtopic_id + subtopic_label (most specific). Wrapped
-      // in try/catch so environments that haven't applied the subtopic_label
-      // migration yet still work via Strategy 2.
+      // Strategy 1: subtopic_id + subtopic_label. Authoritative when both
+      // are set — must NOT fall through to Strategy 2 on an empty result,
+      // because Strategy 2 returns sibling-subtopic rows sharing the same
+      // subtopic_id, which would cause spurious match failures against the
+      // client's answers. An empty result flows to the caller's lazy-seed
+      // recovery instead. The try/catch only exists so legacy schemas
+      // without the subtopic_label column can still fall through.
       if (subtopicId && trimmedSubtopicLabel) {
         try {
-          const scoped = await DatabaseService.getRecords<Record<string, unknown>>('quiz', {
+          return await DatabaseService.getRecords<Record<string, unknown>>('quiz', {
             filter: {
               course_id: data.courseId,
               subtopic_id: subtopicId,
@@ -146,13 +159,13 @@ async function postHandler(req: NextRequest) {
             },
             orderBy: { column: 'created_at', ascending: true },
           });
-          if (scoped.length > 0) return scoped;
         } catch (scopedError) {
           console.warn('[QuizSubmit] subtopic_label filter failed (missing column?), falling back', scopedError);
         }
       }
 
-      // Strategy 2: subtopic_id only (covers legacy rows with NULL label).
+      // Strategy 2: subtopic_id only (legacy rows with NULL label, or
+      // schema without subtopic_label column).
       if (subtopicId) {
         const byModule = await DatabaseService.getRecords<Record<string, unknown>>('quiz', {
           filter: { course_id: data.courseId, subtopic_id: subtopicId },
@@ -393,9 +406,16 @@ async function postHandler(req: NextRequest) {
     }));
 
     if (matchedRows.length === 0) {
+      // Every answer failed all 5 matching strategies. The most likely
+      // cause is that the quiz was regenerated (reshuffle) between the
+      // time the client rendered the form and the time the user hit
+      // submit, so the client-cached question text no longer exists in
+      // the DB. Tell the user explicitly so they know a hard refresh /
+      // reshuffle is the recovery path rather than re-trying blindly.
       return NextResponse.json(
         {
-          error: 'Tidak ada jawaban yang dapat dicocokkan dengan pertanyaan kuis',
+          error: 'Pertanyaan kuis sudah diperbarui — jawaban tidak dapat dicocokkan dengan database. Silakan muat ulang halaman (atau tekan tombol "Kuis Baru") untuk mengerjakan versi terbaru.',
+          code: 'QUIZ_QUESTIONS_DRIFTED',
           matchingResults,
           warnings,
           details: {
@@ -492,6 +512,20 @@ async function postHandler(req: NextRequest) {
         });
       } catch (scoreError) {
         console.warn('[QuizSubmit] Cognitive scoring failed:', scoreError);
+        try {
+          await adminDb.from('api_logs').insert({
+            path: '/api/quiz/submit',
+            label: 'cognitive-scoring-failed',
+            method: 'POST',
+            status_code: 500,
+            user_id: user.id,
+            error_message: `quiz_submit cognitive scoring failed: ${scoreError instanceof Error ? scoreError.message : String(scoreError)}`,
+            metadata: { quiz_attempt_id: quizAttemptId, course_id: data.courseId },
+            created_at: new Date().toISOString(),
+          });
+        } catch (logError) {
+          console.error('[QuizSubmit] Failed to log scoring error to api_logs:', logError);
+        }
       }
     });
 
@@ -524,7 +558,7 @@ async function postHandler(req: NextRequest) {
   }
 }
 
-export const POST = withApiLogging(postHandler, {
+export const POST = withApiLogging(withProtection(postHandler), {
   label: 'quiz-submit',
 });
 
@@ -627,7 +661,9 @@ async function markSubtopicQuizCompletion({
     return;
   }
 
-  const cacheKey = `${courseId}-${moduleTitle}-${subtopicTitle}`;
+  // Normalize the key so completion tracking hits the same row that
+  // generate-subtopic wrote under its canonical (lowercase) cache key.
+  const cacheKey = buildSubtopicCacheKey(courseId, moduleTitle, subtopicTitle);
 
   try {
     const { data: cacheRow, error } = await adminDb

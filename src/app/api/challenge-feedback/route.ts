@@ -116,6 +116,6 @@ Please provide appropriate feedback for this answer, considering the user's leve
     console.error('Error generating challenge feedback:', err);
     return NextResponse.json({ error: 'Gagal membuat umpan balik tantangan' }, { status: 500 });
   }
-}, { csrfProtection: false, requireAuth: true }),
+}, { csrfProtection: true, requireAuth: true }),
   { label: 'challenge-feedback' }
 );

@@ -3,6 +3,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { verifyToken } from '@/lib/jwt';
 import { adminDb } from '@/lib/database';
 import { withApiLogging } from '@/lib/api-logger';
+import { buildSubtopicCacheKey } from '@/lib/quiz-sync';
 
 interface SubtopicNode {
   title?: string;
@@ -228,7 +229,7 @@ async function getHandler(request: NextRequest) {
     const submissionSet = new Set(submissionRows.map((row) => row.quiz_id));
 
     const statuses: SubtopicStatus[] = learningSubtopics.map((item) => {
-      const cacheKey = `${courseId}-${moduleTitle}-${item.title}`;
+      const cacheKey = buildSubtopicCacheKey(courseId, moduleTitle, item.title);
       const cacheContent = cacheMap.get(cacheKey);
       const normalizedTitle = normalizeString(item.title);
       const generated = Boolean(cacheContent) || templateMap.has(normalizedTitle);

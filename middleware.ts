@@ -55,19 +55,18 @@ export function middleware(req: NextRequest) {
   
   // Verify the token
   const payload = verifyToken(activeToken)
-  
+
   // If token is invalid or expired, check for refresh token
   if (!payload) {
     // Check if there's a refresh token
     const refreshToken = req.cookies.get('refresh_token')?.value
-    
-    if (refreshToken) {
-      // Redirect to token refresh endpoint
-      return NextResponse.redirect(new URL('/api/auth/refresh', req.url))
-    }
-    
-    // No refresh token, clear the invalid tokens
-    // For API routes, return JSON 401
+
+    // For API routes we must NEVER redirect — the browser auto-follows 302
+    // as a GET, which silently drops POST bodies (quiz submit, generate
+    // subtopic, etc.) and converts the request into a method it wasn't
+    // meant to be. Return 401 JSON instead and let the client-side
+    // `apiFetch` wrapper call /api/auth/refresh + retry with the original
+    // method and body intact.
     if (pathname.startsWith('/api/')) {
       const response = NextResponse.json(
         { error: 'Token tidak valid atau sudah kedaluwarsa' },
@@ -75,6 +74,13 @@ export function middleware(req: NextRequest) {
       )
       response.cookies.delete('access_token')
       return response
+    }
+
+    if (refreshToken) {
+      // Page navigation with an expired access but valid refresh token —
+      // safe to bounce through /api/auth/refresh because the user hasn't
+      // submitted a form body here.
+      return NextResponse.redirect(new URL('/api/auth/refresh', req.url))
     }
 
     // For page routes, redirect to login

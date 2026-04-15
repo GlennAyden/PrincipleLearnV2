@@ -4,6 +4,7 @@ import React, { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 import styles from './page.module.scss';
 import { useAuth } from '@/hooks/useAuth';
+import { apiFetch } from '@/lib/api-client';
 
 const STEPS = ['Identitas', 'Gaya Belajar', 'Tujuan'];
 
@@ -91,9 +92,8 @@ export default function OnboardingPage() {
       // payload (see src/app/api/learning-profile/route.ts). Once that route
       // is updated to pull the user id from the JWT directly, the `userId`
       // field can be removed from this payload.
-      const res = await fetch('/api/learning-profile', {
+      const res = await apiFetch('/api/learning-profile', {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           userId: user.id,
           displayName: displayName.trim(),

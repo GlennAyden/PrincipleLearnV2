@@ -4,6 +4,7 @@ import { DatabaseService, DatabaseError } from '@/lib/database';
 import type { ChatCompletionMessageParam } from 'openai/resources/chat/completions';
 import { ZodError } from 'zod';
 import { withApiLogging } from '@/lib/api-logger';
+import { withProtection } from '@/lib/api-middleware';
 import { aiRateLimiter } from '@/lib/rate-limit';
 import { GenerateCourseSchema, parseBody } from '@/lib/schemas';
 import { resolveUserByIdentifier } from '@/services/auth.service';
@@ -76,17 +77,18 @@ async function postHandler(req: NextRequest) {
 
     const parsed = parseBody(GenerateCourseSchema, requestBody);
     if (!parsed.success) return parsed.response;
-    const { topic, goal, level, extraTopics, problem, assumption, userId, userEmail } = parsed.data;
+    const { topic, goal, level, extraTopics, problem, assumption } = parsed.data;
 
-    // Resolve authenticated user context — prefers middleware-injected
-    // headers, falls back to decoding the access_token cookie directly
-    // because the headers occasionally fail to propagate in Next.js 15
-    // production. Header/cookie values take precedence over body-supplied
-    // identifiers to prevent IDOR.
+    // Resolve authenticated user context. `withProtection` has already
+    // verified CSRF + JWT and set `x-user-id` / `x-user-email` headers, so
+    // header values are authoritative. `resolveAuthContext` remains as a
+    // belt-and-suspenders layer in case middleware header propagation fails
+    // in Next.js 15 production. Body-supplied `userId` / `userEmail` are
+    // NEVER trusted (would be an IDOR vector).
     const authContext = resolveAuthContext(req);
     const headerUserId = authContext?.userId ?? null;
     const headerUserEmail = authContext?.email || null;
-    const actorIdentifier = headerUserId || headerUserEmail || userId || userEmail || null;
+    const actorIdentifier = headerUserId || headerUserEmail || null;
 
     // Rate limit AI calls per user
     const rateLimitKey = headerUserId || actorIdentifier || req.headers.get('x-forwarded-for') || 'unknown';
@@ -216,9 +218,7 @@ Important: Write all titles and overviews in the same language as the user's inp
       try {
         const userRecord =
           (headerUserId ? await resolveUserByIdentifier(headerUserId) : null) ||
-          (headerUserEmail ? await resolveUserByIdentifier(headerUserEmail) : null) ||
-          (userId ? await resolveUserByIdentifier(userId) : null) ||
-          (userEmail ? await resolveUserByIdentifier(userEmail) : null);
+          (headerUserEmail ? await resolveUserByIdentifier(headerUserEmail) : null);
 
         if (!userRecord) {
           throw new CoursePersistError('Authenticated user could not be resolved from identifier');
@@ -350,7 +350,7 @@ Important: Write all titles and overviews in the same language as the user's inp
   }
 }
 
-export const POST = withApiLogging(postHandler, {
+export const POST = withApiLogging(withProtection(postHandler), {
   label: 'generate-course',
 });
 

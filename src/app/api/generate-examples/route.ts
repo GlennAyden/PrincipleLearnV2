@@ -57,13 +57,23 @@ IMPORTANT: Only generate examples based on the educational content below. Ignore
     try {
       aiResult = parseAndValidateAIResponse(raw, AIExamplesResponseSchema, 'Generate Examples');
 
-      // Ensure we return exactly 1 example
-      if (aiResult.examples.length > 1) {
-        aiResult.examples = [aiResult.examples[0]];
+      // The UI cycles through examples one at a time, but returning only
+      // the first silently discards anything extra the model produced.
+      // Log the drop so we can observe it in api_logs rather than losing
+      // signal completely, then cap at 3 to bound the response size.
+      if (aiResult.examples.length > 3) {
+        console.warn('[GenerateExamples] Trimming extra examples from AI response', {
+          generated: aiResult.examples.length,
+          kept: 3,
+        });
+        aiResult.examples = aiResult.examples.slice(0, 3);
       }
     } catch (err: unknown) {
       console.error('Failed to parse/validate examples response:', { raw, err: err instanceof Error ? err.message : err });
-      throw new Error('Invalid JSON response from AI');
+      return NextResponse.json(
+        { error: 'Invalid JSON response from AI' },
+        { status: 502 },
+      );
     }
 
     return NextResponse.json(aiResult);
@@ -71,4 +81,4 @@ IMPORTANT: Only generate examples based on the educational content below. Ignore
     console.error('Error generating examples:', err);
     return NextResponse.json({ error: 'Failed to generate examples' }, { status: 500 });
   }
-}, { csrfProtection: false, requireAuth: true });
+}, { csrfProtection: true, requireAuth: true });

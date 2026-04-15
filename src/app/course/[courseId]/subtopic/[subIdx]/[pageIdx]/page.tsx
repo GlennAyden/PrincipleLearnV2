@@ -155,6 +155,10 @@ export default function SubtopicPage() {
   );
   
   const [loadingChallenge, setLoadingChallenge] = useState<boolean>(false);
+  // Surface failures of the /api/challenge-response DB save so the learner
+  // knows their response was NOT persisted — previously this was silent
+  // (console.error only), which quietly dropped thesis research data.
+  const [challengeSaveError, setChallengeSaveError] = useState<string | null>(null);
   const [loadingExamples, setLoadingExamples] = useState(false);
 
   const [course, setCourse] = useState<CourseState | null>(null);
@@ -162,6 +166,10 @@ export default function SubtopicPage() {
   const [data, setData] = useState<SubtopicResponse | null>(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string>('');
+  // Bumping this triggers the subtopic loader effect to re-run. The user
+  // clicks "Coba lagi" in the error banner to retry without having to
+  // navigate away and back.
+  const [loadAttempt, setLoadAttempt] = useState(0);
 
   // Quiz: status + reshuffle
   interface QuizStatus {
@@ -298,6 +306,17 @@ export default function SubtopicPage() {
             courseId: courseId
           }),
         });
+        if (res.status === 401) {
+          // apiFetch already attempted a silent /api/auth/refresh + retry
+          // before we got here. Reaching this branch means the refresh
+          // itself failed (refresh_token expired or rotated). Send the
+          // user to login with a clear banner instead of the generic
+          // "Failed to load subtopic" that used to mask auth expiry.
+          setError('Sesi Anda telah berakhir. Mengalihkan ke halaman login...');
+          setLoading(false);
+          setTimeout(() => router.push('/login'), 1800);
+          return;
+        }
         if (res.status === 403) {
           setError('Anda tidak memiliki akses ke subtopic ini');
           setLoading(false);
@@ -308,7 +327,25 @@ export default function SubtopicPage() {
           setLoading(false);
           return;
         }
-        if (!res.ok) throw new Error('Failed to load subtopic');
+        if (res.status === 429) {
+          setError('Terlalu banyak permintaan ke AI. Tunggu beberapa detik lalu tekan "Coba lagi".');
+          setLoading(false);
+          return;
+        }
+        if (!res.ok) {
+          // Try to surface the server's error message so the user knows
+          // whether this was a model/cache/quiz-seed failure vs a generic
+          // network problem. Fall back to the legacy message if the body
+          // is not parseable.
+          const detail = await res.json().catch(() => null);
+          const reason =
+            detail && typeof detail.error === 'string'
+              ? detail.error
+              : `Gagal memuat subtopic (status ${res.status}).`;
+          setError(`${reason} Tekan "Coba lagi" untuk mengulang.`);
+          setLoading(false);
+          return;
+        }
         const json = (await res.json()) as SubtopicResponse;
         setData(json);
 
@@ -340,7 +377,13 @@ export default function SubtopicPage() {
     }
     loadSubtopic();
 
-  }, [course, moduleIndex, subtopicIndex, courseId, subtopicProgressKey]);
+  }, [course, moduleIndex, subtopicIndex, courseId, subtopicProgressKey, loadAttempt, router]);
+
+  const handleRetryLoadSubtopic = useCallback(() => {
+    setError('');
+    setData(null);
+    setLoadAttempt((prev) => prev + 1);
+  }, []);
 
   // Background preload adjacent subtopics for faster navigation
   useEffect(() => {
@@ -519,7 +562,28 @@ export default function SubtopicPage() {
   if (courseLoading) return <div className={styles.loading}>Memuat kursus…</div>;
   if (!course) return <div className={styles.error}>Kursus tidak ditemukan</div>;
   if (loading && !data) return <SkeletonLoading />;
-  if (error) return <div className={styles.error}>Error: {error}</div>;
+  if (error) {
+    return (
+      <div className={styles.error}>
+        <div style={{ marginBottom: '1rem' }}>Error: {error}</div>
+        <button
+          type="button"
+          onClick={handleRetryLoadSubtopic}
+          style={{
+            padding: '0.6rem 1.2rem',
+            borderRadius: '0.5rem',
+            border: '1px solid currentColor',
+            background: 'transparent',
+            color: 'inherit',
+            cursor: 'pointer',
+            fontWeight: 600,
+          }}
+        >
+          Coba lagi
+        </button>
+      </div>
+    );
+  }
   if (!data) return <div className={styles.error}>Konten tidak tersedia.</div>;
 
   const contentCount = data.pages.length;
@@ -615,8 +679,12 @@ export default function SubtopicPage() {
       };
       const newChallengeData = [...challengeData, newChallengeItem];
       setChallengeData(newChallengeData);
-      
-      // Save to database via API
+
+      // Save to database via API. We surface failures in the UI so the
+      // user (and researcher) know the response was NOT persisted — the
+      // previous behaviour was console.error only, which dropped research
+      // data silently.
+      setChallengeSaveError(null);
       try {
         const saveResponse = await apiFetch('/api/challenge-response', {
           method: 'POST',
@@ -636,10 +704,18 @@ export default function SubtopicPage() {
         if (!saveResponse.ok) {
           const errorDetails = await saveResponse.json().catch(() => ({}));
           console.error('Failed to persist challenge response:', errorDetails);
+          const reason =
+            (errorDetails && typeof errorDetails.error === 'string' && errorDetails.error) ||
+            `Server mengembalikan status ${saveResponse.status}`;
+          setChallengeSaveError(
+            `Respons tantanganmu belum tersimpan di server: ${reason}. Silakan coba lagi.`,
+          );
         }
       } catch (saveError) {
         console.error('Error saving challenge to database:', saveError);
-        // Continue execution even if save fails
+        setChallengeSaveError(
+          'Respons tantanganmu belum tersimpan: koneksi terputus. Silakan coba lagi.',
+        );
       }
     } catch (error) {
       console.error('Error submitting challenge:', error);
@@ -842,6 +918,23 @@ export default function SubtopicPage() {
                       </div>
                     )}
                     
+                    {challengeSaveError && (
+                      <div
+                        role="alert"
+                        style={{
+                          padding: '0.75rem 1rem',
+                          marginBottom: '1rem',
+                          borderRadius: '0.5rem',
+                          border: '1px solid #f59e0b',
+                          background: '#fef3c7',
+                          color: '#78350f',
+                          fontSize: '0.9rem',
+                        }}
+                      >
+                        {challengeSaveError}
+                      </div>
+                    )}
+
                     {/* Show current challenge question if not viewing history */}
                     {activeChallengeIndex < 0 && (
                       <>

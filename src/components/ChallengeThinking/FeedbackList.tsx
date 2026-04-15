@@ -9,16 +9,19 @@ interface FeedbackListProps {
 export default function FeedbackList({ feedback }: FeedbackListProps) {
   if (!feedback) return null;
 
+  // Strip any HTML tags defensively — AI-generated feedback is rendered
+  // as plain text + markdown-style markers (headers, **bold**, bullets,
+  // numbered lists). Allowing raw HTML would introduce an XSS vector, so
+  // we neutralize angle brackets before parsing.
+  const stripHtml = (raw: string) =>
+    raw.replace(/<[^>]*>/g, '').replace(/&lt;/g, '<').replace(/&gt;/g, '>');
+
   // Function to format feedback text with proper styling
   const formatFeedback = (text: string) => {
-    // Check if the feedback appears to contain HTML tags
-    if (/<\/?[a-z][\s\S]*>/i.test(text)) {
-      // Render as HTML if it contains HTML tags
-      return <div dangerouslySetInnerHTML={{ __html: text }} />;
-    }
+    const safeText = stripHtml(text);
 
     // Split the text into paragraphs
-    const paragraphs = text.split('\n');
+    const paragraphs = safeText.split('\n');
     const result: React.ReactNode[] = [];
 
     paragraphs.forEach((paragraph, index) => {

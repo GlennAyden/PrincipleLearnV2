@@ -47,6 +47,11 @@ export const AdminRegisterSchema = z.object({
 
 // ── Course schemas ──────────────────────────────────────────────────
 
+// Identity fields (userId / userEmail) are intentionally NOT part of this
+// schema. The route derives the authenticated user from the JWT cookie and
+// x-user-* headers set by withProtection — accepting them from the body
+// would reopen an IDOR vector where a logged-in user could spoof a
+// different `created_by` on the generated course.
 export const GenerateCourseSchema = z.object({
   topic: z.string().min(1, 'Topic is required'),
   goal: z.string().min(1, 'Goal is required'),
@@ -56,13 +61,15 @@ export const GenerateCourseSchema = z.object({
   extraTopics: z.string().optional(),
   problem: z.string().optional(),
   assumption: z.string().optional(),
-  userId: z.string().optional(),
-  userEmail: z.string().optional(),
-});
+}).strict();
 
+// `module` and `subtopic` are both .trim().min(1) so an all-whitespace
+// payload cannot reach quiz-sync — otherwise `normalizeSubtopicLabel`
+// would collapse to '' and quiz rows for sibling subtopics would collide
+// on the same (subtopic_id, '') scope key.
 export const GenerateSubtopicSchema = z.object({
-  module: z.string().min(1, 'module is required'),
-  subtopic: z.string().min(1, 'subtopic is required'),
+  module: z.string().trim().min(1, 'module is required'),
+  subtopic: z.string().trim().min(1, 'subtopic is required'),
   courseId: z.string().min(1, 'courseId is required'),
 });
 
@@ -93,12 +100,16 @@ const QuizAnswerSchema = z.object({
   reasoningNote: z.string().optional(),
 });
 
+// moduleTitle + subtopicTitle are REQUIRED here (not optional) so lazy-seed
+// recovery in /api/quiz/submit can always build a canonical cache key. If
+// either is missing/empty we used to silently skip the recovery and return
+// 404 "Pertanyaan kuis tidak ditemukan" even when the content existed.
 export const QuizSubmitSchema = z.object({
   userId: z.string().min(1, 'User ID is required'),
   courseId: z.string().min(1, 'Course ID is required'),
   subtopic: z.string().min(1, 'Subtopic is required'),
-  moduleTitle: z.string().optional(),
-  subtopicTitle: z.string().optional(),
+  moduleTitle: z.string().trim().min(1, 'moduleTitle wajib diisi'),
+  subtopicTitle: z.string().trim().min(1, 'subtopicTitle wajib diisi'),
   moduleIndex: flexibleIndex,
   subtopicIndex: flexibleIndex,
   score: z.number(),
@@ -152,6 +163,22 @@ export const ChallengeFeedbackSchema = z.object({
 
 export const GenerateExamplesSchema = z.object({
   context: z.string().min(1, 'Missing context in request body'),
+});
+
+// Frontend sends these fields after the user submits their challenge
+// answer — all are required for proper provenance in the
+// `challenge_responses` table. Previously this endpoint parsed the body
+// by hand, which silently accepted malformed payloads.
+export const ChallengeResponseSchema = z.object({
+  userId: z.string().trim().min(1, 'userId is required'),
+  courseId: z.string().trim().min(1, 'courseId is required'),
+  moduleIndex: flexibleIndex,
+  subtopicIndex: flexibleIndex,
+  pageNumber: flexibleIndex,
+  question: z.string().trim().min(1, 'question is required'),
+  answer: z.string().trim().min(1, 'answer is required'),
+  feedback: z.string().optional().default(''),
+  reasoningNote: z.string().optional().default(''),
 });
 
 // ── Feedback & Jurnal schemas ───────────────────────────────────────

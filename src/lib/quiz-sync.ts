@@ -44,6 +44,26 @@ export function normalizeSubtopicLabel(value: unknown): string {
   return value.trim();
 }
 
+/**
+ * Canonical cache key for `subtopic_cache` rows. We lowercase + collapse
+ * whitespace so trivial drift (casing, double spaces) across the various
+ * writers and readers (generate-subtopic, quiz/submit lazy-seed, completion
+ * tracker) hit the same row. Every caller constructing a cache key MUST go
+ * through this helper — a hand-rolled template string will reintroduce the
+ * 2026-04 cache-miss regression where the seed would silently no-op.
+ */
+export function normalizeCacheKeyPart(value: string): string {
+  return value.trim().replace(/\s+/g, ' ').toLowerCase();
+}
+
+export function buildSubtopicCacheKey(
+  courseId: string,
+  moduleTitle: string,
+  subtopicTitle: string,
+): string {
+  return `${courseId}-${normalizeCacheKeyPart(moduleTitle)}-${normalizeCacheKeyPart(subtopicTitle)}`;
+}
+
 async function resolveSubtopic(
   adminDb: AdminDbLike,
   courseId: string,
@@ -184,6 +204,21 @@ export async function syncQuizQuestions(params: SyncQuizParams): Promise<SyncQui
       subtopicTitle,
       subtopicIdProvided: !!subtopicId,
       resolveSubtopicReturned: !!resolvedSubtopic,
+    });
+    return null;
+  }
+
+  // The subtopics table is keyed per MODULE — without a non-empty label,
+  // sibling subtopics inside the same module collide on the same
+  // (subtopic_id, '') scope key, so the subsequent insert/delete logic
+  // would clobber quiz rows across siblings. Refuse to proceed rather
+  // than risk data loss or cross-subtopic leakage.
+  if (!subtopicLabel) {
+    console.error('[quiz-sync] Missing subtopic label — refusing to sync to avoid sibling collision', {
+      courseId,
+      moduleTitle,
+      subtopicTitle,
+      resolvedSubtopicId,
     });
     return null;
   }
