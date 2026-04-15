@@ -218,6 +218,11 @@ export const JurnalSchema = z.object({
   userId: z.string().min(1, 'userId is required'),
   courseId: z.string().min(1, 'courseId is required'),
   content: z.union([z.string().min(1), z.record(z.string(), z.unknown())]),
+  // subtopicId = the `subtopics` table row id (per-module). Together with
+  // subtopicLabel (the leaf subtopic title) these scope the jurnal row to a
+  // specific subtopic so sibling reflections do not overwrite each other.
+  subtopicId: z.string().optional(),
+  subtopicLabel: z.string().optional(),
   subtopic: z.string().optional(),
   moduleIndex: flexibleIndex,
   subtopicIndex: flexibleIndex,

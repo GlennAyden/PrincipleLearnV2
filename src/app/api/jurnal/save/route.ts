@@ -1,7 +1,7 @@
 // "jurnal" uses Indonesian spelling — matches the database table name.
 import { NextResponse, after } from 'next/server';
 import type { NextRequest } from 'next/server';
-import { DatabaseService } from '@/lib/database';
+import { DatabaseService, adminDb } from '@/lib/database';
 import { withApiLogging } from '@/lib/api-logger';
 import { JurnalSchema, parseBody } from '@/lib/schemas';
 import { resolveAuthUserId } from '@/lib/auth-helper';
@@ -10,6 +10,8 @@ import { resolveUserByIdentifier } from '@/services/auth.service';
 interface JurnalSubmission {
   userId: string;
   courseId: string;
+  subtopicId?: string;
+  subtopicLabel?: string;
   subtopic?: string;
   moduleIndex?: number | string | null;
   subtopicIndex?: number | string | null;
@@ -104,7 +106,8 @@ async function postHandler(req: NextRequest) {
     const parsed = parseBody(JurnalSchema, await req.json());
     if (!parsed.success) return parsed.response;
     const data = parsed.data as JurnalSubmission;
-    const subtopic = normalizeText(data.subtopic);
+    const subtopicLabel = normalizeText(data.subtopicLabel) || normalizeText(data.subtopic);
+    const rawSubtopicId = normalizeText(data.subtopicId);
     const type = normalizeText(data.type) || 'free_text';
     const moduleIndex = normalizeIndex(data.moduleIndex);
     const subtopicIndex = normalizeIndex(data.subtopicIndex);
@@ -133,6 +136,25 @@ async function postHandler(req: NextRequest) {
       );
     }
 
+    // Validate that the supplied subtopic_id (the `subtopics` row id for
+    // the MODULE) actually belongs to this course. Prevents mis-scoping
+    // a jurnal row against another course's module.
+    let subtopicId: string | null = null;
+    if (rawSubtopicId) {
+      const ownedSubtopics = await DatabaseService.getRecords<{ id: string }>('subtopics', {
+        filter: { id: rawSubtopicId, course_id: data.courseId },
+        limit: 1,
+      });
+      if (ownedSubtopics.length > 0) {
+        subtopicId = rawSubtopicId;
+      } else {
+        console.warn('[Jurnal] Rejected subtopicId — not found in course', {
+          courseId: data.courseId,
+          subtopicId: rawSubtopicId,
+        });
+      }
+    }
+
     const structured = type === 'structured_reflection' ? parseStructuredContent(data) : null;
 
     const normalizedContent =
@@ -150,9 +172,10 @@ async function postHandler(req: NextRequest) {
           : JSON.stringify(data.content);
 
     const reflectionContext = {
-      subtopic: subtopic || null,
+      subtopic: subtopicLabel || null,
       moduleIndex,
       subtopicIndex,
+      subtopicId,
       fields:
         type === 'structured_reflection'
           ? {
@@ -166,39 +189,100 @@ async function postHandler(req: NextRequest) {
           : null,
     };
 
-    // Save journal to database — upsert by (user_id, course_id) so that
-    // re-submitting a reflection updates the existing row instead of
-    // creating duplicate journal records for the same course.
+    // INSERT-only semantics: every submission creates a new row so per
+    // subtopic reflections are preserved and we keep an audit trail for
+    // research. The legacy overwrite-on-upsert path dropped reflections
+    // from every prior subtopic because the unique constraint was on
+    // (user_id, course_id) only — that constraint has been migrated
+    // away and replaced with an (user_id, course_id, subtopic_id,
+    // subtopic_label) index for reads.
     const jurnalData = {
       user_id: user.id,
       course_id: data.courseId,
+      subtopic_id: subtopicId,
+      module_index: moduleIndex,
+      subtopic_index: subtopicIndex,
+      subtopic_label: subtopicLabel || null,
       content: normalizedContent,
       type,
       reflection: JSON.stringify(reflectionContext),
     };
 
-    const existingJurnal = await DatabaseService.getRecords<{ id: string }>('jurnal', {
-      filter: { user_id: user.id, course_id: data.courseId },
-      limit: 1,
-    });
+    const jurnal = await DatabaseService.insertRecord<
+      { id: string } & Record<string, unknown>
+    >('jurnal', jurnalData);
 
-    const jurnal = existingJurnal.length > 0
-      ? await DatabaseService.updateRecord<{ id: string } & Record<string, unknown>>(
-          'jurnal',
-          existingJurnal[0].id,
-          jurnalData,
-        )
-      : await DatabaseService.insertRecord<{ id: string } & Record<string, unknown>>('jurnal', jurnalData);
-    
     console.log(`Journal saved to database:`, {
       id: jurnal.id,
       user: user.id,
       course: data.courseId,
-      subtopic,
+      subtopicId,
+      subtopicLabel,
       type,
       moduleIndex,
       subtopicIndex,
     });
+
+    // Dual-write: when the reflection carries a rating (content
+    // satisfaction) or free-form content feedback, persist it into the
+    // `feedback` table as well so research queries have proper columns
+    // to filter on (rating, comment, subtopic_id, subtopic_label)
+    // instead of having to parse JSON out of jurnal.content. Feedback
+    // write is secondary — a failure here is logged to api_logs but
+    // does NOT fail the primary jurnal save.
+    let feedbackSaved = false;
+    if (
+      type === 'structured_reflection' &&
+      (typeof structured?.contentRating === 'number' ||
+        (structured?.contentFeedback && structured.contentFeedback.length > 0))
+    ) {
+      try {
+        const ratingValue =
+          typeof structured.contentRating === 'number' &&
+          structured.contentRating >= 1 &&
+          structured.contentRating <= 5
+            ? structured.contentRating
+            : null;
+        const { error: feedbackError } = await adminDb.from('feedback').insert({
+          user_id: user.id,
+          course_id: data.courseId,
+          subtopic_id: subtopicId,
+          module_index: moduleIndex,
+          subtopic_index: subtopicIndex,
+          subtopic_label: subtopicLabel || null,
+          rating: ratingValue,
+          comment: structured.contentFeedback || '',
+        });
+        if (feedbackError) {
+          throw new Error(
+            (feedbackError as { message?: string })?.message || 'feedback insert error',
+          );
+        }
+        feedbackSaved = true;
+      } catch (feedbackError) {
+        console.error('[Jurnal] Dual-write feedback insert failed', feedbackError);
+        try {
+          await adminDb.from('api_logs').insert({
+            path: '/api/jurnal/save',
+            label: 'feedback-dual-write-failed',
+            method: 'POST',
+            status_code: 500,
+            user_id: user.id,
+            error_message: `feedback dual-write failed: ${
+              feedbackError instanceof Error ? feedbackError.message : String(feedbackError)
+            }`,
+            metadata: {
+              course_id: data.courseId,
+              subtopic_id: subtopicId,
+              subtopic_label: subtopicLabel,
+            },
+            created_at: new Date().toISOString(),
+          });
+        } catch (logError) {
+          console.error('[Jurnal] Failed to log dual-write failure to api_logs:', logError);
+        }
+      }
+    }
 
     if (type === 'structured_reflection' && structured) {
       after(async () => {
@@ -226,11 +310,27 @@ async function postHandler(req: NextRequest) {
           });
         } catch (scoreError) {
           console.warn('[Journal] Cognitive scoring failed:', scoreError);
+          try {
+            await adminDb.from('api_logs').insert({
+              path: '/api/jurnal/save',
+              label: 'cognitive-scoring-failed',
+              method: 'POST',
+              status_code: 500,
+              user_id: user.id,
+              error_message: `jurnal cognitive scoring failed: ${
+                scoreError instanceof Error ? scoreError.message : String(scoreError)
+              }`,
+              metadata: { jurnal_id: jurnal.id, course_id: data.courseId },
+              created_at: new Date().toISOString(),
+            });
+          } catch (logError) {
+            console.error('[Journal] Failed to log scoring error to api_logs:', logError);
+          }
         }
       });
     }
 
-    return NextResponse.json({ success: true, id: jurnal.id });
+    return NextResponse.json({ success: true, id: jurnal.id, feedbackSaved });
   } catch (error: unknown) {
     console.error('Error saving jurnal refleksi:', error);
     return NextResponse.json(

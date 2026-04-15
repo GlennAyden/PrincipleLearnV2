@@ -15,6 +15,12 @@ interface ReflectionData {
 interface StructuredReflectionProps {
   courseId: string;
   subtopic?: string;
+  // The `subtopics` table row id for the MODULE that contains this leaf
+  // subtopic. Required on new saves so the backend can scope jurnal +
+  // feedback rows per subtopic instead of clobbering the single-row
+  // (user_id, course_id) upsert that caused prior data loss.
+  subtopicId?: string;
+  subtopicLabel?: string;
   moduleIndex?: number;
   subtopicIndex?: number;
 }
@@ -55,6 +61,8 @@ const STAR_LABELS = ['Kurang', 'Cukup', 'Baik', 'Sangat Baik', 'Luar Biasa'];
 export default function StructuredReflection({
   courseId,
   subtopic = '',
+  subtopicId,
+  subtopicLabel,
   moduleIndex = 0,
   subtopicIndex = 0,
 }: StructuredReflectionProps) {
@@ -89,12 +97,17 @@ export default function StructuredReflection({
     setError('');
 
     try {
-      // Save structured reflection
+      // Save structured reflection. subtopicId + subtopicLabel are what
+      // the backend uses to scope this row per subtopic; without them
+      // the jurnal row would fall back to the legacy (user, course)
+      // bucket and subsequent reflections would overwrite this one.
       const res = await apiFetch('/api/jurnal/save', {
         method: 'POST',
         body: JSON.stringify({
           userId: user.id,
           courseId,
+          subtopicId,
+          subtopicLabel: subtopicLabel || subtopic,
           subtopic,
           moduleIndex,
           subtopicIndex,

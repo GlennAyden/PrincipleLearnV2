@@ -1089,10 +1089,17 @@ export default function SubtopicPage() {
             summary={data.whatNext.summary}
             encouragement={data.whatNext.encouragement}
           />
-          {/* Structured Reflection + Content Feedback (merged) */}
+          {/* Structured Reflection + Content Feedback (merged).
+              We pass subtopicId (module row id from the course outline)
+              AND the real leaf subtopic title so the backend can scope
+              the jurnal + feedback rows per subtopic rather than per
+              course — otherwise submitting for 1.2 would overwrite the
+              reflection that was saved for 1.1. */}
           <StructuredReflection
             courseId={courseId}
-            subtopic={`Module ${moduleIndex + 1}, Subtopic ${subtopicIndex + 1}`}
+            subtopic={quizSubtopicTitle}
+            subtopicId={activeModule?.id}
+            subtopicLabel={quizSubtopicTitle}
             moduleIndex={moduleIndex}
             subtopicIndex={subtopicIndex}
           />
