@@ -1,5 +1,6 @@
-import { NextResponse } from 'next/server';
+import { NextRequest, NextResponse } from 'next/server';
 import { DatabaseService } from '@/lib/database';
+import { withProtection } from '@/lib/api-middleware';
 
 interface CourseRow {
   id: string;
@@ -7,7 +8,7 @@ interface CourseRow {
   created_at: string;
 }
 
-export async function GET() {
+async function handler(_req: NextRequest) {
   try {
     const courses = await DatabaseService.getRecords<CourseRow>('courses', {
       select: 'id,title,created_at',
@@ -25,3 +26,5 @@ export async function GET() {
     return NextResponse.json({ courses: [] }, { status: 500 });
   }
 }
+
+export const GET = withProtection(handler, { adminOnly: true, requireAuth: true, csrfProtection: false });

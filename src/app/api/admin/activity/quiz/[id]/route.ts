@@ -1,7 +1,8 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { adminDb } from '@/lib/database';
+import { withProtection } from '@/lib/api-middleware';
 
-export async function GET(
+async function handler(
   request: NextRequest,
   context: { params: Promise<{ id: string }> }
 ) {
@@ -82,4 +83,8 @@ export async function GET(
       { status: 500 }
     );
   }
+}
+
+export async function GET(request: NextRequest, context: { params: Promise<{ id: string }> }) {
+  return withProtection((req) => handler(req, context), { adminOnly: true, requireAuth: true, csrfProtection: false })(request);
 }

@@ -188,7 +188,9 @@ export default function StudentDetailPage() {
     if (activeSection !== 'kognitif' || kognitifData || kognitifLoading) return
     setKognitifLoading(true)
     setKognitifError(null)
-    fetch(`/api/admin/research/auto-scores/summary?user_id=${params.id}`)
+    fetch(`/api/admin/research/auto-scores/summary?user_id=${params.id}`, {
+      credentials: 'include',
+    })
       .then(r => r.json())
       .then(data => {
         if (data.success !== false) {

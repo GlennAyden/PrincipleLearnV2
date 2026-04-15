@@ -11,7 +11,7 @@ async function requireAdmin(request: NextRequest) {
   const token = request.cookies.get('access_token')?.value;
   if (!token) return null;
   const payload = verifyToken(token);
-  if (!payload || (payload.role ?? '').toUpperCase() !== 'ADMIN') {
+  if (!payload || (payload.role ?? '').toLowerCase() !== 'admin') {
     return null;
   }
   return payload;

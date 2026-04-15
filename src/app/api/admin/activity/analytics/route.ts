@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { adminDb } from '@/lib/database';
-import { withCacheHeaders } from '@/lib/api-middleware';
+import { withCacheHeaders, withProtection } from '@/lib/api-middleware';
 import type { ActivityAnalytics, ActivityType } from '@/types/activity';
 
 function subDays(date: Date, days: number): Date {
@@ -38,7 +38,7 @@ async function getTableCount(table: string, days: number): Promise<number> {
   }
 }
 
-export async function GET(req: NextRequest) {
+async function handler(req: NextRequest) {
   const { searchParams } = new URL(req.url);
   const days = parseInt(searchParams.get('days') || '7');
 
@@ -81,4 +81,6 @@ export async function GET(req: NextRequest) {
 
   return withCacheHeaders(NextResponse.json(analytics), 60);
 }
+
+export const GET = withProtection(handler, { adminOnly: true, requireAuth: true, csrfProtection: false });
 

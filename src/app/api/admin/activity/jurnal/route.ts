@@ -4,6 +4,7 @@
 import { NextResponse } from 'next/server'
 import type { NextRequest } from 'next/server'
 import { DatabaseService } from '@/lib/database'
+import { withProtection } from '@/lib/api-middleware'
 
 interface Journal {
   id: string;
@@ -54,7 +55,7 @@ function parseStructuredContent(content?: string) {
   }
 }
 
-export async function GET(req: NextRequest) {
+async function handler(req: NextRequest) {
   console.log('[Activity API] Starting journal activity fetch');
   
   try {
@@ -211,3 +212,5 @@ export async function GET(req: NextRequest) {
     );
   }
 }
+
+export const GET = withProtection(handler, { adminOnly: true, requireAuth: true, csrfProtection: false });

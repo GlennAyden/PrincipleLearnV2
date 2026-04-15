@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { DatabaseService } from '@/lib/database';
+import { withProtection } from '@/lib/api-middleware';
 
 interface SubtopicRow {
   id: string;
@@ -8,7 +9,7 @@ interface SubtopicRow {
   order_index: number | null;
 }
 
-export async function GET(req: NextRequest) {
+async function handler(req: NextRequest) {
   const { searchParams } = new URL(req.url);
   const courseId = searchParams.get('courseId');
 
@@ -34,3 +35,5 @@ export async function GET(req: NextRequest) {
     return NextResponse.json({ topics: [] }, { status: 500 });
   }
 }
+
+export const GET = withProtection(handler, { adminOnly: true, requireAuth: true, csrfProtection: false });

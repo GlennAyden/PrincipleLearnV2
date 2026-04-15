@@ -4,6 +4,7 @@ import { NextResponse } from 'next/server'
 import type { NextRequest } from 'next/server'
 import { DatabaseService } from '@/lib/database'
 import { ensureQuizSeeded } from '@/lib/activitySeed'
+import { withProtection } from '@/lib/api-middleware'
 
 interface QuizSubmission {
   id: string;
@@ -53,7 +54,7 @@ interface Subtopic {
   title: string;
 }
 
-export async function GET(req: NextRequest) {
+async function activityHandler(req: NextRequest) {
   console.log('[Activity API] Starting quiz activity fetch');
   
   try {
@@ -156,6 +157,8 @@ export async function GET(req: NextRequest) {
     )
   }
 }
+
+export const GET = withProtection(activityHandler, { adminOnly: true, requireAuth: true, csrfProtection: false });
 
 async function fetchCached<T extends { id: string }>(
   cache: Map<string, T | null>,

@@ -168,10 +168,12 @@ export default function PromptEvolutionPage() {
 
     const fetchCourses = useCallback(async () => {
         try {
-            const res = await fetch('/api/courses?limit=100', { credentials: 'include' })
+            // Use admin endpoint so adminDb bypasses RLS (courses_read_own only
+            // returns courses created by the admin's own user id).
+            const res = await fetch('/api/admin/activity/courses', { credentials: 'include' })
             const data = await res.json()
-            if (res.ok && Array.isArray(data)) {
-                setCourses(data)
+            if (res.ok && Array.isArray(data?.courses)) {
+                setCourses(data.courses)
             }
         } catch (err) {
             console.error('Error fetching courses:', err)

@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { adminDb } from '@/lib/database';
 import type { GlobalActivityItem, ActivityType } from '@/types/activity';
+import { withProtection } from '@/lib/api-middleware';
 
 const TABLES: Record<ActivityType, string> = {
   generate: 'course_generation_activity',
@@ -65,7 +66,7 @@ function computeEngagement(type: ActivityType): number {
   return scores[type] || 1;
 }
 
-export async function GET(req: NextRequest) {
+async function handler(req: NextRequest) {
   const { searchParams } = new URL(req.url);
   const timeRange = searchParams.get('timeRange') || '7d';
   const userId = searchParams.get('userId') || undefined;
@@ -124,3 +125,5 @@ export async function GET(req: NextRequest) {
     timeRange
   });
 }
+
+export const GET = withProtection(handler, { adminOnly: true, requireAuth: true, csrfProtection: false });

@@ -3,6 +3,7 @@
 import { NextResponse } from 'next/server'
 import type { NextRequest } from 'next/server'
 import { verifyToken } from '@/lib/jwt'
+import { adminDb } from '@/lib/database'
 
 export async function GET(req: NextRequest) {
   try {
@@ -16,24 +17,36 @@ export async function GET(req: NextRequest) {
       return NextResponse.json({ error: 'Token tidak valid' }, { status: 401 })
     }
 
-    // Check if user has admin role (from token payload — avoids unnecessary DB round-trip)
     const role: string = (payload.role as string) || ''
     if (role.toLowerCase() !== 'admin') {
-      console.log('[Admin Me] Access denied - user role:', role)
       return NextResponse.json({ error: 'Akses ditolak' }, { status: 403 })
     }
 
-    // Return user data directly from token payload (no DB query needed)
-    const userData = {
-      id: payload.userId,
-      email: payload.email,
-      name: 'Admin User',
-      role: role,
+    const { data: rows } = await adminDb
+      .from('users')
+      .select('id, email, name, role, deleted_at')
+      .eq('id', payload.userId)
+      .limit(1)
+
+    interface AdminRow { id: string; email: string; name: string | null; role: string; deleted_at: string | null }
+    const list = (rows ?? []) as unknown as AdminRow[]
+    const row = list[0]
+
+    if (!row || row.deleted_at) {
+      return NextResponse.json({ error: 'Akun admin tidak ditemukan' }, { status: 404 })
     }
 
-    console.log('[Admin Me] Returning user data:', userData)
-    return NextResponse.json({ user: userData }, { status: 200 })
-    
+    return NextResponse.json(
+      {
+        user: {
+          id: row.id,
+          email: row.email,
+          name: row.name || row.email,
+          role: row.role,
+        },
+      },
+      { status: 200 }
+    )
   } catch (err: unknown) {
     console.error('Error di /api/admin/me:', err)
     return NextResponse.json({ error: 'Kesalahan Server Internal' }, { status: 500 })

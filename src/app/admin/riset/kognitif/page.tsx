@@ -465,7 +465,10 @@ export default function KognitifPage() {
                                     <label>Tipe Indikator</label>
                                     <select
                                         value={filterType}
-                                        onChange={(e) => setFilterType(e.target.value)}
+                                        onChange={(e) => {
+                                            setFilterType(e.target.value)
+                                            setCurrentPage(1)
+                                        }}
                                     >
                                         <option value="">Semua Tipe</option>
                                         <option value="computational_thinking">Computational Thinking</option>

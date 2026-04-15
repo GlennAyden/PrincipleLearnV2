@@ -7,7 +7,6 @@ import {
   FiTarget,
   FiCheckSquare,
   FiBookOpen,
-  FiMessageCircle,
   FiFilter,
   FiRotateCcw,
 } from 'react-icons/fi'
@@ -98,9 +97,11 @@ interface QuizAttemptGroup {
 function groupQuizByAttempt(logs: QuizLogItem[]): QuizAttemptGroup[] {
   const groups = new Map<string, QuizAttemptGroup>()
   for (const log of logs) {
-    // Group key: quiz_attempt_id if present, else fall back to userId+subtopic+timestamp
+    // Group key: quiz_attempt_id if present, else fall back to a composite key
+    // that includes log.id as the final disambiguator so two submissions with
+    // the same user/subtopic/timestamp never collide into a single group.
     const key = log.quizAttemptId
-      ?? `${log.userId}::${log.subtopicId ?? log.topic}::${log.rawTimestamp ?? log.timestamp}::${log.attemptNumber ?? 1}`
+      ?? `${log.userId}::${log.subtopicId ?? log.topic}::${log.rawTimestamp ?? log.timestamp}::${log.attemptNumber ?? 1}::${log.id}`
     const existing = groups.get(key)
     if (existing) {
       existing.items.push(log)
@@ -178,7 +179,6 @@ const TABS = [
   { id: 'challenge', label: 'Tantangan', icon: FiTarget },
   { id: 'quiz', label: 'Kuis', icon: FiCheckSquare },
   { id: 'refleksi', label: 'Refleksi', icon: FiBookOpen },
-  { id: 'diskusi', label: 'Diskusi', icon: FiMessageCircle },
 ]
 
 const TAB_DESCRIPTIONS: Record<string, string> = {

@@ -3,6 +3,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { DatabaseService } from '@/lib/database';
 import { ensureFeedbackSeeded } from '@/lib/activitySeed';
+import { withProtection } from '@/lib/api-middleware';
 
 interface FeedbackRow {
   id: string;
@@ -40,7 +41,7 @@ const DATE_OPTIONS: Intl.DateTimeFormatOptions = {
   minute: '2-digit',
 };
 
-export async function GET(req: NextRequest) {
+async function handler(req: NextRequest) {
   try {
     await ensureFeedbackSeeded();
     const { searchParams } = new URL(req.url);
@@ -151,3 +152,5 @@ export async function GET(req: NextRequest) {
     return NextResponse.json({ error: 'Failed to fetch feedback logs' }, { status: 500 });
   }
 }
+
+export const GET = withProtection(handler, { adminOnly: true, requireAuth: true, csrfProtection: false });

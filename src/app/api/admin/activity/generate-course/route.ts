@@ -4,6 +4,7 @@ import { NextResponse } from 'next/server'
 import type { NextRequest } from 'next/server'
 import { DatabaseService } from '@/lib/database'
 import { ensureCourseGenerationActivitySeeded } from '@/lib/activitySeed'
+import { withProtection } from '@/lib/api-middleware'
 
 interface Course {
   id: string;
@@ -31,7 +32,7 @@ interface CourseGenerationActivityRow {
   created_at: string;
 }
 
-export async function GET(req: NextRequest) {
+async function activityHandler(req: NextRequest) {
   console.log('[Activity API] Starting generate-course activity fetch');
   
   try {
@@ -76,6 +77,8 @@ export async function GET(req: NextRequest) {
     )
   }
 }
+
+export const GET = withProtection(activityHandler, { adminOnly: true, requireAuth: true, csrfProtection: false });
 
 async function buildActivityPayload({
   rows,

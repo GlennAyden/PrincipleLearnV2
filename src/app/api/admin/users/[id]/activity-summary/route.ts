@@ -68,11 +68,12 @@ export async function GET(
       return NextResponse.json({ error: 'User ID is required' }, { status: 400 })
     }
 
-    // Verify user exists
+    // Verify user exists and is not soft-deleted
     const { data: userRecord, error: userError } = await adminDb
       .from('users')
       .select('id, email')
       .eq('id', userId)
+      .is('deleted_at', null)
       .maybeSingle()
 
     if (userError || !userRecord) {

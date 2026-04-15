@@ -11,7 +11,7 @@ import {
 import {
   FiUsers, FiBook, FiCheckSquare, FiTarget, FiMessageCircle,
   FiTrendingUp, FiFileText, FiHelpCircle, FiStar, FiClock,
-  FiRefreshCw, FiAlertTriangle, FiActivity, FiShield, FiGrid,
+  FiRefreshCw, FiAlertTriangle, FiActivity, FiGrid,
   FiEdit3, FiDatabase, FiArrowRight, FiClipboard,
 } from 'react-icons/fi'
 import { useRouter } from 'next/navigation'
@@ -39,7 +39,6 @@ const ACTIVITY_LABELS: Record<string, string> = {
 
 const TABS: { id: DashboardTab; label: string; icon: React.ReactNode }[] = [
   { id: 'overview', label: 'Ringkasan', icon: <FiGrid /> },
-  { id: 'system', label: 'Kesehatan Sistem', icon: <FiShield /> },
 ]
 const TIME_RANGES: { value: TimeRange; label: string }[] = [
   { value: '7d', label: '7 Hari' }, { value: '30d', label: '30 Hari' },

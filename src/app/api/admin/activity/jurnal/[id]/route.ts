@@ -1,8 +1,9 @@
 import { NextResponse } from 'next/server'
 import type { NextRequest } from 'next/server'
 import { adminDb } from '@/lib/database'
+import { withProtection } from '@/lib/api-middleware'
 
-export async function GET(req: NextRequest) {
+async function handler(req: NextRequest) {
   try {
     // Ambil id dari URL
     const url = new URL(req.url)
@@ -92,3 +93,5 @@ export async function GET(req: NextRequest) {
     );
   }
 }
+
+export const GET = withProtection(handler, { adminOnly: true, requireAuth: true, csrfProtection: false });
