@@ -15,7 +15,7 @@
  *
  * Then logs in as admin and navigates:
  *   - /admin/dashboard    → KPI cards, RM2/RM3 charts, recent activity
- *   - /admin/aktivitas    → Tabs: Tanya Jawab, Tantangan, Kuis, Refleksi, Diskusi
+ *   - /admin/aktivitas    → Tabs: Tanya Jawab, Tantangan, Kuis, Refleksi, plus diskusi monitoring
  *   - /admin/riset        → Research analytics, prompt stage distribution
  *   - /admin/siswa        → Student list + activity summary
  *
@@ -539,7 +539,7 @@ test.describe('Full Learning Flow → Admin Verification', () => {
       log('Admin Dashboard', 'Screenshot saved → 01-admin-dashboard.png');
     });
 
-    // ── 14. Admin Aktivitas — each tab ──
+    // ── 14. Admin Aktivitas — monitoring tabs ──
     await test.step('14. Verify admin aktivitas page', async () => {
       await page.goto('/admin/aktivitas');
       await page.waitForLoadState('networkidle');

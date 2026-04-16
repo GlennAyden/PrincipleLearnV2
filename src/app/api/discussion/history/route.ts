@@ -1,9 +1,13 @@
 import { NextRequest, NextResponse } from 'next/server';
 
 import { verifyToken } from '@/lib/jwt';
-import { adminDb, publicDb } from '@/lib/database';
+import { adminDb } from '@/lib/database';
 import { withApiLogging } from '@/lib/api-logger';
 import { resolveDiscussionSubtopicId } from '@/lib/discussion/resolveSubtopic';
+import {
+  serializeDiscussionMessages,
+  serializeDiscussionStep,
+} from '@/lib/discussion/serializers';
 
 interface SessionRecord {
   id: string;
@@ -107,15 +111,20 @@ async function getHandler(request: NextRequest) {
         subtopicId: session.subtopic_id,
       },
       templateVersion: templateRow?.version ?? null,
-      messages,
-      currentStep,
+      messages: serializeDiscussionMessages(messages),
+      currentStep: serializeDiscussionStep(currentStep),
     });
   } catch (error) {
     console.error('[DiscussionHistory] Failed to retrieve history', error);
-    return NextResponse.json(
+    const response = NextResponse.json(
       { error: 'Failed to load discussion history' },
       { status: 500 }
     );
+    response.headers.set(
+      'x-log-error-message',
+      error instanceof Error ? error.message : String(error)
+    );
+    return response;
   }
 }
 
@@ -164,7 +173,7 @@ async function fetchLatestSession(userId: string, courseId: string, subtopicId: 
 
 async function fetchTemplate(session: SessionRecord): Promise<TemplateRecord | null> {
   if (session.template_id) {
-    const { data, error } = await publicDb
+    const { data, error } = await adminDb
       .from('discussion_templates')
       .select('id, template, version')
       .eq('id', session.template_id)

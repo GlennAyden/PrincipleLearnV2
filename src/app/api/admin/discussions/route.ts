@@ -3,6 +3,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { verifyToken } from '@/lib/jwt';
 import { adminDb } from '@/lib/database';
 import { withApiLogging } from '@/lib/api-logger';
+import { buildDiscussionHealthScore } from '@/lib/discussion/serializers';
 
 const DEFAULT_LIMIT = 100;
 
@@ -78,15 +79,11 @@ async function getHandler(request: NextRequest) {
     const response = (data ?? [] as DiscussionQueryRow[]).map((item: DiscussionQueryRow) => {
       const messageCount = Number(item.count_messages || 0);
       const goals = Array.isArray(item.learning_goals) ? item.learning_goals : [];
-      const goalPct = goals.length ? (goals.filter((g: { covered?: boolean }) => g.covered).length / goals.length) * 100 : 0;
-      const now = new Date();
-      const daysStalled = (now.getTime() - new Date(item.updated_at).getTime()) / (24 * 60 * 60 * 1000);
-      const score = Math.round((goalPct * 0.5) + (messageCount > 3 ? 0.3 : 0) + (daysStalled < 2 ? 0.2 : 0) * 100);
-      const color = score >= 80 ? 'green' : score >= 50 ? 'yellow' : 'red';
-      const reasons = [];
-      if (goalPct < 50) reasons.push('Low goal coverage');
-      if (messageCount <= 3) reasons.push('Low activity');
-      if (daysStalled > 2) reasons.push('Stalled');
+      const healthScore = buildDiscussionHealthScore({
+        goals,
+        messageCount,
+        updatedAt: item.updated_at,
+      });
 
       return {
         id: item.id,
@@ -107,11 +104,7 @@ async function getHandler(request: NextRequest) {
           id: item.subtopic_id,
           title: item.subtopics?.title ?? null,
         },
-        healthScore: {
-          score,
-          color,
-          reasons,
-        },
+        healthScore,
         messageCount,
       };
     });

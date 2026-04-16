@@ -1,6 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { verifyToken } from '@/lib/jwt';
-import { adminDb } from '@/lib/database';
 import { withApiLogging } from '@/lib/api-logger';
 
 async function postHandler(request: NextRequest) {
@@ -20,28 +19,18 @@ async function postHandler(request: NextRequest) {
 
     const results = { success: 0, failed: 0, errors: [] as string[] };
 
+    if (action !== 'export_csv') {
+      return NextResponse.json(
+        { error: 'Admin discussion bulk actions are read-only. Only export_csv is supported.' },
+        { status: 405 }
+      );
+    }
+
     for (const sessionId of sessionIds) {
       try {
-        if (action === 'mark_completed') {
-          const { error } = await adminDb.from('discussion_sessions').eq('id', sessionId).update({
-            status: 'completed',
-            updated_at: new Date().toISOString()
-          });
-
-          if (!error) {
-            results.success++;
-          } else {
-            results.failed++;
-            results.errors.push(`Session ${sessionId}: ${error.message}`);
-          }
-        } else if (action === 'export_csv') {
-          // Placeholder for CSV generation (can integrate PapaParse or stream)
-          results.success++;
-          console.log(`CSV export queued for ${sessionId}`);
-        } else {
-          results.failed++;
-          results.errors.push(`Unknown action: ${action} for ${sessionId}`);
-        }
+        // Placeholder for CSV generation (can integrate PapaParse or stream)
+        results.success++;
+        console.log(`CSV export queued for ${sessionId}`);
       } catch (err: unknown) {
         results.failed++;
         results.errors.push(`Session ${sessionId}: ${err instanceof Error ? err.message : 'Unknown error'}`);

@@ -1,6 +1,6 @@
 'use client'
 
-import React, { FormEvent, useEffect, useMemo, useState } from 'react'
+import React, { useEffect, useMemo, useState } from 'react'
 import { useRouter } from 'next/navigation'
 import {
   FiHelpCircle,
@@ -18,6 +18,13 @@ import type {
   DiscussionMessage,
   AdminAction,
   ModulePrerequisiteDetails,
+} from '@/types/discussion'
+
+import {
+  normalizeAdminActions,
+  normalizeDiscussionMessages,
+  normalizeDiscussionSession,
+  normalizeDiscussionSessions,
 } from '@/types/discussion'
 
 // ── Shared Types ──
@@ -179,6 +186,7 @@ const TABS = [
   { id: 'challenge', label: 'Tantangan', icon: FiTarget },
   { id: 'quiz', label: 'Kuis', icon: FiCheckSquare },
   { id: 'refleksi', label: 'Refleksi', icon: FiBookOpen },
+  { id: 'diskusi', label: 'Diskusi', icon: FiRotateCcw },
 ]
 
 const TAB_DESCRIPTIONS: Record<string, string> = {
@@ -186,7 +194,7 @@ const TAB_DESCRIPTIONS: Record<string, string> = {
   challenge: 'Jejak tantangan berpikir kritis beserta umpan balik AI.',
   quiz: 'Percobaan kuis: pertanyaan, opsi, jawaban siswa vs kunci, dan status kebenaran.',
   refleksi: 'Refleksi jurnal terstruktur dan umpan balik konten dari siswa.',
-  diskusi: 'Sesi diskusi Socratic: transkrip, tujuan pembelajaran, dan intervensi manual.',
+  diskusi: 'Sesi diskusi Socratic: transkrip, tujuan pembelajaran, dan monitoring baca-saja.',
 }
 
 const STATUS_OPTIONS = [
@@ -210,6 +218,16 @@ const PHASE_LABELS: Record<string, string> = {
 function getPhaseLabel(phase?: string) {
   if (!phase) return 'Belum Mulai'
   return PHASE_LABELS[phase.toLowerCase()] ?? phase
+}
+
+function getSessionStatusLabel(status?: string) {
+  if (status === 'completed') return 'Selesai'
+  if (status === 'failed') return 'Gagal'
+  return 'Berjalan'
+}
+
+function getSessionStatusClass(status?: string) {
+  return status === 'completed' ? styles.statusBadgeDone : styles.statusBadgeProgress
 }
 
 function getMessageTypeLabel(message: DiscussionMessage) {
@@ -281,10 +299,6 @@ export default function AdminAktivitasPage() {
   const [prereqInfo, setPrereqInfo] = useState<ModulePrerequisiteDetails | null>(null)
   const [prereqLoading, setPrereqLoading] = useState(false)
   const [prereqError, setPrereqError] = useState<string | null>(null)
-
-  const [noteText, setNoteText] = useState('')
-  const [notePhase, setNotePhase] = useState<string | null>(null)
-  const [submittingAction, setSubmittingAction] = useState(false)
 
   // ── Derived data ──
   const groupedAskLogs = useMemo(() => groupByTopic(askLogs), [askLogs])
@@ -465,7 +479,7 @@ export default function AdminAktivitasPage() {
           throw new Error(err.error || 'Gagal memuat sesi diskusi')
         }
         const payload = await response.json()
-        setSessions(payload.sessions ?? [])
+        setSessions(normalizeDiscussionSessions(payload.sessions ?? []))
       } catch (error: unknown) {
         if (error instanceof Error && error.name !== 'AbortError') {
           setListError(error.message ?? 'Tidak dapat memuat sesi diskusi')
@@ -506,7 +520,12 @@ export default function AdminAktivitasPage() {
           const err = await response.json().catch(() => ({}))
           throw new Error(err.error || 'Gagal memuat detail sesi')
         }
-        setDetail(await response.json())
+        const payload = await response.json()
+        setDetail({
+          session: normalizeDiscussionSession(payload.session ?? {}),
+          messages: normalizeDiscussionMessages(payload.messages ?? []),
+          adminActions: normalizeAdminActions(payload.adminActions ?? []),
+        })
       } catch (error: unknown) {
         if (error instanceof Error && error.name !== 'AbortError') {
           setDetailError(error.message ?? 'Tidak dapat memuat detail sesi')
@@ -571,83 +590,10 @@ export default function AdminAktivitasPage() {
     return () => { cancelled = true }
   }, [detail?.session?.course?.id, detail?.session?.subtopic?.id])
 
-  // ── Diskusi: actions ──
+  // ── Diskusi: selection & refresh ──
   const handleSelectSession = (sessionId: string) => {
     setSelectedSessionId(sessionId)
-    setNoteText('')
-    setNotePhase(null)
   }
-
-  const handleToggleGoal = async (goalId: string, currentCovered: boolean) => {
-    if (!selectedSessionId) return
-    setSubmittingAction(true)
-    try {
-      const response = await fetch(`/api/admin/discussions/${selectedSessionId}`, {
-        method: 'POST',
-        credentials: 'include',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ action: 'markGoal', goalId, covered: !currentCovered }),
-      })
-      if (!response.ok) {
-        const err = await response.json().catch(() => ({}))
-        throw new Error(err.error || 'Gagal memperbarui status goal')
-      }
-      await refreshDetail()
-    } catch (error: unknown) {
-      alert(error instanceof Error ? error.message : 'Tidak dapat memperbarui status goal')
-    } finally {
-      setSubmittingAction(false)
-    }
-  }
-
-  const handleSubmitNote = async (event: FormEvent<HTMLFormElement>) => {
-    event.preventDefault()
-    if (!selectedSessionId || !noteText.trim()) return
-    setSubmittingAction(true)
-    try {
-      const response = await fetch(`/api/admin/discussions/${selectedSessionId}`, {
-        method: 'POST',
-        credentials: 'include',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ action: 'addCoachNote', message: noteText.trim(), phase: notePhase }),
-      })
-      if (!response.ok) {
-        const err = await response.json().catch(() => ({}))
-        throw new Error(err.error || 'Gagal menambahkan catatan')
-      }
-      setNoteText('')
-      setNotePhase(null)
-      await refreshDetail()
-    } catch (error: unknown) {
-      alert(error instanceof Error ? error.message : 'Tidak dapat menambahkan catatan')
-    } finally {
-      setSubmittingAction(false)
-    }
-  }
-
-  const refreshDetail = async () => {
-    if (!selectedSessionId) return
-    setLoadingDetail(true)
-    try {
-      const response = await fetch(`/api/admin/discussions/${selectedSessionId}`, {
-        credentials: 'include',
-      })
-      if (response.ok) setDetail(await response.json())
-    } catch (error) {
-      console.error('[Aktivitas] Gagal memuat ulang detail', error)
-    } finally {
-      setLoadingDetail(false)
-    }
-  }
-
-  const phaseOptions = useMemo(() => {
-    const phases = new Set<string>()
-    ;(detail?.messages ?? []).forEach((msg) => {
-      const phase = msg.metadata?.phase
-      if (phase) phases.add(String(phase))
-    })
-    return Array.from(phases)
-  }, [detail?.messages])
 
   // ── Auth loading gate ──
   if (authLoading) return <div className={styles.loading}>Memuat...</div>
@@ -1097,8 +1043,8 @@ export default function AdminAktivitasPage() {
                             <span className={styles.sessionCourse}>
                               {session.course.title ?? 'Tanpa judul'}
                             </span>
-                            <span className={`${styles.statusBadge} ${session.status === 'completed' ? styles.statusBadgeDone : styles.statusBadgeProgress}`}>
-                              {session.status === 'completed' ? 'Selesai' : 'Berjalan'}
+                            <span className={`${styles.statusBadge} ${getSessionStatusClass(session.status)}`}>
+                              {getSessionStatusLabel(session.status)}
                             </span>
                           </div>
                           <p className={styles.sessionSubtopic}>
@@ -1141,8 +1087,8 @@ export default function AdminAktivitasPage() {
                         <span className={styles.phaseBadge}>
                           {getPhaseLabel(detail.session.phase)}
                         </span>
-                        <span className={`${styles.statusBadge} ${detail.session.status === 'completed' ? styles.statusBadgeDone : styles.statusBadgeProgress}`}>
-                          {detail.session.status === 'completed' ? 'Selesai' : 'Berjalan'}
+                        <span className={`${styles.statusBadge} ${getSessionStatusClass(detail.session.status)}`}>
+                          {getSessionStatusLabel(detail.session.status)}
                         </span>
                       </div>
                     </div>
@@ -1154,10 +1100,10 @@ export default function AdminAktivitasPage() {
                         <strong className={styles.highlightValue}>
                           {getPhaseLabel(detail.session.phase)}
                         </strong>
-                        <p className={styles.highlightHint}>
-                          Terakhir diperbarui:{' '}
-                          {new Date(detail.session.updatedAt).toLocaleString('id-ID')}
-                        </p>
+                          <p className={styles.highlightHint}>
+                            Terakhir diperbarui:{' '}
+                          {new Date(detail.session.updatedAt || detail.session.createdAt || Date.now()).toLocaleString('id-ID')}
+                          </p>
                       </div>
                       <div className={styles.highlightCard}>
                         <span className={styles.highlightLabel}>Pencapaian Tujuan</span>
@@ -1223,7 +1169,7 @@ export default function AdminAktivitasPage() {
                       </div>
                     </div>
 
-                    {/* Goals + Manual Note */}
+                    {/* Goals + Monitoring Snapshot */}
                     <div className={styles.detailGrid}>
                       <div className={styles.card}>
                         <h4>Tujuan Pembelajaran</h4>
@@ -1236,56 +1182,42 @@ export default function AdminAktivitasPage() {
                                   <small>{String(goal.rubric.success_summary)}</small>
                                 )}
                               </div>
-                              <button
-                                type="button"
+                              <span
                                 className={`${styles.goalToggleBtn} ${goal.covered ? styles.goalToggleBtnCovered : styles.goalToggleBtnUncovered}`}
-                                onClick={() => handleToggleGoal(goal.id, goal.covered)}
-                                disabled={submittingAction}
                               >
-                                {goal.covered ? 'Tandai belum tercapai' : 'Tandai tercapai'}
-                              </button>
+                                {goal.covered ? 'Tercapai' : 'Belum tercapai'}
+                              </span>
                             </li>
                           ))}
                         </ul>
                       </div>
 
                       <div className={styles.card}>
-                        <h4>Catatan Manual</h4>
-                        <form onSubmit={handleSubmitNote} className={styles.noteForm}>
-                          <textarea
-                            placeholder="Kirim pesan manual ke siswa..."
-                            value={noteText}
-                            onChange={(e) => setNoteText(e.target.value)}
-                            rows={4}
-                          />
-                          {phaseOptions.length > 0 && (
-                            <select
-                              value={notePhase ?? ''}
-                              onChange={(e) => setNotePhase(e.target.value || null)}
-                            >
-                              <option value="">Tanpa fase</option>
-                              {phaseOptions.map((phase) => (
-                                <option key={phase} value={phase}>{phase}</option>
-                              ))}
-                            </select>
-                          )}
-                          <button
-                            type="submit"
-                            className={styles.noteSubmitBtn}
-                            disabled={!noteText.trim() || submittingAction}
-                          >
-                            Kirim Catatan
-                          </button>
-                        </form>
+                        <h4>Monitoring Cepat</h4>
+                        <div className={styles.feedbackBox}>
+                          <strong>Status Sesi:</strong>
+                          <p>{getSessionStatusLabel(detail.session.status)}</p>
+                        </div>
+                        <div className={styles.feedbackBox}>
+                          <strong>Tujuan Tercapai:</strong>
+                          <p>
+                            {goalStats.covered}/{goalStats.total || '-'} tujuan
+                          </p>
+                        </div>
+                        <div className={styles.feedbackBox}>
+                          <strong>Pembaruan Terakhir:</strong>
+                          <p>{new Date(detail.session.updatedAt || detail.session.createdAt || Date.now()).toLocaleString('id-ID')}</p>
+                        </div>
                         {detail.adminActions.length > 0 && (
                           <div className={styles.actionHistory}>
-                            <h5>Riwayat Intervensi</h5>
+                            <h5>Riwayat Aktivitas Admin</h5>
                             <ul>
                               {detail.adminActions.map((action) => (
                                 <li key={action.id}>
-                                  <strong>{action.action}</strong> oleh{' '}
-                                  {action.adminEmail ?? 'admin'} pada{' '}
-                                  {new Date(action.createdAt).toLocaleString('id-ID')}
+                                  <strong>{action.action}</strong>
+                                  {action.adminEmail ? ` oleh ${action.adminEmail}` : ''}
+                                  {' '}
+                                  pada {new Date(action.createdAt || Date.now().toString()).toLocaleString('id-ID')}
                                 </li>
                               ))}
                             </ul>

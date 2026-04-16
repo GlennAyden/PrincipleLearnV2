@@ -23,7 +23,7 @@ Tangani status completed dengan badge “Done” dan tombol lanjut modul berikut
 5. Monitoring & Ops
 
 Logging pada setiap API call untuk memudahkan debugging.
-Sediakan admin view untuk melihat transcript diskusi, status goal, dan intervensi manual bila diperlukan.
+Sediakan admin view untuk melihat transcript diskusi dan status goal saja; admin bersifat monitor-only.
 
 
 _____________________________
@@ -59,7 +59,7 @@ discussion_templates(
   created_at timestamptz,
   generated_by text     -- 'auto'
 );
-Hubungkan discussion_sessions.template_version dengan discussion_templates.version supaya ketika materi diperbarui, kita bisa regenerate versi baru tapi tetap menjaga sesi lama.
+Hubungkan sesi ke version template yang dipakai saat start supaya ketika materi diperbarui, sesi lama tetap konsisten.
 5. Integrasi Outline Generator
 
 Setelah outline generator selesai menulis materi pages untuk subtopik, trigger job generateDiscussionTemplate(subtopicContext):
@@ -108,13 +108,12 @@ CREATE TABLE discussion_sessions (
   user_id uuid NOT NULL REFERENCES users(id) ON DELETE CASCADE,
   course_id uuid NOT NULL REFERENCES courses(id) ON DELETE CASCADE,
   subtopic_id uuid NOT NULL REFERENCES subtopics(id) ON DELETE CASCADE,
-  template_id uuid NOT NULL REFERENCES discussion_templates(id) ON DELETE RESTRICT,
-  status text NOT NULL CHECK (status IN ('in_progress','completed','abandoned')),
+  status text NOT NULL CHECK (status IN ('in_progress','completed','failed')),
   phase text NOT NULL,
   learning_goals jsonb NOT NULL,
   created_at timestamptz NOT NULL DEFAULT now(),
   updated_at timestamptz NOT NULL DEFAULT now(),
-  UNIQUE (user_id, subtopic_id)
+  UNIQUE (user_id, course_id, subtopic_id)
 );
 
 CREATE TABLE discussion_messages (
@@ -124,6 +123,9 @@ CREATE TABLE discussion_messages (
   content text NOT NULL,
   step_key text NOT NULL,
   metadata jsonb NOT NULL DEFAULT '{}'::jsonb,
+  learning_session_id uuid REFERENCES learning_sessions(id),
+  is_prompt_revision boolean NOT NULL DEFAULT false,
+  revision_of_message_id uuid REFERENCES discussion_messages(id),
   created_at timestamptz NOT NULL DEFAULT now()
 );
 
@@ -247,7 +249,7 @@ Return JSON only.`;
 Di modul generator existing (misal src/services/content/generateSubtopic.ts):
 
 Setelah materi & key takeaways dikembalikan, panggil generateDiscussionTemplate.
-Update metadata subtopik (discussion_template_version/template_id) di DB.
+Update metadata subtopik (discussion_template_version) di DB.
 Return ke frontend bersamaan dengan data subtopik.
 4. API Diskusi
 

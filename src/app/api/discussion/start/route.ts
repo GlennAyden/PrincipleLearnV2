@@ -1,10 +1,14 @@
 import { NextRequest, NextResponse } from 'next/server';
 
 import { verifyToken } from '@/lib/jwt';
-import { adminDb, publicDb } from '@/lib/database';
+import { adminDb } from '@/lib/database';
 import { withApiLogging } from '@/lib/api-logger';
 import { buildSubtopicCacheKey } from '@/lib/quiz-sync';
 import { resolveDiscussionSubtopicId } from '@/lib/discussion/resolveSubtopic';
+import {
+  serializeDiscussionMessages,
+  serializeDiscussionStep,
+} from '@/lib/discussion/serializers';
 import {
   ThinkingSkillMeta,
   normalizeThinkingSkillMeta,
@@ -211,15 +215,20 @@ async function postHandler(request: NextRequest) {
 
     return NextResponse.json({
       session: serializeSession(session),
-      messages,
-      currentStep,
+      messages: serializeDiscussionMessages(messages),
+      currentStep: serializeDiscussionStep(currentStep),
     });
   } catch (error) {
     console.error('[DiscussionStart] Failed to start discussion', error);
-    return NextResponse.json(
+    const response = NextResponse.json(
       { error: 'Failed to start discussion session' },
       { status: 500 }
     );
+    response.headers.set(
+      'x-log-error-message',
+      error instanceof Error ? error.message : String(error)
+    );
+    return response;
   }
 }
 
@@ -235,7 +244,7 @@ async function fetchLatestTemplate(params: {
 }): Promise<TemplateRecord | null> {
   const { subtopicId, courseId, subtopicTitle } = params;
 
-  const { data, error } = await publicDb
+  const { data, error } = await adminDb
     .from('discussion_templates')
     .select('id, version, template, source')
     .eq('subtopic_id', subtopicId)
@@ -247,7 +256,7 @@ async function fetchLatestTemplate(params: {
   }
 
   if (courseId && subtopicTitle) {
-    const { data: fallback, error: fallbackError } = await publicDb
+    const { data: fallback, error: fallbackError } = await adminDb
       .from('discussion_templates')
       .select('id, version, template, source')
       .eq('course_id', courseId)
@@ -432,7 +441,7 @@ async function tryRegenerateTemplate({
     }
 
     const cacheKey = buildSubtopicCacheKey(courseId, moduleName, focusTitle);
-    const { data: cacheRow, error: cacheError } = await publicDb
+    const { data: cacheRow, error: cacheError } = await adminDb
       .from('subtopic_cache')
       .select('content')
       .eq('cache_key', cacheKey)
@@ -720,7 +729,7 @@ async function assembleModuleDiscussionContextFromDb({
     }
 
     const cacheKey = buildSubtopicCacheKey(courseId, moduleTitle, candidateTitle);
-    const { data: cacheRow, error: cacheError } = await publicDb
+    const { data: cacheRow, error: cacheError } = await adminDb
       .from('subtopic_cache')
       .select('content')
       .eq('cache_key', cacheKey)

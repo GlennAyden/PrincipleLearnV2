@@ -7,6 +7,10 @@ import { useEffect, useState } from 'react';
 import { useLocalStorage } from '@/hooks/useLocalStorage';
 import styles from './page.module.scss';
 import { Level } from '@/context/RequestCourseContext';
+import {
+  normalizeDiscussionSession,
+  type DiscussionSession,
+} from '@/types/discussion';
 
 interface SubtopicSummary {
   title: string;
@@ -98,12 +102,7 @@ function DiscussionCard({
   const router = useRouter();
   const isModuleScope = scope === 'module';
   const [loading, setLoading] = useState(false);
-  const [session, setSession] = useState<{
-    id: string;
-    status: 'in_progress' | 'completed';
-    phase: string;
-    learningGoals: Array<{ id: string; description: string; covered: boolean }>;
-  } | null>(null);
+  const [session, setSession] = useState<DiscussionSession | null>(null);
   const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
@@ -138,14 +137,7 @@ function DiscussionCard({
         }
         const data = await res.json();
         if (!cancelled) {
-          setSession({
-            id: data.session.id,
-            status: data.session.status === 'completed' ? 'completed' : 'in_progress',
-            phase: data.session.phase,
-            learningGoals: Array.isArray(data.session.learningGoals)
-              ? data.session.learningGoals
-              : [],
-          });
+          setSession(normalizeDiscussionSession(data.session ?? {}));
         }
       } catch (err: unknown) {
         if (!cancelled) {
@@ -166,14 +158,24 @@ function DiscussionCard({
     };
   }, [courseId, moduleId, subtopicTitle, scope]);
 
-  const status: 'idle' | 'in_progress' | 'completed' = session
+  const status: 'idle' | 'in_progress' | 'completed' | 'failed' = session
     ? session.status
     : 'idle';
-  const showCompletionBadge = status === 'completed';
-  const badgeClass = showCompletionBadge ? styles.discussionBadgeDone : '';
+  const showCompletionBadge = status !== 'idle';
+  const badgeClass =
+    status === 'completed'
+      ? styles.discussionBadgeDone
+      : styles.discussionBadgeProgress;
 
   const learningGoals = session?.learningGoals ?? [];
   const completedGoals = learningGoals.filter((goal) => goal.covered).length;
+  const statusLabel = status === 'completed'
+    ? 'Selesai'
+    : status === 'failed'
+    ? 'Gagal'
+    : status === 'in_progress'
+    ? 'Berlangsung'
+    : 'Siap';
   const cleanedModuleTitle = cleanTitle(moduleTitle);
 
   const handleNavigate = () => {
@@ -199,23 +201,23 @@ function DiscussionCard({
         {moduleIndex + 1}.{displayIndex + 1}
       </div>
       <div className={styles.cardTitleRow}>
-        <div className={styles.cardTitle}>Diskusi Penutup</div>
+        <div className={styles.cardTitle}>Diskusi Wajib</div>
         {showCompletionBadge && (
-          <span className={`${styles.discussionBadge} ${badgeClass}`}>Selesai</span>
+          <span className={`${styles.discussionBadge} ${badgeClass}`}>{statusLabel}</span>
         )}
       </div>
       <div className={styles.cardText}>
         <p>
           {isModuleScope ? (
             <>
-              Rekap seluruh materi dalam modul{' '}
+              Langkah wajib untuk menutup seluruh materi dalam modul{' '}
               <strong>{cleanedModuleTitle || moduleTitle}</strong> lewat dialog Socratic empat
               fase. Mentor virtual akan membantu menilai capaian setiap subtopik dan memberikan
               umpan balik.
             </>
           ) : (
             <>
-              Tutup subtopik <strong>{displaySubtopicTitle}</strong> dalam modul{' '}
+              Langkah wajib untuk menutup subtopik <strong>{displaySubtopicTitle}</strong> dalam modul{' '}
               <strong>{cleanedModuleTitle || moduleTitle}</strong> melalui dialog Socratic empat
               fase. Mentor virtual akan mengecek capaian dan memberi umpan balik.
             </>
@@ -224,7 +226,7 @@ function DiscussionCard({
         {session && (
           <p className={styles.discussionMeta}>
             Fase saat ini: <strong>{getPhaseLabel(session.phase)}</strong> •{' '}
-            {completedGoals}/{learningGoals.length} goals tercapai
+            {completedGoals}/{learningGoals.length} tujuan tercapai
           </p>
         )}
         {error && <p className={styles.discussionError}>{error}</p>}
@@ -235,10 +237,10 @@ function DiscussionCard({
         disabled={loading}
       >
         {status === 'idle'
-          ? 'Mulai Diskusi'
+          ? 'Mulai Diskusi Wajib'
           : status === 'completed'
-          ? 'Lihat Ringkasan Diskusi'
-          : 'Lanjutkan Diskusi'}
+          ? 'Lihat Ringkasan Diskusi Wajib'
+          : 'Lanjutkan Diskusi Wajib'}
       </button>
     </div>
   );

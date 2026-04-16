@@ -1,9 +1,13 @@
 import { NextRequest, NextResponse, after } from 'next/server';
 
 import { verifyToken } from '@/lib/jwt';
-import { adminDb, publicDb } from '@/lib/database';
+import { adminDb } from '@/lib/database';
 import { openai, defaultOpenAIModel } from '@/lib/openai';
 import { withApiLogging } from '@/lib/api-logger';
+import {
+  serializeDiscussionMessages,
+  serializeDiscussionStep,
+} from '@/lib/discussion/serializers';
 import {
   ThinkingSkillMeta,
   normalizeThinkingSkillMeta,
@@ -491,8 +495,8 @@ async function postHandler(request: NextRequest) {
       const updatedMessages = await fetchMessages(session.id);
       return NextResponse.json({
         session: { id: session.id, status: 'in_progress', phase: session.phase, learningGoals: normalizeGoals(session.learning_goals) },
-        messages: updatedMessages,
-        nextStep: { key: activeStep.step.key, prompt: activeStep.step.prompt, expected_type: activeStep.step.expected_type ?? 'open', options: activeStep.step.options ?? [], phase: activeStep.phaseId },
+        messages: serializeDiscussionMessages(updatedMessages),
+        nextStep: serializeDiscussionStep({ key: activeStep.step.key, prompt: activeStep.step.prompt, expected_type: activeStep.step.expected_type ?? 'open', options: activeStep.step.options ?? [], phase: activeStep.phaseId }),
         effortRejection: true,
       });
     }
@@ -522,8 +526,8 @@ async function postHandler(request: NextRequest) {
         const updatedMessages = await fetchMessages(session.id);
         return NextResponse.json({
           session: { id: session.id, status: 'in_progress', phase: session.phase, learningGoals: normalizeGoals(session.learning_goals) },
-          messages: updatedMessages,
-          nextStep: { key: activeStep.step.key, prompt: activeStep.step.prompt, expected_type: activeStep.step.expected_type ?? 'open', options: activeStep.step.options ?? [], phase: activeStep.phaseId },
+          messages: serializeDiscussionMessages(updatedMessages),
+          nextStep: serializeDiscussionStep({ key: activeStep.step.key, prompt: activeStep.step.prompt, expected_type: activeStep.step.expected_type ?? 'open', options: activeStep.step.options ?? [], phase: activeStep.phaseId }),
           effortRejection: true,
         });
       }
@@ -565,8 +569,8 @@ async function postHandler(request: NextRequest) {
         const updatedMessages = await fetchMessages(session.id);
         return NextResponse.json({
           session: { id: session.id, status: 'in_progress', phase: session.phase, learningGoals: normalizeGoals(session.learning_goals) },
-          messages: updatedMessages,
-          nextStep: { key: activeStep.step.key, prompt: activeStep.step.prompt, expected_type: activeStep.step.expected_type ?? 'open', options: activeStep.step.options ?? [], phase: activeStep.phaseId },
+          messages: serializeDiscussionMessages(updatedMessages),
+          nextStep: serializeDiscussionStep({ key: activeStep.step.key, prompt: activeStep.step.prompt, expected_type: activeStep.step.expected_type ?? 'open', options: activeStep.step.options ?? [], phase: activeStep.phaseId }),
           clarificationGiven: true,
         });
       }
@@ -631,8 +635,8 @@ async function postHandler(request: NextRequest) {
       const updatedMessages = await fetchMessages(session.id);
       return NextResponse.json({
         session: { id: session.id, status: 'in_progress', phase: session.phase, learningGoals },
-        messages: updatedMessages,
-        nextStep: { key: activeStep.step.key, prompt: activeStep.step.prompt, expected_type: activeStep.step.expected_type ?? 'open', options: activeStep.step.options ?? [], phase: activeStep.phaseId },
+        messages: serializeDiscussionMessages(updatedMessages),
+        nextStep: serializeDiscussionStep({ key: activeStep.step.key, prompt: activeStep.step.prompt, expected_type: activeStep.step.expected_type ?? 'open', options: activeStep.step.options ?? [], phase: activeStep.phaseId }),
         effortRejection: true,
       });
     }
@@ -724,8 +728,8 @@ async function postHandler(request: NextRequest) {
 
       return NextResponse.json({
         session: { id: session.id, status: 'in_progress', phase: activeStep.phaseId, learningGoals },
-        messages: updatedMessages,
-        nextStep: { key: activeStep.step.key, prompt: activeStep.step.prompt, expected_type: activeStep.step.expected_type ?? 'open', options: activeStep.step.options ?? [], phase: activeStep.phaseId },
+        messages: serializeDiscussionMessages(updatedMessages),
+        nextStep: serializeDiscussionStep({ key: activeStep.step.key, prompt: activeStep.step.prompt, expected_type: activeStep.step.expected_type ?? 'open', options: activeStep.step.options ?? [], phase: activeStep.phaseId }),
         isRetry: true,
         attemptNumber: currentAttemptNumber,
         maxAttempts: MAX_ATTEMPTS_PER_STEP,
@@ -771,8 +775,8 @@ async function postHandler(request: NextRequest) {
 
       return NextResponse.json({
         session: { id: session.id, status: 'in_progress', phase: nextStep.phaseId, learningGoals },
-        messages: updatedMessages,
-        nextStep: { key: nextStep.step.key, prompt: nextStep.step.prompt, expected_type: nextStep.step.expected_type ?? 'open', options: nextStep.step.options ?? [], phase: nextStep.phaseId },
+        messages: serializeDiscussionMessages(updatedMessages),
+        nextStep: serializeDiscussionStep({ key: nextStep.step.key, prompt: nextStep.step.prompt, expected_type: nextStep.step.expected_type ?? 'open', options: nextStep.step.options ?? [], phase: nextStep.phaseId }),
       });
     }
 
@@ -842,8 +846,8 @@ async function postHandler(request: NextRequest) {
 
         return NextResponse.json({
           session: { id: session.id, status: 'in_progress', phase: 'remediation', learningGoals },
-          messages: updatedMessages,
-          nextStep: { key: remediationStepKey, prompt: remediationQuestion, expected_type: 'open', options: [], phase: 'remediation' },
+          messages: serializeDiscussionMessages(updatedMessages),
+          nextStep: serializeDiscussionStep({ key: remediationStepKey, prompt: remediationQuestion, expected_type: 'open', options: [], phase: 'remediation' }),
           isRemediation: true,
           remediationRound,
           maxRemediationRounds: MAX_REMEDIATION_ROUNDS,
@@ -882,15 +886,20 @@ async function postHandler(request: NextRequest) {
 
     return NextResponse.json({
       session: { id: session.id, status: 'completed', phase: 'completed', learningGoals },
-      messages: updatedMessages,
+      messages: serializeDiscussionMessages(updatedMessages),
       nextStep: null,
     });
   } catch (error) {
     console.error('[DiscussionRespond] Failed to process response', error);
-    return NextResponse.json(
+    const response = NextResponse.json(
       { error: 'Failed to process discussion response' },
       { status: 500 }
     );
+    response.headers.set(
+      'x-log-error-message',
+      error instanceof Error ? error.message : String(error)
+    );
+    return response;
   }
 }
 
@@ -915,7 +924,7 @@ async function fetchSession(sessionId: string): Promise<SessionRecord | null> {
 
 async function fetchTemplate(session: SessionRecord): Promise<TemplateRecord | null> {
   if (session.template_id) {
-    const { data, error } = await publicDb
+    const { data, error } = await adminDb
       .from('discussion_templates')
       .select('id, template, version, source')
       .eq('id', session.template_id)
@@ -926,7 +935,7 @@ async function fetchTemplate(session: SessionRecord): Promise<TemplateRecord | n
     }
   }
 
-  const { data, error } = await publicDb
+  const { data, error } = await adminDb
     .from('discussion_templates')
     .select('id, template, version, source')
     .eq('subtopic_id', session.subtopic_id)

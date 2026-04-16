@@ -30,7 +30,7 @@ PrincipleLearn V3 is an AI-powered adaptive learning platform designed as the pr
 - **Interactive Learning**: Streamed Q&A, challenge thinking prompts, contextual example generation, and structured reflection journals
 - **Socratic Discussions**: Multi-turn AI-guided dialogues using a 4-phase model (diagnosis, exploration, practice, synthesis) with learning goal tracking
 - **Research Analytics**: Prompt classification (SCP/SRP/MQP/REFLECTIVE), cognitive indicator assessment (6 CT + 6 CTh dimensions), inter-rater reliability (Cohen's Kappa), and triangulation records
-- **Admin Dashboard**: KPI monitoring, user management, activity tracking, discussion oversight, and research data export
+- **Admin Dashboard**: KPI monitoring, user management, activity tracking, discussion monitoring, and research data export
 
 ### Technology Stack Summary
 
@@ -163,7 +163,7 @@ The frontend uses the Next.js 15 App Router with React 19 and TypeScript. All pa
 | `/admin/dashboard` | Admin KPIs, RM2/RM3 research charts |
 | `/admin/users` | User management and detail views |
 | `/admin/activity` | Activity monitoring (quiz, journal, transcript, Q&A, challenges) |
-| `/admin/discussions` | Discussion session management and analytics |
+| `/admin/discussions` | Discussion monitoring and analytics |
 | `/admin/insights` | Learning insights and data export |
 | `/admin/research` | Research analytics (prompt classification, cognitive indicators) |
 
@@ -230,7 +230,7 @@ All API routes follow the Next.js 15 App Router convention with `route.ts` files
 | `/api/admin/dashboard` | Aggregated KPIs and stats |
 | `/api/admin/users/*` | User CRUD, detail views, activity summaries, export |
 | `/api/admin/activity/*` | Quiz, journal, transcript, ask-question, challenge, feedback, course, discussion, learning-profile, search, topics, analytics, export |
-| `/api/admin/discussions/*` | Session list, detail, feedback, analytics, bulk operations, module status |
+| `/api/admin/discussions/*` | Session list, detail, analytics, module status |
 | `/api/admin/insights/*` | Learning insights, export |
 | `/api/admin/research/*` | Sessions, classifications, indicators, analytics, classify, bulk, export |
 | `/api/admin/monitoring/logging` | API log viewer |
@@ -686,7 +686,7 @@ sequenceDiagram
         OAI-->>Gen: {phases, learning_goals, closing_message}
         Gen->>DB: INSERT discussion_templates
     end
-    Start->>DB: INSERT discussion_sessions (status: active, phase: diagnosis)
+    Start->>DB: INSERT discussion_sessions (status: in_progress, phase: diagnosis)
     Start->>DB: INSERT discussion_messages (role: agent, initial prompt)
     Start-->>B: {sessionId, message, goals, phase}
 

@@ -4,6 +4,13 @@ import Link from 'next/link';
 import { useParams, useRouter, useSearchParams } from 'next/navigation';
 import { useEffect, useMemo, useRef, useState, type FormEvent } from 'react';
 import styles from './page.module.scss';
+import {
+  normalizeDiscussionResponse,
+  type DiscussionMessage,
+  type DiscussionSession,
+  type DiscussionStep,
+  type ModulePrerequisiteDetails,
+} from '@/types/discussion';
 
 type OutlineSubtopic = {
   title: string;
@@ -22,65 +29,6 @@ type OutlineModule = {
 interface CourseData {
   title: string;
   outline: OutlineModule[];
-}
-
-interface DiscussionGoal {
-  id: string;
-  description: string;
-  covered: boolean;
-  rubric?: Record<string, unknown>;
-}
-
-interface DiscussionSession {
-  id: string;
-  status: 'in_progress' | 'completed';
-  phase: string;
-  learningGoals: DiscussionGoal[];
-}
-
-interface DiscussionMessage {
-  id?: string;
-  role: 'agent' | 'student';
-  content: string;
-  created_at?: string;
-  metadata?: {
-    phase?: string;
-    type?: string;
-    expected_type?: string;
-    options?: string[];
-    [key: string]: unknown;
-  };
-  step_key?: string;
-}
-
-interface DiscussionStep {
-  key: string;
-  prompt: string;
-  expected_type?: string;
-  options?: string[];
-  phase?: string;
-}
-
-interface ModulePrerequisiteDetails {
-  ready: boolean;
-  summary: {
-    expectedSubtopics: number;
-    generatedSubtopics: number;
-    totalQuizQuestions: number;
-    answeredQuizQuestions: number;
-    minQuestionsPerSubtopic: number;
-  };
-  subtopics: Array<{
-    key: string;
-    title: string;
-    generated: boolean;
-    quizQuestionCount: number;
-    answeredCount: number;
-    quizCompleted: boolean;
-    missingQuestions: string[];
-    userHasCompletion?: boolean;
-    completedUsers?: string[];
-  }>;
 }
 
 const PHASE_LABELS: Record<string, string> = {
@@ -342,7 +290,7 @@ export default function DiscussionModulePage() {
             setError('');
           } else {
             setError(
-              'Selesaikan seluruh subtopik (termasuk kuis) sebelum memulai diskusi penutup.'
+              'Selesaikan seluruh subtopik (termasuk kuis) sebelum memulai diskusi wajib.'
             );
           }
         }
@@ -407,17 +355,11 @@ export default function DiscussionModulePage() {
 
         const data = await response.json();
         if (!cancelled) {
+          const normalized = normalizeDiscussionResponse(data);
           setRequiresPreparation(false);
-          setSession({
-            id: data.session.id,
-            status: data.session.status === 'completed' ? 'completed' : 'in_progress',
-            phase: data.session.phase,
-            learningGoals: Array.isArray(data.session.learningGoals)
-              ? data.session.learningGoals
-              : [],
-          });
-          setMessages(Array.isArray(data.messages) ? data.messages : []);
-          setCurrentStep(data.currentStep ?? null);
+          setSession(normalized.session);
+          setMessages(normalized.messages);
+          setCurrentStep(normalized.currentStep);
         }
       } catch (err: unknown) {
         if (!cancelled) {
@@ -425,7 +367,7 @@ export default function DiscussionModulePage() {
           if (/unable to resolve discussion context/i.test(message) || /discussion session not found/i.test(message)) {
             setRequiresPreparation(true);
             setError(
-              'Diskusi penutup baru tersedia setelah semua subtopik modul selesai dipelajari dan digenerate.'
+              'Diskusi wajib baru tersedia setelah semua subtopik modul selesai dipelajari dan digenerate.'
             );
           } else {
             setError(message);
@@ -471,17 +413,11 @@ export default function DiscussionModulePage() {
 
         const data = await response.json();
         if (!cancelled) {
+          const normalized = normalizeDiscussionResponse(data);
           setRequiresPreparation(false);
-          setSession({
-            id: data.session.id,
-            status: data.session.status === 'completed' ? 'completed' : 'in_progress',
-            phase: data.session.phase,
-            learningGoals: Array.isArray(data.session.learningGoals)
-              ? data.session.learningGoals
-              : [],
-          });
-          setMessages(Array.isArray(data.messages) ? data.messages : []);
-          setCurrentStep(data.currentStep ?? null);
+          setSession(normalized.session);
+          setMessages(normalized.messages);
+          setCurrentStep(normalized.currentStep);
         }
       } catch (err: unknown) {
         if (!cancelled) {
@@ -489,7 +425,7 @@ export default function DiscussionModulePage() {
           if (/unable to resolve discussion context/i.test(message) || /discussion session not found/i.test(message)) {
             setRequiresPreparation(true);
             setError(
-              'Diskusi penutup baru tersedia setelah semua subtopik modul selesai dipelajari dan digenerate.'
+              'Diskusi wajib baru tersedia setelah semua subtopik modul selesai dipelajari dan digenerate.'
             );
           } else {
             setError(message);
@@ -521,7 +457,7 @@ export default function DiscussionModulePage() {
     event.preventDefault();
     if (!session || session.status === 'completed' || !currentStep) return;
 
-    const isMcq = (currentStep.expected_type ?? '').toLowerCase() === 'mcq';
+    const isMcq = (currentStep.expectedType ?? '').toLowerCase() === 'mcq';
     const payload = isMcq ? selectedOption : inputValue.trim();
     if (!payload) return;
 
@@ -549,18 +485,12 @@ export default function DiscussionModulePage() {
       }
 
       const data = await response.json();
-      setSession({
-        id: data.session.id,
-        status: data.session.status === 'completed' ? 'completed' : 'in_progress',
-        phase: data.session.phase,
-        learningGoals: Array.isArray(data.session.learningGoals)
-          ? data.session.learningGoals
-          : [],
-      });
-      setMessages(Array.isArray(data.messages) ? data.messages : []);
+      const normalized = normalizeDiscussionResponse(data);
+      setSession(normalized.session);
+      setMessages(normalized.messages);
       const nextStep =
-        data.nextStep ??
-        (data.session.status === 'completed' ? null : data.currentStep ?? null);
+        normalized.nextStep ??
+        (normalized.session.status === 'completed' ? null : normalized.currentStep ?? null);
       setCurrentStep(nextStep);
 
       // Handle effort rejection — keep input so student can edit
@@ -599,7 +529,7 @@ export default function DiscussionModulePage() {
         setRemediationRound(0);
       }
 
-      if (data.session.status === 'completed') {
+      if (normalized.session.status === 'completed') {
         setIsRemediation(false);
         setRemediationRound(0);
         setIsRetrying(false);
@@ -624,7 +554,7 @@ export default function DiscussionModulePage() {
   const hasMessages = messages.length > 0;
   const goalPanelId = session?.id ? `discussion-goal-panel-${session.id}` : 'discussion-goal-panel';
   const isCurrentStepMcq =
-    (currentStep?.expected_type ?? '').toLowerCase() === 'mcq' &&
+    (currentStep?.expectedType ?? '').toLowerCase() === 'mcq' &&
     Array.isArray(currentStep?.options);
   const mcqOptions = isCurrentStepMcq ? (currentStep?.options as string[]) : [];
 
@@ -727,6 +657,8 @@ export default function DiscussionModulePage() {
   const statusBadge =
     session?.status === 'completed'
       ? styles.badgeDone
+      : session?.status === 'failed'
+      ? styles.badgeProgress
       : session?.status === 'in_progress'
       ? styles.badgeProgress
       : styles.badgeIdle;
@@ -734,6 +666,8 @@ export default function DiscussionModulePage() {
   const statusLabel =
     session?.status === 'completed'
       ? 'Selesai'
+      : session?.status === 'failed'
+      ? 'Gagal'
       : session?.status === 'in_progress'
       ? 'Sedang Berlangsung'
       : 'Siap';
@@ -828,7 +762,7 @@ export default function DiscussionModulePage() {
           >
             ← Kembali ke Outline
           </Link>
-          <h1 className={styles.title}>Diskusi Penutup</h1>
+          <h1 className={styles.title}>Diskusi Wajib</h1>
           <p className={styles.subtitle}>
             Modul <strong>{moduleTitle}</strong> - {subtitleLabel}{' '}
             <strong>{displaySubtopicTitle}</strong>
@@ -841,7 +775,7 @@ export default function DiscussionModulePage() {
         <div className={styles.preparationNotice}>
           <h2>Lengkapi Materi Terlebih Dahulu</h2>
           <p>
-            Diskusi penutup modul akan aktif setelah semua subtopik selesai dipelajari dan seluruh
+            Diskusi wajib modul akan aktif setelah semua subtopik selesai dipelajari dan seluruh
             kuis subtopik telah dikerjakan.
           </p>
           {prereqDetails && (
@@ -998,7 +932,7 @@ export default function DiscussionModulePage() {
                       <p className={styles.introPrompt}>{currentStep.prompt}</p>
                     )}
                     <p className={styles.introHint}>
-                      Ketik jawabanmu lalu tekan tombol kirim untuk memulai diskusi.
+                      Ketik jawabanmu lalu tekan tombol kirim untuk melanjutkan diskusi wajib ini.
                     </p>
                   </div>
                 )}
@@ -1006,7 +940,7 @@ export default function DiscussionModulePage() {
                   const isAgent = message.role === 'agent';
                   const meta = message.metadata ?? {};
                   const metaType = message.metadata?.type;
-                  const timestamp = formatTimestamp(message.created_at);
+                  const timestamp = formatTimestamp(message.createdAt);
                   return (
                     <div
               key={message.id ?? `${message.role}-${index}`}

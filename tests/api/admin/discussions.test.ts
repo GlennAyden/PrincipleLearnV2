@@ -1,7 +1,9 @@
-import { describe, it, expect, beforeAll, afterAll } from '@jest/globals';
+import { describe, it, expect, beforeAll } from '@jest/globals';
 import { testAdminUserApi } from '../test-admin-user-api';
-import type { DiscussionSessionListItemWithHealth, DiscussionAnalytics } from '../../../src/types/discussion';
-import { supabase } from '../../../src/lib/database';
+import type {
+  DiscussionAnalytics,
+  DiscussionSessionListItemWithHealth,
+} from '../../../src/types/discussion';
 
 describe('Admin Discussions API', () => {
   let adminHeaders: HeadersInit;
@@ -11,9 +13,16 @@ describe('Admin Discussions API', () => {
     adminHeaders = { Cookie: `access_token=${auth.token}` };
   });
 
-  afterAll(async () => {
-    // Cleanup test data if needed
-  });
+  async function fetchFirstDiscussionSession() {
+    const response = await fetch('http://localhost:3000/api/admin/discussions?limit=1', {
+      headers: adminHeaders as HeadersInit,
+    });
+
+    expect(response.status).toBe(200);
+
+    const data = (await response.json()) as { sessions?: DiscussionSessionListItemWithHealth[] };
+    return data.sessions?.[0] ?? null;
+  }
 
   it('should list discussions with health scores', async () => {
     const response = await fetch('http://localhost:3000/api/admin/discussions?limit=5', {
@@ -22,8 +31,16 @@ describe('Admin Discussions API', () => {
     expect(response.status).toBe(200);
     const data = await response.json();
     expect(Array.isArray(data.sessions)).toBe(true);
+    if (!data.sessions.length) {
+      console.warn('No discussion sessions returned for list test');
+      return;
+    }
+
     expect(data.sessions[0]).toHaveProperty('healthScore');
     expect(typeof data.sessions[0].healthScore.score).toBe('number');
+    expect(['in_progress', 'completed', 'failed']).toContain(data.sessions[0].status);
+    expect(data.sessions[0]).toHaveProperty('course');
+    expect(data.sessions[0]).toHaveProperty('subtopic');
   });
 
   it('should get analytics', async () => {
@@ -36,31 +53,49 @@ describe('Admin Discussions API', () => {
     expect(data.analytics.totalSessions).toBeGreaterThanOrEqual(0);
   });
 
-  it('should handle bulk update', async () => {
-    // First get a session ID
-    const listRes = await fetch('http://localhost:3000/api/admin/discussions?limit=1', {
-      headers: adminHeaders as HeadersInit,
-    });
-    const listData = await listRes.json();
-    if (!listData.sessions?.[0]?.id) {
-      console.warn('No sessions for bulk test');
+  it('should expose a read-only discussion transcript for monitoring', async () => {
+    const session = await fetchFirstDiscussionSession();
+
+    if (!session?.id) {
+      console.warn('No sessions available for detail test');
       return;
     }
 
-    const response = await fetch('http://localhost:3000/api/admin/discussions/bulk', {
-      method: 'POST',
-      headers: {
-        ...adminHeaders as HeadersInit,
-        'Content-Type': 'application/json',
-      },
-      body: JSON.stringify({
-        sessionIds: [listData.sessions[0].id],
-        action: 'mark_completed',
-      }),
+    const response = await fetch(`http://localhost:3000/api/admin/discussions/${session.id}`, {
+      headers: adminHeaders as HeadersInit,
     });
+
     expect(response.status).toBe(200);
-    const result = await response.json();
-    expect(result.results.success).toBeGreaterThanOrEqual(0);
+
+    const data = await response.json() as {
+      session: {
+        id: string;
+        status: string;
+        phase: string;
+        learningGoals: unknown[];
+        createdAt: string;
+        updatedAt: string;
+        user: { id: string; email: string | null };
+        course: { id: string; title: string | null };
+        subtopic: { id: string; title: string | null };
+      };
+      messages: Array<{
+        id: string;
+        role: string;
+        content: string;
+        step_key?: string | null;
+        created_at?: string;
+      }>;
+      adminActions: unknown[];
+    };
+
+    expect(data.session.id).toBe(session.id);
+    expect(['in_progress', 'completed', 'failed']).toContain(data.session.status);
+    expect(Array.isArray(data.session.learningGoals)).toBe(true);
+    expect(Array.isArray(data.messages)).toBe(true);
+    expect(Array.isArray(data.adminActions)).toBe(true);
+    expect(data.messages.length).toBeGreaterThan(0);
+    expect(data.messages[0]).toHaveProperty('step_key');
   });
 });
 

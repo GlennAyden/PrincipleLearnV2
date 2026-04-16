@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { verifyToken } from '@/lib/jwt';
 import { adminDb } from '@/lib/database';
 import { withApiLogging } from '@/lib/api-logger';
+import { buildDiscussionHealthScore } from '@/lib/discussion/serializers';
 import type { DiscussionAnalytics, SessionHealthScore } from '@/types/discussion';
 
 async function getHandler(request: NextRequest) {
@@ -82,23 +83,16 @@ async function getHandler(request: NextRequest) {
       coveredGoals += goals.filter((g: { covered?: boolean }) => g.covered).length;
 
       // Health score logic
-      const daysStalled = (now.getTime() - new Date(session.updated_at).getTime()) / (24 * 60 * 60 * 1000);
-      const goalPct = goals.length ? (goals.filter((g: { covered?: boolean }) => g.covered).length / goals.length) : 0;
-      const hasActivity = messageCount > 3;
-      const score = Math.round(
-        (goalPct * 50) +
-        (hasActivity ? 30 : 0) +
-        (daysStalled < 2 ? 20 : 0)
-      );
-      const color = score >= 80 ? 'green' : score >= 50 ? 'yellow' : 'red';
-      const reasons: string[] = [];
-      if (goalPct < 0.5) reasons.push('Low goal coverage');
-      if (!hasActivity) reasons.push('Low activity');
-      if (daysStalled > 2) reasons.push('Stalled');
+      const healthScore = buildDiscussionHealthScore({
+        goals,
+        messageCount,
+        updatedAt: session.updated_at,
+        now,
+      });
 
       return {
         ...session,
-        healthScore: { score, color, reasons } as SessionHealthScore,
+        healthScore: healthScore as SessionHealthScore,
         messageCount,
       };
     });

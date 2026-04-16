@@ -3,6 +3,10 @@ import { NextRequest, NextResponse } from 'next/server';
 import { verifyToken } from '@/lib/jwt';
 import { adminDb } from '@/lib/database';
 import { withApiLogging } from '@/lib/api-logger';
+import {
+  serializeDiscussionAdminActions,
+  serializeDiscussionMessages,
+} from '@/lib/discussion/serializers';
 
 let hasDiscussionAdminActionsTable: boolean | null = null;
 
@@ -135,8 +139,15 @@ async function getHandler(
           title: session.subtopics?.title ?? null,
         },
       },
-      messages: messages ?? [],
-      adminActions: actions,
+      messages: serializeDiscussionMessages(messages ?? []),
+      adminActions: serializeDiscussionAdminActions(actions as Array<{
+        id: string;
+        action: string;
+        payload: unknown;
+        created_at: string;
+        admin_id: string | null;
+        admin_email: string | null;
+      }>),
     });
   } catch (error) {
     console.error('[AdminDiscussions] Unexpected error loading session details', error);
@@ -162,155 +173,14 @@ async function postHandler(
     if (!sessionId) {
       return NextResponse.json({ error: 'sessionId is required' }, { status: 400 });
     }
-
-    const body = await request.json().catch(() => null);
-    if (!body || !body.action) {
-      return NextResponse.json({ error: 'Action is required' }, { status: 400 });
-    }
-
-    if (body.action === 'markGoal') {
-      const { goalId, covered, note } = body;
-      if (!goalId || typeof covered !== 'boolean') {
-        return NextResponse.json(
-          { error: 'goalId and covered flag are required' },
-          { status: 400 }
-        );
-      }
-
-      const { data: sessionData, error: sessionError } = await adminDb
-        .from('discussion_sessions')
-        .select('learning_goals, course_id, subtopic_id')
-        .eq('id', sessionId)
-        .maybeSingle();
-
-      if (sessionError || !sessionData) {
-        return NextResponse.json({ error: 'Session not found' }, { status: 404 });
-      }
-
-      const goals = Array.isArray(sessionData.learning_goals)
-        ? sessionData.learning_goals
-        : [];
-      const goalIndex = goals.findIndex((goal: Record<string, unknown>) => goal?.id === goalId);
-      if (goalIndex === -1) {
-        return NextResponse.json(
-          { error: 'Goal not found in session' },
-          { status: 404 }
-        );
-      }
-
-      const updatedGoals = goals.map((goal: Record<string, unknown>) =>
-        goal?.id === goalId ? { ...goal, covered } : goal
-      );
-
-      const { error: updateError } = await adminDb
-        .from('discussion_sessions')
-        .eq('id', sessionId)
-        .update({ learning_goals: updatedGoals });
-
-      if (updateError) {
-        console.error('[AdminDiscussions] Failed to update goals', updateError);
-        return NextResponse.json(
-          { error: 'Failed to update goal status' },
-          { status: 500 }
-        );
-      }
-
-      if (note) {
-        await adminDb.from('discussion_messages').insert({
-          session_id: sessionId,
-          role: 'agent',
-          content: note,
-          metadata: {
-            type: 'manual_intervention',
-            goalId,
-            covered,
-            adminId: payload.userId,
-            adminEmail: payload.email,
-          },
-        });
-      }
-
-      if (hasDiscussionAdminActionsTable !== false) {
-        const { error: actionLogError } = await adminDb.from('discussion_admin_actions').insert({
-          session_id: sessionId,
-          admin_id: payload.userId,
-          admin_email: payload.email,
-          action: 'mark_goal',
-          payload: { goalId, covered, note },
-        });
-
-        if (actionLogError) {
-          if (isMissingTableError(actionLogError, 'discussion_admin_actions')) {
-            markDiscussionAdminActionsTableUnavailable();
-            console.warn(
-              '[AdminDiscussions] discussion_admin_actions table not found, skipping action log insert'
-            );
-          } else {
-            console.error('[AdminDiscussions] Failed to insert admin action log', actionLogError);
-          }
-        } else {
-          hasDiscussionAdminActionsTable = true;
-        }
-      }
-
-      return NextResponse.json({ success: true });
-    }
-
-    if (body.action === 'addCoachNote') {
-      const { message, phase } = body;
-      if (!message || typeof message !== 'string' || !message.trim()) {
-        return NextResponse.json(
-          { error: 'message is required' },
-          { status: 400 }
-        );
-      }
-
-      await adminDb.from('discussion_messages').insert({
-        session_id: sessionId,
-        role: 'agent',
-        content: message.trim(),
-        metadata: {
-          type: 'manual_note',
-          phase: phase ?? null,
-          adminId: payload.userId,
-          adminEmail: payload.email,
-        },
-      });
-
-      if (hasDiscussionAdminActionsTable !== false) {
-        const { error: actionLogError } = await adminDb.from('discussion_admin_actions').insert({
-          session_id: sessionId,
-          admin_id: payload.userId,
-          admin_email: payload.email,
-          action: 'add_note',
-          payload: { message: message.trim(), phase },
-        });
-
-        if (actionLogError) {
-          if (isMissingTableError(actionLogError, 'discussion_admin_actions')) {
-            markDiscussionAdminActionsTableUnavailable();
-            console.warn(
-              '[AdminDiscussions] discussion_admin_actions table not found, skipping action log insert'
-            );
-          } else {
-            console.error('[AdminDiscussions] Failed to insert admin action log', actionLogError);
-          }
-        } else {
-          hasDiscussionAdminActionsTable = true;
-        }
-      }
-
-      return NextResponse.json({ success: true });
-    }
-
     return NextResponse.json(
-      { error: `Unknown action: ${body.action}` },
-      { status: 400 }
+      { error: 'Admin discussion interventions are disabled. Monitoring is read-only.' },
+      { status: 405 }
     );
   } catch (error) {
-    console.error('[AdminDiscussions] Failed to apply intervention', error);
+    console.error('[AdminDiscussions] Failed to handle monitor-only guard', error);
     return NextResponse.json(
-      { error: 'Failed to apply intervention' },
+      { error: 'Failed to enforce discussion monitoring policy' },
       { status: 500 }
     );
   }

@@ -212,7 +212,7 @@ erDiagram
         text role
         text content
         jsonb metadata
-        text stepKey
+        text step_key
         uuid learning_session_id FK
         boolean is_prompt_revision
         uuid revision_of_message_id FK
@@ -221,8 +221,13 @@ erDiagram
 
     discussion_templates {
         uuid id PK
+        uuid course_id FK
+        uuid subtopic_id FK
+        text version
         jsonb source
         jsonb template
+        text generated_by
+        text status
         timestamptz created_at
     }
 
@@ -447,7 +452,7 @@ erDiagram
     quiz ||--o{ quiz_submissions : "answered by"
 
     discussion_sessions ||--o{ discussion_messages : "contains"
-    discussion_sessions ||--o{ discussion_admin_actions : "moderated by"
+    discussion_sessions ||--o{ discussion_admin_actions : "audited by"
 
     learning_sessions ||--o{ ask_question_history : "records"
     learning_sessions ||--o{ discussion_messages : "captures"
@@ -725,7 +730,7 @@ Tables supporting the guided discussion system, content caching, administrative 
 
 ### 5.1 `discussion_sessions`
 
-Tracks active and completed guided discussion sessions between students and the AI agent.
+Tracks guided discussion sessions between students and the AI agent.
 
 | Column | Type | Constraints | Description |
 |--------|------|-------------|-------------|
@@ -733,7 +738,7 @@ Tracks active and completed guided discussion sessions between students and the 
 | `user_id` | `uuid` | **FK** -> `users(id)` | Participating student |
 | `course_id` | `uuid` | **FK** -> `courses(id)` | Course context |
 | `subtopic_id` | `uuid` | **FK** -> `subtopics(id)` | Subtopic being discussed |
-| `status` | `text` | | Session status (e.g., `active`, `completed`) |
+| `status` | `text` | | Session status (e.g., `in_progress`, `completed`, `failed`) |
 | `phase` | `text` | | Current discussion phase |
 | `learning_goals` | `jsonb` | | Session learning objectives |
 | `created_at` | `timestamptz` | default `now()` | Session start |
@@ -752,7 +757,7 @@ Individual messages within a discussion session, from both the AI agent and the 
 | `role` | `text` | enum: `agent`, `student` | Message sender role |
 | `content` | `text` | | Message body |
 | `metadata` | `jsonb` | | Additional structured data (e.g., prompt context) |
-| `stepKey` | `text` | | Discussion flow step identifier |
+| `step_key` | `text` | | Discussion flow step identifier |
 | `learning_session_id` | `uuid` | **FK** -> `learning_sessions(id)` | Research session link |
 | `is_prompt_revision` | `boolean` | | Whether this message is a revised version of a prior prompt |
 | `revision_of_message_id` | `uuid` | **FK (self)** -> `discussion_messages(id)` | Original message being revised |
@@ -764,13 +769,18 @@ Individual messages within a discussion session, from both the AI agent and the 
 
 ### 5.3 `discussion_templates`
 
-Predefined discussion flow templates. Publicly readable.
+Predefined discussion flow templates for each course and subtopic.
 
 | Column | Type | Constraints | Description |
 |--------|------|-------------|-------------|
 | `id` | `uuid` | **PK** | Template identifier |
+| `course_id` | `uuid` | **FK** -> `courses(id)` | Course context |
+| `subtopic_id` | `uuid` | **FK** -> `subtopics(id)` | Subtopic context |
+| `version` | `text` | | Template version string |
 | `source` | `jsonb` | | Template source/origin metadata |
 | `template` | `jsonb` | | Discussion flow structure and steps |
+| `generated_by` | `text` | | Template origin (`auto` or similar) |
+| `status` | `text` | | Template status (`ready`, `needs_review`, `failed`) |
 | `created_at` | `timestamptz` | default `now()` | Creation timestamp |
 
 **RLS Policies:**
@@ -781,7 +791,7 @@ Predefined discussion flow templates. Publicly readable.
 
 ### 5.4 `discussion_admin_actions`
 
-Audit log of administrative actions on discussion sessions.
+Audit log of admin monitoring notes and legacy discussion actions.
 
 | Column | Type | Constraints | Description |
 |--------|------|-------------|-------------|
@@ -1133,7 +1143,7 @@ Because the application uses **custom JWT authentication** (not Supabase Auth), 
 
 - **All write operations** go through `adminDb` (service-role), which bypasses RLS entirely.
 - **Most read operations** also use `adminDb` for the same reason.
-- **`publicDb`** (anon key) is used only for tables with `USING (true)` policies (`discussion_templates`, `subtopic_cache`), following the principle of least privilege.
+- **`publicDb`** (anon key) is used for shared reads when the live Supabase policy allows it; discussion template and cache reads may fall back to `adminDb` if the anon client is blocked by RLS.
 
 ---
 
@@ -1322,10 +1332,14 @@ The following columns store structured JSON data. The `get_jsonb_columns()` data
 | `ask_question_history` | `prompt_components` | Structured prompt parts sent to OpenAI |
 | `course_generation_activity` | `request_payload` | Original course generation request parameters |
 | `course_generation_activity` | `outline` | Generated course outline structure |
-| `discussion_sessions` | `learning_goals` | Array of learning objective strings |
+| `discussion_sessions` | `learning_goals` | Array of learning objective objects |
 | `discussion_messages` | `metadata` | Message context (prompt info, step data) |
+| `discussion_messages` | `step_key` | Flow step identifier |
 | `discussion_templates` | `source` | Template origin metadata |
 | `discussion_templates` | `template` | Discussion flow steps and structure |
+| `discussion_templates` | `version` | Template version string |
+| `discussion_templates` | `generated_by` | Template generation source |
+| `discussion_templates` | `status` | Template readiness state |
 | `discussion_admin_actions` | `payload` | Action-specific parameters |
 | `subtopic_cache` | `content` | Cached subtopic content (mirrors `subtopics.content`) |
 | `api_logs` | `metadata` | Request/response metadata (headers, body snippets, user info) |

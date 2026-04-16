@@ -82,6 +82,42 @@ export async function logApiCall({
   }
 }
 
+function normalizeLoggedErrorMessage(raw: string | null | undefined) {
+  if (!raw) return null;
+  const trimmed = raw.trim();
+  return trimmed.length ? trimmed : null;
+}
+
+async function extractErrorMessageFromResponse(response: Response) {
+  const headerError = normalizeLoggedErrorMessage(
+    response.headers.get('x-log-error-message')
+  );
+  if (headerError) {
+    return headerError;
+  }
+
+  if (response.status < 400) {
+    return null;
+  }
+
+  try {
+    const cloned = response.clone();
+    const contentType = cloned.headers.get('content-type') ?? '';
+
+    if (contentType.includes('application/json')) {
+      const body = (await cloned.json()) as { error?: unknown; message?: unknown };
+      if (typeof body?.error === 'string') return normalizeLoggedErrorMessage(body.error);
+      if (typeof body?.message === 'string') return normalizeLoggedErrorMessage(body.message);
+      return null;
+    }
+
+    const text = await cloned.text();
+    return normalizeLoggedErrorMessage(text);
+  } catch {
+    return null;
+  }
+}
+
 // eslint-disable-next-line @typescript-eslint/no-explicit-any -- generic handler signature requires any[] for parameter spread
 export function withApiLogging<T extends (...args: any[]) => Promise<Response>>(
   handler: T,
@@ -93,10 +129,15 @@ export function withApiLogging<T extends (...args: any[]) => Promise<Response>>(
     try {
       const response = await handler(...args);
       const duration = Date.now() - startedAt;
+      const errorMessage = await extractErrorMessageFromResponse(response);
+      if (response.headers.has('x-log-error-message')) {
+        response.headers.delete('x-log-error-message');
+      }
       await logApiCall({
         request,
         status: response.status,
         durationMs: duration,
+        errorMessage,
         label: context.label,
         metadata: context.metadata,
       });

@@ -56,7 +56,7 @@ Complete endpoint reference for the PrincipleLearn V3 platform.
   - [Dashboard and Users](#dashboard-and-users)
   - [Activity Tracking](#activity-tracking)
   - [Insights and Analytics](#insights-and-analytics)
-  - [Discussion Management](#discussion-management)
+  - [Discussion Monitoring](#discussion-monitoring)
   - [Research Endpoints](#research-endpoints)
   - [Monitoring](#monitoring)
 
@@ -1232,7 +1232,7 @@ Retrieves the user's prompt evolution journey for a specific course, tracking ho
 
 ## 6. Discussion Endpoints
 
-The discussion system provides structured, AI-guided discussions for each subtopic. Sessions follow a multi-step template with goal tracking and automatic completion.
+The discussion system provides structured, AI-guided discussions for each subtopic. Sessions follow a multi-step template with goal tracking and automatic completion. The intended admin experience is read-only monitoring: admins can review transcripts, readiness, and analytics, but they do not intervene in the live dialogue.
 
 ### POST /api/discussion/start
 
@@ -1269,19 +1269,31 @@ curl -X POST http://localhost:3000/api/discussion/start \
 {
   "session": {
     "id": "session-uuid",
-    "status": "active",
-    "current_step": 1,
-    "total_steps": 5,
-    "goals_completed": 0
+    "status": "in_progress",
+    "phase": "diagnosis",
+    "learningGoals": [
+      { "id": "goal-1", "description": "Identify the core concept", "covered": false }
+    ],
+    "createdAt": "2026-04-16T03:47:00Z",
+    "updatedAt": "2026-04-16T03:47:00Z",
+    "user": { "id": "user-uuid", "email": "student@example.com" },
+    "course": { "id": "course-uuid", "title": "Algorithms 101" },
+    "subtopic": { "id": "subtopic-uuid", "title": "Sorting Basics" }
   },
   "messages": [
     {
-      "role": "assistant",
-      "content": "Welcome! Let's discuss what machine learning is...",
-      "step": 1
+      "id": "message-uuid",
+      "role": "agent",
+      "content": "Welcome to the discussion.",
+      "step_key": "diagnosis_1",
+      "created_at": "2026-04-16T03:47:00Z"
     }
   ],
-  "currentStep": 1
+  "currentStep": {
+    "key": "diagnosis_1",
+    "prompt": "What do you already know about sorting?",
+    "expected_type": "open"
+  }
 }
 ```
 
@@ -1289,7 +1301,7 @@ curl -X POST http://localhost:3000/api/discussion/start \
 
 ### POST /api/discussion/respond
 
-Submits a user's message in an active discussion session. The AI evaluates the response, tracks goal completion, and may auto-complete the session.
+Submits a student's message in an active discussion session. The backend evaluates the response, tracks goal completion, and may auto-complete the session.
 
 | Property        | Value                                           |
 |----------------|--------------------------------------------------|
@@ -1319,38 +1331,55 @@ curl -X POST http://localhost:3000/api/discussion/respond \
 {
   "session": {
     "id": "session-uuid",
-    "status": "active",
-    "current_step": 2,
-    "goals_completed": 1
+    "status": "in_progress",
+    "phase": "exploration",
+    "learningGoals": [
+      { "id": "goal-1", "description": "Identify the core concept", "covered": true }
+    ],
+    "updatedAt": "2026-04-16T03:50:00Z"
   },
   "messages": [
     {
-      "role": "assistant",
-      "content": "Great observation! You're right that pattern recognition is central...",
-      "step": 2
+      "id": "message-uuid",
+      "role": "student",
+      "content": "Sorting helps arrange data in order.",
+      "step_key": "diagnosis_1",
+      "created_at": "2026-04-16T03:49:30Z"
     }
   ],
-  "nextStep": 2
+  "currentStep": {
+    "key": "exploration_1",
+    "prompt": "Can you compare two sorting approaches?",
+    "expected_type": "open"
+  },
+  "nextStep": {
+    "key": "exploration_1",
+    "prompt": "Can you compare two sorting approaches?",
+    "expected_type": "open"
+  }
 }
 ```
+
+Depending on the branch taken by the evaluator, the response may also include flags such as `effortRejection`, `isRetry`, `clarificationGiven`, `isRemediation`, and `remediationRound`.
 
 ---
 
 ### GET /api/discussion/history
 
-Retrieves the full history of a discussion session.
+Retrieves the persisted history for a discussion session.
 
 | Property        | Value                                           |
 |----------------|--------------------------------------------------|
-| **Auth**       | Token required                                   |
+| **Auth**       | JWT cookie required                              |
 
-**Query Parameters (one of these approaches):**
+**Query Parameters:**
 
-| Parameter          | Type   | Description                    |
-|-------------------|--------|--------------------------------|
-| `sessionId`       | string | Direct session lookup          |
-| `courseId`         | string | Combined with subtopicContext  |
-| `subtopicContext`  | string | Combined with courseId         |
+| Field | Type | Description |
+|-------|------|-------------|
+| `sessionId` | string | Direct session lookup |
+| `courseId` | string | Course context for lookup |
+| `subtopicId` | string | Subtopic context for lookup |
+| `subtopicTitle` | string | Subtopic title fallback |
 
 **Example Response (200):**
 ```json
@@ -1358,16 +1387,22 @@ Retrieves the full history of a discussion session.
   "session": {
     "id": "session-uuid",
     "status": "completed",
-    "current_step": 5,
-    "total_steps": 5
+    "phase": "synthesis",
+    "learningGoals": [
+      { "id": "goal-1", "description": "Identify the core concept", "covered": true }
+    ],
+    "createdAt": "2026-04-16T03:47:00Z",
+    "updatedAt": "2026-04-16T03:55:00Z"
   },
   "messages": [
-    {"role": "assistant", "content": "...", "step": 1},
-    {"role": "user", "content": "...", "step": 1},
-    {"role": "assistant", "content": "...", "step": 2}
+    {"id": "1", "role": "agent", "content": "...", "step_key": "diagnosis_1", "created_at": "2026-04-16T03:47:00Z"},
+    {"id": "2", "role": "student", "content": "...", "step_key": "diagnosis_1", "created_at": "2026-04-16T03:48:10Z"}
   ],
-  "currentStep": 5,
-  "templateVersion": "v2"
+  "currentStep": {
+    "key": "synthesis_1",
+    "prompt": "Summarize what you have learned.",
+    "expected_type": "reflection"
+  }
 }
 ```
 
@@ -1379,14 +1414,14 @@ Checks the discussion readiness and completion status for all subtopics in a mod
 
 | Property        | Value                                           |
 |----------------|--------------------------------------------------|
-| **Auth**       | Token required                                   |
+| **Auth**       | JWT cookie required                              |
 
 **Query Parameters:**
 
-| Parameter  | Type   | Required | Description    |
-|-----------|--------|----------|----------------|
-| `courseId` | string | Yes      | Course UUID    |
-| `moduleId` | string | Yes      | Module identifier |
+| Field | Type | Required | Description |
+|-------|------|----------|-------------|
+| `courseId` | string | Yes | Course UUID |
+| `moduleId` | string | Yes | Module identifier |
 
 **Example Response (200):**
 ```json
@@ -1395,24 +1430,18 @@ Checks the discussion readiness and completion status for all subtopics in a mod
   "summary": {
     "total": 3,
     "completed": 1,
-    "in_progress": 1,
-    "not_started": 1
+    "generated": 3,
+    "quizCompleted": 2
   },
   "subtopics": [
     {
       "title": "What is Machine Learning?",
-      "status": "completed",
-      "hasTemplate": true
-    },
-    {
-      "title": "Types of Machine Learning",
-      "status": "in_progress",
-      "hasTemplate": true
-    },
-    {
-      "title": "The ML Pipeline",
-      "status": "not_started",
-      "hasTemplate": true
+      "generated": true,
+      "quizQuestionCount": 5,
+      "answeredCount": 5,
+      "quizCompleted": true,
+      "missingQuestions": [],
+      "userHasCompletion": true
     }
   ]
 }
@@ -1771,7 +1800,7 @@ Exports insights data for research purposes.
 
 ---
 
-### Discussion Management
+### Discussion Monitoring
 
 #### GET /api/admin/discussions
 
@@ -1785,44 +1814,22 @@ Lists all discussion sessions with filtering, sorting, and health score calculat
 
 | Parameter    | Type   | Required | Description                                     |
 |-------------|--------|----------|-------------------------------------------------|
-| `status`    | string | No       | Filter: `active`, `completed`, `abandoned`      |
+| `status`    | string | No       | Filter: `in_progress`, `completed`, `failed`    |
 | `courseId`   | string | No       | Filter by course                                |
 | `subtopicId`| string | No       | Filter by subtopic                              |
 | `userId`    | string | No       | Filter by user                                  |
 | `sortBy`    | string | No       | Sort field (e.g., `created_at`, `health_score`) |
 | `limit`     | number | No       | Maximum results to return                       |
 
----
-
-#### POST /api/admin/discussions
-
-Creates or manages discussion-related admin operations.
-
-| Property        | Value                                |
-|----------------|---------------------------------------|
-| **Auth**       | Admin role required                  |
-
----
+> The intended admin UX is read-only monitoring. Legacy mutation endpoints may still exist in the codebase, but they are not part of the supported discussion workflow.
 
 #### GET /api/admin/discussions/:sessionId
 
-Returns detailed information about a specific discussion session.
+Returns detailed information about a specific discussion session, including the full transcript and any admin audit entries.
 
 | Property        | Value                                |
 |----------------|---------------------------------------|
 | **Auth**       | Admin role required                  |
-
----
-
-#### POST /api/admin/discussions/:sessionId/feedback
-
-Allows an admin to add feedback/notes to a discussion session.
-
-| Property        | Value                                |
-|----------------|---------------------------------------|
-| **Auth**       | Admin role required                  |
-
----
 
 #### GET /api/admin/discussions/analytics
 
@@ -1832,21 +1839,9 @@ Returns analytics across all discussion sessions.
 |----------------|---------------------------------------|
 | **Auth**       | Admin role required                  |
 
----
-
-#### POST /api/admin/discussions/bulk
-
-Performs bulk operations on discussion sessions (e.g., bulk status update, bulk export).
-
-| Property        | Value                                |
-|----------------|---------------------------------------|
-| **Auth**       | Admin role required                  |
-
----
-
 #### GET /api/admin/discussions/module-status
 
-Returns discussion readiness status for modules (admin view with cross-user visibility).
+Returns discussion readiness status for modules (admin monitoring view with cross-user visibility).
 
 | Property        | Value                                |
 |----------------|---------------------------------------|

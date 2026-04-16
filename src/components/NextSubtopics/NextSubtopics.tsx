@@ -96,6 +96,11 @@ export default function NextSubtopics({
                 }
               }}
             >
+              {isDiscussion && (
+                <span className={styles.moduleLabel}>
+                  Diskusi Wajib:
+                </span>
+              )}
               {moduleIdx !== moduleIndex && (
                 <span className={styles.moduleLabel}>
                   Modul {moduleIdx + 1}:
