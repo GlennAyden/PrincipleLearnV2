@@ -4,6 +4,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { adminDb } from '@/lib/database'
 import { verifyToken } from '@/lib/jwt'
+import { countUnifiedReflections } from '@/lib/admin-reflection-summary'
 
 // ── Row Interfaces ──
 interface UserExportRow { id: string; email: string; name?: string; role: string; created_at: string }
@@ -190,6 +191,7 @@ export async function GET(request: NextRequest) {
       const discussions = discussionByUser[uid] || []
       const feedbacks = feedbackByUser[uid] || []
       const progress = progressByUser[uid] || []
+      const reflectionCount = countUnifiedReflections(journals.length, feedbacks.length)
 
       const completedCount = progress.filter(p => p.is_completed).length
       const totalProgressEntries = progress.length
@@ -212,12 +214,11 @@ export async function GET(request: NextRequest) {
       const totalInteractions =
         courses.length * 3 +
         quizzes.length * 2 +
-        journals.length * 2 +
+        reflectionCount * 2 +
         transcripts.length +
         asks.length * 2 +
         challenges.length * 3 +
-        discussions.length * 3 +
-        feedbacks.length
+        discussions.length * 3
       const engagementScore = Math.min(100, Math.round((totalInteractions / 50) * 100))
 
       // Last activity
@@ -250,6 +251,7 @@ export async function GET(request: NextRequest) {
         quizCorrect,
         quizAccuracy: `${quizAccuracy}%`,
         totalJournals: journals.length,
+        totalReflections: reflectionCount,
         totalTranscripts: transcripts.length,
         totalAskQuestions: asks.length,
         totalChallenges: challenges.length,
@@ -280,14 +282,14 @@ export async function GET(request: NextRequest) {
     // CSV format
     const headers = [
       'ID', 'Email', 'Name', 'Joined', 'Courses', 'Quizzes', 'Quiz Correct',
-      'Quiz Accuracy', 'Journals', 'Transcripts', 'Questions', 'Challenges',
+      'Quiz Accuracy', 'Journals', 'Reflections', 'Transcripts', 'Questions', 'Challenges',
       'Discussions', 'Feedbacks', 'Avg Rating', 'Prompt Stage', 'Engagement',
       'Completion Rate', 'Last Activity',
     ]
 
     const rows = exportRows.map(r => [
       r.id, r.email, r.name, r.joinedAt, r.totalCourses, r.totalQuizzes,
-      r.quizCorrect, r.quizAccuracy, r.totalJournals, r.totalTranscripts,
+      r.quizCorrect, r.quizAccuracy, r.totalJournals, r.totalReflections ?? r.totalJournals, r.totalTranscripts,
       r.totalAskQuestions, r.totalChallenges, r.totalDiscussions,
       r.totalFeedbacks, r.avgFeedbackRating, r.promptStage,
       r.engagementScore, r.courseCompletionRate, r.lastActivity,

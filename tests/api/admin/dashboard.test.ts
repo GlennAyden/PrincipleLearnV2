@@ -186,11 +186,89 @@ describe('GET /api/admin/dashboard', () => {
             expect(data.kpi.quizAccuracy).toBe(50);
             expect(data.kpi.totalDiscussions).toBe(1);
             expect(data.kpi.completedDiscussions).toBe(1);
-            expect(data.kpi.totalJournals).toBe(1);
+            expect(data.kpi.totalJournals).toBe(3);
             expect(data.kpi.totalChallenges).toBe(1);
             expect(data.kpi.totalAskQuestions).toBe(1);
             expect(data.kpi.totalFeedbacks).toBe(2);
             expect(data.kpi.avgRating).toBeGreaterThan(0);
+        });
+
+        it('should merge jurnal and feedback mirrors without double counting', async () => {
+            const now = new Date().toISOString();
+            setupMockDatabase({
+                users: [
+                    { id: 'user-1', email: 'student1@example.com', role: 'user', created_at: now },
+                ],
+                courses: [],
+                quiz_submissions: [],
+                discussion_sessions: [],
+                jurnal: [
+                    {
+                        id: 'journal-1',
+                        user_id: 'user-1',
+                        course_id: 'course-1',
+                        subtopic_id: 'subtopic-1',
+                        subtopic_label: 'Intro',
+                        module_index: 1,
+                        subtopic_index: 1,
+                        type: 'structured_reflection',
+                        content: JSON.stringify({
+                            understood: 'Saya paham',
+                            confused: '',
+                            strategy: '',
+                            promptEvolution: '',
+                            contentRating: 5,
+                            contentFeedback: 'Sangat membantu',
+                        }),
+                        reflection: JSON.stringify({
+                            subtopic: 'Intro',
+                            moduleIndex: 1,
+                            subtopicIndex: 1,
+                            subtopicId: 'subtopic-1',
+                            fields: {
+                                understood: 'Saya paham',
+                                confused: '',
+                                strategy: '',
+                                promptEvolution: '',
+                                contentRating: 5,
+                                contentFeedback: 'Sangat membantu',
+                            },
+                        }),
+                        created_at: now,
+                    },
+                ],
+                challenge_responses: [],
+                ask_question_history: [],
+                feedback: [
+                    {
+                        id: 'feedback-1',
+                        user_id: 'user-1',
+                        course_id: 'course-1',
+                        subtopic_id: 'subtopic-1',
+                        subtopic_label: 'Intro',
+                        module_index: 1,
+                        subtopic_index: 1,
+                        rating: 5,
+                        comment: 'Sangat membantu',
+                        created_at: new Date(Date.now() + 1000).toISOString(),
+                    },
+                ],
+                transcript: [],
+                learning_profiles: [],
+                prompt_classifications: [],
+                cognitive_indicators: [],
+            });
+
+            const request = createAdminRequest();
+            const response = await GET(request);
+            const data = await response.json();
+
+            expect(response.status).toBe(200);
+            expect(data.kpi.totalJournals).toBe(1);
+            expect(data.kpi.totalFeedbacks).toBe(1);
+            expect(data.kpi.avgRating).toBe(5);
+            expect(data.recentActivity).toHaveLength(1);
+            expect(data.recentActivity[0].type).toBe('journal');
         });
 
         it('should return student summary for each user', async () => {

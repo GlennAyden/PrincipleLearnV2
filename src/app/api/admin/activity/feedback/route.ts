@@ -2,7 +2,6 @@
 
 import { NextRequest, NextResponse } from 'next/server';
 import { DatabaseService } from '@/lib/database';
-import { ensureFeedbackSeeded } from '@/lib/activitySeed';
 import { withProtection } from '@/lib/api-middleware';
 
 interface FeedbackRow {
@@ -43,10 +42,10 @@ const DATE_OPTIONS: Intl.DateTimeFormatOptions = {
 
 async function handler(req: NextRequest) {
   try {
-    await ensureFeedbackSeeded();
     const { searchParams } = new URL(req.url);
     const userId = searchParams.get('userId');
     const date = searchParams.get('date');
+    const dateTo = searchParams.get('dateTo');
     const courseId = searchParams.get('course');
     const topic = searchParams.get('topic');
 
@@ -69,10 +68,9 @@ async function handler(req: NextRequest) {
     }
 
     if (date) {
-      const target = new Date(date);
-      const start = new Date(target);
+      const start = new Date(date);
       start.setHours(0, 0, 0, 0);
-      const end = new Date(target);
+      const end = new Date(dateTo || date);
       end.setHours(23, 59, 59, 999);
       feedbackRows = feedbackRows.filter((row) => {
         const createdAt = new Date(row.created_at);

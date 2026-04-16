@@ -1,216 +1,133 @@
 // src/app/api/admin/activity/jurnal/route.ts
-// "jurnal" uses Indonesian spelling — matches the database table name.
+// Unified reflection activity feed for admin: merges jurnal + feedback.
 
 import { NextResponse } from 'next/server'
 import type { NextRequest } from 'next/server'
-import { DatabaseService } from '@/lib/database'
+import { DatabaseService, adminDb } from '@/lib/database'
+import {
+  buildReflectionActivities,
+  filterReflectionActivities,
+  type ReflectionActivityItem,
+  type ReflectionCourseRow,
+  type ReflectionFeedbackRow,
+  type ReflectionJournalRow,
+  type ReflectionSubtopicRow,
+  type ReflectionUserRow,
+} from '@/lib/admin-reflection-activity'
 import { withProtection } from '@/lib/api-middleware'
 
-interface Journal {
-  id: string;
-  user_id: string;
-  course_id: string;
-  content: string;
-  reflection?: string;
-  type?: string | null;
-  created_at: string;
-  updated_at: string;
-}
-
-interface User {
-  id: string;
-  email: string;
-}
-
-interface Course {
-  id: string;
-  title: string;
-}
-
-function parseReflectionContext(reflection?: string) {
-  if (!reflection) return null;
-
+async function fetchRecords<T>(table: string) {
   try {
-    const parsed = JSON.parse(reflection);
-    return parsed && typeof parsed === 'object' ? parsed : null;
-  } catch {
-    const legacyMatch = reflection.match(/^Subtopic:\s*(.+)$/i);
-    if (!legacyMatch) return null;
-    return {
-      subtopic: legacyMatch[1]?.trim() || null,
-      moduleIndex: null,
-      subtopicIndex: null,
-      fields: null,
-    };
+    return await DatabaseService.getRecords<T>(table, {
+      orderBy: { column: 'created_at', ascending: false },
+    })
+  } catch (error) {
+    console.error(`[Activity][Reflection] Failed to fetch ${table}:`, error)
+    return []
   }
 }
 
-function parseStructuredContent(content?: string) {
-  if (!content) return null;
-  try {
-    const parsed = JSON.parse(content);
-    return parsed && typeof parsed === 'object' ? parsed : null;
-  } catch {
-    return null;
+async function fetchUsers(userIds: string[]) {
+  if (userIds.length === 0) return [] as ReflectionUserRow[]
+  const { data, error } = await adminDb
+    .from('users')
+    .select('id, email')
+    .in('id', userIds)
+  if (error) {
+    console.error('[Activity][Reflection] Failed to fetch users:', error)
+    return []
   }
+  return (data ?? []) as ReflectionUserRow[]
+}
+
+async function fetchCourses(courseIds: string[]) {
+  if (courseIds.length === 0) return [] as ReflectionCourseRow[]
+  const { data, error } = await adminDb
+    .from('courses')
+    .select('id, title')
+    .in('id', courseIds)
+  if (error) {
+    console.error('[Activity][Reflection] Failed to fetch courses:', error)
+    return []
+  }
+  return (data ?? []) as ReflectionCourseRow[]
+}
+
+async function fetchSubtopics(subtopicIds: string[]) {
+  if (subtopicIds.length === 0) return [] as ReflectionSubtopicRow[]
+  const { data, error } = await adminDb
+    .from('subtopics')
+    .select('id, title')
+    .in('id', subtopicIds)
+  if (error) {
+    console.error('[Activity][Reflection] Failed to fetch subtopics:', error)
+    return []
+  }
+  return (data ?? []) as ReflectionSubtopicRow[]
 }
 
 async function handler(req: NextRequest) {
-  console.log('[Activity API] Starting journal activity fetch');
-  
   try {
     const { searchParams } = new URL(req.url)
     const userId = searchParams.get('userId')
-    const date = searchParams.get('date')
-    const course = searchParams.get('course')
+    const courseId = searchParams.get('course')
     const topic = searchParams.get('topic')
-  
-    console.log('[Activity API] Request params:', { userId, date, course, topic });
+    const dateFrom = searchParams.get('dateFrom') ?? searchParams.get('date')
+    const dateTo = searchParams.get('dateTo')
 
-    // Get all journal entries from database
-    let journals: Journal[] = [];
-    try {
-      journals = await DatabaseService.getRecords<Journal>('jurnal', {
-        orderBy: { column: 'created_at', ascending: false }
-      });
-    } catch (dbError) {
-      console.error('[Activity API] Database error fetching journals:', dbError);
-      return NextResponse.json([], { status: 200 });
-    }
+    const [journals, feedbacks] = await Promise.all([
+      fetchRecords<ReflectionJournalRow>('jurnal'),
+      fetchRecords<ReflectionFeedbackRow>('feedback'),
+    ])
 
-    console.log(`[Activity API] Found ${journals.length} total journal entries in database`);
-    
-    // Filter journals based on parameters
-    let filteredJournals = journals;
-    
-    // Filter by user if specified
-    if (userId) {
-      filteredJournals = filteredJournals.filter(journal => journal.user_id === userId);
-      console.log(`[Activity API] Filtered by user ${userId}: ${filteredJournals.length} journals`);
-    }
-    
-    // Filter by date if specified
-    if (date) {
-      const targetDate = new Date(date);
-      const startOfDay = new Date(targetDate);
-      startOfDay.setHours(0, 0, 0, 0);
-      const endOfDay = new Date(targetDate);
-      endOfDay.setHours(23, 59, 59, 999);
-      
-      filteredJournals = filteredJournals.filter(journal => {
-        const journalDate = new Date(journal.created_at);
-        return journalDate >= startOfDay && journalDate <= endOfDay;
-      });
-      console.log(`[Activity API] Filtered by date ${date}: ${filteredJournals.length} journals`);
-    }
-    
-    // Filter by course if specified
-    if (course) {
-      filteredJournals = filteredJournals.filter(journal => journal.course_id === course);
-      console.log(`[Activity API] Filtered by course ${course}: ${filteredJournals.length} journals`);
-    }
+    const userIds = Array.from(
+      new Set([
+        ...journals.map((row) => row.user_id).filter(Boolean),
+        ...feedbacks.map((row) => row.user_id).filter((value): value is string => Boolean(value)),
+      ]),
+    )
+    const courseIds = Array.from(
+      new Set([
+        ...journals.map((row) => row.course_id).filter(Boolean),
+        ...feedbacks.map((row) => row.course_id).filter((value): value is string => Boolean(value)),
+      ]),
+    )
+    const subtopicIds = Array.from(
+      new Set([
+        ...journals.map((row) => row.subtopic_id).filter((value): value is string => Boolean(value)),
+        ...feedbacks.map((row) => row.subtopic_id).filter((value): value is string => Boolean(value)),
+      ]),
+    )
 
-    // Get additional information for each journal
-    const payload = [];
-    for (const journal of filteredJournals) {
-      try {
-        // Get user info
-        const users: User[] = await DatabaseService.getRecords<User>('users', {
-          filter: { id: journal.user_id },
-          limit: 1
-        });
-        
-        // Get course info
-        const courses: Course[] = await DatabaseService.getRecords<Course>('courses', {
-          filter: { id: journal.course_id },
-          limit: 1
-        });
-        
-        const user = users.length > 0 ? users[0] : null;
-        const courseData = courses.length > 0 ? courses[0] : null;
-        
-        const reflectionContext = parseReflectionContext(journal.reflection);
-        const structuredContent = parseStructuredContent(journal.content);
-        const topicName =
-          (typeof reflectionContext?.subtopic === 'string' && reflectionContext.subtopic.trim()) ||
-          courseData?.title ||
-          'Unknown Course';
-        
-        // Filter by topic if specified (match against course title)
-        if (topic && !topicName.toLowerCase().includes(topic.toLowerCase())) {
-          continue; // Skip this journal if topic doesn't match
-        }
-        
-        // Create activity log item
-        const logItem = {
-          id: journal.id,
-          timestamp: new Date(journal.created_at).toLocaleDateString('id-ID'),
-          topic: topicName,
-          content: journal.content || 'No content available',
-          type: journal.type || 'free_text',
-          moduleIndex:
-            typeof reflectionContext?.moduleIndex === 'number'
-              ? reflectionContext.moduleIndex
-              : null,
-          subtopicIndex:
-            typeof reflectionContext?.subtopicIndex === 'number'
-              ? reflectionContext.subtopicIndex
-              : null,
-          understood: structuredContent?.understood || reflectionContext?.fields?.understood || '',
-          confused: structuredContent?.confused || reflectionContext?.fields?.confused || '',
-          strategy: structuredContent?.strategy || reflectionContext?.fields?.strategy || '',
-          promptEvolution:
-            structuredContent?.promptEvolution || reflectionContext?.fields?.promptEvolution || '',
-          contentRating:
-            typeof structuredContent?.contentRating === 'number'
-              ? structuredContent.contentRating
-              : typeof reflectionContext?.fields?.contentRating === 'number'
-                ? reflectionContext.fields.contentRating
-                : null,
-          contentFeedback:
-            structuredContent?.contentFeedback || reflectionContext?.fields?.contentFeedback || '',
-          userEmail: user?.email || 'Unknown User',
-          userId: journal.user_id
-        };
-        
-        payload.push(logItem);
-        
-      } catch (infoError) {
-        console.error(`[Activity API] Error getting info for journal ${journal.id}:`, infoError);
-        
-        // Add journal with minimal info
-        const logItem = {
-          id: journal.id,
-          timestamp: new Date(journal.created_at).toLocaleDateString('id-ID'),
-          topic: 'Unknown Topic',
-          content: journal.content || 'No content available',
-          type: journal.type || 'free_text',
-          moduleIndex: null,
-          subtopicIndex: null,
-          understood: '',
-          confused: '',
-          strategy: '',
-          promptEvolution: '',
-          contentRating: null,
-          contentFeedback: '',
-          userEmail: 'Unknown User',
-          userId: journal.user_id
-        };
-        
-        payload.push(logItem);
-      }
-    }
-    
-    console.log(`[Activity API] Returning ${payload.length} formatted journal records`);
-    return NextResponse.json(payload);
-    
+    const [users, courses, subtopics] = await Promise.all([
+      fetchUsers(userIds),
+      fetchCourses(courseIds),
+      fetchSubtopics(subtopicIds),
+    ])
+
+    const unified = buildReflectionActivities({
+      journals,
+      feedbacks,
+      users,
+      courses,
+      subtopics,
+    })
+
+    const filtered = filterReflectionActivities(unified, {
+      userId,
+      courseId,
+      topic,
+      dateFrom,
+      dateTo,
+    })
+
+    const payload: ReflectionActivityItem[] = filtered
+
+    return NextResponse.json(payload)
   } catch (error) {
-    console.error('[Activity API] Error fetching journal logs:', error);
-    return NextResponse.json(
-      { error: 'Failed to fetch journal logs' },
-      { status: 500 }
-    );
+    console.error('[Activity][Reflection] Unexpected error:', error)
+    return NextResponse.json({ error: 'Failed to fetch reflection logs' }, { status: 500 })
   }
 }
 
-export const GET = withProtection(handler, { adminOnly: true, requireAuth: true, csrfProtection: false });
+export const GET = withProtection(handler, { adminOnly: true, requireAuth: true, csrfProtection: false })

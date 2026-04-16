@@ -1,5 +1,10 @@
 import { z } from 'zod';
 import { NextResponse } from 'next/server';
+import {
+  hasStructuredReflectionContent,
+  normalizeReflectionType,
+  parseStructuredReflectionFields,
+} from './reflection-submission';
 
 // ── Shared field definitions ────────────────────────────────────────
 
@@ -200,7 +205,7 @@ export const ChallengeResponseSchema = z.object({
  */
 export const FeedbackSchema = z
   .object({
-    userId: z.string().min(1, 'userId is required'),
+    userId: z.string().min(1, 'userId is required').optional(),
     courseId: z.string().min(1, 'courseId is required'),
     comment: z
       .string()
@@ -215,7 +220,7 @@ export const FeedbackSchema = z
   .strict();
 
 export const JurnalSchema = z.object({
-  userId: z.string().min(1, 'userId is required'),
+  userId: z.string().min(1, 'userId is required').optional(),
   courseId: z.string().min(1, 'courseId is required'),
   content: z.union([z.string().min(1), z.record(z.string(), z.unknown())]),
   // subtopicId = the `subtopics` table row id (per-module). Together with
@@ -226,13 +231,24 @@ export const JurnalSchema = z.object({
   subtopic: z.string().optional(),
   moduleIndex: flexibleIndex,
   subtopicIndex: flexibleIndex,
-  type: z.string().optional(),
+  type: z.enum(['free_text', 'structured_reflection']).optional(),
   understood: z.string().optional(),
   confused: z.string().optional(),
   strategy: z.string().optional(),
   promptEvolution: z.string().optional(),
-  contentRating: z.number().optional(),
+  contentRating: z.number().min(1).max(5).optional(),
   contentFeedback: z.string().optional(),
+}).strict().superRefine((data, ctx) => {
+  if (normalizeReflectionType(data.type) !== 'structured_reflection') return;
+
+  const structured = parseStructuredReflectionFields(data);
+  if (hasStructuredReflectionContent(structured)) return;
+
+  ctx.addIssue({
+    code: z.ZodIssueCode.custom,
+    message: 'Structured reflection requires at least one reflection field or rating',
+    path: ['content'],
+  });
 });
 
 // ── Learning profile schema ────────────────────────────────────────

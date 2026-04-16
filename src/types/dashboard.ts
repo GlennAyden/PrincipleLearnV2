@@ -20,10 +20,13 @@ export interface DashboardKPI {
   quizAccuracy: number;
   totalDiscussions: number;
   completedDiscussions: number;
+  /** Unified reflection event count sourced from jurnal, with feedback mirrors merged in. */
   totalJournals: number;
   totalChallenges: number;
   totalAskQuestions: number;
+  /** Count of reflected entries that carry feedback payload, without double counting mirrors. */
   totalFeedbacks: number;
+  /** Average rating across unified reflection events that have a valid 1..5 rating. */
   avgRating: number;
   ctCoverageRate: number;
   // New KPIs

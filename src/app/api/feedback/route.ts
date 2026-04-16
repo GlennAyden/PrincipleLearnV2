@@ -53,7 +53,8 @@ async function postHandler(req: NextRequest) {
     const normalizedModuleIndex = parseIndex(moduleIndex);
     const normalizedSubtopicIndex = parseIndex(subtopicIndex);
     const normalizedRating = parseRating(rating);
-    
+    const hasRating = typeof normalizedRating === 'number';
+
     // Save feedback to database
     try {
       // Find user in database (accept both user id and email)
@@ -68,28 +69,37 @@ async function postHandler(req: NextRequest) {
 
       // Find course in database
       const courses = await DatabaseService.getRecords('courses', {
-        filter: { id: normalizedCourseId },
+        filter: { id: normalizedCourseId, created_by: user.id },
         limit: 1
       });
       
       if (courses.length === 0) {
         return NextResponse.json(
-          { error: `Course with ID ${normalizedCourseId} not found` },
-          { status: 404 }
+          { error: 'Course not found or access denied' },
+          { status: 403 }
         );
       }
 
       let subtopicTitle: string | null = null;
+      let scopedSubtopicId: string | null = null;
       if (normalizedSubtopicId) {
         try {
           const subtopics = await DatabaseService.getRecords<{ id: string; title: string }>('subtopics', {
-            filter: { id: normalizedSubtopicId },
+            filter: { id: normalizedSubtopicId, course_id: normalizedCourseId },
             limit: 1,
           });
+          scopedSubtopicId = subtopics[0]?.id ?? null;
           subtopicTitle = subtopics[0]?.title ?? null;
         } catch (subtopicError) {
           console.error('Error fetching subtopic for feedback context:', subtopicError);
         }
+      }
+
+      if (normalizedSubtopicId && !scopedSubtopicId) {
+        return NextResponse.json(
+          { error: 'Subtopic not found in this course' },
+          { status: 400 }
+        );
       }
 
       if (!subtopicTitle && normalizedSubtopicLabel) {
@@ -100,11 +110,11 @@ async function postHandler(req: NextRequest) {
       const feedbackData = {
         user_id: user.id,
         course_id: normalizedCourseId,
-        subtopic_id: normalizedSubtopicId || null,
+        subtopic_id: scopedSubtopicId,
         module_index: normalizedModuleIndex,
         subtopic_index: normalizedSubtopicIndex,
         subtopic_label: subtopicTitle,
-        rating: normalizedRating,
+        rating: hasRating ? normalizedRating : null,
         comment: normalizedComment,
       };
       

@@ -336,24 +336,7 @@ storeResult(report.routes, 'challengeResponse', challengeRes);
   storeResult(report.routes, 'quizSubmit', quizRes);
 }
 
-// 5) Feedback
-const feedbackRes = await apiCall('/api/feedback', {
-  method: 'POST',
-  token: studentToken,
-  body: {
-    userId: studentUser.id,
-    courseId,
-    subtopicId,
-    subtopic: subtopicTitle,
-    moduleIndex: 0,
-    subtopicIndex: 0,
-    rating: 5,
-    comment: 'Materi sangat membantu untuk memahami validasi.',
-  },
-});
-storeResult(report.routes, 'feedback', feedbackRes);
-
-// 6) Jurnal
+// 5) Reflection activity via jurnal/save (feedback is mirrored from this write)
 const jurnalRes = await apiCall('/api/jurnal/save', {
   method: 'POST',
   token: studentToken,
@@ -376,7 +359,7 @@ const jurnalRes = await apiCall('/api/jurnal/save', {
 });
 storeResult(report.routes, 'jurnalSave', jurnalRes);
 
-// 7) Transcript
+// 6) Transcript
 const transcriptRes = await apiCall('/api/transcript/save', {
   method: 'POST',
   token: studentToken,
@@ -390,7 +373,7 @@ const transcriptRes = await apiCall('/api/transcript/save', {
 });
 storeResult(report.routes, 'transcriptSave', transcriptRes);
 
-// 8) Learning profile
+// 7) Learning profile
 const profileRes = await apiCall('/api/learning-profile', {
   method: 'POST',
   token: studentToken,
@@ -405,7 +388,7 @@ const profileRes = await apiCall('/api/learning-profile', {
 });
 storeResult(report.routes, 'learningProfile', profileRes);
 
-// 9) Discussion start/respond
+// 8) Discussion start/respond
 {
   const template = {
     learning_goals: [

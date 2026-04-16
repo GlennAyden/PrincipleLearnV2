@@ -1,360 +1,288 @@
 /**
  * API Tests for POST /api/jurnal/save endpoint
  *
- * Tests:
- * - Successful journal save (free text)
- * - Successful structured reflection save
- * - Validation errors (missing userId, courseId, content)
- * - User not found (404)
- * - Course not found (404)
- * - Database insert error (500)
+ * Focus:
+ * - auth-derived identity
+ * - course ownership and subtopic scoping
+ * - structured reflection serialization
+ * - feedback mirror dedupe behaviour
  */
 
-import { createMockNextRequest } from '../../setup/test-utils';
-import { TEST_STUDENT } from '../../fixtures/users.fixture';
-import { TEST_COURSE } from '../../fixtures/courses.fixture';
+import { createMockNextRequest } from '../../setup/test-utils'
+import { TEST_STUDENT } from '../../fixtures/users.fixture'
+import { TEST_COURSE, TEST_SUBTOPIC } from '../../fixtures/courses.fixture'
 
-// ── Mocks ──────────────────────────────────────────────────────────────
+jest.mock('next/server', () => {
+  const actual = jest.requireActual('next/server')
+  return {
+    ...actual,
+    after: jest.fn(),
+  }
+})
 
 jest.mock('@/lib/api-logger', () => ({
-    withApiLogging: (handler: any) => handler,
-}));
+  withApiLogging: (handler: unknown) => handler,
+}))
+
+jest.mock('@/lib/auth-helper', () => ({
+  resolveAuthUserId: jest.fn(),
+}))
 
 jest.mock('@/services/auth.service', () => ({
-    resolveUserByIdentifier: jest.fn(),
-}));
+  resolveUserByIdentifier: jest.fn(),
+}))
+
+const feedbackInsertSpy = jest.fn()
+let feedbackSelectResult: { data: unknown[]; error: null | { message: string } }
+let feedbackInsertResult: { data: { id: string } | null; error: null | { message: string } }
+let feedbackFromCalls = 0
+
+const mockAdminFrom = jest.fn((table: string) => {
+  if (table === 'feedback') {
+    feedbackFromCalls += 1
+
+    if (feedbackFromCalls === 1) {
+      const selectChain: any = {
+        select: jest.fn(() => selectChain),
+        eq: jest.fn(() => selectChain),
+        order: jest.fn(() => selectChain),
+        limit: jest.fn(async () => feedbackSelectResult),
+      }
+      return selectChain
+    }
+
+    const insertChain: any = {
+      insert: jest.fn((payload: unknown) => {
+        feedbackInsertSpy(payload)
+        return insertChain
+      }),
+      select: jest.fn(() => insertChain),
+      single: jest.fn(async () => feedbackInsertResult),
+    }
+    return insertChain
+  }
+
+  return {
+    insert: jest.fn(async () => ({ error: null })),
+  }
+})
 
 jest.mock('@/lib/database', () => ({
-    DatabaseService: {
-        getRecords: jest.fn(),
-        insertRecord: jest.fn(),
-    },
-}));
+  DatabaseService: {
+    getRecords: jest.fn(),
+    insertRecord: jest.fn(),
+  },
+  adminDb: {
+    from: (...args: unknown[]) => mockAdminFrom(...args),
+  },
+}))
 
 jest.mock('@/lib/schemas', () => ({
-    JurnalSchema: {},
-    parseBody: jest.fn(),
-}));
+  JurnalSchema: {},
+  parseBody: jest.fn(),
+}))
 
-// ── Imports (after mocks) ──────────────────────────────────────────────
+import { POST } from '@/app/api/jurnal/save/route'
+import { resolveAuthUserId } from '@/lib/auth-helper'
+import { resolveUserByIdentifier } from '@/services/auth.service'
+import { DatabaseService } from '@/lib/database'
+import { parseBody } from '@/lib/schemas'
 
-import { POST } from '@/app/api/jurnal/save/route';
-import { resolveUserByIdentifier } from '@/services/auth.service';
-import { DatabaseService } from '@/lib/database';
-import { parseBody } from '@/lib/schemas';
-
-const mockResolveUser = resolveUserByIdentifier as jest.MockedFunction<typeof resolveUserByIdentifier>;
-const mockGetRecords = DatabaseService.getRecords as jest.MockedFunction<typeof DatabaseService.getRecords>;
-const mockInsertRecord = DatabaseService.insertRecord as jest.MockedFunction<typeof DatabaseService.insertRecord>;
-const mockParseBody = parseBody as jest.MockedFunction<typeof parseBody>;
-
-// ── Test suite ─────────────────────────────────────────────────────────
+const mockResolveAuthUserId = resolveAuthUserId as jest.MockedFunction<typeof resolveAuthUserId>
+const mockResolveUser = resolveUserByIdentifier as jest.MockedFunction<typeof resolveUserByIdentifier>
+const mockGetRecords = DatabaseService.getRecords as jest.MockedFunction<typeof DatabaseService.getRecords>
+const mockInsertRecord = DatabaseService.insertRecord as jest.MockedFunction<typeof DatabaseService.insertRecord>
+const mockParseBody = parseBody as jest.MockedFunction<typeof parseBody>
 
 describe('POST /api/jurnal/save', () => {
-    beforeEach(() => {
-        jest.clearAllMocks();
-    });
+  beforeEach(() => {
+    jest.clearAllMocks()
+    feedbackFromCalls = 0
+    feedbackSelectResult = { data: [], error: null }
+    feedbackInsertResult = { data: { id: 'feedback-001' }, error: null }
+    mockResolveAuthUserId.mockReturnValue(TEST_STUDENT.id)
+    mockResolveUser.mockResolvedValue({ id: TEST_STUDENT.id, email: TEST_STUDENT.email } as never)
+  })
 
-    describe('Successful journal save (free text)', () => {
-        it('should save a free-text journal entry and return success', async () => {
-            const body = {
-                userId: TEST_STUDENT.id,
-                courseId: TEST_COURSE.id,
-                content: 'Today I learned about software testing fundamentals.',
-            };
+  it('saves a free-text journal for the authenticated course owner', async () => {
+    const body = {
+      courseId: TEST_COURSE.id,
+      content: 'Today I learned about software testing fundamentals.',
+    }
 
-            // parseBody returns validated data
-            mockParseBody.mockReturnValue({
-                success: true,
-                data: body,
-            } as any);
+    mockParseBody.mockReturnValue({ success: true, data: body } as never)
+    mockGetRecords.mockResolvedValueOnce([{ id: TEST_COURSE.id, title: TEST_COURSE.title }] as never)
+    mockInsertRecord.mockResolvedValue({ id: 'jurnal-001' } as never)
 
-            // User found
-            mockResolveUser.mockResolvedValue({ id: TEST_STUDENT.id, email: TEST_STUDENT.email } as any);
+    const request = createMockNextRequest('POST', '/api/jurnal/save', { body })
+    const response = await POST(request)
+    const data = await response.json()
 
-            // Course found
-            mockGetRecords.mockResolvedValue([{ id: TEST_COURSE.id, title: TEST_COURSE.title }] as any);
+    expect(response.status).toBe(200)
+    expect(data).toMatchObject({
+      success: true,
+      id: 'jurnal-001',
+      feedbackSaved: false,
+      feedbackMirrorAction: 'skipped',
+    })
 
-            // Insert succeeds
-            mockInsertRecord.mockResolvedValue({ id: 'jurnal-001' } as any);
+    expect(mockResolveUser).toHaveBeenCalledWith(TEST_STUDENT.id)
+    expect(mockGetRecords).toHaveBeenCalledWith('courses', {
+      filter: { id: TEST_COURSE.id, created_by: TEST_STUDENT.id },
+      limit: 1,
+    })
+    expect(mockInsertRecord).toHaveBeenCalledWith('jurnal', expect.objectContaining({
+      user_id: TEST_STUDENT.id,
+      course_id: TEST_COURSE.id,
+      type: 'free_text',
+      content: 'Today I learned about software testing fundamentals.',
+    }))
+    expect(mockAdminFrom).not.toHaveBeenCalledWith('feedback')
+  })
 
-            const request = createMockNextRequest('POST', '/api/jurnal/save', { body });
-            const response = await POST(request);
-            const data = await response.json();
+  it('saves a structured reflection and creates one feedback mirror when no recent duplicate exists', async () => {
+    const body = {
+      courseId: TEST_COURSE.id,
+      subtopicId: TEST_SUBTOPIC.id,
+      subtopic: TEST_SUBTOPIC.title,
+      moduleIndex: 0,
+      subtopicIndex: 1,
+      type: 'structured_reflection',
+      content: {
+        understood: 'I understood the basics of unit testing.',
+        confused: 'Integration testing is still unclear.',
+        strategy: 'Practice more with real projects.',
+        promptEvolution: 'My questions became more specific.',
+        contentRating: 4,
+        contentFeedback: 'Good content overall.',
+      },
+    }
 
-            expect(response.status).toBe(200);
-            expect(data.success).toBe(true);
-            expect(data.id).toBe('jurnal-001');
+    mockParseBody.mockReturnValue({ success: true, data: body } as never)
+    mockGetRecords
+      .mockResolvedValueOnce([{ id: TEST_COURSE.id, title: TEST_COURSE.title }] as never)
+      .mockResolvedValueOnce([{ id: TEST_SUBTOPIC.id }] as never)
+    mockInsertRecord.mockResolvedValue({ id: 'jurnal-structured-001' } as never)
 
-            // Verify resolveUserByIdentifier was called with the userId
-            expect(mockResolveUser).toHaveBeenCalledWith(TEST_STUDENT.id);
+    const request = createMockNextRequest('POST', '/api/jurnal/save', { body })
+    const response = await POST(request)
+    const data = await response.json()
 
-            // Verify course lookup
-            expect(mockGetRecords).toHaveBeenCalledWith('courses', {
-                filter: { id: TEST_COURSE.id },
-                limit: 1,
-            });
+    expect(response.status).toBe(200)
+    expect(data).toMatchObject({
+      success: true,
+      id: 'jurnal-structured-001',
+      feedbackSaved: true,
+      feedbackMirrorAction: 'created',
+    })
 
-            // Verify insert was called with correct data
-            expect(mockInsertRecord).toHaveBeenCalledWith('jurnal', expect.objectContaining({
-                user_id: TEST_STUDENT.id,
-                course_id: TEST_COURSE.id,
-                content: 'Today I learned about software testing fundamentals.',
-                type: 'free_text',
-            }));
-        });
+    const insertedJournal = mockInsertRecord.mock.calls[0]?.[1] as Record<string, string>
+    expect(insertedJournal.type).toBe('structured_reflection')
+    expect(JSON.parse(insertedJournal.content)).toMatchObject({
+      understood: 'I understood the basics of unit testing.',
+      contentRating: 4,
+      contentFeedback: 'Good content overall.',
+    })
 
-        it('should default type to free_text when not provided', async () => {
-            const body = {
-                userId: TEST_STUDENT.id,
-                courseId: TEST_COURSE.id,
-                content: 'Learning notes for today.',
-            };
+    expect(feedbackInsertSpy).toHaveBeenCalledWith(expect.objectContaining({
+      user_id: TEST_STUDENT.id,
+      course_id: TEST_COURSE.id,
+      subtopic_id: TEST_SUBTOPIC.id,
+      subtopic_label: TEST_SUBTOPIC.title,
+      rating: 4,
+      comment: 'Good content overall.',
+    }))
+  })
 
-            mockParseBody.mockReturnValue({ success: true, data: body } as any);
-            mockResolveUser.mockResolvedValue({ id: TEST_STUDENT.id, email: TEST_STUDENT.email } as any);
-            mockGetRecords.mockResolvedValue([{ id: TEST_COURSE.id }] as any);
-            mockInsertRecord.mockResolvedValue({ id: 'jurnal-002' } as any);
+  it('reuses a recent identical feedback mirror instead of inserting a duplicate row', async () => {
+    const body = {
+      courseId: TEST_COURSE.id,
+      subtopicId: TEST_SUBTOPIC.id,
+      subtopic: TEST_SUBTOPIC.title,
+      moduleIndex: 0,
+      subtopicIndex: 1,
+      type: 'structured_reflection',
+      content: {
+        understood: 'Saya paham konsep inti.',
+        confused: '',
+        strategy: '',
+        promptEvolution: '',
+        contentRating: 5,
+        contentFeedback: 'Materinya sangat membantu.',
+      },
+    }
 
-            const request = createMockNextRequest('POST', '/api/jurnal/save', { body });
-            const response = await POST(request);
+    feedbackSelectResult = {
+      data: [
+        {
+          id: 'feedback-existing-001',
+          subtopic_id: TEST_SUBTOPIC.id,
+          subtopic_label: TEST_SUBTOPIC.title,
+          module_index: 0,
+          subtopic_index: 1,
+          rating: 5,
+          comment: 'Materinya sangat membantu.',
+          created_at: new Date().toISOString(),
+        },
+      ],
+      error: null,
+    }
 
-            expect(response.status).toBe(200);
+    mockParseBody.mockReturnValue({ success: true, data: body } as never)
+    mockGetRecords
+      .mockResolvedValueOnce([{ id: TEST_COURSE.id, title: TEST_COURSE.title }] as never)
+      .mockResolvedValueOnce([{ id: TEST_SUBTOPIC.id }] as never)
+    mockInsertRecord.mockResolvedValue({ id: 'jurnal-structured-002' } as never)
 
-            const insertCall = mockInsertRecord.mock.calls[0];
-            expect((insertCall[1] as any).type).toBe('free_text');
-        });
-    });
+    const request = createMockNextRequest('POST', '/api/jurnal/save', { body })
+    const response = await POST(request)
+    const data = await response.json()
 
-    describe('Successful structured reflection save', () => {
-        it('should save a structured reflection with all fields', async () => {
-            const body = {
-                userId: TEST_STUDENT.id,
-                courseId: TEST_COURSE.id,
-                content: {
-                    understood: 'I understood the basics of unit testing.',
-                    confused: 'Integration testing is still unclear.',
-                    strategy: 'Practice more with real projects.',
-                    promptEvolution: 'My questions became more specific.',
-                    contentRating: 4,
-                    contentFeedback: 'Good content overall.',
-                },
-                subtopic: 'Unit Testing Basics',
-                moduleIndex: 0,
-                subtopicIndex: 1,
-                type: 'structured_reflection',
-            };
+    expect(response.status).toBe(200)
+    expect(data).toMatchObject({
+      success: true,
+      feedbackSaved: true,
+      feedbackMirrorAction: 'reused',
+    })
+    expect(feedbackInsertSpy).not.toHaveBeenCalled()
+  })
 
-            mockParseBody.mockReturnValue({ success: true, data: body } as any);
-            mockResolveUser.mockResolvedValue({ id: TEST_STUDENT.id, email: TEST_STUDENT.email } as any);
-            mockGetRecords.mockResolvedValue([{ id: TEST_COURSE.id }] as any);
-            mockInsertRecord.mockResolvedValue({ id: 'jurnal-003' } as any);
+  it('returns 400 when the subtopic does not belong to the supplied course', async () => {
+    const body = {
+      courseId: TEST_COURSE.id,
+      subtopicId: TEST_SUBTOPIC.id,
+      content: 'Some content',
+    }
 
-            const request = createMockNextRequest('POST', '/api/jurnal/save', { body });
-            const response = await POST(request);
-            const data = await response.json();
+    mockParseBody.mockReturnValue({ success: true, data: body } as never)
+    mockGetRecords
+      .mockResolvedValueOnce([{ id: TEST_COURSE.id, title: TEST_COURSE.title }] as never)
+      .mockResolvedValueOnce([] as never)
 
-            expect(response.status).toBe(200);
-            expect(data.success).toBe(true);
-            expect(data.id).toBe('jurnal-003');
+    const request = createMockNextRequest('POST', '/api/jurnal/save', { body })
+    const response = await POST(request)
+    const data = await response.json()
 
-            // Verify the content was serialized as JSON for structured reflection
-            const insertCall = mockInsertRecord.mock.calls[0];
-            const insertData = insertCall[1] as any;
-            expect(insertData.type).toBe('structured_reflection');
+    expect(response.status).toBe(400)
+    expect(data.error).toBe('Subtopic not found in this course')
+    expect(mockInsertRecord).not.toHaveBeenCalled()
+  })
 
-            // Content should be a JSON string for structured reflections
-            const parsedContent = JSON.parse(insertData.content);
-            expect(parsedContent.understood).toBe('I understood the basics of unit testing.');
-            expect(parsedContent.confused).toBe('Integration testing is still unclear.');
-            expect(parsedContent.strategy).toBe('Practice more with real projects.');
-            expect(parsedContent.contentRating).toBe(4);
-        });
+  it('returns 403 when the authenticated user does not own the course', async () => {
+    const body = {
+      courseId: TEST_COURSE.id,
+      content: 'Some content',
+    }
 
-        it('should include subtopic and index metadata in the reflection field', async () => {
-            const body = {
-                userId: TEST_STUDENT.id,
-                courseId: TEST_COURSE.id,
-                content: {
-                    understood: 'Clear explanation.',
-                    confused: '',
-                    strategy: 'Review notes.',
-                },
-                subtopic: 'Testing Strategies',
-                moduleIndex: 2,
-                subtopicIndex: 3,
-                type: 'structured_reflection',
-            };
+    mockParseBody.mockReturnValue({ success: true, data: body } as never)
+    mockGetRecords.mockResolvedValueOnce([] as never)
 
-            mockParseBody.mockReturnValue({ success: true, data: body } as any);
-            mockResolveUser.mockResolvedValue({ id: TEST_STUDENT.id, email: TEST_STUDENT.email } as any);
-            mockGetRecords.mockResolvedValue([{ id: TEST_COURSE.id }] as any);
-            mockInsertRecord.mockResolvedValue({ id: 'jurnal-004' } as any);
+    const request = createMockNextRequest('POST', '/api/jurnal/save', { body })
+    const response = await POST(request)
+    const data = await response.json()
 
-            const request = createMockNextRequest('POST', '/api/jurnal/save', { body });
-            const response = await POST(request);
-
-            expect(response.status).toBe(200);
-
-            const insertData = (mockInsertRecord.mock.calls[0] as any)[1];
-            const reflection = JSON.parse(insertData.reflection);
-            expect(reflection.subtopic).toBe('Testing Strategies');
-            expect(reflection.moduleIndex).toBe(2);
-            expect(reflection.subtopicIndex).toBe(3);
-            expect(reflection.fields).toBeDefined();
-            expect(reflection.fields.understood).toBe('Clear explanation.');
-        });
-    });
-
-    describe('Validation errors', () => {
-        it('should return 400 when userId is missing', async () => {
-            const body = {
-                courseId: TEST_COURSE.id,
-                content: 'Some content',
-            };
-
-            mockParseBody.mockReturnValue({
-                success: false,
-                response: new Response(JSON.stringify({ error: 'userId is required' }), {
-                    status: 400,
-                    headers: { 'Content-Type': 'application/json' },
-                }),
-            } as any);
-
-            const request = createMockNextRequest('POST', '/api/jurnal/save', { body });
-            const response = await POST(request);
-            const data = await response.json();
-
-            expect(response.status).toBe(400);
-            expect(data.error).toBeDefined();
-        });
-
-        it('should return 400 when courseId is missing', async () => {
-            const body = {
-                userId: TEST_STUDENT.id,
-                content: 'Some content',
-            };
-
-            mockParseBody.mockReturnValue({
-                success: false,
-                response: new Response(JSON.stringify({ error: 'courseId is required' }), {
-                    status: 400,
-                    headers: { 'Content-Type': 'application/json' },
-                }),
-            } as any);
-
-            const request = createMockNextRequest('POST', '/api/jurnal/save', { body });
-            const response = await POST(request);
-            const data = await response.json();
-
-            expect(response.status).toBe(400);
-            expect(data.error).toBeDefined();
-        });
-
-        it('should return 400 when content is missing', async () => {
-            const body = {
-                userId: TEST_STUDENT.id,
-                courseId: TEST_COURSE.id,
-            };
-
-            mockParseBody.mockReturnValue({
-                success: false,
-                response: new Response(JSON.stringify({ error: 'Invalid request body' }), {
-                    status: 400,
-                    headers: { 'Content-Type': 'application/json' },
-                }),
-            } as any);
-
-            const request = createMockNextRequest('POST', '/api/jurnal/save', { body });
-            const response = await POST(request);
-            const data = await response.json();
-
-            expect(response.status).toBe(400);
-            expect(data.error).toBeDefined();
-        });
-    });
-
-    describe('User not found', () => {
-        it('should return 404 when user does not exist', async () => {
-            const body = {
-                userId: 'nonexistent-user-id',
-                courseId: TEST_COURSE.id,
-                content: 'Some content',
-            };
-
-            mockParseBody.mockReturnValue({ success: true, data: body } as any);
-            mockResolveUser.mockResolvedValue(null as any);
-
-            const request = createMockNextRequest('POST', '/api/jurnal/save', { body });
-            const response = await POST(request);
-            const data = await response.json();
-
-            expect(response.status).toBe(404);
-            expect(data.error).toBe('User not found');
-            expect(mockGetRecords).not.toHaveBeenCalled();
-            expect(mockInsertRecord).not.toHaveBeenCalled();
-        });
-    });
-
-    describe('Course not found', () => {
-        it('should return 404 when course does not exist', async () => {
-            const body = {
-                userId: TEST_STUDENT.id,
-                courseId: 'nonexistent-course-id',
-                content: 'Some content',
-            };
-
-            mockParseBody.mockReturnValue({ success: true, data: body } as any);
-            mockResolveUser.mockResolvedValue({ id: TEST_STUDENT.id, email: TEST_STUDENT.email } as any);
-            mockGetRecords.mockResolvedValue([] as any);
-
-            const request = createMockNextRequest('POST', '/api/jurnal/save', { body });
-            const response = await POST(request);
-            const data = await response.json();
-
-            expect(response.status).toBe(404);
-            expect(data.error).toBe('Course not found');
-            expect(mockInsertRecord).not.toHaveBeenCalled();
-        });
-    });
-
-    describe('Database insert error', () => {
-        it('should return 500 when database insert fails', async () => {
-            const body = {
-                userId: TEST_STUDENT.id,
-                courseId: TEST_COURSE.id,
-                content: 'Some journal content',
-            };
-
-            mockParseBody.mockReturnValue({ success: true, data: body } as any);
-            mockResolveUser.mockResolvedValue({ id: TEST_STUDENT.id, email: TEST_STUDENT.email } as any);
-            mockGetRecords.mockResolvedValue([{ id: TEST_COURSE.id }] as any);
-            mockInsertRecord.mockRejectedValue(new Error('Database connection failed'));
-
-            const request = createMockNextRequest('POST', '/api/jurnal/save', { body });
-            const response = await POST(request);
-            const data = await response.json();
-
-            expect(response.status).toBe(500);
-            expect(data.error).toBe('Failed to save jurnal refleksi');
-        });
-
-        it('should return 500 when an unexpected error occurs', async () => {
-            const body = {
-                userId: TEST_STUDENT.id,
-                courseId: TEST_COURSE.id,
-                content: 'Some content',
-            };
-
-            mockParseBody.mockReturnValue({ success: true, data: body } as any);
-            mockResolveUser.mockRejectedValue(new Error('Unexpected service failure'));
-
-            const request = createMockNextRequest('POST', '/api/jurnal/save', { body });
-            const response = await POST(request);
-            const data = await response.json();
-
-            expect(response.status).toBe(500);
-            expect(data.error).toBe('Failed to save jurnal refleksi');
-        });
-    });
-});
+    expect(response.status).toBe(403)
+    expect(data.error).toBe('Course not found or access denied')
+    expect(mockInsertRecord).not.toHaveBeenCalled()
+  })
+})

@@ -18,6 +18,7 @@ export interface StudentListItem {
   totalTranscripts: number;
   totalQuizzes: number;
   totalJournals: number;
+  totalReflections?: number;
   totalChallenges: number;
   totalAskQuestions: number;
   totalDiscussions: number;
@@ -39,8 +40,18 @@ export interface StudentListItem {
 export interface StudentDetail extends StudentListItem {
   learningProfile: StudentLearningProfile | null;
   courses: StudentCourse[];
+  recentReflection?: StudentReflectionEntry | null;
   recentActivity: StudentActivityEntry[];
   activityTimeline: ActivityTimelineEntry[];
+}
+
+export interface StudentReflectionEntry {
+  id: string;
+  title?: string;
+  snippet?: string | null;
+  rating?: number | null;
+  createdAt: string;
+  source: 'jurnal' | 'feedback';
 }
 
 export interface StudentLearningProfile {
@@ -76,6 +87,7 @@ export type ActivityType =
   | 'challenge'
   | 'quiz'
   | 'journal'
+  | 'reflection'
   | 'transcript'
   | 'feedback'
   | 'discussion';
@@ -106,6 +118,14 @@ export interface ActivitySummary {
     snippet?: string | null;
     createdAt: string;
   } | null;
+  recentReflection: {
+    id: string;
+    title?: string;
+    snippet?: string | null;
+    rating?: number | null;
+    createdAt: string;
+    source: 'jurnal' | 'feedback';
+  } | null;
   recentTranscript: {
     id: string;
     title?: string;
@@ -133,6 +153,7 @@ export interface ActivitySummary {
   } | null;
   totals: {
     discussions: number;
+    reflections: number;
     journals: number;
     transcripts: number;
     askQuestions: number;

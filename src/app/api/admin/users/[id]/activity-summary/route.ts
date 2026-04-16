@@ -4,17 +4,86 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { adminDb } from '@/lib/database'
 import { verifyToken } from '@/lib/jwt'
+import { normalizeText, parseStructuredReflectionFields } from '@/lib/reflection-submission'
 
 // ── Row Interfaces ──
 interface DiscussionSummaryRow { id: string; status: string; phase?: string; updated_at: string; learning_goals: unknown }
-interface JournalSummaryRow { id: string; content: string; reflection?: string; created_at: string }
+interface JournalSummaryRow {
+  id: string
+  content: string
+  reflection?: string
+  type?: string
+  subtopic_label?: string
+  created_at: string
+}
 interface TranscriptSummaryRow { id: string; content?: string; created_at: string }
 interface AskSummaryRow { id: string; question: string; created_at: string }
 interface ChallengeSummaryRow { id: string; question?: string; created_at: string }
 interface QuizSummaryRow { id: string; is_correct: boolean; created_at: string }
-interface FeedbackSummaryRow { id: string; rating?: number; created_at: string }
+interface FeedbackSummaryRow { id: string; rating?: number; comment?: string; created_at: string }
 interface IdRow { id: string }
 interface UserRecordRow { id: string; email: string }
+
+function parseObjectLike(value: unknown): Record<string, unknown> | null {
+  if (typeof value === 'object' && value !== null) {
+    return value as Record<string, unknown>
+  }
+
+  if (typeof value !== 'string' || value.trim().length === 0) {
+    return null
+  }
+
+  try {
+    const parsed = JSON.parse(value) as Record<string, unknown>
+    return parsed && typeof parsed === 'object' ? parsed : null
+  } catch {
+    return null
+  }
+}
+
+function buildRecentReflection(
+  recentJournal: JournalSummaryRow | null,
+  recentFeedback: FeedbackSummaryRow | null,
+) {
+  if (recentJournal) {
+    const reflectionContext = parseObjectLike(recentJournal.reflection)
+    const journalFields = parseStructuredReflectionFields({ content: recentJournal.content })
+    const snippet =
+      journalFields.understood ||
+      journalFields.confused ||
+      journalFields.strategy ||
+      journalFields.promptEvolution ||
+      journalFields.contentFeedback ||
+      (typeof recentJournal.content === 'string' ? recentJournal.content.slice(0, 160) : '')
+
+    const title =
+      normalizeText(reflectionContext?.subtopic) ||
+      normalizeText(recentJournal.subtopic_label) ||
+      'Refleksi terbaru'
+
+    return {
+      id: recentJournal.id,
+      title,
+      snippet: snippet || null,
+      rating: journalFields.contentRating,
+      createdAt: recentJournal.created_at,
+      source: 'jurnal' as const,
+    }
+  }
+
+  if (recentFeedback) {
+    return {
+      id: recentFeedback.id,
+      title: 'Refleksi terbaru',
+      snippet: normalizeText(recentFeedback.comment) || null,
+      rating: recentFeedback.rating ?? null,
+      createdAt: recentFeedback.created_at,
+      source: 'feedback' as const,
+    }
+  }
+
+  return null
+}
 
 // ─── Auth ─────────────────────────────────────────────────────────────────────
 
@@ -114,7 +183,7 @@ export async function GET(
       safeQuery<JournalSummaryRow[]>(
         adminDb
           .from('jurnal')
-          .select('id, content, reflection, created_at')
+          .select('id, content, reflection, type, subtopic_label, created_at')
           .eq('user_id', userId)
           .order('created_at', { ascending: false })
           .limit(1),
@@ -164,7 +233,7 @@ export async function GET(
       safeQuery<FeedbackSummaryRow[]>(
         adminDb
           .from('feedback')
-          .select('id, rating, created_at')
+          .select('id, rating, comment, created_at')
           .eq('user_id', userId)
           .order('created_at', { ascending: false })
           .limit(1),
@@ -232,6 +301,8 @@ export async function GET(
     const recentChallenge = challengeRows[0] ?? null
     const recentQuiz = quizRows[0] ?? null
     const recentFeedback = feedbackRows[0] ?? null
+    const recentReflection = buildRecentReflection(recentJournal, recentFeedback)
+    const reflectionCount = Math.max(journalCountRows.length, feedbackCountRows.length)
 
     const typedUser = userRecord as unknown as UserRecordRow;
     const response = {
@@ -264,6 +335,8 @@ export async function GET(
             createdAt: recentJournal.created_at,
           }
         : null,
+
+      recentReflection,
 
       recentTranscript: recentTranscript
         ? {
@@ -310,6 +383,7 @@ export async function GET(
 
       totals: {
         discussions: discussionCountRows.length,
+        reflections: reflectionCount,
         journals: journalCountRows.length,
         transcripts: transcriptCountRows.length,
         askQuestions: askCountRows.length,

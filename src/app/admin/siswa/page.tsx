@@ -143,12 +143,26 @@ export default function AdminSiswaPage() {
     if (!activitySummary) return []
     const entries: Array<{ label: string; icon: string; title: string; timestamp?: string | null; detail?: string | null }> = []
     if (activitySummary.recentDiscussion) entries.push({ label: 'Diskusi', icon: '💬', title: 'Diskusi terbaru', timestamp: activitySummary.recentDiscussion.updatedAt, detail: `Fase ${activitySummary.recentDiscussion.phase ?? 'N/A'} · ${activitySummary.recentDiscussion.goalCount} tujuan` })
-    if (activitySummary.recentJournal) entries.push({ label: 'Jurnal', icon: '📓', title: activitySummary.recentJournal.title ?? 'Jurnal terbaru', timestamp: activitySummary.recentJournal.createdAt, detail: activitySummary.recentJournal.snippet })
+    if (activitySummary.recentReflection) {
+      const reflectionDetail = [
+        activitySummary.recentReflection.snippet,
+        activitySummary.recentReflection.rating != null
+          ? `Penilaian: ${activitySummary.recentReflection.rating}/5`
+          : null,
+      ].filter(Boolean).join(' · ')
+
+      entries.push({
+        label: 'Refleksi',
+        icon: '📓',
+        title: activitySummary.recentReflection.title ?? 'Refleksi terbaru',
+        timestamp: activitySummary.recentReflection.createdAt,
+        detail: reflectionDetail || null,
+      })
+    }
     if (activitySummary.recentTranscript) entries.push({ label: 'Transkrip', icon: '📝', title: activitySummary.recentTranscript.title ?? 'Transkrip terbaru', timestamp: activitySummary.recentTranscript.createdAt })
     if (activitySummary.recentAskQuestion) entries.push({ label: 'Pertanyaan', icon: '❓', title: 'Pertanyaan terbaru', timestamp: activitySummary.recentAskQuestion.createdAt, detail: activitySummary.recentAskQuestion.question })
     if (activitySummary.recentChallenge) entries.push({ label: 'Tantangan', icon: '🧩', title: 'Tantangan terbaru', timestamp: activitySummary.recentChallenge.createdAt, detail: activitySummary.recentChallenge.challengeType ? `Tipe: ${activitySummary.recentChallenge.challengeType}` : null })
     if (activitySummary.recentQuiz) entries.push({ label: 'Kuis', icon: '✅', title: `Kuis — ${activitySummary.recentQuiz.isCorrect ? 'Benar' : 'Salah'}`, timestamp: activitySummary.recentQuiz.createdAt })
-    if (activitySummary.recentFeedback) entries.push({ label: 'Umpan Balik', icon: '⭐', title: 'Umpan balik terbaru', timestamp: activitySummary.recentFeedback.createdAt, detail: activitySummary.recentFeedback.rating != null ? `Penilaian: ${activitySummary.recentFeedback.rating}/5` : null })
     return entries.sort((a, b) => (parseDate(b.timestamp)?.getTime() ?? 0) - (parseDate(a.timestamp)?.getTime() ?? 0))
   }, [activitySummary])
 
@@ -317,7 +331,7 @@ export default function AdminSiswaPage() {
                 <div className={styles.detailStatsGrid}>
                   <div className={styles.detailStatItem}><span className={styles.detailStatNum}>{selectedUser.totalCourses}</span><span className={styles.detailStatLabel}>Kursus</span></div>
                   <div className={styles.detailStatItem}><span className={styles.detailStatNum}>{selectedUser.totalQuizzes}</span><span className={styles.detailStatLabel}>Kuis</span></div>
-                  <div className={styles.detailStatItem}><span className={styles.detailStatNum}>{selectedUser.totalJournals}</span><span className={styles.detailStatLabel}>Jurnal</span></div>
+                  <div className={styles.detailStatItem}><span className={styles.detailStatNum}>{selectedUser.totalJournals}</span><span className={styles.detailStatLabel}>Refleksi</span></div>
                   <div className={styles.detailStatItem}><span className={styles.detailStatNum}>{selectedUser.totalTranscripts}</span><span className={styles.detailStatLabel}>Transkrip</span></div>
                   <div className={styles.detailStatItem}><span className={styles.detailStatNum}>{selectedUser.totalAskQuestions}</span><span className={styles.detailStatLabel}>Pertanyaan</span></div>
                   <div className={styles.detailStatItem}><span className={styles.detailStatNum}>{selectedUser.totalChallenges}</span><span className={styles.detailStatLabel}>Tantangan</span></div>
@@ -341,9 +355,9 @@ export default function AdminSiswaPage() {
                       <p className={styles.activityLabel}>{activitySummary?.recentDiscussion ? `Terakhir: ${new Date(activitySummary.recentDiscussion.updatedAt).toLocaleString('id-ID')}` : 'Belum ada diskusi'}</p>
                     </article>
                     <article className={styles.activityCard}>
-                      <h4>Jurnal</h4>
-                      <p className={styles.activityValue}>{activitySummary?.totals?.journals ?? 0}</p>
-                      <p className={styles.activityLabel}>{activitySummary?.recentJournal ? (activitySummary.recentJournal.title ?? 'Jurnal terbaru') : 'Belum ada jurnal'}</p>
+                      <h4>Refleksi</h4>
+                      <p className={styles.activityValue}>{activitySummary?.totals?.reflections ?? 0}</p>
+                      <p className={styles.activityLabel}>{activitySummary?.recentReflection ? (activitySummary.recentReflection.title ?? 'Refleksi terbaru') : 'Belum ada refleksi'}</p>
                     </article>
                     <article className={styles.activityCard}>
                       <h4>Transkrip</h4>
@@ -364,11 +378,6 @@ export default function AdminSiswaPage() {
                       <h4>Kuis</h4>
                       <p className={styles.activityValue}>{activitySummary?.totals?.quizzes ?? 0}</p>
                       <p className={styles.activityLabel}>{activitySummary?.recentQuiz ? `Terakhir: ${activitySummary.recentQuiz.isCorrect ? 'Benar' : 'Salah'}` : 'Belum ada kuis'}</p>
-                    </article>
-                    <article className={styles.activityCard}>
-                      <h4>Umpan Balik</h4>
-                      <p className={styles.activityValue}>{activitySummary?.totals?.feedbacks ?? 0}</p>
-                      <p className={styles.activityLabel}>{activitySummary?.recentFeedback ? `Penilaian: ${activitySummary.recentFeedback.rating ?? 'N/A'}` : 'Belum ada umpan balik'}</p>
                     </article>
                     <article className={styles.activityCard}>
                       <h4>Kursus</h4>

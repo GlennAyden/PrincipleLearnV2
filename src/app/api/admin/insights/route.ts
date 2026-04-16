@@ -5,13 +5,17 @@ import { adminDb } from '@/lib/database';
 import { withCacheHeaders } from '@/lib/api-middleware';
 import jwt from 'jsonwebtoken';
 import type { TimeRange } from '@/types/dashboard';
+import {
+  buildUnifiedReflectionModel,
+  type ReflectionFeedbackRow,
+  type ReflectionJournalRow,
+} from '@/lib/analytics/reflection-model';
 
 const JWT_SECRET = process.env.JWT_SECRET!;
 
 // ── Row Interfaces ──
 interface PromptRow { id: string; user_id: string; question: string; prompt_components: unknown; prompt_version: string; session_number: number; reasoning_note: string; created_at: string }
 interface QuizRow { id: string; user_id: string; is_correct: boolean; reasoning_note: string; created_at: string }
-interface JournalRow { id: string; user_id: string; content: unknown; type: string; created_at: string }
 interface ChallengeRow { id: string; user_id: string; created_at: string }
 interface DiscussionRow { id: string; user_id: string; status: string; created_at: string }
 interface PromptClassificationRow { id: string; user_id: string; prompt_stage: string; prompt_stage_score: number; created_at: string; [key: string]: unknown }
@@ -94,6 +98,7 @@ export async function GET(request: NextRequest) {
       prompts,
       quizzes,
       journals,
+      feedbacks,
       challenges,
       _discussions,
       // Research tables
@@ -101,7 +106,8 @@ export async function GET(request: NextRequest) {
     ] = await Promise.all([
       safeQuery<PromptRow>('ask_question_history', 'id, user_id, question, prompt_components, prompt_version, session_number, reasoning_note, created_at', userId ? { user_id: userId } : {}),
       safeQuery<QuizRow>('quiz_submissions', 'id, user_id, is_correct, reasoning_note, created_at', userId ? { user_id: userId } : {}),
-      safeQuery<JournalRow>('jurnal', 'id, user_id, content, type, created_at', userId ? { user_id: userId } : {}),
+      safeQuery<ReflectionJournalRow>('jurnal', 'id, user_id, course_id, subtopic_id, subtopic_label, module_index, subtopic_index, content, reflection, type, created_at', userId ? { user_id: userId } : {}),
+      safeQuery<ReflectionFeedbackRow>('feedback', 'id, user_id, course_id, subtopic_id, subtopic_label, module_index, subtopic_index, rating, comment, created_at', userId ? { user_id: userId } : {}),
       safeQuery<ChallengeRow>('challenge_responses', 'id, user_id, created_at', userId ? { user_id: userId } : {}),
       safeQuery<DiscussionRow>('discussion_sessions', 'id, user_id, status, created_at'),
       safeQuery<PromptClassificationRow>('prompt_classifications', '*'),
@@ -109,21 +115,23 @@ export async function GET(request: NextRequest) {
 
     // Apply time filter
     const filteredPrompts = filterByTime(prompts);
+    const filteredQuizzes = filterByTime(quizzes);
+    const filteredJournals = filterByTime(journals);
+    const filteredFeedbacks = filterByTime(feedbacks);
+    const filteredChallenges = filterByTime(challenges);
+    const filteredPromptClassifications = filterByTime(promptClassifications);
+    const reflectionModel = buildUnifiedReflectionModel(filteredJournals, filteredFeedbacks);
 
     // ── RM2: Prompt Evolution (Research + Heuristic) ──
-    const hasResearchRM2 = promptClassifications.length > 0
+    const hasResearchRM2 = filteredPromptClassifications.length > 0
     let promptList: PromptListItem[] = filteredPrompts
     let avgComponentsUsed = 0
     const stageDistribution: Record<string, number> = { SCP: 0, SRP: 0, MQP: 0, Reflektif: 0 }
 
     if (hasResearchRM2) {
       // Filter research data by time/user
-      const filteredPC = promptClassifications.filter(pc => {
+      const filteredPC = filteredPromptClassifications.filter(pc => {
         if (userId && pc.user_id !== userId) return false
-        if (dateSince) {
-          const d = new Date(pc.created_at)
-          if (isNaN(d.getTime()) || d < dateSince) return false
-        }
         return true
       })
 
@@ -190,7 +198,7 @@ export async function GET(request: NextRequest) {
       .sort((a, b) => parseInt(a.session.replace('Sesi ', '')) - parseInt(b.session.replace('Sesi ', '')));
 
     // ── 2. Quiz Performance (RM3) ──
-    const quizList = quizzes.map(item => ({
+    const quizList = filteredQuizzes.map(item => ({
       ...item,
       submitted_at: item.created_at ?? null,
     }));
@@ -201,37 +209,12 @@ export async function GET(request: NextRequest) {
     const quizWithReasoning = quizList.filter(q => q.reasoning_note?.trim()).length;
 
     // ── 3. Reflection Data (RM3) ──
-    const journalList = journals;
-    const structuredReflections = journalList.filter(j => j.type === 'structured_reflection');
-
-    // Parse content ratings from structured reflections
-    const ratings: number[] = [];
-    structuredReflections.forEach(r => {
-      try {
-        const parsed = (typeof r.content === 'string' ? JSON.parse(r.content) : r.content) as { contentRating?: number } | null;
-        if (parsed?.contentRating && parsed.contentRating > 0) {
-          ratings.push(parsed.contentRating);
-        }
-      } catch { /* ignore parse errors */ }
-    });
-    const avgContentRating = ratings.length > 0
-      ? Math.round((ratings.reduce((s, r) => s + r, 0) / ratings.length) * 10) / 10
-      : 0;
-
-    // CT indicator counts from structured reflections
-    let ctIndicators = 0;
-    structuredReflections.forEach(r => {
-      try {
-        const parsed = (typeof r.content === 'string' ? JSON.parse(r.content) : r.content) as { understood?: string; confused?: string; strategy?: string; promptEvolution?: string } | null;
-        if (parsed?.understood?.trim()) ctIndicators++;
-        if (parsed?.confused?.trim()) ctIndicators++;
-        if (parsed?.strategy?.trim()) ctIndicators++;
-        if (parsed?.promptEvolution?.trim()) ctIndicators++;
-      } catch { /* ignore parse errors */ }
-    });
+    const structuredReflections = reflectionModel.structuredReflections;
+    const avgContentRating = reflectionModel.avgRating;
+    const ctIndicators = reflectionModel.ctIndicators;
 
     // ── 4. Challenge Responses ──
-    const challengeList = challenges;
+    const challengeList = filteredChallenges;
     // Note: challenge_responses table has no reasoning_note column; always 0.
     const challengesWithReasoning = 0;
 
@@ -247,7 +230,7 @@ export async function GET(request: NextRequest) {
       studentSummary = userList.map(u => {
         const userPrompts = promptList.filter(p => p.user_id === u.id);
         const userQuizzes = quizList.filter(q => q.user_id === u.id);
-        const userJournals = journalList.filter(j => j.user_id === u.id);
+        const userReflections = reflectionModel.byUser.get(u.id) || [];
         const userChallenges = challengeList.filter(c => c.user_id === u.id);
 
         const correctQuiz = userQuizzes.filter(q => q.is_correct).length;
@@ -258,7 +241,7 @@ export async function GET(request: NextRequest) {
           totalPrompts: userPrompts.length,
           totalQuizzes: userQuizzes.length,
           quizAccuracy: userQuizzes.length > 0 ? Math.round((correctQuiz / userQuizzes.length) * 100) : 0,
-          totalReflections: userJournals.length,
+          totalReflections: userReflections.length,
           totalChallenges: userChallenges.length,
           joinedAt: u.created_at,
         };
@@ -285,8 +268,8 @@ export async function GET(request: NextRequest) {
         quizAccuracy,
         quizTotal: quizList.length,
         quizWithReasoning,
-        reflectionTotal: journalList.length,
-        structuredReflections: structuredReflections.length,
+        reflectionTotal: reflectionModel.totalReflections,
+        structuredReflections,
         avgContentRating,
         ctIndicators,
         challengeTotal: challengeList.length,

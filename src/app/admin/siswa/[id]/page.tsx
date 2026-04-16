@@ -31,7 +31,19 @@ const STAGE_CONFIG: Record<string, { label: string; color: string; bg: string }>
 
 const TYPE_ICONS: Record<string, string> = {
   course: '📚', quiz: '✅', journal: '📓', transcript: '📝',
-  ask: '❓', challenge: '🧩', discussion: '💬', feedback: '⭐',
+  reflection: '📓', ask: '❓', challenge: '🧩', discussion: '💬', feedback: '⭐',
+}
+
+const TYPE_LABELS: Record<string, string> = {
+  course: 'Kursus',
+  quiz: 'Kuis',
+  journal: 'Jurnal',
+  reflection: 'Refleksi',
+  transcript: 'Transkrip',
+  ask: 'Pertanyaan',
+  challenge: 'Tantangan',
+  discussion: 'Diskusi',
+  feedback: 'Rating',
 }
 
 // ─── Constants ────────────────────────────────────────────────────
@@ -259,12 +271,12 @@ export default function StudentDetailPage() {
           <section className={styles.statsGrid}>
             <div className={styles.statItem}><FiFileText className={styles.statIconPurple} /><div><span className={styles.statNum}>{student.totalCourses}</span><span className={styles.statLabel}>Kursus</span></div></div>
             <div className={styles.statItem}><FiCheckSquare className={styles.statIconGreen} /><div><span className={styles.statNum}>{student.totalQuizzes}</span><span className={styles.statLabel}>Kuis</span></div></div>
-            <div className={styles.statItem}><FiBookOpen className={styles.statIconBlue} /><div><span className={styles.statNum}>{student.totalJournals}</span><span className={styles.statLabel}>Jurnal</span></div></div>
+            <div className={styles.statItem}><FiBookOpen className={styles.statIconBlue} /><div><span className={styles.statNum}>{student.totalReflections ?? student.totalJournals}</span><span className={styles.statLabel}>Refleksi</span></div></div>
             <div className={styles.statItem}><FiMessageCircle className={styles.statIconTeal} /><div><span className={styles.statNum}>{student.totalTranscripts}</span><span className={styles.statLabel}>Transkrip</span></div></div>
             <div className={styles.statItem}><FiHelpCircle className={styles.statIconOrange} /><div><span className={styles.statNum}>{student.totalAskQuestions}</span><span className={styles.statLabel}>Pertanyaan</span></div></div>
             <div className={styles.statItem}><FiTarget className={styles.statIconRed} /><div><span className={styles.statNum}>{student.totalChallenges}</span><span className={styles.statLabel}>Tantangan</span></div></div>
             <div className={styles.statItem}><FiZap className={styles.statIconYellow} /><div><span className={styles.statNum}>{student.totalDiscussions}</span><span className={styles.statLabel}>Diskusi</span></div></div>
-            <div className={styles.statItem}><FiStar className={styles.statIconPink} /><div><span className={styles.statNum}>{student.totalFeedbacks}</span><span className={styles.statLabel}>Umpan Balik</span></div></div>
+            <div className={styles.statItem}><FiStar className={styles.statIconPink} /><div><span className={styles.statNum}>{student.totalFeedbacks}</span><span className={styles.statLabel}>Rating Refleksi</span></div></div>
           </section>
 
           {/* Keterlibatan & Penyelesaian */}
@@ -323,7 +335,7 @@ export default function StudentDetailPage() {
                       <span className={styles.activityIcon}>{TYPE_ICONS[item.type] ?? '📌'}</span>
                       <div className={styles.activityContent}>
                         <div className={styles.activityTop}>
-                          <span className={styles.activityType}>{item.type}</span>
+                          <span className={styles.activityType}>{TYPE_LABELS[item.type] ?? item.type}</span>
                           <time>{formatDateTime(item.timestamp)}</time>
                         </div>
                         <p className={styles.activityTitle}>{item.title}</p>

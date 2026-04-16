@@ -9,9 +9,8 @@
  *   5. Challenge My Thinking (streaming) + Feedback
  *   6. Generate Examples
  *   7. Submit Quiz
- *   8. Save Journal (structured reflection)
- *   9. Submit Feedback
- *  10. Discussion session (start → respond until complete)
+ *   8. Save Reflection (structured reflection + feedback mirror)
+ *   9. Discussion session (start → respond until complete)
  *
  * Then logs in as admin and navigates:
  *   - /admin/dashboard    → KPI cards, RM2/RM3 charts, recent activity
@@ -377,8 +376,8 @@ test.describe('Full Learning Flow → Admin Verification', () => {
       }
     });
 
-    // ── 9. Save Journal (structured reflection) ──
-    await test.step('9. Save journal entry', async () => {
+    // ── 9. Save Reflection (structured reflection + feedback mirror) ──
+    await test.step('9. Save reflection activity', async () => {
       const res = await apiPost('/api/jurnal/save', {
         userId,
         courseId,
@@ -401,33 +400,16 @@ test.describe('Full Learning Flow → Admin Verification', () => {
       });
 
       expect(res.ok).toBeTruthy();
-      const data = res.data as { success: boolean; id?: string };
+      const data = res.data as { success: boolean; id?: string; feedbackSaved?: boolean; feedbackMirrorAction?: string };
       expect(data.success).toBe(true);
+      expect(data.feedbackSaved).toBe(true);
+      expect(['created', 'reused']).toContain(data.feedbackMirrorAction || '');
 
-      log('Journal', `Saved structured reflection (id=${data.id})`);
+      log('Reflection', `Saved unified reflection (id=${data.id}, mirror=${data.feedbackMirrorAction})`);
     });
 
-    // ── 10. Submit Feedback ──
-    await test.step('10. Submit feedback', async () => {
-      const res = await apiPost('/api/feedback', {
-        userId,
-        courseId,
-        subtopic: firstSubtopicTitle,
-        moduleIndex: 0,
-        subtopicIndex: 0,
-        rating: 5,
-        comment: 'Materi yang sangat bagus dan komprehensif. Penjelasan tentang algoritma sangat mudah dipahami.',
-      });
-
-      expect(res.ok).toBeTruthy();
-      const data = res.data as { success: boolean };
-      expect(data.success).toBe(true);
-
-      log('Feedback', 'Rating 5/5 submitted');
-    });
-
-    // ── 11. Discussion: start → respond until complete ──
-    await test.step('11. Discussion session (full)', async () => {
+    // ── 10. Discussion: start → respond until complete ──
+    await test.step('10. Discussion session (full)', async () => {
       // Start discussion
       const startRes = await browserFetch('/api/discussion/start', {
         courseId,

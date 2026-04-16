@@ -15,8 +15,11 @@ export interface InsightsSummary {
   quizAccuracy: number
   quizTotal: number
   quizWithReasoning: number
+  /** Unified reflection event count from jurnal + feedback, deduped by scope/time. */
   reflectionTotal: number
+  /** Structured reflection subset of the unified reflection model. */
   structuredReflections: number
+  /** Average valid rating across unified reflection events, using jurnal contentRating or feedback.rating. */
   avgContentRating: number
   ctIndicators: number
   challengeTotal: number
@@ -46,6 +49,7 @@ export interface InsightsStudentRow {
   totalPrompts: number
   totalQuizzes: number
   quizAccuracy: number
+  /** Unified reflection total for the student, not raw jurnal rows. */
   totalReflections: number
   totalChallenges: number
   joinedAt: string

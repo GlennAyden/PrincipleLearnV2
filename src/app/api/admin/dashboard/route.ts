@@ -8,6 +8,13 @@ import { adminDb } from '@/lib/database'
 import { withCacheHeaders } from '@/lib/api-middleware'
 import jwt from 'jsonwebtoken'
 import type { TimeRange, ActivityItem, DashboardAPIResponse, CTBreakdown, CThBreakdown } from '@/types/dashboard'
+import {
+  buildUnifiedReflectionModel,
+  getUnifiedReflectionActivityDetail,
+  getUnifiedReflectionActivityType,
+  type ReflectionFeedbackRow,
+  type ReflectionJournalRow,
+} from '@/lib/analytics/reflection-model'
 
 const JWT_SECRET = process.env.JWT_SECRET!
 
@@ -17,10 +24,8 @@ interface UserRow { id: string; email: string; role: string; created_at: string 
 interface CourseRow { id: string; title: string; created_at: string; created_by: string }
 interface QuizSubmissionRow { id: string; user_id: string; is_correct: boolean; reasoning_note: string; created_at: string }
 interface DiscussionRow { id: string; user_id: string; status: string; learning_goals: unknown; created_at: string }
-interface JournalRow { id: string; user_id: string; type: string; content: string; created_at: string }
 interface ChallengeRow { id: string; user_id: string; question: string; created_at: string }
 interface AskHistoryRow { id: string; user_id: string; question: string; prompt_components: unknown; prompt_version: string; session_number: number; created_at: string }
-interface FeedbackRow { id: string; user_id: string; rating: number; comment: string; created_at: string }
 interface TranscriptRow { id: string; user_id: string; created_at: string }
 interface LearningProfileRow { id: string; user_id: string; created_at: string }
 interface PromptClassificationRow { id: string; user_id: string; prompt_stage: string; prompt_stage_score: number; micro_markers: unknown; primary_marker: string; created_at: string }
@@ -192,10 +197,10 @@ export async function GET(request: NextRequest) {
       safeQuery<CourseRow>('courses', 'id, title, created_at, created_by', {}, queryOpts),
       safeQuery<QuizSubmissionRow>('quiz_submissions', 'id, user_id, is_correct, reasoning_note, created_at', {}, queryOpts),
       safeQuery<DiscussionRow>('discussion_sessions', 'id, user_id, status, learning_goals, created_at', {}, queryOpts),
-      safeQuery<JournalRow>('jurnal', 'id, user_id, type, content, created_at', {}, queryOpts),
+      safeQuery<ReflectionJournalRow>('jurnal', 'id, user_id, course_id, subtopic_id, subtopic_label, module_index, subtopic_index, type, content, reflection, created_at', {}, queryOpts),
       safeQuery<ChallengeRow>('challenge_responses', 'id, user_id, question, created_at', {}, queryOpts),
       safeQuery<AskHistoryRow>('ask_question_history', 'id, user_id, question, prompt_components, prompt_version, session_number, created_at', {}, queryOpts),
-      safeQuery<FeedbackRow>('feedback', 'id, user_id, rating, comment, created_at', {}, queryOpts),
+      safeQuery<ReflectionFeedbackRow>('feedback', 'id, user_id, course_id, subtopic_id, subtopic_label, module_index, subtopic_index, rating, comment, created_at', {}, queryOpts),
       safeQuery<TranscriptRow>('transcript', 'id, user_id, created_at', {}, queryOpts),
       safeQuery<LearningProfileRow>('learning_profiles', 'id, user_id, created_at', {}, queryOpts),
       // Research tables — graceful fallback if not created
@@ -210,10 +215,11 @@ export async function GET(request: NextRequest) {
     const coursesByUser = buildUserMap(courses, 'created_by')
     const quizByUser = buildUserMap(quizSubmissions)
     const discussionsByUser = buildUserMap(discussions)
-    const journalsByUser = buildUserMap(journals)
     const challengesByUser = buildUserMap(challenges)
     const askByUser = buildUserMap(askHistory)
     const transcriptsByUser = buildUserMap(transcripts)
+    const reflectionModel = buildUnifiedReflectionModel(journals, feedbacks)
+    const reflectionsByUser = reflectionModel.byUser
 
     // ── 1. KPI Calculations ─────────────────────────────────────────────────
 
@@ -227,11 +233,10 @@ export async function GET(request: NextRequest) {
       courses.forEach(c => { if (c.created_by) activeUserIds.add(c.created_by) })
       quizSubmissions.forEach(q => { if (q.user_id) activeUserIds.add(q.user_id) })
       discussions.forEach(d => { if (d.user_id) activeUserIds.add(d.user_id) })
-      journals.forEach(j => { if (j.user_id) activeUserIds.add(j.user_id) })
       challenges.forEach(c => { if (c.user_id) activeUserIds.add(c.user_id) })
       askHistory.forEach(a => { if (a.user_id) activeUserIds.add(a.user_id) })
-      feedbacks.forEach(f => { if (f.user_id) activeUserIds.add(f.user_id) })
       transcripts.forEach(t => { if (t.user_id) activeUserIds.add(t.user_id) })
+      reflectionModel.events.forEach((event) => { if (event.userId) activeUserIds.add(event.userId) })
       activeStudents = activeUserIds.size
     }
 
@@ -242,11 +247,9 @@ export async function GET(request: NextRequest) {
     const totalDiscussions = discussions.length
     const completedDiscussions = discussions.filter(d => d.status === 'completed').length
 
-    const totalFeedbacks = feedbacks.length
-    const ratedFeedbacks = feedbacks.filter(f => f.rating)
-    const avgRating = ratedFeedbacks.length > 0
-      ? Math.round((ratedFeedbacks.reduce((sum: number, f) => sum + (f.rating || 0), 0) / ratedFeedbacks.length) * 10) / 10
-      : 0
+    const totalJournals = reflectionModel.totalReflections
+    const totalFeedbacks = reflectionModel.ratedReflections
+    const avgRating = reflectionModel.avgRating
 
     // CT Coverage Rate from discussions
     let totalGoals = 0
@@ -273,7 +276,7 @@ export async function GET(request: NextRequest) {
       quizAccuracy,
       totalDiscussions,
       completedDiscussions,
-      totalJournals: journals.length,
+      totalJournals,
       totalChallenges: challenges.length,
       totalAskQuestions: askHistory.length,
       totalFeedbacks,
@@ -425,7 +428,7 @@ export async function GET(request: NextRequest) {
       // O(1) lookups via pre-built Maps
       const userCourses = coursesByUser.get(userId) || []
       const userQuizzes = quizByUser.get(userId) || []
-      const userJournals = journalsByUser.get(userId) || []
+      const userReflections = reflectionsByUser.get(userId) || []
       const userChallenges = challengesByUser.get(userId) || []
       const userDiscussions = discussionsByUser.get(userId) || []
       const userAsk = askByUser.get(userId) || []
@@ -460,7 +463,9 @@ export async function GET(request: NextRequest) {
         ...userQuizzes.map(q => q.created_at),
         ...userAsk.map(a => a.created_at),
         ...userChallenges.map(c => c.created_at),
-        ...userJournals.map(j => j.created_at),
+        ...userReflections.map(r => r.createdAt),
+        ...userDiscussions.map(d => d.created_at),
+        ...userTranscripts.map(t => t.created_at),
       ].filter(Boolean).map(t => new Date(t).getTime()).filter(t => !isNaN(t))
 
       const lastActivity = allTimestamps.length > 0
@@ -473,7 +478,7 @@ export async function GET(request: NextRequest) {
         courses: userCourses.length,
         quizzes: userQuizzes.length,
         quizAccuracy: userQuizAccuracy,
-        journals: userJournals.length,
+        journals: userReflections.length,
         challenges: userChallenges.length,
         discussions: userDiscussions.length,
         promptStage: userStage,
@@ -524,12 +529,12 @@ export async function GET(request: NextRequest) {
       })
     })
 
-    journals.slice(-10).forEach(j => {
+    reflectionModel.events.slice(0, 10).forEach((event) => {
       recentItems.push({
-        type: 'journal',
-        email: userMap.get(j.user_id) || 'Unknown',
-        detail: j.type === 'structured_reflection' ? 'Refleksi terstruktur' : 'Jurnal entry',
-        timestamp: j.created_at,
+        type: getUnifiedReflectionActivityType(event),
+        email: userMap.get(event.userId) || 'Unknown',
+        detail: getUnifiedReflectionActivityDetail(event),
+        timestamp: event.createdAt,
       })
     })
 
@@ -539,15 +544,6 @@ export async function GET(request: NextRequest) {
         email: userMap.get(t.user_id) || 'Unknown',
         detail: 'Transcript saved',
         timestamp: t.created_at,
-      })
-    })
-
-    feedbacks.slice(-10).forEach(f => {
-      recentItems.push({
-        type: 'feedback',
-        email: userMap.get(f.user_id) || 'Unknown',
-        detail: f.rating ? `Rating ${f.rating}/5` : (f.comment || '').substring(0, 80) || 'Feedback submitted',
-        timestamp: f.created_at,
       })
     })
 
