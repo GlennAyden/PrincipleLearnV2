@@ -4,6 +4,7 @@ import {
   AdminRegisterSchema,
   GenerateCourseSchema,
   QuizSubmitSchema,
+  QuizStatusSchema,
   AskQuestionSchema,
   ChallengeThinkingSchema,
   ChallengeFeedbackSchema,
@@ -200,8 +201,8 @@ describe('GenerateCourseSchema', () => {
     const result = GenerateCourseSchema.safeParse({
       ...validData,
       extraTopics: 'Neural Networks',
-      userId: 'u1',
-      userEmail: 'u@t.com',
+      problem: 'Sulit memahami fondasi teori',
+      assumption: 'Saya belum pernah belajar topik ini sebelumnya',
     });
     expect(result.success).toBe(true);
   });
@@ -279,18 +280,28 @@ describe('GenerateCourseSchema', () => {
 describe('QuizSubmitSchema', () => {
   const validAnswer = {
     question: 'What is 2+2?',
-    options: ['3', '4', '5'],
+    options: ['1', '2', '3', '4'],
     userAnswer: '4',
     isCorrect: true,
     questionIndex: 0,
   };
 
+  const validAnswers = Array.from({ length: 5 }, (_, index) => ({
+    ...validAnswer,
+    question: `What is ${index + 2}+2?`,
+    questionIndex: index,
+  }));
+
   const validData = {
     userId: 'user-1',
     courseId: 'course-1',
     subtopic: 'Arithmetic',
+    moduleTitle: 'Arithmetic Module',
+    subtopicTitle: 'Arithmetic',
+    moduleIndex: 0,
+    subtopicIndex: 0,
     score: 100,
-    answers: [validAnswer],
+    answers: validAnswers,
   };
 
   it('should accept valid quiz submission data', () => {
@@ -298,8 +309,22 @@ describe('QuizSubmitSchema', () => {
     expect(result.success).toBe(true);
   });
 
-  it('should reject an empty answers array', () => {
-    const result = QuizSubmitSchema.safeParse({ ...validData, answers: [] });
+  it('should reject an answers array that does not contain exactly five items', () => {
+    const result = QuizSubmitSchema.safeParse({ ...validData, answers: validAnswers.slice(0, 4) });
+    expect(result.success).toBe(false);
+  });
+
+  it('should reject an answer when it does not have exactly four options', () => {
+    const result = QuizSubmitSchema.safeParse({
+      ...validData,
+      answers: [
+        {
+          ...validAnswers[0],
+          options: ['3', '4', '5'],
+        },
+        ...validAnswers.slice(1),
+      ],
+    });
     expect(result.success).toBe(false);
   });
 
@@ -325,10 +350,52 @@ describe('QuizSubmitSchema', () => {
     const result = QuizSubmitSchema.safeParse(rest);
     expect(result.success).toBe(false);
   });
+
+  it('should reject missing moduleTitle', () => {
+    const { moduleTitle: _, ...rest } = validData;
+    const result = QuizSubmitSchema.safeParse(rest);
+    expect(result.success).toBe(false);
+  });
+
+  it('should reject missing subtopicTitle', () => {
+    const { subtopicTitle: _, ...rest } = validData;
+    const result = QuizSubmitSchema.safeParse(rest);
+    expect(result.success).toBe(false);
+  });
 });
 
 // ---------------------------------------------------------------------------
-// 6. AskQuestionSchema
+// 6. QuizStatusSchema
+// ---------------------------------------------------------------------------
+describe('QuizStatusSchema', () => {
+  const baseData = {
+    courseId: 'course-1',
+  };
+
+  it('should accept status queries with moduleTitle', () => {
+    const result = QuizStatusSchema.safeParse({
+      ...baseData,
+      moduleTitle: 'Arithmetic Module',
+    });
+    expect(result.success).toBe(true);
+  });
+
+  it('should accept status queries with subtopicTitle', () => {
+    const result = QuizStatusSchema.safeParse({
+      ...baseData,
+      subtopicTitle: 'Arithmetic',
+    });
+    expect(result.success).toBe(true);
+  });
+
+  it('should reject status queries without moduleTitle or subtopicTitle', () => {
+    const result = QuizStatusSchema.safeParse(baseData);
+    expect(result.success).toBe(false);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// 7. AskQuestionSchema
 // ---------------------------------------------------------------------------
 describe('AskQuestionSchema', () => {
   const validData = {
@@ -398,7 +465,7 @@ describe('AskQuestionSchema', () => {
 });
 
 // ---------------------------------------------------------------------------
-// 7. ChallengeThinkingSchema
+// 8. ChallengeThinkingSchema
 // ---------------------------------------------------------------------------
 describe('ChallengeThinkingSchema', () => {
   it('should accept valid data', () => {
@@ -426,7 +493,7 @@ describe('ChallengeThinkingSchema', () => {
 });
 
 // ---------------------------------------------------------------------------
-// 8. ChallengeFeedbackSchema
+// 9. ChallengeFeedbackSchema
 // ---------------------------------------------------------------------------
 describe('ChallengeFeedbackSchema', () => {
   it('should accept valid data', () => {
@@ -460,7 +527,7 @@ describe('ChallengeFeedbackSchema', () => {
 });
 
 // ---------------------------------------------------------------------------
-// 9. GenerateExamplesSchema
+// 10. GenerateExamplesSchema
 // ---------------------------------------------------------------------------
 describe('GenerateExamplesSchema', () => {
   it('should accept valid data', () => {
@@ -480,7 +547,7 @@ describe('GenerateExamplesSchema', () => {
 });
 
 // ---------------------------------------------------------------------------
-// 10. FeedbackSchema
+// 11. FeedbackSchema
 // ---------------------------------------------------------------------------
 describe('FeedbackSchema', () => {
   const baseData = {
@@ -566,7 +633,7 @@ describe('FeedbackSchema', () => {
 });
 
 // ---------------------------------------------------------------------------
-// 11. JurnalSchema
+// 12. JurnalSchema
 // ---------------------------------------------------------------------------
 describe('JurnalSchema', () => {
   const baseData = {
@@ -612,7 +679,7 @@ describe('JurnalSchema', () => {
 });
 
 // ---------------------------------------------------------------------------
-// 12. parseBody helper
+// 13. parseBody helper
 // ---------------------------------------------------------------------------
 describe('parseBody', () => {
   it('should return success with parsed data for valid input', () => {

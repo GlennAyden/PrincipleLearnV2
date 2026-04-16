@@ -11,6 +11,10 @@ import { withApiLogging } from '@/lib/api-logger';
 import { aiRateLimiter } from '@/lib/rate-limit';
 import { chatCompletion } from '@/services/ai.service';
 import { appendNewQuizQuestions, buildSubtopicCacheKey } from '@/lib/quiz-sync';
+import {
+  mergeSubtopicCacheContent,
+  sanitizeQuizForClient,
+} from '@/lib/quiz-content';
 import { parseBody } from '@/lib/schemas';
 import { verifyToken } from '@/lib/jwt';
 import { assertCourseOwnership, toOwnershipError } from '@/lib/ownership';
@@ -195,7 +199,14 @@ async function postHandler(req: NextRequest) {
 
   // Update subtopic_cache so the next page load serves the new questions.
   try {
-    const updatedContent = { ...(cached.content as Record<string, unknown>), quiz: quizItems, quiz_regenerated_at: new Date().toISOString() };
+    const updatedContent = mergeSubtopicCacheContent(
+      cached.content as Record<string, unknown>,
+      {
+        ...(cached.content as Record<string, unknown>),
+        quiz: quizItems,
+        quiz_regenerated_at: new Date().toISOString(),
+      },
+    );
     await adminDb
       .from('subtopic_cache')
       .eq('cache_key', cacheKey)
@@ -206,7 +217,7 @@ async function postHandler(req: NextRequest) {
 
   return NextResponse.json({
     success: true,
-    quiz: quizItems,
+    quiz: sanitizeQuizForClient(quizItems),
   });
 }
 

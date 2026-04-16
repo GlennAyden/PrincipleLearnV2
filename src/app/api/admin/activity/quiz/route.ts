@@ -3,7 +3,6 @@
 import { NextResponse } from 'next/server'
 import type { NextRequest } from 'next/server'
 import { DatabaseService } from '@/lib/database'
-import { ensureQuizSeeded } from '@/lib/activitySeed'
 import { withProtection } from '@/lib/api-middleware'
 
 interface QuizSubmission {
@@ -58,7 +57,6 @@ async function activityHandler(req: NextRequest) {
   console.log('[Activity API] Starting quiz activity fetch');
   
   try {
-    await ensureQuizSeeded();
     const { searchParams } = new URL(req.url)
     const userId = searchParams.get('userId')
     const date = searchParams.get('date')

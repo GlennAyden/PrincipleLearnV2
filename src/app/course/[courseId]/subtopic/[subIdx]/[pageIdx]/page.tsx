@@ -28,7 +28,7 @@ interface SubtopicResponse {
   objectives: string[];
   pages: { title: string; paragraphs: string[] }[];
   keyTakeaways: string[];
-  quiz: { question: string; options: string[]; correctIndex: number }[];
+  quiz: { question: string; options: string[] }[];
   whatNext: { summary: string; encouragement: string };
 }
 
@@ -199,6 +199,13 @@ export default function SubtopicPage() {
     typeof activeSubtopic === 'string'
       ? activeSubtopic
       : activeSubtopic?.title ?? `Subtopic ${subtopicIndex + 1}`;
+  const quizScopeKey = `${courseId}-${moduleIndex}-${subtopicIndex}-${pageNumber}-${quizModuleTitle}-${quizSubtopicTitle}`;
+
+  useEffect(() => {
+    setQuizStatus(null);
+    setQuizQuestionsOverride(null);
+    setReshuffling(false);
+  }, [quizScopeKey]);
 
   // Load course data — check sessionStorage first to avoid sequential fetch
   useEffect(() => {
@@ -501,6 +508,8 @@ export default function SubtopicPage() {
   // Runs independently of `data` loading so that navigating back to the quiz
   // page immediately re-fetches prior attempts (mirrors loadAskHistory).
   useEffect(() => {
+    let cancelled = false;
+
     async function loadQuizStatus() {
       if (!user?.id || !courseId || !quizSubtopicTitle) return;
 
@@ -515,7 +524,7 @@ export default function SubtopicPage() {
         if (quizModuleTitle) params.set('moduleTitle', quizModuleTitle);
 
         const response = await apiFetch(`/api/quiz/status?${params.toString()}`);
-        if (response.ok) {
+        if (!cancelled && response.ok) {
           const result = await response.json();
           setQuizStatus(result);
         }
@@ -523,7 +532,12 @@ export default function SubtopicPage() {
         console.warn('Failed to load quiz status:', err);
       }
     }
+
     loadQuizStatus();
+
+    return () => {
+      cancelled = true;
+    };
   }, [user?.id, courseId, quizSubtopicTitle, quizModuleTitle]);
 
   // Reshuffle: generate new quiz questions for this subtopic

@@ -8,7 +8,7 @@ import ReasoningNote from '@/components/ReasoningNote/ReasoningNote';
 export interface QuizItem {
   question: string;
   options: string[];
-  correctIndex: number;
+  correctIndex?: number;
 }
 
 export interface QuizCompletedState {
@@ -21,6 +21,48 @@ export interface QuizCompletedState {
     totalQuestions: number;
     submittedAt: string;
   };
+}
+
+interface QuizAnswerEvaluation {
+  questionIndex: number;
+  isCorrect: boolean;
+  correctAnswer?: string;
+  userAnswer?: string;
+  matched?: boolean;
+  method?: string;
+  question?: string;
+}
+
+interface QuizSubmissionSummary {
+  score: number;
+  correctCount: number;
+  totalQuestions: number;
+  attemptNumber?: number;
+  quizAttemptId?: string;
+  submittedAt?: string;
+}
+
+interface QuizSubmissionResponse {
+  success?: boolean;
+  score?: number;
+  correctCount?: number;
+  attemptNumber?: number;
+  quizAttemptId?: string;
+  submittedAt?: string;
+  message?: string;
+  evaluatedAnswers?: QuizAnswerEvaluation[];
+  matchingResults?: Array<{
+    questionIndex?: number;
+    matched?: boolean;
+    method?: string;
+    question?: string;
+    correctAnswer?: string;
+    userAnswer?: string;
+    isCorrect?: boolean;
+  }>;
+  evaluations?: QuizAnswerEvaluation[];
+  questionEvaluations?: QuizAnswerEvaluation[];
+  answerEvaluations?: QuizAnswerEvaluation[];
 }
 
 export interface QuizProps {
@@ -53,6 +95,7 @@ export default function Quiz({
 }: QuizProps) {
   const safeItems = questions;
   const { user } = useAuth();
+  const quizScopeKey = `${courseId}|${moduleTitle}|${subtopic}|${subtopicTitle}|${moduleIndex}|${subtopicIndex}`;
 
   const [selectedAnswers, setSelectedAnswers] = useState<(number | null)[]>(
     safeItems.map(() => null),
@@ -67,6 +110,8 @@ export default function Quiz({
   const [submitted, setSubmitted] = useState(false);
   const [loading, setLoading] = useState(false);
   const [submitError, setSubmitError] = useState<string | null>(null);
+  const [submissionSummary, setSubmissionSummary] = useState<QuizSubmissionSummary | null>(null);
+  const [questionEvaluations, setQuestionEvaluations] = useState<QuizAnswerEvaluation[]>([]);
   // Atomic double-submit guard. State updates are async so `submitted` can
   // race when the user double-clicks; a ref flips synchronously and is the
   // source of truth for "is a request in flight".
@@ -76,16 +121,23 @@ export default function Quiz({
   // completedState, so we bypass the summary view for the fresh attempt.
   const [showSummary, setShowSummary] = useState<boolean>(!!completedState);
 
-  // Reset internal state whenever the questions array changes (after reshuffle).
-  useEffect(() => {
+  const resetAttemptState = useCallback((nextShowSummary = false) => {
     setSelectedAnswers(safeItems.map(() => null));
     setReasoningNotes(safeItems.map(() => ''));
     setShowResults(false);
     setSubmitted(false);
     setLoading(false);
     setSubmitError(null);
+    setSubmissionSummary(null);
+    setQuestionEvaluations([]);
     submittingRef.current = false;
-  }, [safeItems.length, safeItems]);
+    setShowSummary(nextShowSummary);
+  }, [safeItems]);
+
+  // Reset internal state whenever the quiz scope or question list changes.
+  useEffect(() => {
+    resetAttemptState(false);
+  }, [quizScopeKey, safeItems.length, resetAttemptState]);
 
   // If the parent flips completedState back to non-null (e.g. after a submit
   // where the status endpoint is re-fetched), re-enter summary view.
@@ -126,11 +178,11 @@ export default function Quiz({
         reasoningNote: string;
       }>,
       score: number,
-    ): Promise<boolean> => {
+    ): Promise<QuizSubmissionResponse | null> => {
       // Atomic guard: ref flips synchronously so a double-click cannot
       // squeeze a second request through before React commits `submitted`.
-      if (submittingRef.current) return false;
-      if (submitted || !user?.id) return false;
+      if (submittingRef.current) return null;
+      if (submitted || !user?.id) return null;
       submittingRef.current = true;
 
       try {
@@ -155,8 +207,21 @@ export default function Quiz({
         if (response.ok) {
           const result = await response.json();
           setSubmitted(true);
+          const evaluations = extractEvaluations(result, answers);
+          setQuestionEvaluations(evaluations);
+          setSubmissionSummary({
+            score: typeof result.score === 'number' ? result.score : score,
+            correctCount:
+              typeof result.correctCount === 'number'
+                ? result.correctCount
+                : evaluations.filter((item) => item.isCorrect).length,
+            totalQuestions: answers.length,
+            attemptNumber: typeof result.attemptNumber === 'number' ? result.attemptNumber : undefined,
+            quizAttemptId: typeof result.quizAttemptId === 'string' ? result.quizAttemptId : undefined,
+            submittedAt: typeof result.submittedAt === 'string' ? result.submittedAt : undefined,
+          });
           console.log('Quiz attempt saved successfully:', result.message);
-          return true;
+          return result;
         }
 
         const errorResult = await response.json().catch(() => ({}));
@@ -167,13 +232,13 @@ export default function Quiz({
         setSubmitError(
           `Gagal menyimpan hasil kuis: ${reason}. Silakan coba lagi atau muat ulang halaman.`,
         );
-        return false;
+        return null;
       } catch (error) {
         console.error('Error saving quiz attempt:', error);
         setSubmitError(
           'Gagal menyimpan hasil kuis: koneksi terputus. Silakan coba lagi.',
         );
-        return false;
+        return null;
       } finally {
         setLoading(false);
         submittingRef.current = false;
@@ -186,7 +251,7 @@ export default function Quiz({
     let correctCount = 0;
     const answers = safeItems.map((q, index) => {
       const userAnswerIndex = selectedAnswers[index] ?? -1;
-      const isCorrect = userAnswerIndex === q.correctIndex;
+      const isCorrect = typeof q.correctIndex === 'number' && userAnswerIndex === q.correctIndex;
       if (isCorrect) correctCount++;
 
       return {
@@ -210,12 +275,21 @@ export default function Quiz({
     // If the user is anonymous (no user.id), keep the legacy local-only
     // flow so the feature still works in demo mode.
     if (user?.id && courseId) {
-      const ok = await submitQuizToServer(answers, score);
-      if (ok) {
+      const result = await submitQuizToServer(answers, score);
+      if (result) {
         setShowResults(true);
+        setShowSummary(false);
       }
     } else {
+      const fallbackEvaluations = buildFallbackEvaluations(answers);
+      setQuestionEvaluations(fallbackEvaluations);
+      setSubmissionSummary({
+        score,
+        correctCount: fallbackEvaluations.filter((evaluation) => evaluation.isCorrect).length,
+        totalQuestions: answers.length,
+      });
       setShowResults(true);
+      setShowSummary(false);
     }
   };
 
@@ -226,8 +300,11 @@ export default function Quiz({
   const handleRetrySubmit = async () => {
     if (!user?.id || !courseId) return;
     const { answers, score } = buildAnswersFromState();
-    const ok = await submitQuizToServer(answers, score);
-    if (ok) setShowResults(true);
+    const result = await submitQuizToServer(answers, score);
+    if (result) {
+      setShowResults(true);
+      setShowSummary(false);
+    }
   };
 
   const handleReshuffleClick = async () => {
@@ -236,11 +313,92 @@ export default function Quiz({
       ? window.confirm('Yakin ingin mengerjakan kuis baru? Nilai lama tetap tersimpan.')
       : true;
     if (!confirmed) return;
-    setShowSummary(false);
-    setShowResults(false);
-    setSubmitted(false);
+    resetAttemptState(false);
     await onReshuffle();
   };
+
+  const buildFallbackEvaluations = useCallback(
+    (answers: Array<{
+      question: string;
+      options: string[];
+      userAnswer: string;
+      isCorrect: boolean;
+      questionIndex: number;
+      reasoningNote: string;
+    }>) =>
+      answers.map((answer) => ({
+        questionIndex: answer.questionIndex,
+        isCorrect: answer.isCorrect,
+        userAnswer: answer.userAnswer,
+        question: answer.question,
+      })),
+    [],
+  );
+
+  function extractEvaluations(
+    result: QuizSubmissionResponse,
+    answers: Array<{
+      question: string;
+      options: string[];
+      userAnswer: string;
+      isCorrect: boolean;
+      questionIndex: number;
+      reasoningNote: string;
+    }>,
+  ): QuizAnswerEvaluation[] {
+    const rawEvaluations = (
+      result.questionEvaluations ??
+      result.answerEvaluations ??
+      result.evaluations ??
+      result.evaluatedAnswers ??
+      result.matchingResults ??
+      []
+    ) as Array<Record<string, unknown>>;
+
+    if (!Array.isArray(rawEvaluations) || rawEvaluations.length === 0) {
+      return buildFallbackEvaluations(answers);
+    }
+
+    return rawEvaluations.map((evaluation, index) => {
+      const questionIndexValue = evaluation.questionIndex;
+      const questionIndex = typeof questionIndexValue === 'number' ? questionIndexValue : index;
+      const answer = answers[questionIndex] ?? answers[index];
+      const correctAnswer =
+        typeof evaluation.correctAnswer === 'string'
+          ? evaluation.correctAnswer
+          : undefined;
+      const isCorrect =
+        typeof evaluation.isCorrect === 'boolean'
+          ? evaluation.isCorrect
+          : typeof evaluation.matched === 'boolean'
+            ? evaluation.matched
+            : typeof correctAnswer === 'string'
+              ? answer?.userAnswer === correctAnswer
+              : typeof answer?.isCorrect === 'boolean'
+                ? answer.isCorrect
+                : false;
+
+      return {
+        questionIndex,
+        isCorrect,
+        correctAnswer,
+        userAnswer:
+          typeof evaluation.userAnswer === 'string'
+            ? evaluation.userAnswer
+            : answer?.userAnswer,
+        matched: typeof evaluation.matched === 'boolean' ? evaluation.matched : undefined,
+        method: typeof evaluation.method === 'string' ? evaluation.method : undefined,
+        question: typeof evaluation.question === 'string' ? evaluation.question : answer?.question,
+      };
+    });
+  }
+
+  const getEvaluationForQuestion = useCallback(
+    (questionIndex: number) =>
+      questionEvaluations.find((evaluation) => evaluation.questionIndex === questionIndex) ??
+      null,
+    [questionEvaluations],
+  );
 
   // ── Render: completion summary panel ──
   if (showSummary && completedState) {
@@ -299,6 +457,17 @@ export default function Quiz({
   return (
     <section className={styles.quizSection}>
       <h3 className={styles.quizHeader}>Waktu Kuis!</h3>
+      {showResults && submissionSummary && (
+        <div className={styles.completionPanel}>
+          <div className={styles.completionTitle}>Hasil evaluasi tersimpan</div>
+          <div className={styles.completionScore}>
+            Skor: <strong>{submissionSummary.score}%</strong> ({submissionSummary.correctCount}/{submissionSummary.totalQuestions})
+          </div>
+          {submissionSummary.attemptNumber && (
+            <div className={styles.completionMeta}>Attempt #{submissionSummary.attemptNumber}</div>
+          )}
+        </div>
+      )}
       {safeItems.map((q, qIdx) => (
         <div key={qIdx} className={styles.questionBlock}>
           <p className={styles.questionText}>
@@ -307,7 +476,14 @@ export default function Quiz({
           <ul className={styles.optionsList}>
             {q.options.map((opt, optIdx) => {
               const isSelected = selectedAnswers[qIdx] === optIdx;
-              const isCorrect = q.correctIndex === optIdx;
+              const evaluation = getEvaluationForQuestion(qIdx);
+              const fallbackCorrectIndex = typeof q.correctIndex === 'number' ? q.correctIndex : null;
+              const correctAnswerText = evaluation?.correctAnswer ?? (
+                fallbackCorrectIndex !== null ? q.options[fallbackCorrectIndex] : undefined
+              );
+              const isCorrectOption = typeof correctAnswerText === 'string'
+                ? q.options[optIdx] === correctAnswerText
+                : fallbackCorrectIndex === optIdx;
               return (
                 <li key={optIdx} className={styles.optionItem}>
                   <label className={styles.optionLabel}>
@@ -321,19 +497,30 @@ export default function Quiz({
                     />
                     {opt}
                   </label>
-                  {showResults && isSelected && isCorrect && (
+                  {showResults && isSelected && isCorrectOption && (
                     <span className={styles.resultIcon}>✔</span>
                   )}
-                  {showResults && isSelected && !isCorrect && (
+                  {showResults && isSelected && !isCorrectOption && (
                     <span className={styles.resultIcon}>✖</span>
                   )}
-                  {showResults && !isSelected && isCorrect && (
+                  {showResults && !isSelected && isCorrectOption && (
                     <span className={styles.resultIcon}>✔</span>
                   )}
                 </li>
               );
             })}
           </ul>
+          {showResults && (() => {
+            const evaluation = getEvaluationForQuestion(qIdx);
+            const correctAnswerText = evaluation?.correctAnswer ??
+              (typeof q.correctIndex === 'number' ? q.options[q.correctIndex] : undefined);
+            if (!correctAnswerText) return null;
+            return (
+              <div className={styles.completionHint}>
+                Jawaban benar: <strong>{correctAnswerText}</strong>
+              </div>
+            );
+          })()}
           {selectedAnswers[qIdx] !== null && !showResults && (
             <ReasoningNote
               value={reasoningNotes[qIdx]}

@@ -4,6 +4,7 @@ import { verifyToken } from '@/lib/jwt';
 import { adminDb } from '@/lib/database';
 import { withApiLogging } from '@/lib/api-logger';
 import { buildSubtopicCacheKey } from '@/lib/quiz-sync';
+import { evaluateModuleDiscussionPrerequisites } from '@/lib/discussion-prerequisites';
 import { resolveDiscussionSubtopicId } from '@/lib/discussion/resolveSubtopic';
 import {
   serializeDiscussionMessages,
@@ -121,6 +122,30 @@ async function postHandler(request: NextRequest) {
         { error: 'Unable to resolve discussion context for this subtopic' },
         { status: 404 }
       );
+    }
+
+    const moduleScopeRequested =
+      (typeof subtopicTitle === 'string' && isDiscussionLabel(subtopicTitle)) ||
+      (typeof moduleTitle === 'string' &&
+        typeof subtopicTitle === 'string' &&
+        normalizeIdentifier(moduleTitle) === normalizeIdentifier(subtopicTitle));
+
+    if (moduleScopeRequested) {
+      const prerequisites = await evaluateModuleDiscussionPrerequisites({
+        courseId,
+        moduleId: subtopicId,
+        userId: tokenPayload.userId,
+      });
+
+      if (!prerequisites.ready) {
+        return NextResponse.json(
+          {
+            error: 'Selesaikan seluruh subtopik dan kuis modul ini sebelum memulai diskusi.',
+            prerequisites,
+          },
+          { status: 409 },
+        );
+      }
     }
 
     let templateRow = await fetchLatestTemplate({ subtopicId, courseId, subtopicTitle, moduleTitle });

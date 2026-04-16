@@ -15,9 +15,18 @@ import { apiRateLimiter } from '@/lib/rate-limit';
 
 interface SubmissionRow {
   attempt_number: number;
-  quiz_attempt_id: string;
+  quiz_attempt_id: string | null;
   is_correct: boolean;
   created_at: string;
+}
+
+interface AttemptSummary {
+  attemptId: string;
+  attemptNumber: number;
+  correctCount: number;
+  totalQuestions: number;
+  score: number;
+  submittedAt: string;
 }
 
 async function getHandler(req: NextRequest) {
@@ -176,37 +185,60 @@ async function getHandler(req: NextRequest) {
       });
     }
 
-    // Group by quiz_attempt_id to compute per-attempt score.
+    // Group by quiz_attempt_id so historical reshuffles and answer rows
+    // collapse into stable attempts, even if attempt_number has races.
     const attemptGroups = new Map<string, SubmissionRow[]>();
     for (const row of rows) {
-      const key = row.quiz_attempt_id;
+      const key = row.quiz_attempt_id || `legacy-${row.attempt_number}-${row.created_at}`;
       if (!attemptGroups.has(key)) attemptGroups.set(key, []);
       attemptGroups.get(key)!.push(row);
     }
 
-    const attemptCount = attemptGroups.size;
+    const attemptSummaries: AttemptSummary[] = Array.from(attemptGroups.entries()).map(
+      ([attemptId, attemptRows]) => {
+        const sortedRows = [...attemptRows].sort((a, b) => {
+          return new Date(a.created_at).getTime() - new Date(b.created_at).getTime();
+        });
+        const latestRow = sortedRows[sortedRows.length - 1];
+        const correctCount = attemptRows.filter((row) => row.is_correct).length;
+        const totalQuestions = attemptRows.length;
+        const score = totalQuestions > 0 ? Math.round((correctCount / totalQuestions) * 100) : 0;
 
-    // Latest = highest attempt_number
-    const latestAttemptId = rows[0].quiz_attempt_id;
-    const latestRows = attemptGroups.get(latestAttemptId) ?? [];
-    const latestCorrect = latestRows.filter((r) => r.is_correct).length;
-    const latestTotal = latestRows.length;
-    const latestScore = latestTotal > 0 ? Math.round((latestCorrect / latestTotal) * 100) : 0;
-    const latestSubmittedAt = latestRows
-      .map((r) => r.created_at)
-      .sort()
-      .pop() ?? rows[0].created_at;
+        return {
+          attemptId,
+          attemptNumber: typeof latestRow?.attempt_number === 'number' ? latestRow.attempt_number : 1,
+          correctCount,
+          totalQuestions,
+          score,
+          submittedAt: latestRow?.created_at ?? '',
+        };
+      },
+    );
+
+    const latestAttempt = attemptSummaries.sort((a, b) => {
+      const submittedAtDiff = new Date(b.submittedAt).getTime() - new Date(a.submittedAt).getTime();
+      if (submittedAtDiff !== 0) return submittedAtDiff;
+      return b.attemptNumber - a.attemptNumber;
+    })[0];
+
+    if (!latestAttempt) {
+      return NextResponse.json({
+        completed: false,
+        attemptCount: 0,
+        latest: null,
+      });
+    }
 
     return NextResponse.json({
       completed: true,
-      attemptCount,
+      attemptCount: attemptGroups.size,
       latest: {
-        attemptNumber: rows[0].attempt_number,
-        quizAttemptId: latestAttemptId,
-        score: latestScore,
-        correctCount: latestCorrect,
-        totalQuestions: latestTotal,
-        submittedAt: latestSubmittedAt,
+        attemptNumber: latestAttempt.attemptNumber,
+        quizAttemptId: latestAttempt.attemptId,
+        score: latestAttempt.score,
+        correctCount: latestAttempt.correctCount,
+        totalQuestions: latestAttempt.totalQuestions,
+        submittedAt: latestAttempt.submittedAt,
       },
     });
   } catch (error) {

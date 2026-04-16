@@ -93,7 +93,7 @@ export const QuizStatusSchema = z
 
 const QuizAnswerSchema = z.object({
   question: z.string(),
-  options: z.array(z.string()),
+  options: z.array(z.string()).length(4, 'Setiap soal harus memiliki 4 opsi'),
   userAnswer: z.string(),
   isCorrect: z.boolean(),
   questionIndex: z.number(),
@@ -113,7 +113,7 @@ export const QuizSubmitSchema = z.object({
   moduleIndex: flexibleIndex,
   subtopicIndex: flexibleIndex,
   score: z.number(),
-  answers: z.array(QuizAnswerSchema).min(1, 'Quiz answers are required'),
+  answers: z.array(QuizAnswerSchema).length(5, 'Quiz harus berisi tepat 5 jawaban'),
 });
 
 // ── AI feature schemas ──────────────────────────────────────────────

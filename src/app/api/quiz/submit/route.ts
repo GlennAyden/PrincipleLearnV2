@@ -6,8 +6,10 @@ import { withApiLogging } from '@/lib/api-logger';
 import { withProtection } from '@/lib/api-middleware';
 import { verifyToken } from '@/lib/jwt';
 import { QuizSubmitSchema, parseBody } from '@/lib/schemas';
+import { assertCourseOwnership, toOwnershipError } from '@/lib/ownership';
 import { resolveUserByIdentifier } from '@/services/auth.service';
 import { syncQuizQuestions, buildSubtopicCacheKey } from '@/lib/quiz-sync';
+import { withQuizCompletionState } from '@/lib/quiz-content';
 
 function normalizeText(value: unknown) {
   return typeof value === 'string' ? value.trim() : '';
@@ -22,57 +24,313 @@ function normalizeIndex(value: unknown) {
   return null;
 }
 
+function normalizeQuizText(text: string) {
+  return text.replace(/\s+/g, ' ').replace(/[^\w\s]/g, '').toLowerCase().trim();
+}
+
+function tokenizeQuizText(text: string) {
+  return text.toLowerCase().split(/\s+/).filter((word) => word.length > 3 || /\d/.test(word));
+}
+
+function optionsSignature(options: unknown): string | null {
+  if (!Array.isArray(options) || options.length === 0) return null;
+  return options
+    .map((option) => String(option).replace(/\s+/g, ' ').trim().toLowerCase())
+    .sort()
+    .join('|');
+}
+
+interface QuizRowRecord extends Record<string, unknown> {
+  id?: string;
+  question?: string;
+  options?: unknown;
+  correct_answer?: string;
+}
+
+interface CachedQuizItem {
+  question: string;
+  options: string[];
+  correctIndex: number | null;
+}
+
+interface AuthoritativeQuizQuestion {
+  quizId: string;
+  question: string;
+  options: string[];
+  correctAnswer: string;
+}
+
+interface EvaluatedAnswer {
+  questionIndex: number;
+  question: string;
+  userAnswer: string;
+  correctAnswer: string;
+  isCorrect: boolean;
+  reasoningNote: string | null;
+}
+
+function parseContentRecord(content: unknown): Record<string, unknown> {
+  if (typeof content === 'string') {
+    try {
+      const parsed = JSON.parse(content);
+      if (parsed && typeof parsed === 'object' && !Array.isArray(parsed)) {
+        return parsed as Record<string, unknown>;
+      }
+      return {};
+    } catch {
+      return {};
+    }
+  }
+
+  if (content && typeof content === 'object' && !Array.isArray(content)) {
+    return content as Record<string, unknown>;
+  }
+
+  return {};
+}
+
+function extractCachedQuizItems(content: unknown): CachedQuizItem[] {
+  const record = parseContentRecord(content);
+  const quiz = record.quiz;
+  if (!Array.isArray(quiz)) return [];
+
+  return quiz
+    .map((item) => {
+      if (!item || typeof item !== 'object') return null;
+
+      const question = typeof item.question === 'string' ? item.question.trim() : '';
+      const options = Array.isArray(item.options)
+        ? item.options
+            .map((option: unknown) => (typeof option === 'string' ? option.trim() : ''))
+            .filter(Boolean)
+        : [];
+      const correctIndex = typeof item.correctIndex === 'number' && item.correctIndex >= 0
+        ? Math.floor(item.correctIndex)
+        : null;
+
+      if (!question || options.length !== 4) return null;
+
+      return {
+        question,
+        options,
+        correctIndex,
+      };
+    })
+    .filter((item): item is CachedQuizItem => item !== null);
+}
+
+function dedupeByQuestion(rows: QuizRowRecord[]) {
+  const byKey = new Map<string, QuizRowRecord>();
+  for (const row of rows) {
+    const raw = typeof row.question === 'string' ? row.question : '';
+    const key = raw.replace(/\s+/g, ' ').toLowerCase().trim();
+    if (!key) continue;
+    byKey.set(key, row);
+  }
+  return byKey.size > 0 ? Array.from(byKey.values()) : rows;
+}
+
+function resolveCorrectAnswer(item: CachedQuizItem, matchedRow: QuizRowRecord | null): string {
+  if (
+    item.correctIndex !== null &&
+    item.correctIndex >= 0 &&
+    item.correctIndex < item.options.length
+  ) {
+    return item.options[item.correctIndex] ?? '';
+  }
+
+  const rowAnswer = typeof matchedRow?.correct_answer === 'string'
+    ? matchedRow.correct_answer.trim()
+    : '';
+
+  return rowAnswer || item.options[0] || '';
+}
+
+function matchCachedQuizToRow(
+  item: CachedQuizItem,
+  latestRows: QuizRowRecord[],
+  latestFirstRows: QuizRowRecord[],
+  index: number,
+): QuizRowRecord | null {
+  const normalizedQuestion = normalizeQuizText(item.question);
+  const itemOptionsKey = optionsSignature(item.options);
+
+  const exactQuestionMatch = latestRows.find(
+    (row) => typeof row.question === 'string' && row.question.trim() === item.question,
+  );
+  if (exactQuestionMatch) return exactQuestionMatch;
+
+  const normalizedQuestionMatch = latestRows.find(
+    (row) =>
+      typeof row.question === 'string' &&
+      normalizeQuizText(row.question) === normalizedQuestion,
+  );
+  if (normalizedQuestionMatch) return normalizedQuestionMatch;
+
+  if (itemOptionsKey) {
+    const optionsMatch = latestRows.find(
+      (row) => optionsSignature(row.options) === itemOptionsKey,
+    );
+    if (optionsMatch) return optionsMatch;
+  }
+
+  const fallbackRow = latestRows[index];
+  if (fallbackRow?.id) return fallbackRow;
+
+  if (itemOptionsKey) {
+    const latestOptionsMatch = latestFirstRows.find(
+      (row) => optionsSignature(row.options) === itemOptionsKey,
+    );
+    if (latestOptionsMatch) return latestOptionsMatch;
+  }
+
+  return latestFirstRows.find(
+    (row) =>
+      typeof row.question === 'string' &&
+      normalizeQuizText(row.question) === normalizedQuestion,
+  ) ?? null;
+}
+
+function buildAuthoritativeQuiz(
+  quizRows: QuizRowRecord[],
+  cachedQuizItems: CachedQuizItem[],
+): AuthoritativeQuizQuestion[] {
+  if (cachedQuizItems.length > 0) {
+    const latestRows = quizRows.slice(-cachedQuizItems.length);
+    const latestFirstRows = [...quizRows].reverse();
+
+    return cachedQuizItems
+      .map((item, index) => {
+        const matchedRow = matchCachedQuizToRow(item, latestRows, latestFirstRows, index);
+        const quizId = typeof matchedRow?.id === 'string' ? matchedRow.id : '';
+        const correctAnswer = resolveCorrectAnswer(item, matchedRow);
+
+        if (!quizId || !correctAnswer) return null;
+
+        return {
+          quizId,
+          question: item.question,
+          options: item.options,
+          correctAnswer,
+        };
+      })
+      .filter((item): item is AuthoritativeQuizQuestion => item !== null);
+  }
+
+  return dedupeByQuestion(quizRows)
+    .map((row) => {
+      const quizId = typeof row.id === 'string' ? row.id : '';
+      const question = typeof row.question === 'string' ? row.question.trim() : '';
+      const options = Array.isArray(row.options) ? row.options.map((option) => String(option)) : [];
+      const correctAnswer = typeof row.correct_answer === 'string' ? row.correct_answer.trim() : '';
+
+      if (!quizId || !question || options.length !== 4 || !correctAnswer) {
+        return null;
+      }
+
+      return {
+        quizId,
+        question,
+        options,
+        correctAnswer,
+      };
+    })
+    .filter((item): item is AuthoritativeQuizQuestion => item !== null);
+}
+
+function matchAnswerToQuestion(
+  answer: {
+    question: string;
+    options: string[];
+  },
+  authoritativeQuiz: AuthoritativeQuizQuestion[],
+  usedQuizIds: Set<string>,
+  index: number,
+): { quiz: AuthoritativeQuizQuestion | null; method: string } {
+  const availableQuiz = authoritativeQuiz.filter((quiz) => !usedQuizIds.has(quiz.quizId));
+  const normalizedQuestion = normalizeQuizText(answer.question);
+  const answerOptionsKey = optionsSignature(answer.options);
+
+  const exactTextMatch = availableQuiz.find((quiz) => quiz.question.trim() === answer.question.trim()) ?? null;
+  if (exactTextMatch) return { quiz: exactTextMatch, method: 'exact_text' };
+
+  const normalizedTextMatch = availableQuiz.find(
+    (quiz) => normalizeQuizText(quiz.question) === normalizedQuestion,
+  ) ?? null;
+  if (normalizedTextMatch) return { quiz: normalizedTextMatch, method: 'fuzzy_text' };
+
+  if (answerOptionsKey) {
+    const optionsMatch = availableQuiz.find(
+      (quiz) => optionsSignature(quiz.options) === answerOptionsKey,
+    ) ?? null;
+    if (optionsMatch) return { quiz: optionsMatch, method: 'options_signature' };
+  }
+
+  const answerTokens = tokenizeQuizText(answer.question);
+  if (answerTokens.length > 0) {
+    const similarityMatch = availableQuiz.find((quiz) => {
+      const quizTokens = tokenizeQuizText(quiz.question);
+      const commonTokens = answerTokens.filter((token) => quizTokens.includes(token));
+      return commonTokens.length >= Math.max(2, Math.ceil(answerTokens.length * 0.5));
+    }) ?? null;
+    if (similarityMatch) return { quiz: similarityMatch, method: 'content_similarity' };
+  }
+
+  const indexMatch = authoritativeQuiz[index];
+  if (indexMatch && !usedQuizIds.has(indexMatch.quizId)) {
+    return { quiz: indexMatch, method: 'index_position' };
+  }
+
+  return { quiz: null, method: 'no_match' };
+}
+
 async function postHandler(req: NextRequest) {
   try {
-    // Prefer middleware-injected header; fall back to JWT cookie directly.
-    // Middleware header propagation has proven unreliable in production, so
-    // we mirror the cookie-based pattern used by the working routes.
     let authUserId = req.headers.get('x-user-id');
+    let authUserRole = req.headers.get('x-user-role') ?? undefined;
     if (!authUserId) {
       const accessToken = req.cookies.get('access_token')?.value;
       const tokenPayload = accessToken ? verifyToken(accessToken) : null;
       if (tokenPayload?.userId) {
         authUserId = tokenPayload.userId;
+        authUserRole = authUserRole ?? tokenPayload.role;
       }
     }
+
     if (!authUserId) {
       return NextResponse.json(
         { error: 'Autentikasi diperlukan' },
-        { status: 401 }
+        { status: 401 },
       );
     }
 
     const parsed = parseBody(QuizSubmitSchema, await req.json());
     if (!parsed.success) return parsed.response;
+
     const data = parsed.data;
     const answers = data.answers;
 
-    // Find user in database using authenticated user ID from JWT
-    const user = await resolveUserByIdentifier(authUserId);
+    try {
+      await assertCourseOwnership(authUserId, data.courseId, authUserRole);
+    } catch (ownershipErr) {
+      const asOwnership = toOwnershipError(ownershipErr);
+      if (asOwnership) {
+        return NextResponse.json(
+          { error: asOwnership.message },
+          { status: asOwnership.status },
+        );
+      }
+      throw ownershipErr;
+    }
 
+    const user = await resolveUserByIdentifier(authUserId);
     if (!user) {
       return NextResponse.json(
-        { error: "Pengguna tidak ditemukan" },
-        { status: 404 }
+        { error: 'Pengguna tidak ditemukan' },
+        { status: 404 },
       );
     }
 
-    // Find course in database
-    const courses = await DatabaseService.getRecords('courses', {
-      filter: { id: data.courseId },
-      limit: 1
-    });
-
-    if (courses.length === 0) {
-      return NextResponse.json(
-        { error: "Kursus tidak ditemukan" },
-        { status: 404 }
-      );
-    }
-
-    // subtopics table is keyed per MODULE (subtopics.title = module title),
-    // so we look up by moduleTitle first. subtopicTitle is kept as a
-    // fallback for callers that only pass the subtopic label.
     let subtopicId: string | null = null;
     const trimmedModuleTitle = data.moduleTitle?.trim() ?? '';
     const trimmedSubtopicLabel = data.subtopicTitle?.trim() ?? '';
@@ -97,17 +355,10 @@ async function postHandler(req: NextRequest) {
       subtopicId = (subRow as { id?: string } | null)?.id ?? null;
     }
 
-    // Lazy-seed helper: if the quiz table is empty for this (subtopic, label)
-    // pair, try to re-insert from subtopic_cache before giving up. This
-    // recovers from legacy/stale cache entries whose background sync never
-    // succeeded and avoids discarding the user's in-flight answers.
     async function lazySeedQuizFromCache(): Promise<number> {
       if (!trimmedModuleTitle || !trimmedSubtopicLabel) return 0;
+
       try {
-        // MUST use the same normalization as generate-subtopic's writer,
-        // otherwise every casing/whitespace drift silently misses the cache
-        // and leaves the `quiz` table empty — which surfaces to the user as
-        // a 404 on submit even though the content actually exists.
         const cacheKey = buildSubtopicCacheKey(
           data.courseId,
           trimmedModuleTitle,
@@ -118,22 +369,26 @@ async function postHandler(req: NextRequest) {
           .select('content')
           .eq('cache_key', cacheKey)
           .maybeSingle();
-        const cachedContent = (cacheRow as { content?: { quiz?: unknown } } | null)?.content ?? null;
-        const cachedQuiz = Array.isArray(cachedContent?.quiz) ? cachedContent.quiz : null;
-        if (!cachedQuiz || cachedQuiz.length === 0) return 0;
+        const cachedQuiz = extractCachedQuizItems(cacheRow?.content ?? null);
+        if (cachedQuiz.length === 0) return 0;
 
         const seedResult = await syncQuizQuestions({
           adminDb,
           courseId: data.courseId,
           moduleTitle: trimmedModuleTitle,
           subtopicTitle: trimmedSubtopicLabel,
-          quizItems: cachedQuiz,
+          quizItems: cachedQuiz.map((item) => ({
+            question: item.question,
+            options: item.options,
+            correctIndex: item.correctIndex ?? 0,
+          })),
           subtopicId: subtopicId ?? undefined,
         });
 
         if (seedResult?.resolvedSubtopicId && !subtopicId) {
           subtopicId = seedResult.resolvedSubtopicId;
         }
+
         return seedResult?.insertedCount ?? 0;
       } catch (seedError) {
         console.warn('[QuizSubmit] Lazy seed from cache failed', seedError);
@@ -141,17 +396,10 @@ async function postHandler(req: NextRequest) {
       }
     }
 
-    async function loadQuizQuestions(): Promise<Array<Record<string, unknown>>> {
-      // Strategy 1: subtopic_id + subtopic_label. Authoritative when both
-      // are set — must NOT fall through to Strategy 2 on an empty result,
-      // because Strategy 2 returns sibling-subtopic rows sharing the same
-      // subtopic_id, which would cause spurious match failures against the
-      // client's answers. An empty result flows to the caller's lazy-seed
-      // recovery instead. The try/catch only exists so legacy schemas
-      // without the subtopic_label column can still fall through.
+    async function loadQuizQuestions(): Promise<QuizRowRecord[]> {
       if (subtopicId && trimmedSubtopicLabel) {
         try {
-          return await DatabaseService.getRecords<Record<string, unknown>>('quiz', {
+          return await DatabaseService.getRecords<QuizRowRecord>('quiz', {
             filter: {
               course_id: data.courseId,
               subtopic_id: subtopicId,
@@ -164,18 +412,15 @@ async function postHandler(req: NextRequest) {
         }
       }
 
-      // Strategy 2: subtopic_id only (legacy rows with NULL label, or
-      // schema without subtopic_label column).
       if (subtopicId) {
-        const byModule = await DatabaseService.getRecords<Record<string, unknown>>('quiz', {
+        const byModule = await DatabaseService.getRecords<QuizRowRecord>('quiz', {
           filter: { course_id: data.courseId, subtopic_id: subtopicId },
           orderBy: { column: 'created_at', ascending: true },
         });
         if (byModule.length > 0) return byModule;
       }
 
-      // Strategy 3: course-wide fallback.
-      return DatabaseService.getRecords<Record<string, unknown>>('quiz', {
+      return DatabaseService.getRecords<QuizRowRecord>('quiz', {
         filter: { course_id: data.courseId },
         orderBy: { column: 'created_at', ascending: true },
       });
@@ -186,7 +431,6 @@ async function postHandler(req: NextRequest) {
       `[QuizSubmit] Initial load: ${quizQuestions.length} quiz rows (subtopic_id=${subtopicId ?? 'null'}, label=${trimmedSubtopicLabel || 'null'})`,
     );
 
-    // Lazy seed if empty — do NOT return 404 until we've tried to recover.
     if (quizQuestions.length === 0) {
       const seeded = await lazySeedQuizFromCache();
       if (seeded > 0) {
@@ -197,34 +441,50 @@ async function postHandler(req: NextRequest) {
 
     if (quizQuestions.length === 0) {
       return NextResponse.json(
-        { error: "Pertanyaan kuis tidak ditemukan di database. Silakan muat ulang halaman subtopik." },
-        { status: 404 }
+        { error: 'Pertanyaan kuis tidak ditemukan di database. Silakan muat ulang halaman subtopik.' },
+        { status: 404 },
       );
     }
 
-    // Legacy subtopics can hold multiple quiz rows per question (pre-d748282
-    // reshuffles appended instead of replacing). Collapse to the most-recent
-    // row per unique normalized question text so matching has a clean universe.
-    const dedupeByQuestion = (rows: Array<Record<string, unknown>>) => {
-      const byKey = new Map<string, Record<string, unknown>>();
-      for (const row of rows) {
-        const raw = typeof row.question === 'string' ? row.question : '';
-        const key = raw.replace(/\s+/g, ' ').toLowerCase().trim();
-        if (!key) continue;
-        byKey.set(key, row); // ASC order → later writes overwrite → newest wins
-      }
-      return byKey.size > 0 ? Array.from(byKey.values()) : rows;
-    };
-    const dedupedQuestions = dedupeByQuestion(quizQuestions);
-    if (dedupedQuestions.length !== quizQuestions.length) {
-      console.log(
-        `[QuizSubmit] Deduped ${quizQuestions.length} → ${dedupedQuestions.length} unique quiz questions`,
+    const cacheKey = buildSubtopicCacheKey(
+      data.courseId,
+      trimmedModuleTitle,
+      trimmedSubtopicLabel,
+    );
+    const { data: cacheRow, error: cacheLookupError } = await adminDb
+      .from('subtopic_cache')
+      .select('content')
+      .eq('cache_key', cacheKey)
+      .maybeSingle();
+
+    if (cacheLookupError) {
+      console.warn('[QuizSubmit] Failed to load subtopic cache', cacheLookupError);
+    }
+
+    const cachedQuizItems = extractCachedQuizItems(cacheRow?.content ?? null);
+    const authoritativeQuiz = buildAuthoritativeQuiz(quizQuestions, cachedQuizItems);
+
+    if (authoritativeQuiz.length === 0) {
+      return NextResponse.json(
+        { error: 'Versi kuis aktif tidak dapat dipastikan. Silakan muat ulang halaman atau pilih Kuis Baru.' },
+        { status: 409 },
       );
     }
 
-    // Determine the next attempt number for this (user, subtopic_id,
-    // subtopic_label) tuple. Scoping by subtopic_label ensures sibling
-    // subtopics inside the same module have independent attempt counters.
+    if (authoritativeQuiz.length !== answers.length) {
+      return NextResponse.json(
+        {
+          error: 'Versi kuis yang Anda kerjakan sudah berubah. Silakan muat ulang halaman atau pilih Kuis Baru untuk mendapatkan set soal terbaru.',
+          code: 'QUIZ_QUESTIONS_DRIFTED',
+          details: {
+            submittedAnswers: answers.length,
+            activeQuestions: authoritativeQuiz.length,
+          },
+        },
+        { status: 409 },
+      );
+    }
+
     let nextAttemptNumber = 1;
     if (subtopicId) {
       try {
@@ -233,6 +493,7 @@ async function postHandler(req: NextRequest) {
           .select('attempt_number')
           .eq('user_id', user.id)
           .eq('subtopic_id', subtopicId);
+
         const { data: maxRow } = trimmedSubtopicLabel
           ? await attemptQuery
               .eq('subtopic_label', trimmedSubtopicLabel)
@@ -243,6 +504,7 @@ async function postHandler(req: NextRequest) {
               .order('attempt_number', { ascending: false })
               .limit(1)
               .maybeSingle();
+
         const existingMax = (maxRow as { attempt_number?: number } | null)?.attempt_number;
         if (typeof existingMax === 'number' && existingMax > 0) {
           nextAttemptNumber = existingMax + 1;
@@ -252,12 +514,14 @@ async function postHandler(req: NextRequest) {
       }
     }
 
-    // One UUID groups all answer rows from this submission batch.
-    // Used as the `source_id` for cognitive scoring and for admin attempt grouping.
     const quizAttemptId = randomUUID();
-
-    // Save each quiz answer to database with improved matching
-    const matchingResults: Array<{ questionIndex: number; matched: boolean; method: string; quizId?: string; question: string }> = [];
+    const matchingResults: Array<{
+      questionIndex: number;
+      matched: boolean;
+      method: string;
+      quizId?: string;
+      question: string;
+    }> = [];
     const matchedRows: Array<{
       user_id: string;
       quiz_id: string;
@@ -272,159 +536,98 @@ async function postHandler(req: NextRequest) {
       attempt_number: number;
       quiz_attempt_id: string;
     }> = [];
+    const evaluatedAnswers: EvaluatedAnswer[] = [];
+    const usedQuizIds = new Set<string>();
 
     for (let i = 0; i < answers.length; i++) {
       const answer = answers[i];
-      let matchingQuiz: Record<string, unknown> | null | undefined = null;
-      let matchMethod = '';
+      const { quiz: matchingQuiz, method } = matchAnswerToQuestion(
+        answer,
+        authoritativeQuiz,
+        usedQuizIds,
+        i,
+      );
 
-      // Strategy 1: Exact question text match
-      matchingQuiz = dedupedQuestions.find(q => (q.question as string).trim() === answer.question.trim());
-      if (matchingQuiz) {
-        matchMethod = 'exact_text';
-      }
-
-      // Strategy 2: Fuzzy question text match (collapse whitespace, drop punctuation)
       if (!matchingQuiz) {
-        const normalizeQuizText = (text: string) => text.replace(/\s+/g, ' ').replace(/[^\w\s]/g, '').toLowerCase().trim();
-        const normalizedAnswerQuestion = normalizeQuizText(answer.question);
-
-        matchingQuiz = dedupedQuestions.find(q =>
-          normalizeQuizText(q.question as string) === normalizedAnswerQuestion
-        );
-        if (matchingQuiz) {
-          matchMethod = 'fuzzy_text';
-        }
-      }
-
-      // Strategy 3: Options-signature match. The sorted+normalized option set
-      // is a strong fingerprint of the underlying question even when the
-      // prompt wording has drifted due to later regeneration, so it's our
-      // primary fallback whenever text-based strategies miss.
-      if (!matchingQuiz && Array.isArray(answer.options) && answer.options.length > 0) {
-        const optionsKey = (opts: unknown): string | null => {
-          if (!Array.isArray(opts) || opts.length === 0) return null;
-          return opts
-            .map((o) => String(o).replace(/\s+/g, ' ').trim().toLowerCase())
-            .sort()
-            .join('|');
-        };
-        const answerKey = optionsKey(answer.options);
-        if (answerKey) {
-          matchingQuiz = dedupedQuestions.find((q: Record<string, unknown>) => {
-            const quizKey = optionsKey(q.options);
-            return quizKey !== null && quizKey === answerKey;
-          });
-          if (matchingQuiz) {
-            matchMethod = 'options_signature';
-          }
-        }
-      }
-
-      // Strategy 4: Match by question content similarity. Tokens containing
-      // digits (e.g. "5-4-3-2-1") are kept regardless of length so numeric
-      // identifiers aren't stripped by the short-word filter.
-      if (!matchingQuiz) {
-        const tokenize = (text: string) =>
-          text.toLowerCase().split(/\s+/).filter((w: string) => w.length > 3 || /\d/.test(w));
-        const answerWords = tokenize(answer.question);
-        if (answerWords.length > 0) {
-          matchingQuiz = dedupedQuestions.find((q: Record<string, unknown>) => {
-            const quizWords = tokenize(q.question as string);
-            const commonWords = answerWords.filter((word: string) => quizWords.includes(word));
-            return commonWords.length >= Math.max(2, Math.ceil(answerWords.length * 0.5));
-          });
-          if (matchingQuiz) {
-            matchMethod = 'content_similarity';
-          }
-        }
-      }
-
-      // Strategy 5 (last resort): positional match when counts line up.
-      // Moved to last position because reshuffled quiz UIs can deliver
-      // answers in a different order than DB insertion order.
-      if (!matchingQuiz && answers.length === dedupedQuestions.length && i < dedupedQuestions.length) {
-        matchingQuiz = dedupedQuestions[i];
-        matchMethod = 'index_position';
-      }
-      
-      if (matchingQuiz) {
-        const reasoningFromAnswer = normalizeText(answer.reasoningNote);
-        const quizId = matchingQuiz.id as string;
-        const userAnswerText = normalizeText(answer.userAnswer);
-        // Server-side verify correctness against the DB's stored correct_answer,
-        // rather than trusting the client's `answer.isCorrect`.
-        const correctAnswerText = normalizeText(matchingQuiz.correct_answer);
-        const serverIsCorrect = correctAnswerText.length > 0
-          && userAnswerText.toLowerCase() === correctAnswerText.toLowerCase();
-
-        matchedRows.push({
-          user_id: user.id,
-          quiz_id: quizId,
-          course_id: data.courseId,
-          subtopic_id: subtopicId,
-          subtopic_label: trimmedSubtopicLabel || null,
-          module_index: normalizeIndex(data.moduleIndex),
-          subtopic_index: normalizeIndex(data.subtopicIndex),
-          answer: userAnswerText,
-          is_correct: serverIsCorrect,
-          reasoning_note: reasoningFromAnswer || null,
-          attempt_number: nextAttemptNumber,
-          quiz_attempt_id: quizAttemptId,
-        });
-
-        matchingResults.push({
-          questionIndex: i,
-          matched: true,
-          method: matchMethod,
-          quizId,
-          question: answer.question.substring(0, 50) + '...'
-        });
-
-        if (serverIsCorrect !== answer.isCorrect) {
-          console.warn(
-            `[QuizSubmit] Client/server is_correct mismatch for q${i + 1}: client=${answer.isCorrect} server=${serverIsCorrect}`
-          );
-        }
-        console.log(`✅ Matched submission ${i + 1}/${answers.length} (${matchMethod}):`, answer.question.substring(0, 50) + '...');
-      } else {
         matchingResults.push({
           questionIndex: i,
           matched: false,
-          method: 'no_match',
-          question: answer.question.substring(0, 50) + '...'
+          method,
+          question: answer.question.substring(0, 50) + '...',
         });
-        console.warn(`❌ No matching quiz found for answer ${i + 1}:`, answer.question.substring(0, 50) + '...');
+        console.warn(`No matching quiz found for answer ${i + 1}:`, answer.question.substring(0, 50) + '...');
+        continue;
+      }
+
+      usedQuizIds.add(matchingQuiz.quizId);
+
+      const reasoningFromAnswer = normalizeText(answer.reasoningNote);
+      const userAnswerText = normalizeText(answer.userAnswer);
+      const correctAnswerText = normalizeText(matchingQuiz.correctAnswer);
+      const serverIsCorrect =
+        correctAnswerText.length > 0 &&
+        userAnswerText.toLowerCase() === correctAnswerText.toLowerCase();
+
+      matchedRows.push({
+        user_id: user.id,
+        quiz_id: matchingQuiz.quizId,
+        course_id: data.courseId,
+        subtopic_id: subtopicId,
+        subtopic_label: trimmedSubtopicLabel || null,
+        module_index: normalizeIndex(data.moduleIndex),
+        subtopic_index: normalizeIndex(data.subtopicIndex),
+        answer: userAnswerText,
+        is_correct: serverIsCorrect,
+        reasoning_note: reasoningFromAnswer || null,
+        attempt_number: nextAttemptNumber,
+        quiz_attempt_id: quizAttemptId,
+      });
+
+      evaluatedAnswers.push({
+        questionIndex: i,
+        question: matchingQuiz.question,
+        userAnswer: userAnswerText,
+        correctAnswer: correctAnswerText,
+        isCorrect: serverIsCorrect,
+        reasoningNote: reasoningFromAnswer || null,
+      });
+
+      matchingResults.push({
+        questionIndex: i,
+        matched: true,
+        method,
+        quizId: matchingQuiz.quizId,
+        question: answer.question.substring(0, 50) + '...',
+      });
+
+      if (serverIsCorrect !== answer.isCorrect) {
+        console.warn(
+          `[QuizSubmit] Client/server is_correct mismatch for q${i + 1}: client=${answer.isCorrect} server=${serverIsCorrect}`,
+        );
       }
     }
 
-    const failedMatches = matchingResults.filter((r) => !r.matched);
-    const warnings = failedMatches.map((fm) => ({
-      questionIndex: fm.questionIndex,
-      question: fm.question,
-      reason: 'Tidak dapat dicocokkan dengan pertanyaan kuis di database',
+    const failedMatches = matchingResults.filter((result) => !result.matched);
+    const warnings = failedMatches.map((result) => ({
+      questionIndex: result.questionIndex,
+      question: result.question,
+      reason: 'Tidak dapat dicocokkan dengan pertanyaan kuis aktif',
     }));
 
-    if (matchedRows.length === 0) {
-      // Every answer failed all 5 matching strategies. The most likely
-      // cause is that the quiz was regenerated (reshuffle) between the
-      // time the client rendered the form and the time the user hit
-      // submit, so the client-cached question text no longer exists in
-      // the DB. Tell the user explicitly so they know a hard refresh /
-      // reshuffle is the recovery path rather than re-trying blindly.
+    if (matchedRows.length !== authoritativeQuiz.length) {
       return NextResponse.json(
         {
-          error: 'Pertanyaan kuis sudah diperbarui — jawaban tidak dapat dicocokkan dengan database. Silakan muat ulang halaman (atau tekan tombol "Kuis Baru") untuk mengerjakan versi terbaru.',
+          error: 'Versi kuis yang Anda kerjakan sudah berubah sebelum submit selesai diproses. Silakan muat ulang halaman atau pilih Kuis Baru untuk mencoba versi terbaru.',
           code: 'QUIZ_QUESTIONS_DRIFTED',
           matchingResults,
           warnings,
           details: {
             totalAnswers: answers.length,
-            successfulMatches: 0,
+            successfulMatches: matchedRows.length,
             failedMatches: failedMatches.length,
           },
         },
-        { status: 400 }
+        { status: 409 },
       );
     }
 
@@ -443,28 +646,13 @@ async function postHandler(req: NextRequest) {
         : [];
     const submissionIds = insertedRowList.map((row: Record<string, unknown>) => row.id);
 
-    // Server-computed score. We ONLY count answers we successfully matched
-    // against an authoritative DB row. Unmatched answers are skipped from
-    // both numerator and denominator so a buggy client cannot inflate the
-    // score by flipping `isCorrect` on an orphan row. If literally every
-    // answer is unmatched the denominator collapses to 0 and we default
-    // the score to 0 (the early-return on `matchedRows.length === 0`
-    // above already handles the "all unmatched" case before we get here).
-    const unmatchedCount = matchingResults.length - matchedRows.length;
-    if (unmatchedCount > 0) {
-      console.warn(
-        `[quiz/submit] unmatched answers skipped from score: ${unmatchedCount}/${matchingResults.length}`,
-      );
-    }
-    const serverCorrectCount = matchedRows.filter((r) => r.is_correct).length;
-    const serverScore = matchedRows.length > 0
-      ? Math.round((serverCorrectCount / matchedRows.length) * 100)
-      : 0;
+    const serverCorrectCount = evaluatedAnswers.filter((row) => row.isCorrect).length;
+    const serverScore = Math.round((serverCorrectCount / authoritativeQuiz.length) * 100);
 
-    console.log(`Quiz submission saved to database:`, {
-      user: data.userId,
+    console.log('Quiz submission saved to database:', {
+      user: user.id,
       course: data.courseId,
-      subtopic: data.subtopic,
+      moduleTitle: data.moduleTitle,
       subtopicTitle: data.subtopicTitle,
       clientScore: data.score,
       serverScore,
@@ -473,8 +661,6 @@ async function postHandler(req: NextRequest) {
       matchingResults,
     });
 
-    const successfulMatches = matchedRows.length;
-
     const { moduleTitle: resolvedModuleTitle, subtopicTitle: resolvedSubtopicTitle } =
       await resolveModuleContext({
         courseId: data.courseId,
@@ -482,21 +668,25 @@ async function postHandler(req: NextRequest) {
         subtopicTitle: data.subtopicTitle,
       });
 
+    const completedAt = new Date().toISOString();
     if (resolvedModuleTitle && resolvedSubtopicTitle) {
       await markSubtopicQuizCompletion({
         courseId: data.courseId,
         moduleTitle: resolvedModuleTitle,
         subtopicTitle: resolvedSubtopicTitle,
         userId: user.id,
+        attemptId: quizAttemptId,
+        completedAt,
       });
     }
-    
+
     after(async () => {
       try {
-        const qaText = matchedRows.map((row, i) => {
-          const ans = answers[i];
-          return `Q: ${ans?.question || ''}\nA: ${row.answer}\nCorrect: ${row.is_correct}\nReasoning: ${row.reasoning_note || '-'}`;
-        }).join('\n---\n');
+        const qaText = evaluatedAnswers
+          .map((row) => {
+            return `Q: ${row.question}\nA: ${row.userAnswer}\nCorrect answer: ${row.correctAnswer}\nCorrect: ${row.isCorrect}\nReasoning: ${row.reasoningNote || '-'}`;
+          })
+          .join('\n---\n');
 
         if (qaText.length < 20) return;
 
@@ -508,7 +698,7 @@ async function postHandler(req: NextRequest) {
           source_id: quizAttemptId,
           user_text: qaText,
           prompt_or_question: `Kuis subtopik: ${data.subtopicTitle || ''} (attempt ${nextAttemptNumber})`,
-          context_summary: `Skor: ${serverScore}, ${serverCorrectCount}/${matchedRows.length} benar, attempt ${nextAttemptNumber}`,
+          context_summary: `Skor: ${serverScore}, ${serverCorrectCount}/${authoritativeQuiz.length} benar, attempt ${nextAttemptNumber}`,
         });
       } catch (scoreError) {
         console.warn('[QuizSubmit] Cognitive scoring failed:', scoreError);
@@ -536,24 +726,28 @@ async function postHandler(req: NextRequest) {
       warnings,
       score: serverScore,
       correctCount: serverCorrectCount,
+      totalQuestions: authoritativeQuiz.length,
       attemptNumber: nextAttemptNumber,
       quizAttemptId,
-      message: warnings.length > 0
-        ? `Saved ${successfulMatches}/${data.answers.length} quiz answers (${warnings.length} unmatched) — attempt #${nextAttemptNumber}`
-        : `Saved ${successfulMatches}/${data.answers.length} quiz answers — attempt #${nextAttemptNumber}`,
+      submittedAt: completedAt,
+      evaluatedAnswers,
+      questionEvaluations: evaluatedAnswers,
+      discussionUnlocked: true,
+      message: `Saved ${matchedRows.length}/${authoritativeQuiz.length} quiz answers - attempt #${nextAttemptNumber}`,
       details: {
         totalAnswers: answers.length,
-        successfulMatches,
+        successfulMatches: matchedRows.length,
         failedMatches: warnings.length,
         subtopicId,
         quizQuestionsFound: quizQuestions.length,
+        authoritativeQuestions: authoritativeQuiz.length,
       },
     });
   } catch (error: unknown) {
     console.error('Error saving quiz attempt:', error);
     return NextResponse.json(
       { error: 'Gagal menyimpan percobaan kuis' },
-      { status: 500 }
+      { status: 500 },
     );
   }
 }
@@ -649,6 +843,8 @@ interface CompletionParams {
   moduleTitle: string;
   subtopicTitle: string;
   userId: string;
+  attemptId?: string;
+  completedAt?: string;
 }
 
 async function markSubtopicQuizCompletion({
@@ -656,13 +852,13 @@ async function markSubtopicQuizCompletion({
   moduleTitle,
   subtopicTitle,
   userId,
+  attemptId,
+  completedAt,
 }: CompletionParams) {
   if (!courseId || !moduleTitle || !subtopicTitle || !userId) {
     return;
   }
 
-  // Normalize the key so completion tracking hits the same row that
-  // generate-subtopic wrote under its canonical (lowercase) cache key.
   const cacheKey = buildSubtopicCacheKey(courseId, moduleTitle, subtopicTitle);
 
   try {
@@ -682,38 +878,24 @@ async function markSubtopicQuizCompletion({
       return;
     }
 
-    let content: Record<string, unknown> = (cacheRow.content ?? {}) as Record<string, unknown>;
-    if (typeof content === 'string') {
-      try {
-        content = JSON.parse(content);
-      } catch {
-        content = {};
-      }
-    }
+    const existingContent = parseContentRecord(cacheRow.content ?? {});
+    const nextContent = withQuizCompletionState(
+      existingContent,
+      userId,
+      attemptId,
+      completedAt,
+    );
 
-    if (!content || typeof content !== 'object') {
-      content = {};
-    }
+    const { error: updateError } = await adminDb
+      .from('subtopic_cache')
+      .eq('cache_key', cacheKey)
+      .update({
+        content: nextContent,
+        updated_at: completedAt ?? new Date().toISOString(),
+      });
 
-    const existingUsers = Array.isArray(content.completed_users)
-      ? (content.completed_users as unknown[]).map((value: unknown) => String(value))
-      : [];
-
-    if (!existingUsers.includes(userId)) {
-      content.completed_users = [...existingUsers, userId];
-      content.last_completed_at = new Date().toISOString();
-
-      const { error: updateError } = await adminDb
-        .from('subtopic_cache')
-        .eq('cache_key', cacheKey)
-        .update({
-          content,
-          updated_at: new Date().toISOString(),
-        });
-
-      if (updateError) {
-        console.warn('[QuizSubmit] Failed to update completion state', updateError);
-      }
+    if (updateError) {
+      console.warn('[QuizSubmit] Failed to update completion state', updateError);
     }
   } catch (completionError) {
     console.warn('[QuizSubmit] Unable to mark completion', completionError);

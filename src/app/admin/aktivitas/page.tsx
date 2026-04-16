@@ -303,6 +303,7 @@ export default function AdminAktivitasPage() {
   // ── Derived data ──
   const groupedAskLogs = useMemo(() => groupByTopic(askLogs), [askLogs])
   const groupedChallengeLogs = useMemo(() => groupByTopic(challengeLogs), [challengeLogs])
+  const groupedQuizAttempts = useMemo(() => groupQuizByAttempt(quizLogs), [quizLogs])
 
   const clearAllFilters = () => {
     setSelectedUser('')
@@ -346,9 +347,9 @@ export default function AdminAktivitasPage() {
       const correct = quizLogs.filter((l) => l.isCorrect).length
       const accuracy = quizLogs.length > 0 ? Math.round((correct / quizLogs.length) * 100) : 0
       return [
-        { label: 'Percobaan', value: quizLogs.length },
-        { label: 'Benar', value: correct },
-        { label: 'Akurasi', value: `${accuracy}%` },
+        { label: 'Percobaan', value: groupedQuizAttempts.length },
+        { label: 'Jawaban Tercatat', value: quizLogs.length },
+        { label: 'Akurasi Jawaban', value: `${accuracy}%` },
       ]
     }
     if (activeTab === 'refleksi') {
@@ -369,20 +370,21 @@ export default function AdminAktivitasPage() {
       { label: 'Sedang Berlangsung', value: sessions.filter((s) => s.status === 'in_progress').length },
       { label: 'Tujuan Tercapai', value: coveredGoals },
     ]
-  }, [activeTab, askLogs, challengeLogs, quizLogs, refleksiLogs, sessions, groupedAskLogs.length])
+  }, [activeTab, askLogs, challengeLogs, quizLogs, refleksiLogs, sessions, groupedAskLogs.length, groupedQuizAttempts.length])
 
   const tabCount = useMemo(() => {
     switch (activeTab) {
       case 'ask': return askLogs.length
       case 'challenge': return challengeLogs.length
-      case 'quiz': return quizLogs.length
+      case 'quiz': return groupedQuizAttempts.length
       case 'refleksi': return refleksiLogs.length
       case 'diskusi': return sessions.length
       default: return 0
     }
-  }, [activeTab, askLogs.length, challengeLogs.length, quizLogs.length, refleksiLogs.length, sessions.length])
+  }, [activeTab, askLogs.length, challengeLogs.length, quizLogs.length, refleksiLogs.length, sessions.length, groupedQuizAttempts.length])
 
   const activeTabLabel = TABS.find((t) => t.id === activeTab)?.label ?? 'Aktivitas'
+  const activeTabMetaLabel = activeTab === 'quiz' ? 'percobaan' : 'catatan'
 
   // ── Auth guard ──
   useEffect(() => {
@@ -706,7 +708,7 @@ export default function AdminAktivitasPage() {
             <p>{TAB_DESCRIPTIONS[activeTab] ?? 'Data aktivitas.'}</p>
           </div>
           <div className={styles.sectionMeta}>
-            <span>{tabCount} catatan</span>
+            <span>{tabCount} {activeTabMetaLabel}</span>
           </div>
         </header>
 
@@ -841,7 +843,7 @@ export default function AdminAktivitasPage() {
               {quizLogs.length === 0 ? (
                 <EmptyState message="Belum ada pengerjaan kuis" />
               ) : (
-                groupQuizByAttempt(quizLogs).map((group) => (
+                groupedQuizAttempts.map((group) => (
                   <article key={group.key} className={styles.quizCard}>
                     <header>
                       <div>
@@ -852,9 +854,12 @@ export default function AdminAktivitasPage() {
                           </span>
                         </h3>
                         <p>{group.courseTitle}</p>
+                        <p style={{ marginTop: 4, fontSize: '0.8rem', color: '#6b7280' }}>
+                          {group.quizAttemptId ? `Attempt ID: ${group.quizAttemptId}` : 'Attempt ID belum tersedia'}
+                        </p>
                       </div>
                       <div className={group.score >= 80 ? styles.pillSuccess : styles.pillMuted}>
-                        {group.correctCount}/{group.totalCount} benar · {group.score}%
+                        {group.correctCount}/{group.totalCount} jawaban benar · {group.score}%
                       </div>
                     </header>
 
@@ -903,7 +908,7 @@ export default function AdminAktivitasPage() {
                       </div>
                     ))}
 
-                    <RawDetail title="Lihat Detail" data={group} />
+                    <RawDetail title="Lihat Detail Attempt" data={group} />
                     <footer>
                       <span>{group.userEmail}</span>
                       <span>{group.timestamp}</span>

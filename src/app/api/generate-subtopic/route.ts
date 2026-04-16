@@ -11,6 +11,10 @@ import {
   syncQuizQuestions as syncQuizQuestionsHelper,
   buildSubtopicCacheKey,
 } from '@/lib/quiz-sync';
+import {
+  mergeSubtopicCacheContent,
+  sanitizeSubtopicContentForClient,
+} from '@/lib/quiz-content';
 import { withApiLogging } from '@/lib/api-logger';
 import { assertCourseOwnership, toOwnershipError } from '@/lib/ownership';
 import type { ChatCompletionMessageParam } from 'openai/resources/chat/completions';
@@ -245,7 +249,11 @@ async function postHandler(request: NextRequest) {
             });
           }
 
-          const response = NextResponse.json(cached.content);
+          const response = NextResponse.json(
+            sanitizeSubtopicContentForClient(
+              (cached.content ?? {}) as Record<string, unknown>,
+            ),
+          );
           response.headers.set('Cache-Control', 'private, max-age=300, stale-while-revalidate=600');
           return response;
         }
@@ -494,12 +502,21 @@ async function postHandler(request: NextRequest) {
         const { adminDb } = await import('@/lib/database');
 
         const cacheKey = buildSubtopicCacheKey(courseId, moduleTitle, subtopic);
+        const { data: existingCache } = await adminDb
+          .from('subtopic_cache')
+          .select('content')
+          .eq('cache_key', cacheKey)
+          .maybeSingle();
+        const mergedCacheContent = mergeSubtopicCacheContent(
+          existingCache?.content ?? null,
+          data as Record<string, unknown>,
+        );
         const { error: cacheError } = await adminDb
           .from('subtopic_cache')
           .upsert(
             {
               cache_key: cacheKey,
-              content: data,
+              content: mergedCacheContent,
               created_at: new Date().toISOString(),
               updated_at: new Date().toISOString(),
             },
@@ -707,7 +724,9 @@ async function postHandler(request: NextRequest) {
       }
     }
 
-    return NextResponse.json(data);
+    return NextResponse.json(
+      sanitizeSubtopicContentForClient(data as Record<string, unknown>),
+    );
   } catch (err: unknown) {
     console.error('Error generating subtopic:', err);
     return NextResponse.json(
