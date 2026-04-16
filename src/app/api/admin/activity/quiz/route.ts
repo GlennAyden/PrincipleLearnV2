@@ -1,25 +1,80 @@
-// src/app/api/admin/activity/quiz/route.ts
-
 import { NextResponse } from 'next/server'
 import type { NextRequest } from 'next/server'
 import { DatabaseService } from '@/lib/database'
 import { withProtection } from '@/lib/api-middleware'
 
+const DEFAULT_PAGE_SIZE = 25
+const MAX_PAGE_SIZE = 100
+
 interface QuizSubmission {
-  id: string;
-  user_id: string;
-  quiz_id: string;
-  course_id?: string | null;
-  subtopic_id?: string | null;
-  module_index?: number | null;
-  subtopic_index?: number | null;
-  answer: string;
-  is_correct: boolean;
-  reasoning_note?: string | null;
-  attempt_number?: number | null;
-  quiz_attempt_id?: string | null;
-  submitted_at?: string;
-  created_at?: string;
+  id: string
+  user_id: string
+  quiz_id: string
+  course_id?: string | null
+  subtopic_id?: string | null
+  module_index?: number | null
+  subtopic_index?: number | null
+  answer: string
+  is_correct: boolean
+  reasoning_note?: string | null
+  attempt_number?: number | null
+  quiz_attempt_id?: string | null
+  submitted_at?: string
+  created_at?: string
+}
+
+interface Quiz {
+  id: string
+  course_id: string
+  subtopic_id: string
+  question: string
+  options: unknown
+  correct_answer: string | null
+}
+
+interface User {
+  id: string
+  email: string
+}
+
+interface Course {
+  id: string
+  title: string
+}
+
+interface Subtopic {
+  id: string
+  title: string
+}
+
+interface PaginationMeta {
+  page: number
+  pageSize: number
+  totalItems: number
+  totalPages: number
+  hasNextPage: boolean
+  hasPreviousPage: boolean
+}
+
+interface QuizActivityItem {
+  id: string
+  timestamp: string
+  rawTimestamp: string | null
+  userEmail: string
+  userId: string
+  topic: string
+  subtopicId: string | null
+  courseTitle: string
+  question: string
+  options: unknown[]
+  userAnswer: string
+  correctAnswer: string
+  isCorrect: boolean
+  reasoningNote: string
+  moduleIndex: number | null
+  subtopicIndex: number | null
+  attemptNumber: number
+  quizAttemptId: string | null
 }
 
 function resolveSubmissionTimestamp(submission: QuizSubmission): Date | null {
@@ -29,134 +84,291 @@ function resolveSubmissionTimestamp(submission: QuizSubmission): Date | null {
   return Number.isNaN(parsed.getTime()) ? null : parsed
 }
 
-interface Quiz {
-  id: string;
-  course_id: string;
-  subtopic_id: string;
-  question: string;
-  options: unknown;
-  correct_answer: string | null;
+function parsePositiveInt(rawValue: string | null, fallback: number, max?: number): number {
+  const parsed = rawValue ? Number.parseInt(rawValue, 10) : Number.NaN
+  if (!Number.isFinite(parsed) || parsed < 1) return fallback
+  return typeof max === 'number' ? Math.min(parsed, max) : parsed
 }
 
-interface User {
-  id: string;
-  email: string;
+function parseContentRangeTotal(contentRange: string | null): number {
+  if (!contentRange) return 0
+  const totalText = contentRange.split('/').pop()
+  const parsed = totalText ? Number.parseInt(totalText, 10) : Number.NaN
+  return Number.isFinite(parsed) && parsed >= 0 ? parsed : 0
 }
 
-interface Course {
-  id: string;
-  title: string;
+function startOfDay(value: string): string | null {
+  const date = new Date(value)
+  if (Number.isNaN(date.getTime())) return null
+  date.setHours(0, 0, 0, 0)
+  return date.toISOString()
 }
 
-interface Subtopic {
-  id: string;
-  title: string;
+function endOfDay(value: string): string | null {
+  const date = new Date(value)
+  if (Number.isNaN(date.getTime())) return null
+  date.setHours(23, 59, 59, 999)
+  return date.toISOString()
 }
 
-async function activityHandler(req: NextRequest) {
-  console.log('[Activity API] Starting quiz activity fetch');
-  
-  try {
-    const { searchParams } = new URL(req.url)
-    const userId = searchParams.get('userId')
-    const date = searchParams.get('date')
-    const courseId = searchParams.get('course')
-    const topicFilter = searchParams.get('topic')
-  
-    console.log('[Activity API] Request params:', { userId, date, courseId, topic: topicFilter });
+function buildSupabaseRestConfig() {
+  const baseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL
+  const serviceKey = process.env.SUPABASE_SERVICE_ROLE_KEY
 
-    let quizSubmissions: QuizSubmission[] = []
-    try {
-      quizSubmissions = await DatabaseService.getRecords<QuizSubmission>('quiz_submissions', {
-        orderBy: { column: 'created_at', ascending: false },
-      })
-    } catch (dbError) {
-      console.error('[Activity API] Database error fetching quiz submissions:', dbError)
-      return NextResponse.json([], { status: 200 })
-    }
+  if (!baseUrl || !serviceKey) {
+    throw new Error('Supabase environment is not configured')
+  }
 
-    if (userId) {
-      quizSubmissions = quizSubmissions.filter((submission) => submission.user_id === userId)
-    }
-
-    if (date) {
-      const targetDate = new Date(date)
-      const startOfDay = new Date(targetDate)
-      startOfDay.setHours(0, 0, 0, 0)
-      const endOfDay = new Date(targetDate)
-      endOfDay.setHours(23, 59, 59, 999)
-      quizSubmissions = quizSubmissions.filter((submission) => {
-        const submittedAt = resolveSubmissionTimestamp(submission)
-        if (!submittedAt) return false
-        return submittedAt >= startOfDay && submittedAt <= endOfDay
-      })
-    }
-
-    const userCache = new Map<string, User | null>()
-    const quizCache = new Map<string, Quiz | null>()
-    const subtopicCache = new Map<string, Subtopic | null>()
-    const courseCache = new Map<string, Course | null>()
-
-    const payload = []
-    for (const submission of quizSubmissions) {
-      const quiz = await fetchCached(quizCache, submission.quiz_id, 'quiz')
-      if (!quiz) continue
-
-      const resolvedCourseId = submission.course_id ?? quiz.course_id;
-      if (courseId && resolvedCourseId !== courseId) {
-        continue
-      }
-
-      const [subtopic, course, user] = await Promise.all([
-        fetchCached(subtopicCache, submission.subtopic_id ?? quiz.subtopic_id, 'subtopics'),
-        fetchCached(courseCache, resolvedCourseId, 'courses'),
-        fetchCached(userCache, submission.user_id, 'users'),
-      ])
-
-      const topicName = subtopic?.title ?? 'Tanpa Subtopik'
-      if (topicFilter && !topicName.toLowerCase().includes(topicFilter.toLowerCase())) {
-        continue
-      }
-
-      const submissionTimestamp = resolveSubmissionTimestamp(submission)
-
-      payload.push({
-        id: submission.id,
-        timestamp: submissionTimestamp
-          ? submissionTimestamp.toLocaleString('id-ID')
-          : 'Unknown time',
-        rawTimestamp: submissionTimestamp ? submissionTimestamp.toISOString() : null,
-        userEmail: user?.email ?? 'Unknown User',
-        userId: submission.user_id,
-        topic: topicName,
-        subtopicId: submission.subtopic_id ?? quiz.subtopic_id ?? null,
-        courseTitle: course?.title ?? 'Tanpa Kursus',
-        question: quiz.question,
-        options: Array.isArray(quiz.options) ? quiz.options : [],
-        userAnswer: submission.answer,
-        correctAnswer: quiz.correct_answer ?? '',
-        isCorrect: submission.is_correct,
-        reasoningNote: submission.reasoning_note ?? '',
-        moduleIndex: submission.module_index ?? null,
-        subtopicIndex: submission.subtopic_index ?? null,
-        attemptNumber: submission.attempt_number ?? 1,
-        quizAttemptId: submission.quiz_attempt_id ?? null,
-      })
-    }
-    
-    console.log(`[Activity API] Returning ${payload.length} detailed quiz records`)
-    return NextResponse.json(payload)
-    
-  } catch (error) {
-    console.error('[Activity API] Error fetching quiz logs:', error)
-    return NextResponse.json(
-      { error: 'Failed to fetch quiz logs' },
-      { status: 500 }
-    )
+  return {
+    restBaseUrl: `${baseUrl.replace(/\/$/, '')}/rest/v1`,
+    headers: {
+      apikey: serviceKey,
+      Authorization: `Bearer ${serviceKey}`,
+    },
   }
 }
 
-export const GET = withProtection(activityHandler, { adminOnly: true, requireAuth: true, csrfProtection: false });
+function appendFilter(params: URLSearchParams, column: string, operator: string, value: string) {
+  params.append(column, `${operator}.${value}`)
+}
+
+function buildSubmissionQuery(filters: {
+  userId?: string | null
+  courseId?: string | null
+  subtopicIds?: string[] | null
+  dateFrom?: string | null
+  dateTo?: string | null
+  select?: string
+  limit: number
+  offset?: number
+}) {
+  const params = new URLSearchParams()
+  params.set('select', filters.select ?? '*')
+  params.set('order', 'created_at.desc')
+  params.set('limit', String(filters.limit))
+  if (typeof filters.offset === 'number' && filters.offset > 0) {
+    params.set('offset', String(filters.offset))
+  }
+  if (filters.userId) appendFilter(params, 'user_id', 'eq', filters.userId)
+  if (filters.courseId) appendFilter(params, 'course_id', 'eq', filters.courseId)
+  if (filters.subtopicIds && filters.subtopicIds.length > 0) {
+    appendFilter(params, 'subtopic_id', 'in', `(${filters.subtopicIds.join(',')})`)
+  }
+  if (filters.dateFrom) appendFilter(params, 'created_at', 'gte', filters.dateFrom)
+  if (filters.dateTo) appendFilter(params, 'created_at', 'lte', filters.dateTo)
+  return params
+}
+
+async function fetchSupabaseRows<T>(table: string, query: URLSearchParams) {
+  const { restBaseUrl, headers } = buildSupabaseRestConfig()
+  const url = new URL(`${restBaseUrl}/${table}`)
+  url.search = query.toString()
+
+  const response = await fetch(url, {
+    method: 'GET',
+    headers: {
+      ...headers,
+      Prefer: 'count=exact',
+    },
+  })
+
+  if (!response.ok) {
+    const body = await response.text().catch(() => '')
+    throw new Error(`Supabase query failed for ${table}: ${response.status} ${body}`)
+  }
+
+  const data = (await response.json().catch(() => [])) as T[]
+  return {
+    data,
+    totalItems: parseContentRangeTotal(response.headers.get('content-range')),
+  }
+}
+
+async function fetchTopicSubtopicIds(courseId: string | null, topicFilter: string): Promise<string[]> {
+  const { restBaseUrl, headers } = buildSupabaseRestConfig()
+  const url = new URL(`${restBaseUrl}/subtopics`)
+  url.searchParams.set('select', 'id,title')
+  url.searchParams.set('title', `ilike.%${topicFilter}%`)
+  if (courseId) appendFilter(url.searchParams, 'course_id', 'eq', courseId)
+
+  const response = await fetch(url, {
+    method: 'GET',
+    headers,
+  })
+
+  if (!response.ok) {
+    const body = await response.text().catch(() => '')
+    throw new Error(`Failed to resolve topic filter: ${response.status} ${body}`)
+  }
+
+  const rows = (await response.json().catch(() => [])) as Array<{ id?: string }>
+  return rows
+    .map((row) => row.id)
+    .filter((id): id is string => typeof id === 'string' && id.length > 0)
+}
+
+async function activityHandler(req: NextRequest) {
+  console.log('[Activity API] Starting quiz activity fetch')
+
+  try {
+    const { searchParams } = new URL(req.url)
+    const userId = searchParams.get('userId')?.trim() || null
+    const date = searchParams.get('date')?.trim() || null
+    const dateTo = searchParams.get('dateTo')?.trim() || null
+    const courseId = searchParams.get('course')?.trim() || null
+    const topicFilter = searchParams.get('topic')?.trim() || null
+    const page = parsePositiveInt(searchParams.get('page'), 1)
+    const pageSize = parsePositiveInt(searchParams.get('pageSize'), DEFAULT_PAGE_SIZE, MAX_PAGE_SIZE)
+
+    console.log('[Activity API] Request params:', { userId, date, dateTo, courseId, topic: topicFilter, page, pageSize })
+
+    let topicSubtopicIds: string[] | null = null
+    if (topicFilter) {
+      topicSubtopicIds = await fetchTopicSubtopicIds(courseId, topicFilter)
+      if (topicSubtopicIds.length === 0) {
+        return NextResponse.json({
+          data: [],
+          pagination: {
+            page: 1,
+            pageSize,
+            totalItems: 0,
+            totalPages: 0,
+            hasNextPage: false,
+            hasPreviousPage: false,
+          } satisfies PaginationMeta,
+          filters: { userId, date, dateTo, courseId, topic: topicFilter },
+        })
+      }
+    }
+
+    let dateFromIso: string | null = null
+    let dateToIso: string | null = null
+    if (date) {
+      const from = startOfDay(date)
+      if (from) dateFromIso = from
+      const toSource = dateTo || date
+      const to = endOfDay(toSource)
+      if (to) dateToIso = to
+    } else if (dateTo) {
+      const from = startOfDay(dateTo)
+      const to = endOfDay(dateTo)
+      if (from) dateFromIso = from
+      if (to) dateToIso = to
+    }
+
+    const countQuery = buildSubmissionQuery({
+      userId,
+      courseId,
+      subtopicIds: topicSubtopicIds,
+      dateFrom: dateFromIso,
+      dateTo: dateToIso,
+      select: 'id',
+      limit: 1,
+    })
+    const countResult = await fetchSupabaseRows<{ id: string }>('quiz_submissions', countQuery)
+    const totalItems = countResult.totalItems
+    const totalPages = totalItems > 0 ? Math.ceil(totalItems / pageSize) : 0
+    const currentPage = totalPages > 0 ? Math.min(page, totalPages) : 1
+    const offset = totalItems > 0 ? (currentPage - 1) * pageSize : 0
+
+    const pageQuery = buildSubmissionQuery({
+      userId,
+      courseId,
+      subtopicIds: topicSubtopicIds,
+      dateFrom: dateFromIso,
+      dateTo: dateToIso,
+      select: 'id,user_id,quiz_id,course_id,subtopic_id,module_index,subtopic_index,answer,is_correct,reasoning_note,attempt_number,quiz_attempt_id,submitted_at,created_at',
+      limit: pageSize,
+      offset,
+    })
+    const quizSubmissionsResult = await fetchSupabaseRows<QuizSubmission>('quiz_submissions', pageQuery)
+    const quizSubmissions = quizSubmissionsResult.data
+
+    let payload: QuizActivityItem[] = []
+    try {
+      payload = await hydrateQuizSubmissions(quizSubmissions)
+    } catch (hydrateError) {
+      console.error('[Activity API] Error hydrating quiz submissions:', hydrateError)
+      return NextResponse.json({ error: 'Failed to fetch quiz logs' }, { status: 500 })
+    }
+
+    console.log(
+      `[Activity API] Returning ${payload.length} quiz records (${currentPage}/${totalPages || 1}, total=${totalItems})`
+    )
+    return NextResponse.json({
+      data: payload,
+      pagination: {
+        page: currentPage,
+        pageSize,
+        totalItems,
+        totalPages,
+        hasNextPage: totalPages > 0 ? currentPage < totalPages : false,
+        hasPreviousPage: totalPages > 0 ? currentPage > 1 : false,
+      } satisfies PaginationMeta,
+      filters: {
+        userId,
+        date,
+        dateTo,
+        courseId,
+        topic: topicFilter,
+      },
+    })
+  } catch (error) {
+    console.error('[Activity API] Error fetching quiz logs:', error)
+    return NextResponse.json({ error: 'Failed to fetch quiz logs' }, { status: 500 })
+  }
+}
+
+async function hydrateQuizSubmissions(quizSubmissions: QuizSubmission[]): Promise<QuizActivityItem[]> {
+  const userCache = new Map<string, User | null>()
+  const quizCache = new Map<string, Quiz | null>()
+  const subtopicCache = new Map<string, Subtopic | null>()
+  const courseCache = new Map<string, Course | null>()
+
+  const payload: QuizActivityItem[] = []
+  for (const submission of quizSubmissions) {
+    const quiz = await fetchCached(quizCache, submission.quiz_id, 'quiz')
+    if (!quiz) continue
+
+    const resolvedCourseId = submission.course_id ?? quiz.course_id
+    const [subtopic, course, user] = await Promise.all([
+      fetchCached(subtopicCache, submission.subtopic_id ?? quiz.subtopic_id, 'subtopics'),
+      fetchCached(courseCache, resolvedCourseId, 'courses'),
+      fetchCached(userCache, submission.user_id, 'users'),
+    ])
+
+    const submissionTimestamp = resolveSubmissionTimestamp(submission)
+
+    payload.push({
+      id: submission.id,
+      timestamp: submissionTimestamp ? submissionTimestamp.toLocaleString('id-ID') : 'Unknown time',
+      rawTimestamp: submissionTimestamp ? submissionTimestamp.toISOString() : null,
+      userEmail: user?.email ?? 'Unknown User',
+      userId: submission.user_id,
+      topic: subtopic?.title ?? 'Tanpa Subtopik',
+      subtopicId: submission.subtopic_id ?? quiz.subtopic_id ?? null,
+      courseTitle: course?.title ?? 'Tanpa Kursus',
+      question: quiz.question,
+      options: Array.isArray(quiz.options) ? quiz.options : [],
+      userAnswer: submission.answer,
+      correctAnswer: quiz.correct_answer ?? '',
+      isCorrect: submission.is_correct,
+      reasoningNote: submission.reasoning_note ?? '',
+      moduleIndex: submission.module_index ?? null,
+      subtopicIndex: submission.subtopic_index ?? null,
+      attemptNumber: submission.attempt_number ?? 1,
+      quizAttemptId: submission.quiz_attempt_id ?? null,
+    })
+  }
+
+  return payload
+}
+
+export const GET = withProtection(activityHandler, {
+  adminOnly: true,
+  requireAuth: true,
+  csrfProtection: false,
+})
 
 async function fetchCached<T extends { id: string }>(
   cache: Map<string, T | null>,

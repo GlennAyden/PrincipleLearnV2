@@ -15,6 +15,7 @@ const mockAttemptMaybeSingle = jest.fn();
 const mockCacheMaybeSingle = jest.fn();
 const mockCacheUpdate = jest.fn().mockResolvedValue({ data: null, error: null });
 const mockInsert = jest.fn();
+const mockRpc = jest.fn();
 const mockApiLogsInsert = jest.fn().mockResolvedValue({ data: null, error: null });
 
 jest.mock('@/lib/schemas', () => ({
@@ -89,6 +90,7 @@ jest.mock('@/lib/database', () => ({
     }
   },
   adminDb: {
+    rpc: (...args: unknown[]) => mockRpc(...args),
     from: (table: string) => {
       switch (table) {
         case 'subtopics':
@@ -139,6 +141,7 @@ const quizBlueprint = Array.from({ length: 5 }, (_, index) => ({
 const mockQuizQuestions = quizBlueprint.map((item, index) => ({
   id: `quiz-q-00${index + 1}`,
   course_id: TEST_COURSE.id,
+  leaf_subtopic_id: 'leaf-subtopic-001',
   question: item.question,
   options: item.options,
   correct_answer: item.options[item.correctIndex],
@@ -215,6 +218,22 @@ describe('POST /api/quiz/submit', () => {
       data: [{ id: 'submission-001' }, { id: 'submission-002' }, { id: 'submission-003' }, { id: 'submission-004' }, { id: 'submission-005' }],
       error: null,
     });
+    mockRpc.mockImplementation((fnName: string, params?: Record<string, unknown>) => {
+      if (fnName === 'ensure_leaf_subtopic') {
+        return Promise.resolve({ data: 'leaf-subtopic-001', error: null });
+      }
+      if (fnName === 'insert_quiz_attempt') {
+        return Promise.resolve({
+          data: quizBlueprint.map((_, index) => ({
+            submission_id: `submission-00${index + 1}`,
+            attempt_number: 1,
+            quiz_attempt_id: params?.p_quiz_attempt_id ?? 'attempt-001',
+          })),
+          error: null,
+        });
+      }
+      return Promise.resolve({ data: null, error: null });
+    });
     mockScoreAndSave.mockResolvedValue(undefined);
 
     mockGetRecords.mockImplementation((table: string, options?: { filter?: Record<string, unknown> }) => {
@@ -255,10 +274,60 @@ describe('POST /api/quiz/submit', () => {
       TEST_COURSE.id,
       'user',
     );
+    expect(mockRpc).toHaveBeenCalledWith('ensure_leaf_subtopic', expect.objectContaining({
+      p_course_id: TEST_COURSE.id,
+      p_module_id: 'subtopic-001',
+      p_subtopic_title: 'What is Software Testing?',
+    }));
+    expect(mockRpc).toHaveBeenCalledWith('insert_quiz_attempt', expect.objectContaining({
+      p_user_id: TEST_STUDENT.id,
+      p_course_id: TEST_COURSE.id,
+      p_subtopic_id: 'subtopic-001',
+      p_leaf_subtopic_id: 'leaf-subtopic-001',
+      p_answers: expect.arrayContaining([
+        expect.objectContaining({
+          quiz_id: 'quiz-q-001',
+          answer: 'Option 1B',
+          is_correct: true,
+        }),
+      ]),
+    }));
 
     const completionPayload = mockCacheUpdate.mock.calls[0][0];
     expect(completionPayload.content.completed_users).toContain(TEST_STUDENT.id);
     expect(completionPayload.content.last_quiz_attempt_id).toEqual(expect.any(String));
+  });
+
+  it('falls back to legacy row inserts when the atomic RPC is unavailable', async () => {
+    mockRpc.mockImplementation((fnName: string, params?: Record<string, unknown>) => {
+      if (fnName === 'ensure_leaf_subtopic') {
+        return Promise.resolve({ data: 'leaf-subtopic-001', error: null });
+      }
+      if (fnName === 'insert_quiz_attempt') {
+        return Promise.resolve({
+          data: null,
+          error: { message: 'RPC not found', code: 'PGRST202' },
+        });
+      }
+      return Promise.resolve({ data: null, error: null });
+    });
+
+    mockInsert.mockImplementation((payload: Record<string, unknown>) => Promise.resolve({
+      data: [{
+        id: `submission-${String(payload.quiz_id)}`,
+        attempt_number: 1,
+        quiz_attempt_id: payload.quiz_attempt_id,
+      }],
+      error: null,
+    }));
+
+    const response = await POST(createAuthenticatedRequest(validBody));
+    const data = await response.json();
+
+    expect(response.status).toBe(200);
+    expect(data.success).toBe(true);
+    expect(data.submissionIds).toHaveLength(5);
+    expect(mockInsert).toHaveBeenCalledTimes(5);
   });
 
   it('returns the validation response from parseBody when payload is invalid', async () => {
@@ -325,13 +394,21 @@ describe('POST /api/quiz/submit', () => {
 
     expect(response.status).toBe(409);
     expect(data.code).toBe('QUIZ_QUESTIONS_DRIFTED');
-    expect(mockInsert).not.toHaveBeenCalled();
+    expect(mockRpc).not.toHaveBeenCalledWith('insert_quiz_attempt', expect.anything());
   });
 
   it('returns 500 when quiz submission insert fails', async () => {
-    mockInsert.mockResolvedValueOnce({
-      data: null,
-      error: { message: 'Database write failed', code: '42501' },
+    mockRpc.mockImplementation((fnName: string) => {
+      if (fnName === 'ensure_leaf_subtopic') {
+        return Promise.resolve({ data: 'leaf-subtopic-001', error: null });
+      }
+      if (fnName === 'insert_quiz_attempt') {
+        return Promise.resolve({
+          data: null,
+          error: { message: 'Database write failed', code: '42501' },
+        });
+      }
+      return Promise.resolve({ data: null, error: null });
     });
 
     const response = await POST(createAuthenticatedRequest(validBody));

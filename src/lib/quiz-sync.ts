@@ -10,6 +10,7 @@
 //   Reshuffle feature so previous attempts remain auditable.
 
 import { adminDb as defaultAdminDb } from '@/lib/database';
+import { ensureLeafSubtopic } from '@/lib/leaf-subtopics';
 
 export interface QuizItem {
   question?: string;
@@ -26,12 +27,16 @@ export interface SyncQuizParams {
   subtopicTitle?: string;
   quizItems?: QuizItem[];
   subtopicId?: string;
+  leafSubtopicId?: string | null;
+  moduleIndex?: number | null;
+  subtopicIndex?: number | null;
   subtopicData?: { id?: string; title?: string; content?: string | null };
 }
 
 export interface SyncQuizResult {
   resolvedSubtopicId: string | null;
   subtopicLabel: string;
+  leafSubtopicId: string | null;
   insertedCount: number;
   skippedDelete: boolean;
 }
@@ -138,6 +143,7 @@ function buildQuizInserts(
   courseId: string,
   resolvedSubtopicId: string,
   subtopicLabel: string,
+  leafSubtopicId: string | null,
   createdAt: string,
 ): Array<Record<string, unknown>> {
   // NOTE: `createdAt` MUST be the caller's `syncMarkedAt` — the cleanup
@@ -178,6 +184,7 @@ function buildQuizInserts(
         course_id: courseId,
         subtopic_id: resolvedSubtopicId,
         subtopic_label: subtopicLabel,
+        ...(leafSubtopicId ? { leaf_subtopic_id: leafSubtopicId } : {}),
         question: rawQuestion,
         options: optionsArray,
         correct_answer: correctAnswer,
@@ -194,7 +201,18 @@ function buildQuizInserts(
  * case, old rows are preserved for audit/admin display.
  */
 export async function syncQuizQuestions(params: SyncQuizParams): Promise<SyncQuizResult | null> {
-  const { adminDb, courseId, moduleTitle, subtopicTitle, quizItems, subtopicId, subtopicData } = params;
+  const {
+    adminDb,
+    courseId,
+    moduleTitle,
+    subtopicTitle,
+    quizItems,
+    subtopicId,
+    leafSubtopicId,
+    moduleIndex,
+    subtopicIndex,
+    subtopicData,
+  } = params;
 
   if (!adminDb || !courseId || !Array.isArray(quizItems) || quizItems.length === 0) {
     return null;
@@ -230,6 +248,15 @@ export async function syncQuizQuestions(params: SyncQuizParams): Promise<SyncQui
     return null;
   }
 
+  const resolvedLeafSubtopicId = leafSubtopicId ?? await ensureLeafSubtopic({
+    courseId,
+    moduleId: resolvedSubtopicId,
+    moduleTitle,
+    subtopicTitle,
+    moduleIndex,
+    subtopicIndex,
+  }, adminDb);
+
   // Capture the sync boundary BEFORE building the insert payload so the
   // new rows' created_at can be stamped with the exact same value. The
   // cleanup step below deletes rows with `created_at < syncMarkedAt`; if
@@ -242,6 +269,7 @@ export async function syncQuizQuestions(params: SyncQuizParams): Promise<SyncQui
     courseId,
     resolvedSubtopicId,
     subtopicLabel,
+    resolvedLeafSubtopicId,
     syncMarkedAt,
   );
   if (quizInserts.length === 0) {
@@ -251,7 +279,13 @@ export async function syncQuizQuestions(params: SyncQuizParams): Promise<SyncQui
       subtopicId: resolvedSubtopicId,
       subtopicLabel,
     });
-    return { resolvedSubtopicId, subtopicLabel, insertedCount: 0, skippedDelete: true };
+    return {
+      resolvedSubtopicId,
+      subtopicLabel,
+      leafSubtopicId: resolvedLeafSubtopicId,
+      insertedCount: 0,
+      skippedDelete: true,
+    };
   }
 
   // Check if any quiz_submissions reference existing quiz rows for THIS
@@ -299,7 +333,13 @@ export async function syncQuizQuestions(params: SyncQuizParams): Promise<SyncQui
       subtopicLabel,
       samplePayload: quizInserts[0],
     });
-    return { resolvedSubtopicId, subtopicLabel, insertedCount: 0, skippedDelete: true };
+    return {
+      resolvedSubtopicId,
+      subtopicLabel,
+      leafSubtopicId: resolvedLeafSubtopicId,
+      insertedCount: 0,
+      skippedDelete: true,
+    };
   }
 
   if (hasExistingSubmissions) {
@@ -308,7 +348,13 @@ export async function syncQuizQuestions(params: SyncQuizParams): Promise<SyncQui
       subtopicId: resolvedSubtopicId,
       subtopicLabel,
     });
-    return { resolvedSubtopicId, subtopicLabel, insertedCount: quizInserts.length, skippedDelete: true };
+    return {
+      resolvedSubtopicId,
+      subtopicLabel,
+      leafSubtopicId: resolvedLeafSubtopicId,
+      insertedCount: quizInserts.length,
+      skippedDelete: true,
+    };
   }
 
   // Scoped cleanup: only remove stale rows that belong to THIS subtopic_label.
@@ -337,7 +383,13 @@ export async function syncQuizQuestions(params: SyncQuizParams): Promise<SyncQui
     count: quizInserts.length,
   });
 
-  return { resolvedSubtopicId, subtopicLabel, insertedCount: quizInserts.length, skippedDelete: false };
+  return {
+    resolvedSubtopicId,
+    subtopicLabel,
+    leafSubtopicId: resolvedLeafSubtopicId,
+    insertedCount: quizInserts.length,
+    skippedDelete: false,
+  };
 }
 
 /**
@@ -348,7 +400,18 @@ export async function syncQuizQuestions(params: SyncQuizParams): Promise<SyncQui
 export async function appendNewQuizQuestions(
   params: SyncQuizParams,
 ): Promise<SyncQuizResult | null> {
-  const { adminDb, courseId, moduleTitle, subtopicTitle, quizItems, subtopicId, subtopicData } = params;
+  const {
+    adminDb,
+    courseId,
+    moduleTitle,
+    subtopicTitle,
+    quizItems,
+    subtopicId,
+    leafSubtopicId,
+    moduleIndex,
+    subtopicIndex,
+    subtopicData,
+  } = params;
 
   if (!adminDb || !courseId || !Array.isArray(quizItems) || quizItems.length === 0) {
     return null;
@@ -367,21 +430,43 @@ export async function appendNewQuizQuestions(
     return null;
   }
 
+  const resolvedLeafSubtopicId = leafSubtopicId ?? await ensureLeafSubtopic({
+    courseId,
+    moduleId: resolvedSubtopicId,
+    moduleTitle,
+    subtopicTitle,
+    moduleIndex,
+    subtopicIndex,
+  }, adminDb);
+
   const quizInserts = buildQuizInserts(
     quizItems,
     courseId,
     resolvedSubtopicId,
     subtopicLabel,
+    resolvedLeafSubtopicId,
     new Date().toISOString(),
   );
   if (quizInserts.length === 0) {
-    return { resolvedSubtopicId, subtopicLabel, insertedCount: 0, skippedDelete: true };
+    return {
+      resolvedSubtopicId,
+      subtopicLabel,
+      leafSubtopicId: resolvedLeafSubtopicId,
+      insertedCount: 0,
+      skippedDelete: true,
+    };
   }
 
   const { error: insertError } = await adminDb.from('quiz').insert(quizInserts);
   if (insertError) {
     console.warn('[quiz-sync] Append insert failed', insertError);
-    return { resolvedSubtopicId, subtopicLabel, insertedCount: 0, skippedDelete: true };
+    return {
+      resolvedSubtopicId,
+      subtopicLabel,
+      leafSubtopicId: resolvedLeafSubtopicId,
+      insertedCount: 0,
+      skippedDelete: true,
+    };
   }
 
   console.log('[quiz-sync] New quiz questions appended (history preserved)', {
@@ -391,5 +476,11 @@ export async function appendNewQuizQuestions(
     count: quizInserts.length,
   });
 
-  return { resolvedSubtopicId, subtopicLabel, insertedCount: quizInserts.length, skippedDelete: true };
+  return {
+    resolvedSubtopicId,
+    subtopicLabel,
+    leafSubtopicId: resolvedLeafSubtopicId,
+    insertedCount: quizInserts.length,
+    skippedDelete: true,
+  };
 }

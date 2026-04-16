@@ -12,6 +12,7 @@ import { resolveUserByIdentifier } from '@/services/auth.service';
 import { QuizStatusSchema, parseBody } from '@/lib/schemas';
 import { assertCourseOwnership, toOwnershipError } from '@/lib/ownership';
 import { apiRateLimiter } from '@/lib/rate-limit';
+import { ensureLeafSubtopic } from '@/lib/leaf-subtopics';
 
 interface SubmissionRow {
   attempt_number: number;
@@ -130,6 +131,13 @@ async function getHandler(req: NextRequest) {
     });
   }
 
+  const leafSubtopicId = await ensureLeafSubtopic({
+    courseId,
+    moduleId: subtopicId,
+    moduleTitle: trimmedModuleTitle,
+    subtopicTitle: trimmedSubtopicLabel,
+  });
+
   try {
     // Scope by subtopic_label so sibling subtopics inside the same module
     // show independent completion state. Fall back gracefully when the
@@ -143,7 +151,25 @@ async function getHandler(req: NextRequest) {
     let submissions: unknown = null;
     let error: unknown = null;
 
-    if (trimmedSubtopicLabel) {
+    if (leafSubtopicId) {
+      const leafResult = await adminDb
+        .from('quiz_submissions')
+        .select('attempt_number, quiz_attempt_id, is_correct, created_at')
+        .eq('user_id', user.id)
+        .eq('leaf_subtopic_id', leafSubtopicId)
+        .order('created_at', { ascending: false });
+      if (leafResult.error) {
+        console.warn('[QuizStatus] leaf_subtopic_id filter failed, falling back', leafResult.error);
+      } else {
+        const leafRows = Array.isArray(leafResult.data) ? leafResult.data : [];
+        if (leafRows.length > 0) {
+          submissions = leafRows;
+          error = null;
+        }
+      }
+    }
+
+    if (submissions === null && trimmedSubtopicLabel) {
       const scopedResult = await submissionsQuery
         .eq('subtopic_label', trimmedSubtopicLabel)
         .order('attempt_number', { ascending: false });
@@ -161,7 +187,7 @@ async function getHandler(req: NextRequest) {
         submissions = scopedResult.data;
         error = null;
       }
-    } else {
+    } else if (submissions === null) {
       const plainResult = await submissionsQuery.order('attempt_number', { ascending: false });
       submissions = plainResult.data;
       error = plainResult.error;

@@ -10,6 +10,7 @@ import { assertCourseOwnership, toOwnershipError } from '@/lib/ownership';
 import { resolveUserByIdentifier } from '@/services/auth.service';
 import { syncQuizQuestions, buildSubtopicCacheKey } from '@/lib/quiz-sync';
 import { withQuizCompletionState } from '@/lib/quiz-content';
+import { ensureLeafSubtopic } from '@/lib/leaf-subtopics';
 
 function normalizeText(value: unknown) {
   return typeof value === 'string' ? value.trim() : '';
@@ -45,6 +46,7 @@ interface QuizRowRecord extends Record<string, unknown> {
   question?: string;
   options?: unknown;
   correct_answer?: string;
+  leaf_subtopic_id?: string | null;
 }
 
 interface CachedQuizItem {
@@ -238,6 +240,129 @@ function buildAuthoritativeQuiz(
     .filter((item): item is AuthoritativeQuizQuestion => item !== null);
 }
 
+function isMissingInsertQuizAttemptFunction(error: unknown): boolean {
+  if (!error || typeof error !== 'object') return false;
+  const record = error as { code?: unknown; message?: unknown };
+  return (
+    record.code === 'PGRST202' ||
+    (typeof record.message === 'string' && record.message.includes('insert_quiz_attempt'))
+  );
+}
+
+async function resolveLegacyAttemptNumber(params: {
+  userId: string;
+  courseId: string;
+  subtopicId: string | null;
+  subtopicLabel: string | null;
+}): Promise<number> {
+  const baseFilter: Record<string, string> = {
+    user_id: params.userId,
+    course_id: params.courseId,
+  };
+
+  if (params.subtopicId) {
+    baseFilter.subtopic_id = params.subtopicId;
+  }
+
+  if (params.subtopicLabel) {
+    baseFilter.subtopic_label = params.subtopicLabel;
+  }
+
+  const latestRows = await DatabaseService.getRecords<{
+    attempt_number?: number | null;
+  }>('quiz_submissions', {
+    filter: baseFilter,
+    orderBy: { column: 'attempt_number', ascending: false },
+    limit: 1,
+  });
+
+  const latestAttemptNumber = latestRows[0]?.attempt_number ?? 0;
+  return latestAttemptNumber + 1;
+}
+
+async function insertQuizAttemptFallback(params: {
+  userId: string;
+  courseId: string;
+  subtopicId: string | null;
+  subtopicLabel: string | null;
+  moduleIndex: number | null;
+  subtopicIndex: number | null;
+  quizAttemptId: string;
+  rows: Array<{
+    quiz_id: string;
+    answer: string;
+    is_correct: boolean;
+    reasoning_note: string | null;
+  }>;
+}): Promise<{
+  insertedRows: Array<{
+    submission_id: string;
+    attempt_number: number;
+    quiz_attempt_id: string;
+  }>;
+  attempt_number: number;
+  quiz_attempt_id: string;
+}> {
+  const attemptNumber = await resolveLegacyAttemptNumber({
+    userId: params.userId,
+    courseId: params.courseId,
+    subtopicId: params.subtopicId,
+    subtopicLabel: params.subtopicLabel,
+  });
+
+  const insertedRows: Array<{
+    submission_id: string;
+    attempt_number: number;
+    quiz_attempt_id: string;
+  }> = [];
+
+  for (const row of params.rows) {
+    const { data, error } = await adminDb
+      .from('quiz_submissions')
+      .insert({
+        user_id: params.userId,
+        quiz_id: row.quiz_id,
+        course_id: params.courseId,
+        subtopic_id: params.subtopicId,
+        subtopic_label: params.subtopicLabel,
+        module_index: params.moduleIndex,
+        subtopic_index: params.subtopicIndex,
+        answer: row.answer,
+        is_correct: row.is_correct,
+        reasoning_note: row.reasoning_note,
+        attempt_number: attemptNumber,
+        quiz_attempt_id: params.quizAttemptId,
+      });
+
+    if (error) {
+      throw new DatabaseError('Failed to insert quiz submissions', error);
+    }
+
+    const inserted = Array.isArray(data) ? data[0] : data;
+    if (!inserted || typeof inserted !== 'object') {
+      throw new DatabaseError('Failed to insert quiz submissions');
+    }
+
+    insertedRows.push({
+      submission_id: typeof (inserted as Record<string, unknown>).id === 'string'
+        ? (inserted as Record<string, unknown>).id as string
+        : '',
+      attempt_number: typeof (inserted as Record<string, unknown>).attempt_number === 'number'
+        ? (inserted as Record<string, unknown>).attempt_number as number
+        : attemptNumber,
+      quiz_attempt_id: typeof (inserted as Record<string, unknown>).quiz_attempt_id === 'string'
+        ? (inserted as Record<string, unknown>).quiz_attempt_id as string
+        : params.quizAttemptId,
+    });
+  }
+
+  return {
+    insertedRows,
+    attempt_number: attemptNumber,
+    quiz_attempt_id: params.quizAttemptId,
+  };
+}
+
 function matchAnswerToQuestion(
   answer: {
     question: string;
@@ -355,6 +480,17 @@ async function postHandler(req: NextRequest) {
       subtopicId = (subRow as { id?: string } | null)?.id ?? null;
     }
 
+    const leafSubtopicId = subtopicId
+      ? await ensureLeafSubtopic({
+          courseId: data.courseId,
+          moduleId: subtopicId,
+          moduleTitle: trimmedModuleTitle,
+          subtopicTitle: trimmedSubtopicLabel,
+          moduleIndex: normalizeIndex(data.moduleIndex),
+          subtopicIndex: normalizeIndex(data.subtopicIndex),
+        })
+      : null;
+
     async function lazySeedQuizFromCache(): Promise<number> {
       if (!trimmedModuleTitle || !trimmedSubtopicLabel) return 0;
 
@@ -383,6 +519,9 @@ async function postHandler(req: NextRequest) {
             correctIndex: item.correctIndex ?? 0,
           })),
           subtopicId: subtopicId ?? undefined,
+          leafSubtopicId,
+          moduleIndex: normalizeIndex(data.moduleIndex),
+          subtopicIndex: normalizeIndex(data.subtopicIndex),
         });
 
         if (seedResult?.resolvedSubtopicId && !subtopicId) {
@@ -397,6 +536,21 @@ async function postHandler(req: NextRequest) {
     }
 
     async function loadQuizQuestions(): Promise<QuizRowRecord[]> {
+      if (leafSubtopicId) {
+        try {
+          const byLeaf = await DatabaseService.getRecords<QuizRowRecord>('quiz', {
+            filter: {
+              course_id: data.courseId,
+              leaf_subtopic_id: leafSubtopicId,
+            },
+            orderBy: { column: 'created_at', ascending: true },
+          });
+          if (byLeaf.length > 0) return byLeaf;
+        } catch (leafLookupError) {
+          console.warn('[QuizSubmit] leaf_subtopic_id filter failed, falling back', leafLookupError);
+        }
+      }
+
       if (subtopicId && trimmedSubtopicLabel) {
         try {
           return await DatabaseService.getRecords<QuizRowRecord>('quiz', {
@@ -485,35 +639,6 @@ async function postHandler(req: NextRequest) {
       );
     }
 
-    let nextAttemptNumber = 1;
-    if (subtopicId) {
-      try {
-        const attemptQuery = adminDb
-          .from('quiz_submissions')
-          .select('attempt_number')
-          .eq('user_id', user.id)
-          .eq('subtopic_id', subtopicId);
-
-        const { data: maxRow } = trimmedSubtopicLabel
-          ? await attemptQuery
-              .eq('subtopic_label', trimmedSubtopicLabel)
-              .order('attempt_number', { ascending: false })
-              .limit(1)
-              .maybeSingle()
-          : await attemptQuery
-              .order('attempt_number', { ascending: false })
-              .limit(1)
-              .maybeSingle();
-
-        const existingMax = (maxRow as { attempt_number?: number } | null)?.attempt_number;
-        if (typeof existingMax === 'number' && existingMax > 0) {
-          nextAttemptNumber = existingMax + 1;
-        }
-      } catch (attemptLookupError) {
-        console.warn('[QuizSubmit] Failed to determine next attempt number, defaulting to 1', attemptLookupError);
-      }
-    }
-
     const quizAttemptId = randomUUID();
     const matchingResults: Array<{
       questionIndex: number;
@@ -528,6 +653,7 @@ async function postHandler(req: NextRequest) {
       course_id: string;
       subtopic_id: string | null;
       subtopic_label: string | null;
+      leaf_subtopic_id: string | null;
       module_index: number | null;
       subtopic_index: number | null;
       answer: string;
@@ -574,12 +700,13 @@ async function postHandler(req: NextRequest) {
         course_id: data.courseId,
         subtopic_id: subtopicId,
         subtopic_label: trimmedSubtopicLabel || null,
+        leaf_subtopic_id: leafSubtopicId,
         module_index: normalizeIndex(data.moduleIndex),
         subtopic_index: normalizeIndex(data.subtopicIndex),
         answer: userAnswerText,
         is_correct: serverIsCorrect,
         reasoning_note: reasoningFromAnswer || null,
-        attempt_number: nextAttemptNumber,
+        attempt_number: 0,
         quiz_attempt_id: quizAttemptId,
       });
 
@@ -631,9 +758,46 @@ async function postHandler(req: NextRequest) {
       );
     }
 
-    const { data: insertedRows, error: insertError } = await adminDb
-      .from('quiz_submissions')
-      .insert(matchedRows);
+    const rpcResult = await adminDb.rpc('insert_quiz_attempt', {
+      p_user_id: user.id,
+      p_course_id: data.courseId,
+      p_subtopic_id: subtopicId,
+      p_subtopic_label: trimmedSubtopicLabel || null,
+      p_leaf_subtopic_id: leafSubtopicId,
+      p_module_index: normalizeIndex(data.moduleIndex),
+      p_subtopic_index: normalizeIndex(data.subtopicIndex),
+      p_quiz_attempt_id: quizAttemptId,
+      p_answers: matchedRows.map((row) => ({
+        quiz_id: row.quiz_id,
+        answer: row.answer,
+        is_correct: row.is_correct,
+        reasoning_note: row.reasoning_note,
+      })),
+    });
+
+    let insertedRows = rpcResult.data;
+    let insertError = rpcResult.error;
+
+    if (insertError && isMissingInsertQuizAttemptFunction(insertError)) {
+      console.warn('[QuizSubmit] insert_quiz_attempt RPC is missing; falling back to legacy row inserts');
+      const fallbackResult = await insertQuizAttemptFallback({
+        userId: user.id,
+        courseId: data.courseId,
+        subtopicId,
+        subtopicLabel: trimmedSubtopicLabel || null,
+        moduleIndex: normalizeIndex(data.moduleIndex),
+        subtopicIndex: normalizeIndex(data.subtopicIndex),
+        quizAttemptId,
+        rows: matchedRows.map((row) => ({
+          quiz_id: row.quiz_id,
+          answer: row.answer,
+          is_correct: row.is_correct,
+          reasoning_note: row.reasoning_note,
+        })),
+      });
+      insertedRows = fallbackResult.insertedRows;
+      insertError = null;
+    }
 
     if (insertError) {
       throw new DatabaseError('Failed to insert quiz submissions', insertError);
@@ -644,7 +808,15 @@ async function postHandler(req: NextRequest) {
       : insertedRows
         ? [insertedRows]
         : [];
-    const submissionIds = insertedRowList.map((row: Record<string, unknown>) => row.id);
+    const submissionIds = insertedRowList.map((row: Record<string, unknown>) => row.submission_id);
+    const persistedAttemptNumber = (() => {
+      const first = insertedRowList[0] as Record<string, unknown> | undefined;
+      return typeof first?.attempt_number === 'number' ? first.attempt_number : 1;
+    })();
+    const persistedAttemptId = (() => {
+      const first = insertedRowList[0] as Record<string, unknown> | undefined;
+      return typeof first?.quiz_attempt_id === 'string' ? first.quiz_attempt_id : quizAttemptId;
+    })();
 
     const serverCorrectCount = evaluatedAnswers.filter((row) => row.isCorrect).length;
     const serverScore = Math.round((serverCorrectCount / authoritativeQuiz.length) * 100);
@@ -675,7 +847,7 @@ async function postHandler(req: NextRequest) {
         moduleTitle: resolvedModuleTitle,
         subtopicTitle: resolvedSubtopicTitle,
         userId: user.id,
-        attemptId: quizAttemptId,
+        attemptId: persistedAttemptId,
         completedAt,
       });
     }
@@ -695,10 +867,10 @@ async function postHandler(req: NextRequest) {
           source: 'quiz_submission',
           user_id: user.id,
           course_id: data.courseId,
-          source_id: quizAttemptId,
+          source_id: persistedAttemptId,
           user_text: qaText,
-          prompt_or_question: `Kuis subtopik: ${data.subtopicTitle || ''} (attempt ${nextAttemptNumber})`,
-          context_summary: `Skor: ${serverScore}, ${serverCorrectCount}/${authoritativeQuiz.length} benar, attempt ${nextAttemptNumber}`,
+          prompt_or_question: `Kuis subtopik: ${data.subtopicTitle || ''} (attempt ${persistedAttemptNumber})`,
+          context_summary: `Skor: ${serverScore}, ${serverCorrectCount}/${authoritativeQuiz.length} benar, attempt ${persistedAttemptNumber}`,
         });
       } catch (scoreError) {
         console.warn('[QuizSubmit] Cognitive scoring failed:', scoreError);
@@ -710,7 +882,7 @@ async function postHandler(req: NextRequest) {
             status_code: 500,
             user_id: user.id,
             error_message: `quiz_submit cognitive scoring failed: ${scoreError instanceof Error ? scoreError.message : String(scoreError)}`,
-            metadata: { quiz_attempt_id: quizAttemptId, course_id: data.courseId },
+            metadata: { quiz_attempt_id: persistedAttemptId, course_id: data.courseId },
             created_at: new Date().toISOString(),
           });
         } catch (logError) {
@@ -727,18 +899,19 @@ async function postHandler(req: NextRequest) {
       score: serverScore,
       correctCount: serverCorrectCount,
       totalQuestions: authoritativeQuiz.length,
-      attemptNumber: nextAttemptNumber,
-      quizAttemptId,
+      attemptNumber: persistedAttemptNumber,
+      quizAttemptId: persistedAttemptId,
       submittedAt: completedAt,
       evaluatedAnswers,
       questionEvaluations: evaluatedAnswers,
       discussionUnlocked: true,
-      message: `Saved ${matchedRows.length}/${authoritativeQuiz.length} quiz answers - attempt #${nextAttemptNumber}`,
+      message: `Saved ${matchedRows.length}/${authoritativeQuiz.length} quiz answers - attempt #${persistedAttemptNumber}`,
       details: {
         totalAnswers: answers.length,
         successfulMatches: matchedRows.length,
         failedMatches: warnings.length,
         subtopicId,
+        leafSubtopicId,
         quizQuestionsFound: quizQuestions.length,
         authoritativeQuestions: authoritativeQuiz.length,
       },

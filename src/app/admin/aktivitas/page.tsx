@@ -86,6 +86,21 @@ interface QuizLogItem {
   quizAttemptId?: string | null
 }
 
+interface QuizPaginationMeta {
+  page: number
+  pageSize: number
+  totalItems: number
+  totalPages: number
+  hasNextPage: boolean
+  hasPreviousPage: boolean
+}
+
+interface QuizActivityResponse {
+  data?: QuizLogItem[]
+  items?: QuizLogItem[]
+  pagination?: QuizPaginationMeta
+}
+
 interface QuizAttemptGroup {
   key: string
   userEmail: string
@@ -148,7 +163,7 @@ function groupQuizByAttempt(logs: QuizLogItem[]): QuizAttemptGroup[] {
   return result
 }
 
-interface JurnalLogItem {
+interface _JurnalLogItem {
   id: string
   journalId?: string | null
   feedbackId?: string | null
@@ -286,6 +301,8 @@ export default function AdminAktivitasPage() {
   const [askLogs, setAskLogs] = useState<AskLogItem[]>([])
   const [challengeLogs, setChallengeLogs] = useState<ChallengeLogItem[]>([])
   const [quizLogs, setQuizLogs] = useState<QuizLogItem[]>([])
+  const [quizPagination, setQuizPagination] = useState<QuizPaginationMeta | null>(null)
+  const [quizPage, setQuizPage] = useState(1)
   const [refleksiLogs, setRefleksiLogs] = useState<ReflectionActivityItem[]>([])
   const [logsLoading, setLogsLoading] = useState(false)
 
@@ -314,6 +331,7 @@ export default function AdminAktivitasPage() {
     setSelectedCourse('')
     setSelectedDateFrom('')
     setSelectedDateTo('')
+    setQuizPage(1)
   }
 
   const activeFilterChips = useMemo(() => {
@@ -352,7 +370,7 @@ export default function AdminAktivitasPage() {
       const accuracy = quizLogs.length > 0 ? Math.round((correct / quizLogs.length) * 100) : 0
       return [
         { label: 'Percobaan', value: groupedQuizAttempts.length },
-        { label: 'Jawaban Tercatat', value: quizLogs.length },
+        { label: 'Jawaban Tercatat', value: quizPagination?.totalItems ?? quizLogs.length },
         { label: 'Akurasi Jawaban', value: `${accuracy}%` },
       ]
     }
@@ -374,21 +392,21 @@ export default function AdminAktivitasPage() {
       { label: 'Sedang Berlangsung', value: sessions.filter((s) => s.status === 'in_progress').length },
       { label: 'Tujuan Tercapai', value: coveredGoals },
     ]
-  }, [activeTab, askLogs, challengeLogs, quizLogs, refleksiLogs, sessions, groupedAskLogs.length, groupedQuizAttempts.length])
+  }, [activeTab, askLogs, challengeLogs, quizLogs, refleksiLogs, sessions, groupedAskLogs.length, groupedQuizAttempts.length, quizPagination?.totalItems])
 
   const tabCount = useMemo(() => {
     switch (activeTab) {
       case 'ask': return askLogs.length
       case 'challenge': return challengeLogs.length
-      case 'quiz': return groupedQuizAttempts.length
+      case 'quiz': return quizPagination?.totalItems ?? quizLogs.length
       case 'refleksi': return refleksiLogs.length
       case 'diskusi': return sessions.length
       default: return 0
     }
-  }, [activeTab, askLogs.length, challengeLogs.length, quizLogs.length, refleksiLogs.length, sessions.length, groupedQuizAttempts.length])
+  }, [activeTab, askLogs.length, challengeLogs.length, quizLogs.length, refleksiLogs.length, sessions.length, groupedQuizAttempts.length, quizPagination?.totalItems])
 
   const activeTabLabel = TABS.find((t) => t.id === activeTab)?.label ?? 'Aktivitas'
-  const activeTabMetaLabel = activeTab === 'quiz' ? 'percobaan' : 'catatan'
+  const activeTabMetaLabel = activeTab === 'quiz' ? 'jawaban' : 'catatan'
 
   // ── Auth guard ──
   useEffect(() => {
@@ -422,6 +440,10 @@ export default function AdminAktivitasPage() {
     return params.toString()
   }
 
+  useEffect(() => {
+    setQuizPage(1)
+  }, [selectedUser, selectedDateFrom, selectedDateTo, selectedCourse])
+
   // ── Fetch tab data (non-diskusi) ──
   useEffect(() => {
     if (authLoading || !admin) return
@@ -436,20 +458,36 @@ export default function AdminAktivitasPage() {
     const endpoint = endpointMap[activeTab]
     if (!endpoint) return
 
-    const params = buildParams()
-    const url = `/api/admin/activity/${endpoint}?${params}`
+    const params = new URLSearchParams(buildParams())
+    if (activeTab === 'quiz') {
+      params.set('page', String(quizPage))
+      params.set('pageSize', '25')
+    }
+    const url = `/api/admin/activity/${endpoint}?${params.toString()}`
 
     setLogsLoading(true)
-    fetch(url, { credentials: 'include' })
+    const controller = new AbortController()
+    fetch(url, { credentials: 'include', signal: controller.signal })
       .then((res) => {
         if (!res.ok) throw new Error('Gagal memuat data')
         return res.json()
       })
       .then((data) => {
+        const payload: QuizActivityResponse = Array.isArray(data)
+          ? { data }
+          : data ?? {}
+        const quizRecords = Array.isArray(payload.data)
+          ? payload.data
+          : Array.isArray(payload.items)
+            ? payload.items
+            : []
         switch (activeTab) {
           case 'ask': setAskLogs(data); break
           case 'challenge': setChallengeLogs(data); break
-          case 'quiz': setQuizLogs(data); break
+          case 'quiz':
+            setQuizLogs(quizRecords)
+            setQuizPagination(payload.pagination ?? null)
+            break
           case 'refleksi': setRefleksiLogs(data); break
         }
       })
@@ -457,12 +495,17 @@ export default function AdminAktivitasPage() {
         switch (activeTab) {
           case 'ask': setAskLogs([]); break
           case 'challenge': setChallengeLogs([]); break
-          case 'quiz': setQuizLogs([]); break
+          case 'quiz':
+            setQuizLogs([])
+            setQuizPagination(null)
+            break
           case 'refleksi': setRefleksiLogs([]); break
         }
       })
       .finally(() => setLogsLoading(false))
-  }, [activeTab, selectedUser, selectedDateFrom, selectedDateTo, selectedCourse, authLoading, admin])
+
+    return () => controller.abort()
+  }, [activeTab, selectedUser, selectedDateFrom, selectedDateTo, selectedCourse, quizPage, authLoading, admin])
 
   // ── Diskusi: load session list ──
   useEffect(() => {
@@ -844,6 +887,33 @@ export default function AdminAktivitasPage() {
         {activeTab === 'quiz' && (
           logsLoading ? <Skeleton /> : (
             <div className={styles.quizList}>
+              {quizPagination && (
+                <div style={{ display: 'flex', justifyContent: 'space-between', gap: 12, flexWrap: 'wrap', alignItems: 'center', marginBottom: 12 }}>
+                  <p style={{ margin: 0, color: '#6b7280', fontSize: '0.92rem' }}>
+                    Menampilkan {quizLogs.length} dari {quizPagination.totalItems} jawaban
+                    {' '}
+                    · Halaman {quizPagination.page}/{Math.max(quizPagination.totalPages, 1)}
+                  </p>
+                  <div style={{ display: 'flex', gap: 8 }}>
+                    <button
+                      type="button"
+                      className={styles.refreshBtn}
+                      onClick={() => setQuizPage((current) => Math.max(1, current - 1))}
+                      disabled={logsLoading || !quizPagination.hasPreviousPage}
+                    >
+                      Sebelumnya
+                    </button>
+                    <button
+                      type="button"
+                      className={styles.refreshBtn}
+                      onClick={() => setQuizPage((current) => current + 1)}
+                      disabled={logsLoading || !quizPagination.hasNextPage}
+                    >
+                      Berikutnya
+                    </button>
+                  </div>
+                </div>
+              )}
               {quizLogs.length === 0 ? (
                 <EmptyState message="Belum ada pengerjaan kuis" />
               ) : (

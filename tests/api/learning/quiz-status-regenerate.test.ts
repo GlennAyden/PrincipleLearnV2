@@ -14,6 +14,7 @@ const mockSubtopicsMaybeSingle = jest.fn();
 const mockQuizSubmissionsOrder = jest.fn();
 const mockCacheMaybeSingle = jest.fn();
 const mockCacheUpdate = jest.fn().mockResolvedValue({ data: null, error: null });
+const mockRpc = jest.fn();
 
 const subtopicsQuery = {
   select: jest.fn().mockReturnThis(),
@@ -64,6 +65,7 @@ jest.mock('@/lib/quiz-sync', () => ({
 
 jest.mock('@/lib/database', () => ({
   adminDb: {
+    rpc: (...args: unknown[]) => mockRpc(...args),
     from: (table: string) => {
       switch (table) {
         case 'subtopics':
@@ -133,6 +135,12 @@ describe('Quiz status and regenerate routes', () => {
     mockSubtopicsMaybeSingle.mockResolvedValue({
       data: { id: 'subtopic-001' },
       error: null,
+    });
+    mockRpc.mockImplementation((fnName: string) => {
+      if (fnName === 'ensure_leaf_subtopic') {
+        return Promise.resolve({ data: 'leaf-subtopic-001', error: null });
+      }
+      return Promise.resolve({ data: null, error: null });
     });
     mockQuizSubmissionsOrder.mockResolvedValue({
       data: quizRows,
@@ -208,6 +216,7 @@ describe('Quiz status and regenerate routes', () => {
         data: quizRows,
         error: null,
       });
+    mockRpc.mockResolvedValueOnce({ data: null, error: null });
 
     const request = createMockNextRequest(
       'GET',
