@@ -39,6 +39,7 @@ interface JurnalSubmission {
 
 interface FeedbackMirrorRow {
   id: string
+  origin_jurnal_id: string | null
   subtopic_id: string | null
   subtopic_label: string | null
   module_index: number | null
@@ -108,6 +109,7 @@ function isRecentExactMirror(
 async function persistFeedbackMirror(input: {
   userId: string
   courseId: string
+  originJurnalId: string
   subtopicId: string | null
   subtopicLabel: string
   moduleIndex: number | null
@@ -124,7 +126,7 @@ async function persistFeedbackMirror(input: {
 
   const { data: recentRows, error: recentError } = await adminDb
     .from('feedback')
-    .select('id, subtopic_id, subtopic_label, module_index, subtopic_index, rating, comment, created_at')
+    .select('id, origin_jurnal_id, subtopic_id, subtopic_label, module_index, subtopic_index, rating, comment, created_at')
     .eq('user_id', input.userId)
     .eq('course_id', input.courseId)
     .order('created_at', { ascending: false })
@@ -146,6 +148,18 @@ async function persistFeedbackMirror(input: {
   )
 
   if (duplicate) {
+    if (!duplicate.origin_jurnal_id) {
+      const { error: updateError } = await adminDb
+        .from('feedback')
+        .eq('id', duplicate.id)
+        .is('origin_jurnal_id', null)
+        .update({ origin_jurnal_id: input.originJurnalId })
+
+      if (updateError) {
+        throw new Error(getErrorMessage(updateError, 'feedback mirror origin link failed'))
+      }
+    }
+
     return { saved: true, action: 'reused' as const, id: duplicate.id }
   }
 
@@ -158,6 +172,7 @@ async function persistFeedbackMirror(input: {
       module_index: input.moduleIndex,
       subtopic_index: input.subtopicIndex,
       subtopic_label: input.subtopicLabel || null,
+      origin_jurnal_id: input.originJurnalId,
       rating: ratingValue,
       comment: commentValue,
     })
@@ -281,6 +296,7 @@ async function postHandler(req: NextRequest) {
         const mirrorResult = await persistFeedbackMirror({
           userId: user.id,
           courseId: data.courseId,
+          originJurnalId: jurnal.id,
           subtopicId,
           subtopicLabel,
           moduleIndex,

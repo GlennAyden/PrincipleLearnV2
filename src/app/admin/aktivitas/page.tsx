@@ -12,6 +12,7 @@ import {
 } from 'react-icons/fi'
 import styles from './page.module.scss'
 import { useAdmin } from '@/hooks/useAdmin'
+import type { ReflectionActivityItem } from '@/lib/admin-reflection-activity'
 
 import type {
   DiscussionSessionListItem,
@@ -149,6 +150,9 @@ function groupQuizByAttempt(logs: QuizLogItem[]): QuizAttemptGroup[] {
 
 interface JurnalLogItem {
   id: string
+  journalId?: string | null
+  feedbackId?: string | null
+  source?: 'journal' | 'journal_with_feedback' | 'feedback_only'
   timestamp: string
   topic: string
   content: string
@@ -193,7 +197,7 @@ const TAB_DESCRIPTIONS: Record<string, string> = {
   ask: 'Log tanya jawab otomatis: pertanyaan, jawaban, reasoning, tahap prompt, dan komponen prompt.',
   challenge: 'Jejak tantangan berpikir kritis beserta umpan balik AI.',
   quiz: 'Percobaan kuis: pertanyaan, opsi, jawaban siswa vs kunci, dan status kebenaran.',
-  refleksi: 'Refleksi jurnal terstruktur dan umpan balik konten dari siswa.',
+  refleksi: 'Refleksi terpadu dari jurnal dan feedback, dengan riwayat per subtopik.',
   diskusi: 'Sesi diskusi Socratic: transkrip, tujuan pembelajaran, dan monitoring baca-saja.',
 }
 
@@ -282,7 +286,7 @@ export default function AdminAktivitasPage() {
   const [askLogs, setAskLogs] = useState<AskLogItem[]>([])
   const [challengeLogs, setChallengeLogs] = useState<ChallengeLogItem[]>([])
   const [quizLogs, setQuizLogs] = useState<QuizLogItem[]>([])
-  const [refleksiLogs, setRefleksiLogs] = useState<JurnalLogItem[]>([])
+  const [refleksiLogs, setRefleksiLogs] = useState<ReflectionActivityItem[]>([])
   const [logsLoading, setLogsLoading] = useState(false)
 
   // ── Diskusi tab state ──
@@ -353,7 +357,7 @@ export default function AdminAktivitasPage() {
       ]
     }
     if (activeTab === 'refleksi') {
-      const rated = refleksiLogs.filter((l) => typeof l.contentRating === 'number' || typeof l.rating === 'number')
+      const rated = refleksiLogs.filter((l) => typeof l.rating === 'number' || typeof l.contentRating === 'number')
       return [
         { label: 'Entri Refleksi', value: refleksiLogs.length },
         { label: 'Pengguna Unik', value: new Set(refleksiLogs.map((l) => l.userId)).size },
@@ -936,14 +940,25 @@ export default function AdminAktivitasPage() {
                         <h3>{log.topic}</h3>
                         <p>{log.userEmail}</p>
                       </div>
-                      {(typeof log.contentRating === 'number' || typeof log.rating === 'number') && (
-                        <span className={styles.ratingBadge}>
-                          {log.contentRating ?? log.rating ?? '-'}
-                        </span>
-                      )}
+                      <div className={styles.refleksiHeaderMeta}>
+                        {log.hasJournal && log.hasFeedback && (
+                          <span className={styles.sourceBadge}>Jurnal + Feedback</span>
+                        )}
+                        {log.hasJournal && !log.hasFeedback && (
+                          <span className={styles.sourceBadge}>Jurnal</span>
+                        )}
+                        {log.hasFeedback && !log.hasJournal && (
+                          <span className={styles.sourceBadge}>Feedback</span>
+                        )}
+                        {(typeof log.rating === 'number' || typeof log.contentRating === 'number') && (
+                          <span className={styles.ratingBadge}>
+                            {log.rating ?? log.contentRating ?? '-'}
+                          </span>
+                        )}
+                      </div>
                     </header>
 
-                    {log.type === 'structured_reflection' ? (
+                    {log.hasJournal ? (
                       <>
                         <div className={styles.feedbackBox}>
                           <strong>Yang Dipahami:</strong>

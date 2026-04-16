@@ -118,7 +118,7 @@ Endpoint penting memvalidasi payload dengan schema di `src/lib/schemas.ts`. Jika
 - `/api/jurnal/save` adalah write-path utama untuk refleksi terstruktur.
 - `jurnal` disimpan sebagai history log, bukan one-row-per-course.
 - `/api/feedback` masih valid untuk jalur feedback langsung, tetapi angka admin/research harus dibaca sebagai model refleksi terpadu dari `jurnal + feedback`.
-- bila migration `origin_jurnal_id` diterapkan, row `feedback` hasil mirror dari jurnal sebaiknya membawa linkage eksplisit ke row sumbernya.
+- row `feedback` hasil mirror dari jurnal membawa `origin_jurnal_id` ke row sumbernya; direct feedback boleh tetap tanpa origin.
 - rollout live untuk domain ini dipersiapkan lewat `scripts/reflection-rollout-live.mjs` dan snippet di `docs/sql/`.
 
 ## Error Pattern

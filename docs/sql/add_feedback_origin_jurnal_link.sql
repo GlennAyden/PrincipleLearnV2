@@ -31,8 +31,9 @@ CREATE INDEX IF NOT EXISTS idx_feedback_origin_jurnal_id
 
 -- Suggested rollout:
 --   1. apply this schema change
---   2. backfill legacy mirror pairs in a separate ad-hoc script using
+--   2. update `/api/jurnal/save` to populate `origin_jurnal_id` on mirror write
+--   3. backfill legacy mirror pairs with
+--      `docs/sql/backfill_feedback_origin_jurnal_id.sql` using
 --      user/course/subtopic/module/subtopic scope plus timestamp proximity
---   3. if the backfill is collision-free, enforce uniqueness with
+--   4. if the backfill is collision-free, enforce uniqueness with
 --      `docs/sql/enforce_feedback_origin_jurnal_uniqueness.sql`
---   4. update `/api/jurnal/save` to populate `origin_jurnal_id` on mirror write

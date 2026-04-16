@@ -33,33 +33,29 @@ jest.mock('@/services/auth.service', () => ({
 }))
 
 const feedbackInsertSpy = jest.fn()
+const feedbackUpdateSpy = jest.fn()
 let feedbackSelectResult: { data: unknown[]; error: null | { message: string } }
 let feedbackInsertResult: { data: { id: string } | null; error: null | { message: string } }
-let feedbackFromCalls = 0
+let feedbackUpdateResult: { data: unknown[] | null; error: null | { message: string } }
 
 const mockAdminFrom = jest.fn((table: string) => {
   if (table === 'feedback') {
-    feedbackFromCalls += 1
-
-    if (feedbackFromCalls === 1) {
-      const selectChain: any = {
-        select: jest.fn(() => selectChain),
-        eq: jest.fn(() => selectChain),
-        order: jest.fn(() => selectChain),
-        limit: jest.fn(async () => feedbackSelectResult),
-      }
-      return selectChain
-    }
-
-    const insertChain: any = {
-      insert: jest.fn((payload: unknown) => {
+    const chain: any = {
+      select: jest.fn(() => chain),
+      eq: jest.fn(() => chain),
+      is: jest.fn(() => chain),
+      order: jest.fn(() => chain),
+      limit: jest.fn(async () => feedbackSelectResult),
+      insert: jest.fn(async (payload: unknown) => {
         feedbackInsertSpy(payload)
-        return insertChain
+        return feedbackInsertResult
       }),
-      select: jest.fn(() => insertChain),
-      single: jest.fn(async () => feedbackInsertResult),
+      update: jest.fn(async (payload: unknown) => {
+        feedbackUpdateSpy(payload)
+        return feedbackUpdateResult
+      }),
     }
-    return insertChain
+    return chain
   }
 
   return {
@@ -97,9 +93,9 @@ const mockParseBody = parseBody as jest.MockedFunction<typeof parseBody>
 describe('POST /api/jurnal/save', () => {
   beforeEach(() => {
     jest.clearAllMocks()
-    feedbackFromCalls = 0
     feedbackSelectResult = { data: [], error: null }
     feedbackInsertResult = { data: { id: 'feedback-001' }, error: null }
+    feedbackUpdateResult = { data: [], error: null }
     mockResolveAuthUserId.mockReturnValue(TEST_STUDENT.id)
     mockResolveUser.mockResolvedValue({ id: TEST_STUDENT.id, email: TEST_STUDENT.email } as never)
   })
@@ -189,6 +185,7 @@ describe('POST /api/jurnal/save', () => {
       course_id: TEST_COURSE.id,
       subtopic_id: TEST_SUBTOPIC.id,
       subtopic_label: TEST_SUBTOPIC.title,
+      origin_jurnal_id: 'jurnal-structured-001',
       rating: 4,
       comment: 'Good content overall.',
     }))
@@ -216,6 +213,7 @@ describe('POST /api/jurnal/save', () => {
       data: [
         {
           id: 'feedback-existing-001',
+          origin_jurnal_id: null,
           subtopic_id: TEST_SUBTOPIC.id,
           subtopic_label: TEST_SUBTOPIC.title,
           module_index: 0,
@@ -245,6 +243,64 @@ describe('POST /api/jurnal/save', () => {
       feedbackMirrorAction: 'reused',
     })
     expect(feedbackInsertSpy).not.toHaveBeenCalled()
+    expect(feedbackUpdateSpy).toHaveBeenCalledWith({
+      origin_jurnal_id: 'jurnal-structured-002',
+    })
+  })
+
+  it('reuses an already linked duplicate feedback mirror without relinking it', async () => {
+    const body = {
+      courseId: TEST_COURSE.id,
+      subtopicId: TEST_SUBTOPIC.id,
+      subtopic: TEST_SUBTOPIC.title,
+      moduleIndex: 0,
+      subtopicIndex: 1,
+      type: 'structured_reflection',
+      content: {
+        understood: 'Saya paham konsep inti.',
+        confused: '',
+        strategy: '',
+        promptEvolution: '',
+        contentRating: 5,
+        contentFeedback: 'Materinya sangat membantu.',
+      },
+    }
+
+    feedbackSelectResult = {
+      data: [
+        {
+          id: 'feedback-existing-linked-001',
+          origin_jurnal_id: 'jurnal-existing-001',
+          subtopic_id: TEST_SUBTOPIC.id,
+          subtopic_label: TEST_SUBTOPIC.title,
+          module_index: 0,
+          subtopic_index: 1,
+          rating: 5,
+          comment: 'Materinya sangat membantu.',
+          created_at: new Date().toISOString(),
+        },
+      ],
+      error: null,
+    }
+
+    mockParseBody.mockReturnValue({ success: true, data: body } as never)
+    mockGetRecords
+      .mockResolvedValueOnce([{ id: TEST_COURSE.id, title: TEST_COURSE.title }] as never)
+      .mockResolvedValueOnce([{ id: TEST_SUBTOPIC.id }] as never)
+    mockInsertRecord.mockResolvedValue({ id: 'jurnal-structured-003' } as never)
+
+    const request = createMockNextRequest('POST', '/api/jurnal/save', { body })
+    const response = await POST(request)
+    const data = await response.json()
+
+    expect(response.status).toBe(200)
+    expect(data).toMatchObject({
+      success: true,
+      feedbackSaved: true,
+      feedbackMirrorAction: 'reused',
+    })
+    expect(feedbackInsertSpy).not.toHaveBeenCalled()
+    expect(feedbackUpdateSpy).not.toHaveBeenCalled()
   })
 
   it('returns 400 when the subtopic does not belong to the supplied course', async () => {

@@ -66,7 +66,7 @@ Karena auth tidak memakai Supabase Auth, banyak otorisasi tetap dilakukan di lay
 - `jurnal` adalah nama domain yang sengaja dipertahankan.
 - model refleksi saat ini bersifat historis: setiap submit `jurnal` membuat row baru, bukan overwrite satu row per course.
 - `feedback` masih dipertahankan sebagai tabel terpisah untuk rating/comment dan beberapa jalur legacy, tetapi secara admin/read-model ia diperlakukan sebagai bagian dari domain refleksi yang sama.
-- bila migration linkage diterapkan, `feedback.origin_jurnal_id` menjadi penghubung eksplisit antara mirror feedback dan row `jurnal` asalnya.
+- `feedback.origin_jurnal_id` adalah penghubung eksplisit antara mirror feedback dan row `jurnal` asalnya; row feedback langsung boleh tetap `NULL`.
 - quiz dan subtopic punya kebutuhan sinkronisasi label dan cache key; `quiz-sync.ts` membantu menjaga konsistensinya.
 - `subtopic_cache` penting untuk menghindari regenerasi AI yang tidak perlu.
 - research tables bukan hanya arsip; mereka bagian aktif dari admin analytics.
@@ -83,9 +83,9 @@ Karena auth tidak memakai Supabase Auth, banyak otorisasi tetap dilakukan di lay
 
 - write-path utama refleksi user ada di `/api/jurnal/save`
 - `jurnal` menyimpan isi refleksi utama, konteks subtopik, dan payload kualitatif yang dibutuhkan untuk audit historis
-- `feedback` menyimpan rating/comment yang bisa berasal dari submit langsung atau mirror dari structured reflection
+- `feedback` menyimpan rating/comment yang bisa berasal dari submit langsung atau mirror dari structured reflection; mirror baru dari `/api/jurnal/save` harus membawa `origin_jurnal_id`
 - admin activity, dashboard, dan insights membaca keduanya sebagai satu model refleksi terpadu untuk menghindari double count
-- `UNIQUE (user_id, course_id)` pada `jurnal` adalah invariant lama dan tidak boleh dipakai lagi untuk environment baru
+- legacy unique constraint pada `jurnal` tidak dipakai lagi; riwayat refleksi harus historis per submit/subtopik
 
 ## Data Ownership Rules
 
@@ -102,6 +102,7 @@ Snippet yang relevan untuk domain refleksi sekarang:
 - `docs/sql/align_reflection_history_model.sql`
 - `docs/sql/add_feedback_rating_guardrails.sql`
 - `docs/sql/add_feedback_origin_jurnal_link.sql`
+- `docs/sql/backfill_feedback_origin_jurnal_id.sql`
 - `docs/sql/enforce_feedback_origin_jurnal_uniqueness.sql`
 - `docs/sql/drop_legacy_jurnal_user_course_unique.sql`
 

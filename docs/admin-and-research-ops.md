@@ -113,4 +113,6 @@ Dokumen lama kadang memakai istilah lain seperti `CPT`; untuk dokumentasi baru j
 - gunakan `node scripts/reflection-rollout-live.mjs` untuk precheck live berbasis service-role
 - gunakan `node scripts/reflection-rollout-live.mjs --json` bila butuh output yang mudah disimpan atau dibandingkan
 - `--apply-safe` hanya boleh dipakai bila token Management API sudah tersedia dan precheck menunjukkan rating/index data bersih
-- uniqueness `feedback.origin_jurnal_id` dan drop legacy unique `jurnal` harus tetap ditahan sampai backfill/collision scan dinyatakan aman
+- backfill `feedback.origin_jurnal_id` harus memakai matching konservatif; pasangan ambigu dibiarkan `NULL` sampai ada review manual
+- uniqueness `feedback.origin_jurnal_id` boleh ditegakkan setelah duplicate scan kosong
+- legacy unique `jurnal` boleh di-drop setelah semua write/read path memakai model refleksi historis

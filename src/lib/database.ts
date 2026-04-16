@@ -307,7 +307,7 @@ export class DatabaseService {
     try {
       const sanitized = sanitizeForInsert(tableName, data as Record<string, unknown>);
 
-      const TABLES_WITHOUT_UPDATED_AT = ['rate_limits', 'api_logs', 'quiz_submissions'];
+      const TABLES_WITHOUT_UPDATED_AT = ['rate_limits', 'api_logs', 'quiz_submissions', 'feedback'];
       const payload = TABLES_WITHOUT_UPDATED_AT.includes(tableName)
         ? sanitized
         : { ...sanitized, updated_at: new Date().toISOString() };
@@ -569,7 +569,7 @@ class SupabaseQueryBuilder {
     try {
       // Only inject updated_at if the caller didn't already provide it
       // and the table likely has the column (skip for known tables without it)
-      const TABLES_WITHOUT_UPDATED_AT = ['rate_limits', 'api_logs', 'quiz_submissions'];
+      const TABLES_WITHOUT_UPDATED_AT = ['rate_limits', 'api_logs', 'quiz_submissions', 'feedback'];
       const payload = TABLES_WITHOUT_UPDATED_AT.includes(this.tableName)
         ? data
         : { ...data, updated_at: new Date().toISOString() };

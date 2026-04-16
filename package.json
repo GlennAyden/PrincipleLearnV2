@@ -63,6 +63,7 @@
     "node-mocks-http": "^1.17.2",
     "puppeteer": "^24.37.5",
     "recharts": "^3.8.1",
+    "supabase": "^2.91.3",
     "ts-jest": "^29.4.6",
     "typescript": "^5"
   }

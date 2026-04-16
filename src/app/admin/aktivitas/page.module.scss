@@ -538,6 +538,26 @@
   }
 }
 
+.refleksiHeaderMeta {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+}
+
+.sourceBadge {
+  display: inline-flex;
+  align-items: center;
+  padding: 4px 8px;
+  border-radius: 999px;
+  font-size: 0.72rem;
+  font-weight: 600;
+  background: rgba($indigo-500, 0.12);
+  color: $indigo-700;
+  border: 1px solid rgba($indigo-500, 0.18);
+}
+
 .ratingBadge {
   display: inline-flex;
   align-items: center;
