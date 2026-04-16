@@ -786,7 +786,7 @@ Saves a user's challenge response (question, answer, and feedback) to the databa
 | Property        | Value                                           |
 |----------------|--------------------------------------------------|
 | **Auth**       | JWT cookie required                              |
-| **Schema**     | Custom (not a named Zod schema)                  |
+| **Schema**     | `ChallengeResponseSchema`                        |
 
 **Request Body:**
 
@@ -806,7 +806,8 @@ Saves a user's challenge response (question, answer, and feedback) to the databa
 ```json
 {
   "success": true,
-  "challengeId": "challenge-response-uuid"
+  "challengeId": "8c5a2b22-9f27-4f12-b49f-4f07d9f6ef34",
+  "message": "Respons tantangan berhasil disimpan"
 }
 ```
 

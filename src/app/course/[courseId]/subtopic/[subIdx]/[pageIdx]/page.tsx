@@ -138,6 +138,7 @@ export default function SubtopicPage() {
   const [challengeAnswer, setChallengeAnswer] = useState<string>('');
   const [challengeReasoning, setChallengeReasoning] = useState<string>('');
   const [activeChallengeIndex, setActiveChallengeIndex] = useState<number>(-1);
+  const [pendingChallengeResult, setPendingChallengeResult] = useState<ChallengeItem | null>(null);
 
   const [examplesData, setExamplesData] = useSessionStorage<string[]>(
     `${keyBase}-examples`,
@@ -609,6 +610,7 @@ export default function SubtopicPage() {
   // Function to select a challenge from history
   const selectChallengeItem = (index: number) => {
     setActiveChallengeIndex(index);
+    setPendingChallengeResult(null);
     // Clear the current challenge if viewing history
     setChallengeQ('');
     setChallengeAnswer('');
@@ -622,6 +624,8 @@ export default function SubtopicPage() {
     setChallengeAnswer('');
     setChallengeReasoning('');
     setActiveChallengeIndex(-1);
+    setPendingChallengeResult(null);
+    setChallengeSaveError(null);
 
     try {
       const response = await apiFetch('/api/challenge-thinking', {
@@ -670,15 +674,14 @@ export default function SubtopicPage() {
 
       const responseData = await response.json();
 
-      // Save to challenge history in state
+      // Keep the generated feedback visible even if the DB save fails.
       const newChallengeItem = {
         question: challengeQ,
         answer: challengeAnswer,
         feedback: responseData.feedback,
         reasoningNote: challengeReasoning.trim()
       };
-      const newChallengeData = [...challengeData, newChallengeItem];
-      setChallengeData(newChallengeData);
+      setPendingChallengeResult(newChallengeItem);
 
       // Save to database via API. We surface failures in the UI so the
       // user (and researcher) know the response was NOT persisted — the
@@ -710,6 +713,14 @@ export default function SubtopicPage() {
           setChallengeSaveError(
             `Respons tantanganmu belum tersimpan di server: ${reason}. Silakan coba lagi.`,
           );
+        } else {
+          const newChallengeData = [...challengeData, newChallengeItem];
+          setChallengeData(newChallengeData);
+          setPendingChallengeResult(null);
+          setActiveChallengeIndex(newChallengeData.length - 1);
+          setChallengeQ('');
+          setChallengeAnswer('');
+          setChallengeReasoning('');
         }
       } catch (saveError) {
         console.error('Error saving challenge to database:', saveError);
@@ -932,6 +943,29 @@ export default function SubtopicPage() {
                         }}
                       >
                         {challengeSaveError}
+                      </div>
+                    )}
+
+                    {pendingChallengeResult && (
+                      <div className={styles.challengeReview}>
+                        <div className={styles.pendingSaveNote}>
+                          Umpan balik AI sudah dibuat, tetapi respons ini belum tersimpan ke server.
+                          Tekan <strong>Submit</strong> lagi untuk mencoba menyimpan ulang.
+                        </div>
+                        <ChallengeBox question={pendingChallengeResult.question} />
+                        <div className={styles.challengeAnswer}>
+                          <div className={styles.answerLabel}>Jawabanmu:</div>
+                          <div className={styles.answerContent}>{pendingChallengeResult.answer}</div>
+                        </div>
+                        {pendingChallengeResult.feedback && (
+                          <FeedbackList feedback={pendingChallengeResult.feedback} />
+                        )}
+                        {pendingChallengeResult.reasoningNote && (
+                          <div className={styles.challengeAnswer}>
+                            <div className={styles.answerLabel}>Penalaranmu:</div>
+                            <div className={styles.answerContent}>{pendingChallengeResult.reasoningNote}</div>
+                          </div>
+                        )}
                       </div>
                     )}
 

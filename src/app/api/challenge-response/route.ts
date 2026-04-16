@@ -1,3 +1,4 @@
+import { randomUUID } from 'crypto';
 import { NextRequest, NextResponse, after } from 'next/server';
 import { adminDb, DatabaseError } from '@/lib/database';
 import { verifyToken } from '@/lib/jwt';
@@ -12,6 +13,24 @@ function normalizeIndex(value: unknown) {
     if (!Number.isNaN(parsed)) return parsed;
   }
   return 0;
+}
+
+function getDbErrorMessage(error: unknown): string {
+  if (error instanceof DatabaseError) {
+    if (error.originalError && 'message' in error.originalError) {
+      const originalMessage = error.originalError.message;
+      if (typeof originalMessage === 'string' && originalMessage.trim()) {
+        return originalMessage;
+      }
+    }
+    return error.message;
+  }
+
+  if (error instanceof Error) {
+    return error.message;
+  }
+
+  return String(error);
 }
 
 async function postHandler(req: NextRequest) {
@@ -49,8 +68,9 @@ async function postHandler(req: NextRequest) {
       return NextResponse.json({ error: 'Pengguna tidak cocok' }, { status: 403 });
     }
 
-    // Create unique identifier for this challenge session
-    const challengeId = `${courseId}_${moduleIndex}_${subtopicIndex}_${pageNumber}_${Date.now()}`;
+    // The live Supabase table uses a UUID primary key for challenge_responses.
+    // A prior composite string ID caused inserts to fail with invalid UUID syntax.
+    const challengeId = randomUUID();
 
     console.log('[Challenge Response] Attempting to save challenge response:', {
       challengeId,
@@ -133,6 +153,27 @@ async function postHandler(req: NextRequest) {
       const message = dbError instanceof DatabaseError ? dbError.message : 'Unknown database error';
       const originalError = dbError instanceof DatabaseError ? dbError.originalError : dbError;
       console.error('[Challenge Response] Database error:', message, originalError);
+
+      try {
+        await adminDb.from('api_logs').insert({
+          path: '/api/challenge-response',
+          label: 'challenge-response-db-error',
+          method: 'POST',
+          status_code: 500,
+          user_id: userId,
+          error_message: `challenge_response insert failed: ${getDbErrorMessage(dbError)}`,
+          metadata: {
+            challenge_id: challengeId,
+            course_id: courseId,
+            module_index: normalizeIndex(moduleIndex),
+            subtopic_index: normalizeIndex(subtopicIndex),
+            page_number: normalizeIndex(pageNumber),
+          },
+          created_at: new Date().toISOString(),
+        });
+      } catch (logError) {
+        console.error('[ChallengeResponse] Failed to log DB error to api_logs:', logError);
+      }
 
       return NextResponse.json(
         { error: 'Gagal menyimpan respons tantangan' },

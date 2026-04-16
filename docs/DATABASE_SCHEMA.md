@@ -685,13 +685,20 @@ Records student responses to critical thinking challenges with AI-powered feedba
 | Column | Type | Constraints | Description |
 |--------|------|-------------|-------------|
 | `id` | `uuid` | **PK** | Response identifier |
-| `user_id` | `text` | **TYPE MISMATCH** | User identifier stored as TEXT (not UUID) |
-| `challenge_id` | `uuid` | | Challenge being responded to |
-| `response` | `text` | | Student's challenge response |
+| `user_id` | `text` | Legacy type; app treats as string | User identifier |
+| `course_id` | `uuid` | **FK** -> `courses(id)` | Course context |
+| `module_index` | `integer` | | Module position within the course |
+| `subtopic_index` | `integer` | | Subtopic position within the module |
+| `page_number` | `integer` | | Page position within the subtopic |
+| `question` | `text` | | Challenge question shown to the learner |
+| `answer` | `text` | | Student answer |
+| `feedback` | `text` | nullable | AI-generated feedback saved alongside the answer |
+| `reasoning_note` | `text` | nullable | Optional learner reasoning / justification note |
 | `learning_session_id` | `uuid` | **FK** -> `learning_sessions(id)` | Research session link |
 | `created_at` | `timestamptz` | default `now()` | Submission timestamp |
+| `updated_at` | `timestamptz` | default `now()` | Last update timestamp |
 
-**Known Issue -- Type Mismatch:** The `user_id` column is `text` rather than `uuid`, unlike all other user-referencing tables. RLS policies compensate with explicit casting: `user_id::text = auth.uid()::text`. This inconsistency should be addressed in a future migration.
+**Known Issue -- Type Mismatch:** `user_id` is still stored as `text` on this table, unlike most user-linked tables. RLS policies compensate with explicit casting such as `user_id::text = auth.uid()::text`. The primary key `id` is a real UUID and the save API must generate a UUID-compatible value.
 
 ---
 

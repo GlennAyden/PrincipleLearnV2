@@ -393,6 +393,17 @@ $transition: 0.25s cubic-bezier(0.4, 0, 0.2, 1);
 
 .challengeReview { width: 100%; }
 
+.pendingSaveNote {
+  margin-bottom: 0.75rem;
+  padding: 0.75rem 1rem;
+  border: 1px solid #fbbf24;
+  border-radius: $radius-md;
+  background: #fffbeb;
+  color: #92400e;
+  font-size: 0.88rem;
+  line-height: 1.5;
+}
+
 .challengeAnswer {
   padding: 0.75rem 1rem;
   background: $gray-50;
