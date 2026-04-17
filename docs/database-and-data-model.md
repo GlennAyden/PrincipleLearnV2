@@ -69,6 +69,8 @@ Karena auth tidak memakai Supabase Auth, banyak otorisasi tetap dilakukan di lay
 - `feedback.origin_jurnal_id` adalah penghubung eksplisit antara mirror feedback dan row `jurnal` asalnya; row feedback langsung boleh tetap `NULL`.
 - quiz dan subtopic punya kebutuhan sinkronisasi label dan cache key; `quiz-sync.ts` membantu menjaga konsistensinya.
 - `subtopic_cache` penting untuk menghindari regenerasi AI yang tidak perlu.
+- `discussion_templates.source.generation` menyimpan provenance template diskusi untuk analisis riset (`ai_initial` vs `ai_regenerated`, scope, trigger, model, prompt version, dan jumlah attempt). Kolom `generated_by` tetap dipakai sebagai compatibility marker runtime (`auto`/`auto-module`).
+- Data demo activity tidak boleh otomatis dibuat di production; seed demo hanya aktif di non-production atau jika `ENABLE_PRODUCTION_ACTIVITY_SEED=true` diset secara eksplisit.
 - research tables bukan hanya arsip; mereka bagian aktif dari admin analytics.
 
 ## Conceptual Relationships

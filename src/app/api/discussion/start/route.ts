@@ -1,4 +1,4 @@
-import { NextRequest, NextResponse } from 'next/server';
+import { after, NextRequest, NextResponse } from 'next/server';
 
 import { verifyToken } from '@/lib/jwt';
 import { adminDb } from '@/lib/database';
@@ -93,6 +93,13 @@ interface SubtopicCacheContent {
   [key: string]: unknown;
 }
 
+const DISCUSSION_TEMPLATE_PREPARING_CODE = 'DISCUSSION_TEMPLATE_PREPARING';
+const DISCUSSION_TEMPLATE_PREPARING_MESSAGE =
+  'Diskusi sedang disiapkan. Coba tekan mulai ulang diskusi beberapa saat lagi.';
+const TEMPLATE_PREPARATION_COOLDOWN_MS = 30_000;
+const templatePreparationLocks = new Set<string>();
+const templatePreparationCooldowns = new Map<string, number>();
+
 async function postHandler(request: NextRequest) {
   try {
     const accessToken = request.cookies.get('access_token')?.value;
@@ -133,7 +140,10 @@ async function postHandler(request: NextRequest) {
 
     if (!subtopicId) {
       return NextResponse.json(
-        { error: 'Unable to resolve discussion context for this subtopic' },
+        {
+          code: 'DISCUSSION_CONTEXT_NOT_FOUND',
+          error: 'Unable to resolve discussion context for this subtopic',
+        },
         { status: 404 }
       );
     }
@@ -154,6 +164,7 @@ async function postHandler(request: NextRequest) {
       if (!prerequisites.ready) {
         return NextResponse.json(
           {
+            code: 'PREREQUISITES_INCOMPLETE',
             error: 'Selesaikan materi, kuis, dan refleksi seluruh subtopik modul ini sebelum memulai diskusi.',
             prerequisites,
           },
@@ -162,25 +173,29 @@ async function postHandler(request: NextRequest) {
       }
     }
 
-    let templateRow = await fetchLatestTemplate({ subtopicId, courseId, subtopicTitle, moduleTitle });
+    const templateRow = await fetchLatestTemplate({ subtopicId, courseId, subtopicTitle, moduleTitle });
     if (!templateRow) {
-      const regenerated = await tryRegenerateTemplate({
+      scheduleTemplatePreparation({
         courseId,
         subtopicId,
         subtopicTitle,
         moduleTitle,
+        generationMode: 'ai_regenerated',
+        generationTrigger: 'discussion_start_missing_template',
       });
 
-      if (regenerated) {
-        templateRow = await fetchLatestTemplate({ subtopicId, courseId, subtopicTitle, moduleTitle });
-      }
-    }
-
-    if (!templateRow) {
-      return NextResponse.json(
-        { error: 'Discussion template not found for this subtopic' },
-        { status: 404 }
+      const response = NextResponse.json(
+        {
+          code: DISCUSSION_TEMPLATE_PREPARING_CODE,
+          status: 'preparing',
+          error: DISCUSSION_TEMPLATE_PREPARING_MESSAGE,
+          message: DISCUSSION_TEMPLATE_PREPARING_MESSAGE,
+        },
+        { status: 202 }
       );
+      response.headers.set('x-log-error-message', DISCUSSION_TEMPLATE_PREPARING_CODE);
+      response.headers.set('Retry-After', '30');
+      return response;
     }
 
     const steps = flattenTemplate(templateRow.template);
@@ -281,17 +296,29 @@ async function fetchLatestTemplate(params: {
   subtopicTitle?: string | null;
   moduleTitle?: string | null;
 }): Promise<TemplateRecord | null> {
-  const { subtopicId, courseId, subtopicTitle } = params;
+  const { subtopicId, courseId, subtopicTitle, moduleTitle } = params;
 
-  const { data, error } = await adminDb
+  let templateQuery = adminDb
     .from('discussion_templates')
     .select('id, version, template, source')
-    .eq('subtopic_id', subtopicId)
-    .order('version', { ascending: false })
-    .limit(1);
+    .eq('subtopic_id', subtopicId);
 
-  if (!error && data?.[0]) {
-    return data[0];
+  if (courseId) {
+    templateQuery = templateQuery.eq('course_id', courseId);
+  }
+
+  const { data, error } = await templateQuery
+    .order('version', { ascending: false })
+    .limit(25);
+
+  if (!error && data?.length) {
+    const exactMatch = findMatchingTemplate(data, { subtopicTitle, moduleTitle });
+    if (exactMatch) {
+      return exactMatch;
+    }
+    if (!subtopicTitle) {
+      return data[0];
+    }
   }
 
   if (courseId && subtopicTitle) {
@@ -299,12 +326,14 @@ async function fetchLatestTemplate(params: {
       .from('discussion_templates')
       .select('id, version, template, source')
       .eq('course_id', courseId)
-      .contains('source', { subtopicTitle })
       .order('version', { ascending: false })
-      .limit(1);
+      .limit(100);
 
-    if (!fallbackError && fallback?.[0]) {
-      return fallback[0];
+    if (!fallbackError && fallback?.length) {
+      const exactMatch = findMatchingTemplate(fallback, { subtopicTitle, moduleTitle });
+      if (exactMatch) {
+        return exactMatch;
+      }
     }
   }
 
@@ -313,6 +342,52 @@ async function fetchLatestTemplate(params: {
   }
 
   return null;
+}
+
+function findMatchingTemplate(
+  rows: TemplateRecord[],
+  params: { subtopicTitle?: string | null; moduleTitle?: string | null },
+): TemplateRecord | null {
+  const subtopicTitle = normalizeIdentifier(params.subtopicTitle ?? '');
+  const moduleTitle = normalizeIdentifier(params.moduleTitle ?? '');
+
+  for (const row of rows) {
+    if (sourceMatchesContext(row.source, { subtopicTitle, moduleTitle })) {
+      return row;
+    }
+  }
+
+  return null;
+}
+
+function sourceMatchesContext(
+  source: Record<string, unknown> | undefined,
+  params: { subtopicTitle: string; moduleTitle: string },
+) {
+  const sourceScope = typeof source?.scope === 'string' ? source.scope : '';
+  const sourceSubtopicTitle = normalizeIdentifier(
+    typeof source?.subtopicTitle === 'string' ? source.subtopicTitle : '',
+  );
+  const sourceModuleTitle = normalizeIdentifier(
+    typeof source?.moduleTitle === 'string' ? source.moduleTitle : '',
+  );
+  const wantsModule =
+    (params.subtopicTitle && isDiscussionLabel(params.subtopicTitle)) ||
+    (params.moduleTitle && params.subtopicTitle === params.moduleTitle);
+
+  if (wantsModule) {
+    return (
+      sourceScope === 'module' &&
+      Boolean(params.moduleTitle) &&
+      (sourceModuleTitle === params.moduleTitle || sourceSubtopicTitle === params.moduleTitle)
+    );
+  }
+
+  if (sourceScope === 'module') {
+    return false;
+  }
+
+  return Boolean(params.subtopicTitle) && sourceSubtopicTitle === params.subtopicTitle;
 }
 
 async function fetchExistingSession(userId: string, courseId: string, subtopicId: string): Promise<SessionRecord | null> {
@@ -411,6 +486,51 @@ interface TryRegenerateParams {
   subtopicId: string;
   subtopicTitle?: string | null;
   moduleTitle?: string | null;
+  generationMode?: 'ai_initial' | 'ai_regenerated';
+  generationTrigger?: string;
+}
+
+function scheduleTemplatePreparation(params: TryRegenerateParams) {
+  const lockKey = [
+    params.courseId,
+    params.subtopicId,
+    normalizeIdentifier(params.moduleTitle ?? ''),
+    normalizeIdentifier(params.subtopicTitle ?? ''),
+  ].join(':');
+
+  if (templatePreparationLocks.has(lockKey)) {
+    console.info('[DiscussionStart] Template preparation already queued', {
+      courseId: params.courseId,
+      subtopicId: params.subtopicId,
+    });
+    return;
+  }
+
+  const lastAttemptAt = templatePreparationCooldowns.get(lockKey) ?? 0;
+  if (Date.now() - lastAttemptAt < TEMPLATE_PREPARATION_COOLDOWN_MS) {
+    console.info('[DiscussionStart] Template preparation cooldown active', {
+      courseId: params.courseId,
+      subtopicId: params.subtopicId,
+    });
+    return;
+  }
+
+  templatePreparationCooldowns.set(lockKey, Date.now());
+  templatePreparationLocks.add(lockKey);
+  after(async () => {
+    try {
+      const regenerated = await tryRegenerateTemplate(params);
+      console.info('[DiscussionStart] Background template preparation finished', {
+        courseId: params.courseId,
+        subtopicId: params.subtopicId,
+        regenerated,
+      });
+    } catch (error) {
+      console.error('[DiscussionStart] Background template preparation failed', error);
+    } finally {
+      templatePreparationLocks.delete(lockKey);
+    }
+  });
 }
 
 async function tryRegenerateTemplate({
@@ -418,6 +538,8 @@ async function tryRegenerateTemplate({
   subtopicId,
   subtopicTitle,
   moduleTitle,
+  generationMode = 'ai_regenerated',
+  generationTrigger = 'discussion_start_regeneration',
 }: TryRegenerateParams): Promise<boolean> {
   try {
     const normalizedModuleTitle = moduleTitle?.trim() || '';
@@ -474,6 +596,8 @@ async function tryRegenerateTemplate({
         keyTakeaways: context.keyTakeaways,
         misconceptions: context.misconceptions,
         subtopics: context.subtopics,
+        generationMode,
+        generationTrigger,
       });
 
       return Boolean(result);
@@ -515,6 +639,8 @@ async function tryRegenerateTemplate({
       summary,
       keyTakeaways,
       misconceptions,
+      generationMode,
+      generationTrigger,
     });
 
     return Boolean(result);

@@ -146,7 +146,8 @@ export async function evaluateModuleDiscussionPrerequisites(params: {
 
   const templateMap = new Map<string, Record<string, unknown>>();
   (templateRows ?? []).forEach((row: Record<string, unknown>) => {
-    if (((row?.generated_by as string) ?? 'auto') === 'auto') {
+    const generatedBy = String(row?.generated_by ?? 'auto');
+    if (generatedBy === 'auto' || generatedBy === 'auto-module') {
       const src = (row?.source ?? {}) as Record<string, unknown>;
       const title = typeof src?.subtopicTitle === 'string' ? src.subtopicTitle : null;
       if (title) {

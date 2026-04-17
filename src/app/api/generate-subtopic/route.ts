@@ -671,6 +671,8 @@ async function postHandler(request: NextRequest) {
                     summary: buildDiscussionSummary(data),
                     keyTakeaways: Array.isArray(data.keyTakeaways) ? data.keyTakeaways : [],
                     misconceptions: extractMisconceptions(data),
+                    generationMode: 'ai_initial',
+                    generationTrigger: 'generate_subtopic_background',
                   });
 
                   if (templateResult) {
@@ -705,6 +707,8 @@ async function postHandler(request: NextRequest) {
                         keyTakeaways: moduleContext.keyTakeaways,
                         misconceptions: moduleContext.misconceptions,
                         subtopics: moduleContext.subtopics,
+                        generationMode: 'ai_initial',
+                        generationTrigger: 'generate_subtopic_module_background',
                       });
 
                       if (moduleTemplateResult) {

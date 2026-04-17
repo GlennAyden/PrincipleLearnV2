@@ -825,9 +825,9 @@ Predefined discussion flow templates for each course and subtopic.
 | `course_id` | `uuid` | **FK** -> `courses(id)` | Course context |
 | `subtopic_id` | `uuid` | **FK** -> `subtopics(id)` | Subtopic context |
 | `version` | `text` | | Template version string |
-| `source` | `jsonb` | | Template source/origin metadata |
+| `source` | `jsonb` | | Template source/origin metadata. Runtime stores `source.generation` for research provenance: `mode` (`ai_initial` or `ai_regenerated`), `scope`, `trigger`, `provider`, `model`, `promptVersion`, `attempts`, and `generatedAt`. |
 | `template` | `jsonb` | | Discussion flow structure and steps |
-| `generated_by` | `text` | | Template origin (`auto` or similar) |
+| `generated_by` | `text` | | Runtime compatibility marker (`auto` for subtopic templates, `auto-module` for module templates). Research labels should read `source.generation.mode` instead of overloading this column. |
 | `created_at` | `timestamptz` | default `now()` | Creation timestamp |
 
 **RLS Policies:**

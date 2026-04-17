@@ -2,7 +2,7 @@
 
 import Link from 'next/link';
 import { useParams, useRouter, useSearchParams } from 'next/navigation';
-import { useEffect, useMemo, useRef, useState, type FormEvent } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState, type FormEvent } from 'react';
 import styles from './page.module.scss';
 import {
   normalizeDiscussionResponse,
@@ -42,6 +42,18 @@ const PHASE_LABELS: Record<string, string> = {
   completed: 'Selesai',
 };
 
+const DISCUSSION_TEMPLATE_PREPARING_CODE = 'DISCUSSION_TEMPLATE_PREPARING';
+const DISCUSSION_PREPARING_MESSAGE =
+  'Diskusi sedang disiapkan. Coba tekan mulai ulang diskusi beberapa saat lagi.';
+
+type ApiErrorPayload = {
+  code?: string;
+  error?: string;
+  message?: string;
+  status?: string;
+  prerequisites?: ModulePrerequisiteDetails;
+};
+
 function normalizePhase(phase?: string) {
   if (!phase) return '';
   return phase.toLowerCase();
@@ -63,6 +75,18 @@ function formatTimestamp(value?: string) {
   const date = new Date(value);
   if (Number.isNaN(date.getTime())) return '';
   return date.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+}
+
+async function readApiPayload(response: Response): Promise<ApiErrorPayload | null> {
+  try {
+    return (await response.json()) as ApiErrorPayload;
+  } catch {
+    return null;
+  }
+}
+
+function payloadMessage(payload: ApiErrorPayload | null, fallback: string) {
+  return payload?.message || payload?.error || fallback;
 }
 
 export default function DiscussionModulePage() {
@@ -105,8 +129,11 @@ export default function DiscussionModulePage() {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
   const [requiresPreparation, setRequiresPreparation] = useState(false);
+  const [discussionPreparing, setDiscussionPreparing] = useState(false);
+  const [preparingMessage, setPreparingMessage] = useState(DISCUSSION_PREPARING_MESSAGE);
   const [prereqDetails, setPrereqDetails] = useState<ModulePrerequisiteDetails | null>(null);
   const [prereqChecked, setPrereqChecked] = useState(discussionScope !== 'module');
+  const [reloadKey, setReloadKey] = useState(0);
 
   const [inputValue, setInputValue] = useState('');
   const [selectedOption, setSelectedOption] = useState<string | null>(null);
@@ -121,6 +148,20 @@ export default function DiscussionModulePage() {
   const threadEndRef = useRef<HTMLDivElement | null>(null);
   const goalToggleRef = useRef<HTMLButtonElement | null>(null);
   const goalPanelRef = useRef<HTMLDivElement | null>(null);
+
+  const clearDiscussionState = useCallback(() => {
+    setSession(null);
+    setMessages([]);
+    setCurrentStep(null);
+    setInputValue('');
+    setSelectedOption(null);
+    setIsRetrying(false);
+    setRetryAttempt(0);
+    setIsRemediation(false);
+    setRemediationRound(0);
+    setEffortWarning('');
+    setShowGoalPanel(false);
+  }, []);
 
   useEffect(() => {
     if (threadEndRef.current) {
@@ -220,10 +261,10 @@ export default function DiscussionModulePage() {
   }, [discussionScope, moduleData?.subtopics, targetSubtopicIndex]);
 
   const apiSubtopicTitle = useMemo(() => {
-    if (queryTitle) return queryTitle;
     if (discussionScope === 'module') {
-      return moduleData?.module ?? moduleData?.rawTitle ?? '';
+      return moduleData?.module ?? moduleData?.rawTitle ?? queryTitle ?? '';
     }
+    if (queryTitle) return queryTitle;
     if (!targetSubtopic) return moduleData?.module ?? '';
     return typeof targetSubtopic === 'string'
       ? targetSubtopic
@@ -248,7 +289,7 @@ export default function DiscussionModulePage() {
   }, [discussionScope, moduleData?.module, moduleData?.rawTitle, queryTitle, targetSubtopic]);
 
   const moduleTitle = moduleData?.module ?? 'Modul';
-  const moduleSubtopicId = moduleIdParam ?? moduleData?.id ?? null;
+  const moduleSubtopicId = moduleData?.id ?? moduleIdParam ?? null;
   const subtitleLabel = discussionScope === 'module' ? 'Cakupan Diskusi' : 'Subtopik';
 
   useEffect(() => {
@@ -256,6 +297,7 @@ export default function DiscussionModulePage() {
       setPrereqDetails(null);
       setPrereqChecked(true);
       setRequiresPreparation(false);
+      setDiscussionPreparing(false);
       return;
     }
 
@@ -283,9 +325,11 @@ export default function DiscussionModulePage() {
         if (!cancelled) {
           setPrereqDetails(data);
           setRequiresPreparation(!data.ready);
+          setDiscussionPreparing(false);
           if (data.ready) {
             setError('');
           } else {
+            clearDiscussionState();
             setError(
               'Selesaikan seluruh subtopik (termasuk kuis) sebelum memulai diskusi wajib.'
             );
@@ -295,6 +339,8 @@ export default function DiscussionModulePage() {
         if (!cancelled) {
           setPrereqDetails(null);
           setRequiresPreparation(true);
+          setDiscussionPreparing(false);
+          clearDiscussionState();
           setError(err instanceof Error ? err.message : 'Gagal memeriksa prasyarat diskusi');
         }
       } finally {
@@ -309,13 +355,15 @@ export default function DiscussionModulePage() {
     return () => {
       cancelled = true;
     };
-  }, [courseId, discussionScope, moduleSubtopicId]);
+  }, [clearDiscussionState, courseId, discussionScope, moduleSubtopicId]);
 
   useEffect(() => {
     if (!courseId || !apiSubtopicTitle) return;
     if (discussionScope === 'module') {
       if (!prereqChecked) return;
       if (requiresPreparation) {
+        clearDiscussionState();
+        setDiscussionPreparing(false);
         setLoading(false);
         setInitializing(false);
         return;
@@ -339,19 +387,60 @@ export default function DiscussionModulePage() {
           body: JSON.stringify(payload),
         });
 
+        if (response.status === 202) {
+          const responsePayload = await readApiPayload(response);
+          if (!cancelled) {
+            clearDiscussionState();
+            setRequiresPreparation(false);
+            setDiscussionPreparing(true);
+            setPreparingMessage(payloadMessage(responsePayload, DISCUSSION_PREPARING_MESSAGE));
+            setError('');
+          }
+          return;
+        }
+
         if (response.status === 401) {
           throw new Error('Sesi diskusi memerlukan login. Silakan masuk kembali.');
         }
 
+        if (response.status === 409) {
+          const responsePayload = await readApiPayload(response);
+          if (!cancelled) {
+            clearDiscussionState();
+            setRequiresPreparation(true);
+            setDiscussionPreparing(false);
+            setPrereqDetails(responsePayload?.prerequisites ?? null);
+            setError(
+              payloadMessage(
+                responsePayload,
+                'Selesaikan seluruh subtopik modul sebelum memulai diskusi wajib.',
+              ),
+            );
+          }
+          return;
+        }
+
         if (!response.ok) {
-          const payload = await response.json().catch(() => null);
-          throw new Error(payload?.error || 'Gagal memulai diskusi');
+          const responsePayload = await readApiPayload(response);
+          if (responsePayload?.code === DISCUSSION_TEMPLATE_PREPARING_CODE) {
+            if (!cancelled) {
+              clearDiscussionState();
+              setRequiresPreparation(false);
+              setDiscussionPreparing(true);
+              setPreparingMessage(payloadMessage(responsePayload, DISCUSSION_PREPARING_MESSAGE));
+              setError('');
+            }
+            return;
+          }
+          throw new Error(payloadMessage(responsePayload, 'Gagal memulai diskusi'));
         }
 
         const data = await response.json();
         if (!cancelled) {
           const normalized = normalizeDiscussionResponse(data);
           setRequiresPreparation(false);
+          setDiscussionPreparing(false);
+          setError('');
           setSession(normalized.session);
           setMessages(normalized.messages);
           setCurrentStep(normalized.currentStep);
@@ -361,10 +450,13 @@ export default function DiscussionModulePage() {
           const message = err instanceof Error ? err.message : 'Tidak dapat memulai sesi diskusi';
           if (/unable to resolve discussion context/i.test(message) || /discussion session not found/i.test(message)) {
             setRequiresPreparation(true);
+            setDiscussionPreparing(false);
+            clearDiscussionState();
             setError(
               'Diskusi wajib baru tersedia setelah semua subtopik modul selesai dipelajari dan digenerate.'
             );
           } else {
+            setDiscussionPreparing(false);
             setError(message);
           }
         }
@@ -379,6 +471,8 @@ export default function DiscussionModulePage() {
     async function loadHistory() {
       setLoading(true);
       setError('');
+      setDiscussionPreparing(false);
+      clearDiscussionState();
       try {
         const params = new URLSearchParams({
           courseId,
@@ -392,7 +486,18 @@ export default function DiscussionModulePage() {
         const response = await apiFetch(`/api/discussion/history?${params.toString()}`);
 
         if (response.status === 404) {
-          await startNewSession();
+          const responsePayload = await readApiPayload(response);
+          if (responsePayload?.code === 'SESSION_NOT_FOUND') {
+            await startNewSession();
+            return;
+          }
+          if (!cancelled) {
+            setRequiresPreparation(true);
+            setDiscussionPreparing(false);
+            setError(
+              'Diskusi wajib baru tersedia setelah semua subtopik modul selesai dipelajari dan digenerate.'
+            );
+          }
           return;
         }
 
@@ -401,13 +506,16 @@ export default function DiscussionModulePage() {
         }
 
         if (!response.ok) {
-          throw new Error('Gagal memuat sesi diskusi');
+          const responsePayload = await readApiPayload(response);
+          throw new Error(payloadMessage(responsePayload, 'Gagal memuat sesi diskusi'));
         }
 
         const data = await response.json();
         if (!cancelled) {
           const normalized = normalizeDiscussionResponse(data);
           setRequiresPreparation(false);
+          setDiscussionPreparing(false);
+          setError('');
           setSession(normalized.session);
           setMessages(normalized.messages);
           setCurrentStep(normalized.currentStep);
@@ -417,10 +525,13 @@ export default function DiscussionModulePage() {
           const message = err instanceof Error ? err.message : 'Tidak dapat memuat sesi diskusi';
           if (/unable to resolve discussion context/i.test(message) || /discussion session not found/i.test(message)) {
             setRequiresPreparation(true);
+            setDiscussionPreparing(false);
+            clearDiscussionState();
             setError(
               'Diskusi wajib baru tersedia setelah semua subtopik modul selesai dipelajari dan digenerate.'
             );
           } else {
+            setDiscussionPreparing(false);
             setError(message);
           }
         }
@@ -438,12 +549,14 @@ export default function DiscussionModulePage() {
     };
   }, [
     apiSubtopicTitle,
+    clearDiscussionState,
     courseId,
     moduleSubtopicId,
     moduleTitle,
     discussionScope,
     prereqChecked,
     requiresPreparation,
+    reloadKey,
   ]);
 
   const handleSubmit = async (event: FormEvent<HTMLFormElement>) => {
@@ -563,7 +676,12 @@ export default function DiscussionModulePage() {
     }
   }, [showGoalPanel, totalGoals]);
 
-  const shouldRenderComposer = session?.status !== 'completed' && Boolean(currentStep);
+  const shouldRenderComposer =
+    !loading &&
+    !requiresPreparation &&
+    !discussionPreparing &&
+    session?.status !== 'completed' &&
+    Boolean(currentStep);
 
   const renderComposer = () => {
     if (!currentStep) return null;
@@ -861,6 +979,23 @@ export default function DiscussionModulePage() {
           )}
           <button type="button" className={styles.preparationButton} onClick={handleGoToModule}>
             Pelajari Subtopik Modul
+          </button>
+        </div>
+      ) : discussionPreparing ? (
+        <div className={styles.preparationNotice}>
+          <h2>Diskusi Sedang Disiapkan</h2>
+          <p>{preparingMessage}</p>
+          <ol className={styles.preparationList}>
+            <li>Tunggu sekitar 30-60 detik agar sistem selesai menyiapkan pertanyaan diskusi.</li>
+            <li>Tekan tombol di bawah ini untuk mengecek ulang kesiapan diskusi.</li>
+          </ol>
+          <button
+            type="button"
+            className={styles.preparationButton}
+            onClick={() => setReloadKey((value) => value + 1)}
+            disabled={loading}
+          >
+            {loading ? 'Memeriksa...' : 'Mulai Ulang Diskusi'}
           </button>
         </div>
       ) : initializing ? (

@@ -11,6 +11,13 @@ type DemoEntities = {
 const DEMO_EMAIL = 'activity.demo@principlelearn.ai';
 const DEMO_COURSE_TITLE = 'Activity Monitoring Demo Course';
 
+function shouldSeedDemoActivity() {
+  return (
+    process.env.NODE_ENV !== 'production' ||
+    process.env.ENABLE_PRODUCTION_ACTIVITY_SEED === 'true'
+  );
+}
+
 // Helper: insertRecord typed to return a record with at least an `id` field
 async function insert<T extends Record<string, unknown>>(
   table: string,
@@ -123,6 +130,8 @@ async function ensureDemoSubtopics(courseId: string): Promise<Array<{ id: string
 }
 
 export async function ensureAskQuestionHistorySeeded() {
+  if (!shouldSeedDemoActivity()) return;
+
   const existing = await DatabaseService.getRecords<{ id: string }>('ask_question_history', {
     limit: 1,
   });
@@ -143,6 +152,8 @@ export async function ensureAskQuestionHistorySeeded() {
 }
 
 export async function ensureChallengeResponsesSeeded() {
+  if (!shouldSeedDemoActivity()) return;
+
   const existing = await DatabaseService.getRecords<{ id: string }>('challenge_responses', {
     limit: 1,
   });
@@ -166,6 +177,8 @@ export async function ensureChallengeResponsesSeeded() {
 }
 
 export async function ensureFeedbackSeeded() {
+  if (!shouldSeedDemoActivity()) return;
+
   const existing = await DatabaseService.getRecords<{ id: string }>('feedback', {
     limit: 1,
   });
@@ -187,6 +200,8 @@ export async function ensureFeedbackSeeded() {
 }
 
 export async function ensureCourseGenerationActivitySeeded() {
+  if (!shouldSeedDemoActivity()) return;
+
   const existing = await DatabaseService.getRecords<{ id: string }>('course_generation_activity', {
     limit: 1,
   });
@@ -222,6 +237,8 @@ export async function ensureCourseGenerationActivitySeeded() {
 }
 
 export async function ensureQuizSeeded() {
+  if (!shouldSeedDemoActivity()) return;
+
   const existing = await DatabaseService.getRecords<{ id: string }>('quiz_submissions', {
     limit: 1,
   });
@@ -249,6 +266,8 @@ export async function ensureQuizSeeded() {
 }
 
 export async function ensureDiscussionSessionSeeded() {
+  if (!shouldSeedDemoActivity()) return;
+
   const existing = await DatabaseService.getRecords<{ id: string }>('discussion_sessions', {
     limit: 1,
   });

@@ -59,7 +59,16 @@ interface ModuleDiscussionTemplateParams {
   keyTakeaways: string[];
   misconceptions?: string[];
   subtopics: ModuleSubtopicContext[];
+  generationMode?: DiscussionTemplateGenerationMode;
+  generationTrigger?: string;
 }
+
+type DiscussionTemplateGenerationMode = 'ai_initial' | 'ai_regenerated';
+
+const TEMPLATE_PROMPT_VERSION = 'discussion-template-v2';
+const TEMPLATE_GENERATION_ATTEMPTS = 2;
+const SUBTOPIC_MAX_COMPLETION_TOKENS = 3200;
+const MODULE_MAX_COMPLETION_TOKENS = 4200;
 
 function isTemplateStep(step: unknown): step is TemplateStep {
   if (!step || typeof step !== 'object') return false;
@@ -191,7 +200,7 @@ const responseFormat = {
           minItems: 1,
           items: {
             type: 'object',
-            required: ['id', 'description'],
+            required: ['id', 'description', 'thinking_skill'],
             properties: {
               id: { type: 'string' },
               description: { type: 'string' },
@@ -239,6 +248,8 @@ export interface DiscussionTemplateParams {
   summary: string;
   keyTakeaways: string[];
   misconceptions?: string[];
+  generationMode?: DiscussionTemplateGenerationMode;
+  generationTrigger?: string;
 }
 
 export interface DiscussionTemplateResult {
@@ -251,9 +262,9 @@ export async function generateDiscussionTemplate(
 ): Promise<DiscussionTemplateResult | null> {
   try {
     const prompt = buildPrompt(params);
-
-    const completion = await openai.chat.completions.create({
-      model: defaultOpenAIModel,
+    const generated = await requestTemplateFromOpenAI({
+      scope: 'subtopic',
+      maxCompletionTokens: SUBTOPIC_MAX_COMPLETION_TOKENS,
       messages: [
         {
           role: 'system',
@@ -264,24 +275,15 @@ export async function generateDiscussionTemplate(
           content: prompt,
         },
       ],
-      response_format: responseFormat,
-      max_completion_tokens: 1400,
     });
 
-    const raw = completion.choices?.[0]?.message?.content;
-    if (!raw) {
-      console.warn('[DiscussionTemplate] Empty response from OpenAI');
+    if (!generated) {
       return null;
     }
 
-    const parsed = JSON.parse(raw);
-    if (!isValidTemplate(parsed)) {
-      console.error('[DiscussionTemplate] Validation failed: invalid structure');
-      return null;
-    }
-
-    const normalized = normalizeTemplate(parsed);
+    const normalized = normalizeTemplate(generated.template);
     const version = new Date().toISOString();
+    const generationMode = params.generationMode ?? 'ai_initial';
 
     const { data, error } = await adminDb
       .from('discussion_templates')
@@ -290,12 +292,20 @@ export async function generateDiscussionTemplate(
         subtopic_id: params.subtopicId,
         version,
         source: {
+          scope: 'subtopic',
           moduleTitle: params.moduleTitle,
           subtopicTitle: params.subtopicTitle,
           learningObjectives: params.learningObjectives,
           summary: params.summary,
           keyTakeaways: params.keyTakeaways,
           misconceptions: params.misconceptions ?? [],
+          generation: buildGenerationMetadata({
+            mode: generationMode,
+            scope: 'subtopic',
+            trigger: params.generationTrigger ?? 'subtopic_generation',
+            generatedAt: version,
+            attempts: generated.attempts,
+          }),
         },
         template: normalized,
         generated_by: 'auto',
@@ -325,10 +335,9 @@ export async function generateModuleDiscussionTemplate(
       return null;
     }
 
-    const completion = await openai.chat.completions.create({
-      model: defaultOpenAIModel,
-      response_format: responseFormat,
-      max_completion_tokens: 1600,
+    const generated = await requestTemplateFromOpenAI({
+      scope: 'module',
+      maxCompletionTokens: MODULE_MAX_COMPLETION_TOKENS,
       messages: [
         {
           role: 'system',
@@ -341,20 +350,13 @@ export async function generateModuleDiscussionTemplate(
       ],
     });
 
-    const raw = completion.choices?.[0]?.message?.content;
-    if (!raw) {
-      console.warn('[DiscussionTemplate] Empty response from OpenAI (module scope)');
+    if (!generated) {
       return null;
     }
 
-    const parsed = JSON.parse(raw);
-    if (!isValidTemplate(parsed)) {
-      console.error('[DiscussionTemplate] Validation failed: invalid module template structure');
-      return null;
-    }
-
-    const normalized = normalizeTemplate(parsed);
+    const normalized = normalizeTemplate(generated.template);
     const version = new Date().toISOString();
+    const generationMode = params.generationMode ?? 'ai_initial';
 
     const { data, error } = await adminDb
       .from('discussion_templates')
@@ -371,6 +373,13 @@ export async function generateModuleDiscussionTemplate(
           keyTakeaways: params.keyTakeaways,
           misconceptions: params.misconceptions ?? [],
           subtopics: params.subtopics,
+          generation: buildGenerationMetadata({
+            mode: generationMode,
+            scope: 'module',
+            trigger: params.generationTrigger ?? 'module_discussion_generation',
+            generatedAt: version,
+            attempts: generated.attempts,
+          }),
         },
         template: normalized,
         generated_by: 'auto-module',
@@ -389,6 +398,123 @@ export async function generateModuleDiscussionTemplate(
     console.error('[DiscussionTemplate] Error generating module template', error);
     return null;
   }
+}
+
+async function requestTemplateFromOpenAI(params: {
+  scope: 'subtopic' | 'module';
+  messages: Array<{ role: 'system' | 'user'; content: string }>;
+  maxCompletionTokens: number;
+}): Promise<{ template: DiscussionTemplatePayload; attempts: number } | null> {
+  for (let attempt = 1; attempt <= TEMPLATE_GENERATION_ATTEMPTS; attempt += 1) {
+    try {
+      const completion = await openai.chat.completions.create({
+        model: defaultOpenAIModel,
+        messages: params.messages,
+        response_format: responseFormat,
+        max_completion_tokens: params.maxCompletionTokens,
+      });
+
+      const choice = completion.choices?.[0];
+      const message = choice?.message as
+        | { content?: string | null; refusal?: string | null }
+        | undefined;
+      const raw = message?.content;
+
+      logCompletionDiagnostics({
+        scope: params.scope,
+        attempt,
+        finishReason: choice?.finish_reason ?? null,
+        refusal: message?.refusal ?? null,
+        usage: completion.usage ?? null,
+        hasContent: Boolean(raw && raw.trim()),
+      });
+
+      if (!raw || !raw.trim()) {
+        console.warn('[DiscussionTemplate] Empty response from OpenAI', {
+          scope: params.scope,
+          attempt,
+          model: defaultOpenAIModel,
+        });
+        continue;
+      }
+
+      const parsed = JSON.parse(raw);
+      if (!isValidTemplate(parsed)) {
+        console.error('[DiscussionTemplate] Validation failed: invalid template structure', {
+          scope: params.scope,
+          attempt,
+        });
+        continue;
+      }
+
+      return { template: parsed, attempts: attempt };
+    } catch (error) {
+      console.error('[DiscussionTemplate] OpenAI template attempt failed', {
+        scope: params.scope,
+        attempt,
+        error,
+      });
+    }
+  }
+
+  console.error('[DiscussionTemplate] Template generation exhausted attempts', {
+    scope: params.scope,
+    attempts: TEMPLATE_GENERATION_ATTEMPTS,
+    model: defaultOpenAIModel,
+  });
+  return null;
+}
+
+function logCompletionDiagnostics(params: {
+  scope: 'subtopic' | 'module';
+  attempt: number;
+  finishReason: string | null;
+  refusal: string | null;
+  usage: unknown;
+  hasContent: boolean;
+}) {
+  const usage = params.usage as
+    | {
+        prompt_tokens?: number;
+        completion_tokens?: number;
+        total_tokens?: number;
+        completion_tokens_details?: {
+          reasoning_tokens?: number;
+        };
+      }
+    | null;
+
+  console.info('[DiscussionTemplate] OpenAI completion diagnostics', {
+    scope: params.scope,
+    attempt: params.attempt,
+    finishReason: params.finishReason,
+    hasContent: params.hasContent,
+    refusal: params.refusal ? '[present]' : null,
+    promptTokens: usage?.prompt_tokens,
+    completionTokens: usage?.completion_tokens,
+    reasoningTokens: usage?.completion_tokens_details?.reasoning_tokens,
+    totalTokens: usage?.total_tokens,
+    model: defaultOpenAIModel,
+  });
+}
+
+function buildGenerationMetadata(params: {
+  mode: DiscussionTemplateGenerationMode;
+  scope: 'subtopic' | 'module';
+  trigger: string;
+  generatedAt: string;
+  attempts: number;
+}) {
+  return {
+    mode: params.mode,
+    scope: params.scope,
+    trigger: params.trigger,
+    provider: 'openai',
+    model: defaultOpenAIModel,
+    promptVersion: TEMPLATE_PROMPT_VERSION,
+    attempts: params.attempts,
+    generatedAt: params.generatedAt,
+  };
 }
 
 function buildSystemPrompt() {

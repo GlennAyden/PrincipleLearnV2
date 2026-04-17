@@ -87,14 +87,26 @@ async function getHandler(request: NextRequest) {
       });
 
       if (!resolvedSubtopicId) {
-        return NextResponse.json({ error: 'Discussion session not found' }, { status: 404 });
+        return NextResponse.json(
+          {
+            code: 'DISCUSSION_CONTEXT_NOT_FOUND',
+            error: 'Discussion session not found',
+          },
+          { status: 404 }
+        );
       }
 
       session = await fetchLatestSession(tokenPayload.userId, courseId!, resolvedSubtopicId);
     }
 
     if (!session || session.user_id !== tokenPayload.userId) {
-      return NextResponse.json({ error: 'Session not found' }, { status: 404 });
+      return NextResponse.json(
+        {
+          code: 'SESSION_NOT_FOUND',
+          error: 'Session not found',
+        },
+        { status: 404 }
+      );
     }
 
     const templateRow = await fetchTemplate(session);
