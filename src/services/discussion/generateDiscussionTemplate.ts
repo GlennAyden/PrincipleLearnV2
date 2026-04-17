@@ -66,9 +66,10 @@ interface ModuleDiscussionTemplateParams {
 type DiscussionTemplateGenerationMode = 'ai_initial' | 'ai_regenerated';
 
 const TEMPLATE_PROMPT_VERSION = 'discussion-template-v2';
-const TEMPLATE_GENERATION_ATTEMPTS = 2;
-const SUBTOPIC_MAX_COMPLETION_TOKENS = 3200;
-const MODULE_MAX_COMPLETION_TOKENS = 4200;
+const TEMPLATE_GENERATION_ATTEMPTS = 1;
+const TEMPLATE_OPENAI_TIMEOUT_MS = 42_000;
+const SUBTOPIC_MAX_COMPLETION_TOKENS = 2400;
+const MODULE_MAX_COMPLETION_TOKENS = 3000;
 
 function isTemplateStep(step: unknown): step is TemplateStep {
   if (!step || typeof step !== 'object') return false;
@@ -412,6 +413,9 @@ async function requestTemplateFromOpenAI(params: {
         messages: params.messages,
         response_format: responseFormat,
         max_completion_tokens: params.maxCompletionTokens,
+      }, {
+        maxRetries: 0,
+        timeout: TEMPLATE_OPENAI_TIMEOUT_MS,
       });
 
       const choice = completion.choices?.[0];
@@ -514,6 +518,7 @@ function buildGenerationMetadata(params: {
     promptVersion: TEMPLATE_PROMPT_VERSION,
     attempts: params.attempts,
     generatedAt: params.generatedAt,
+    status: 'ready',
   };
 }
 
@@ -538,23 +543,26 @@ function buildPrompt({
   misconceptions = [],
 }: DiscussionTemplateParams) {
   const thinkingSkillLines = buildThinkingSkillGuidanceLines();
+  const safeObjectives = limitStringArray(learningObjectives, 5, 260);
+  const safeTakeaways = limitStringArray(keyTakeaways, 5, 260);
+  const safeMisconceptions = limitStringArray(misconceptions, 4, 220);
 
   return [
     `Module Title: ${moduleTitle}`,
     `Subtopic Title: ${subtopicTitle}`,
     '',
     'Learning Objectives:',
-    ...learningObjectives.map((item) => `- ${item}`),
+    ...safeObjectives.map((item) => `- ${item}`),
     '',
     'Subtopic Summary:',
-    summary || '-',
+    truncateText(summary || '-', 1600),
     '',
     'Key Takeaways:',
-    ...keyTakeaways.map((item) => `- ${item}`),
-    keyTakeaways.length ? '' : '-',
+    ...safeTakeaways.map((item) => `- ${item}`),
+    safeTakeaways.length ? '' : '-',
     '',
     'Common Misconceptions or pitfalls:',
-    ...(misconceptions.length ? misconceptions.map((item) => `- ${item}`) : ['- None provided']),
+    ...(safeMisconceptions.length ? safeMisconceptions.map((item) => `- ${item}`) : ['- None provided']),
     '',
     'Panduan indikator kemampuan berpikir:',
     ...thinkingSkillLines,
@@ -586,21 +594,24 @@ function buildModulePrompt({
   subtopics,
 }: ModuleDiscussionTemplateParams) {
   const thinkingSkillLines = buildThinkingSkillGuidanceLines();
+  const safeObjectives = limitStringArray(learningObjectives, 8, 240);
+  const safeTakeaways = limitStringArray(keyTakeaways, 10, 240);
+  const safeMisconceptions = limitStringArray(misconceptions, 6, 220);
 
   const subtopicSections = subtopics.map((item, index) => {
     const header = `${index + 1}. ${item.title}`;
-    const summaryLine = item.summary ? `Ringkasan: ${item.summary}` : null;
+    const summaryLine = item.summary ? `Ringkasan: ${truncateText(item.summary, 900)}` : null;
     const objectiveLines =
       item.objectives.length > 0
-        ? ['Tujuan utama:', ...item.objectives.map((goal) => `- ${goal}`)]
+        ? ['Tujuan utama:', ...limitStringArray(item.objectives, 3, 220).map((goal) => `- ${goal}`)]
         : null;
     const takeawayLines =
       item.keyTakeaways.length > 0
-        ? ['Takeaways penting:', ...item.keyTakeaways.map((point) => `- ${point}`)]
+        ? ['Takeaways penting:', ...limitStringArray(item.keyTakeaways, 3, 220).map((point) => `- ${point}`)]
         : null;
     const misconceptionLines =
       item.misconceptions.length > 0
-        ? ['Miskonsepsi umum:', ...item.misconceptions.map((miss) => `- ${miss}`)]
+        ? ['Miskonsepsi umum:', ...limitStringArray(item.misconceptions, 2, 180).map((miss) => `- ${miss}`)]
         : null;
 
     return [header, summaryLine, objectiveLines, takeawayLines, misconceptionLines]
@@ -613,16 +624,16 @@ function buildModulePrompt({
     `Modul: ${moduleTitle}`,
     '',
     'Ringkasan modul:',
-    summary || '-',
+    truncateText(summary || '-', 2600),
     '',
     'Tujuan pembelajaran gabungan:',
-    ...(learningObjectives.length ? learningObjectives.map((goal) => `- ${goal}`) : ['-']),
+    ...(safeObjectives.length ? safeObjectives.map((goal) => `- ${goal}`) : ['-']),
     '',
     'Key takeaways gabungan:',
-    ...(keyTakeaways.length ? keyTakeaways.map((item) => `- ${item}`) : ['-']),
+    ...(safeTakeaways.length ? safeTakeaways.map((item) => `- ${item}`) : ['-']),
     '',
     'Miskonsepsi lintas subtopik:',
-    ...(misconceptions.length ? misconceptions.map((item) => `- ${item}`) : ['- None provided']),
+    ...(safeMisconceptions.length ? safeMisconceptions.map((item) => `- ${item}`) : ['- None provided']),
     '',
     'Detail setiap subtopik dalam modul:',
     ...subtopicSections,
@@ -674,4 +685,16 @@ function normalizeTemplate(template: DiscussionTemplatePayload) {
     learning_goals: template.learning_goals,
     closing_message: template.closing_message,
   };
+}
+
+function limitStringArray(values: string[], maxItems: number, maxLength: number) {
+  return values
+    .filter((value) => typeof value === 'string' && value.trim().length > 0)
+    .slice(0, maxItems)
+    .map((value) => truncateText(value.trim(), maxLength));
+}
+
+function truncateText(value: string, maxLength: number) {
+  if (!value || value.length <= maxLength) return value;
+  return `${value.slice(0, maxLength - 3).trim()}...`;
 }

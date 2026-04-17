@@ -24,6 +24,7 @@ type TemplateRecord = {
   id: string;
   template: DiscussionTemplate;
   version: string;
+  generated_by?: string | null;
 };
 
 interface DiscussionTemplate {
@@ -198,17 +199,24 @@ async function fetchTemplate(session: SessionRecord): Promise<TemplateRecord | n
 
   const { data, error } = await adminDb
     .from('discussion_templates')
-    .select('id, template, version')
+    .select('id, template, version, generated_by')
     .eq('subtopic_id', session.subtopic_id)
     .order('version', { ascending: false })
-    .limit(1);
+    .limit(25);
 
   if (error) {
     console.error('[DiscussionHistory] Failed to fetch template fallback', error);
     return null;
   }
 
-  return data?.[0] ?? null;
+  return (data ?? []).find(isUsableTemplateRow) ?? null;
+}
+
+function isUsableTemplateRow(row: TemplateRecord) {
+  if (row.generated_by === 'preparation-status') {
+    return false;
+  }
+  return Array.isArray(row.template?.phases) && row.template.phases.length > 0;
 }
 
 async function fetchMessages(sessionId: string) {
@@ -248,6 +256,11 @@ function flattenTemplate(template: DiscussionTemplate | null | undefined) {
 function getCurrentStep(template: DiscussionTemplate, messages: DiscussionMessage[]) {
   const steps = flattenTemplate(template);
   if (!steps.length) return null;
+
+  const pendingPrompt = getPendingPromptStep(messages);
+  if (pendingPrompt) {
+    return pendingPrompt;
+  }
 
   const agentMessages = messages.filter(
     (message: DiscussionMessage) =>
@@ -291,5 +304,39 @@ function getCurrentStep(template: DiscussionTemplate, messages: DiscussionMessag
     expected_type: matched.step.expected_type ?? 'open',
     options: matched.step.options ?? [],
     phase: matched.phaseId,
+  };
+}
+
+function getPendingPromptStep(messages: DiscussionMessage[]) {
+  const lastMessage = messages[messages.length - 1];
+  if (!lastMessage || lastMessage.role !== 'agent' || !lastMessage.metadata) {
+    return null;
+  }
+
+  const type = lastMessage.metadata.type;
+  if (type !== 'retry_prompt' && type !== 'remediation_prompt') {
+    return null;
+  }
+
+  const metadata = lastMessage.metadata;
+  const options = Array.isArray(metadata.options)
+    ? metadata.options.filter((option): option is string => typeof option === 'string')
+    : [];
+
+  return {
+    key:
+      typeof metadata.original_step_key === 'string'
+        ? metadata.original_step_key
+        : lastMessage.step_key ?? 'pending',
+    prompt: lastMessage.content,
+    expected_type:
+      typeof metadata.expected_type === 'string' ? metadata.expected_type : 'open',
+    options,
+    phase:
+      typeof metadata.phase === 'string'
+        ? metadata.phase
+        : type === 'remediation_prompt'
+        ? 'remediation'
+        : 'phase',
   };
 }

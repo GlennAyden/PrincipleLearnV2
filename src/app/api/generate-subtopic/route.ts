@@ -2,7 +2,7 @@
 
 import { NextResponse, after } from 'next/server';
 import type { NextRequest } from 'next/server';
-import { generateDiscussionTemplate, generateModuleDiscussionTemplate } from '@/services/discussion/generateDiscussionTemplate';
+import { queueDiscussionTemplatePreparation } from '@/services/discussion/templatePreparation';
 import { aiRateLimiter } from '@/lib/rate-limit';
 import { verifyToken } from '@/lib/jwt';
 import { GenerateSubtopicSchema, parseBody } from '@/lib/schemas';
@@ -657,73 +657,34 @@ async function postHandler(request: NextRequest) {
             }
 
             if (resolvedSubtopicId) {
-              // Defer discussion template generation to after response is sent
-              // This prevents Vercel timeout since these OpenAI calls can take 15-30s
-              after(async () => {
-                try {
-                  const { adminDb: bgAdminDb } = await import('@/lib/database');
-                  const templateResult = await generateDiscussionTemplate({
+              try {
+                await queueDiscussionTemplatePreparation({
+                  courseId,
+                  subtopicId: resolvedSubtopicId,
+                  moduleTitle,
+                  subtopicTitle: subtopic,
+                  mode: 'ai_initial',
+                  trigger: 'generate_subtopic_template_queued',
+                });
+
+                if (moduleRecord?.id && courseId && isDiscussionLabel(subtopic)) {
+                  await queueDiscussionTemplatePreparation({
                     courseId,
-                    subtopicId: resolvedSubtopicId,
+                    subtopicId: moduleRecord.id,
                     moduleTitle,
-                    subtopicTitle: subtopic,
-                    learningObjectives: Array.isArray(data.objectives) ? data.objectives : [],
-                    summary: buildDiscussionSummary(data),
-                    keyTakeaways: Array.isArray(data.keyTakeaways) ? data.keyTakeaways : [],
-                    misconceptions: extractMisconceptions(data),
-                    generationMode: 'ai_initial',
-                    generationTrigger: 'generate_subtopic_background',
+                    subtopicTitle: moduleTitle,
+                    mode: 'ai_initial',
+                    trigger: 'generate_subtopic_module_template_queued',
                   });
-
-                  if (templateResult) {
-                    console.log('[GenerateSubtopic] Discussion template stored (background)', {
-                      subtopicId: resolvedSubtopicId,
-                      templateId: templateResult.templateId,
-                      version: templateResult.templateVersion,
-                    });
-                  } else {
-                    console.warn('[GenerateSubtopic] Discussion template generation skipped');
-                  }
-
-                  if (
-                    moduleRecord?.id &&
-                    courseId &&
-                    isDiscussionLabel(subtopic)
-                  ) {
-                    const moduleContext = await assembleModuleDiscussionContext({
-                      adminDb: bgAdminDb,
-                      courseId,
-                      moduleTitle,
-                      moduleRecord,
-                    });
-
-                    if (moduleContext) {
-                      const moduleTemplateResult = await generateModuleDiscussionTemplate({
-                        courseId,
-                        subtopicId: moduleContext.moduleId,
-                        moduleTitle,
-                        summary: moduleContext.summary,
-                        learningObjectives: moduleContext.learningObjectives,
-                        keyTakeaways: moduleContext.keyTakeaways,
-                        misconceptions: moduleContext.misconceptions,
-                        subtopics: moduleContext.subtopics,
-                        generationMode: 'ai_initial',
-                        generationTrigger: 'generate_subtopic_module_background',
-                      });
-
-                      if (moduleTemplateResult) {
-                        console.log('[GenerateSubtopic] Module-level discussion template stored (background)', {
-                          moduleId: moduleContext.moduleId,
-                          templateId: moduleTemplateResult.templateId,
-                          version: moduleTemplateResult.templateVersion,
-                        });
-                      }
-                    }
-                  }
-                } catch (discussionError) {
-                  console.error('[GenerateSubtopic] Background discussion template generation failed', discussionError);
                 }
-              });
+              } catch (discussionQueueError) {
+                console.warn('[GenerateSubtopic] Discussion template queue failed', {
+                  courseId,
+                  moduleTitle,
+                  subtopic,
+                  error: discussionQueueError,
+                });
+              }
             }
           } catch (quizSaveError) {
             console.error('[GenerateSubtopic] Quiz database save failed', {
@@ -890,221 +851,9 @@ async function syncQuizQuestions(params: {
   }
 }
 
-interface SubtopicContent {
-  whatNext?: { summary?: string; encouragement?: string };
-  keyTakeaways?: string[];
-  objectives?: string[];
-  pages?: Array<{ title?: string; paragraphs?: string[] }>;
-  quiz?: QuizItem[];
-  commonPitfalls?: string[];
-  misconceptions?: string[];
-  [key: string]: unknown;
-}
-
-function buildDiscussionSummary(content: SubtopicContent | null): string {
-  const summaryParts: string[] = [];
-
-  if (content?.whatNext?.summary) {
-    summaryParts.push(content.whatNext.summary);
-  }
-
-  if (Array.isArray(content?.keyTakeaways) && content.keyTakeaways.length > 0) {
-    summaryParts.push(
-      'Key takeaways:\n' + content.keyTakeaways.map((item: string) => `- ${item}`).join('\n')
-    );
-  }
-
-  if (Array.isArray(content?.objectives) && content.objectives.length > 0) {
-    summaryParts.push(
-      'Learning objectives:\n' + content.objectives.map((item: string) => `- ${item}`).join('\n')
-    );
-  }
-
-  if (Array.isArray(content?.pages) && content.pages.length > 0) {
-    const firstPage = content.pages[0];
-    if (Array.isArray(firstPage?.paragraphs) && firstPage.paragraphs.length > 0) {
-      summaryParts.push(firstPage.paragraphs[0]);
-    }
-  }
-
-  return summaryParts.join('\n\n');
-}
-
-function extractMisconceptions(content: SubtopicContent | null): string[] {
-  if (Array.isArray(content?.commonPitfalls) && content.commonPitfalls.length > 0) {
-    return content.commonPitfalls;
-  }
-
-  return [];
-}
-
 function isDiscussionLabel(label: string): boolean {
   if (!label) return false;
   const normalized = label.toLowerCase();
   return normalized.includes('diskusi penutup') || normalized.includes('closing discussion');
-}
-
-type AdminDbType = typeof import('@/lib/database').adminDb;
-
-interface ModuleDiscussionContextParams {
-  adminDb: AdminDbType;
-  courseId: string;
-  moduleTitle: string;
-  moduleRecord: { id?: string; title?: string; content?: string | null };
-}
-
-interface ModuleDiscussionContextResult {
-  moduleId: string;
-  summary: string;
-  learningObjectives: string[];
-  keyTakeaways: string[];
-  misconceptions: string[];
-  subtopics: Array<{
-    title: string;
-    summary: string;
-    objectives: string[];
-    keyTakeaways: string[];
-    misconceptions: string[];
-  }>;
-}
-
-async function assembleModuleDiscussionContext({
-  adminDb,
-  courseId,
-  moduleTitle,
-  moduleRecord,
-}: ModuleDiscussionContextParams): Promise<ModuleDiscussionContextResult | null> {
-  if (!moduleRecord?.id) {
-    return null;
-  }
-
-  let outline: { subtopics?: Array<string | { title?: string; type?: string; isDiscussion?: boolean; overview?: string }> } | null = null;
-  try {
-    outline = moduleRecord.content ? JSON.parse(moduleRecord.content) : null;
-  } catch (parseError) {
-    console.warn('[GenerateSubtopic] Failed to parse module content for discussion aggregation', {
-      courseId,
-      moduleTitle,
-      error: parseError,
-    });
-  }
-
-  const moduleSubtopics = Array.isArray(outline?.subtopics) ? outline.subtopics : [];
-  const aggregated: ModuleDiscussionContextResult['subtopics'] = [];
-  const learningObjectives: string[] = [];
-  const keyTakeaways: string[] = [];
-  const misconceptions: string[] = [];
-
-  for (const sub of moduleSubtopics) {
-    const isDiscussion =
-      typeof sub === 'object' &&
-      (sub?.type === 'discussion' || sub?.isDiscussion === true || isDiscussionLabel(String(sub?.title ?? '')));
-    if (isDiscussion) {
-      continue;
-    }
-
-    const subtopicTitle =
-      typeof sub === 'string'
-        ? sub
-        : typeof sub?.title === 'string'
-          ? sub.title
-          : '';
-
-    if (!subtopicTitle) {
-      continue;
-    }
-
-    const cacheKey = buildSubtopicCacheKey(courseId, moduleTitle, subtopicTitle);
-    let cachedContent: SubtopicContent | null = null;
-
-    try {
-      const { data: cacheRow } = await adminDb
-        .from('subtopic_cache')
-        .select('content')
-        .eq('cache_key', cacheKey)
-        .maybeSingle();
-      cachedContent = (cacheRow?.content ?? null) as SubtopicContent | null;
-    } catch (cacheError) {
-      console.warn('[GenerateSubtopic] Failed to load cached content for module aggregation', {
-        courseId,
-        moduleTitle,
-        subtopicTitle,
-        error: cacheError,
-      });
-    }
-
-    const objectives = Array.isArray(cachedContent?.objectives)
-      ? cachedContent.objectives.filter((item: string) => typeof item === 'string' && item.trim())
-      : [];
-    const takeaways = Array.isArray(cachedContent?.keyTakeaways)
-      ? cachedContent.keyTakeaways.filter((item: string) => typeof item === 'string' && item.trim())
-      : [];
-    const subMisconceptions = extractMisconceptions(cachedContent);
-    const summaryText =
-      buildDiscussionSummary(cachedContent) ||
-      (typeof sub === 'object' && typeof sub.overview === 'string' ? sub.overview : '') ||
-      objectives.join('; ');
-
-    aggregated.push({
-      title: subtopicTitle,
-      summary: summaryText,
-      objectives,
-      keyTakeaways: takeaways,
-      misconceptions: subMisconceptions,
-    });
-
-    pushUniqueRange(learningObjectives, objectives);
-    pushUniqueRange(keyTakeaways, takeaways);
-    pushUniqueRange(misconceptions, subMisconceptions);
-  }
-
-  if (!aggregated.length) {
-    return null;
-  }
-
-  const summary = buildModuleSummary(moduleTitle, aggregated);
-
-  return {
-    moduleId: moduleRecord.id,
-    summary,
-    learningObjectives,
-    keyTakeaways,
-    misconceptions,
-    subtopics: aggregated,
-  };
-}
-
-function pushUniqueRange(target: string[], values: string[]) {
-  for (const value of values) {
-    if (typeof value === 'string' && value.trim() && !target.includes(value)) {
-      target.push(value);
-    }
-  }
-}
-
-function buildModuleSummary(
-  moduleTitle: string,
-  subtopics: ModuleDiscussionContextResult['subtopics']
-): string {
-  const sections = subtopics.map((item, index) => {
-    const lines: string[] = [`${index + 1}. ${item.title}`];
-    if (item.summary) {
-      lines.push(`Ringkasan: ${item.summary}`);
-    }
-    if (item.objectives.length) {
-      lines.push('Tujuan utama:');
-      lines.push(...item.objectives.map((goal) => `- ${goal}`));
-    }
-    if (item.keyTakeaways.length) {
-      lines.push('Poin penting:');
-      lines.push(...item.keyTakeaways.map((point) => `- ${point}`));
-    }
-    return lines.join('\n');
-  });
-
-  return [
-    `Modul "${moduleTitle}" mencakup ${subtopics.length} subtopik utama dengan fokus berikut:`,
-    ...sections,
-  ].join('\n\n');
 }
 

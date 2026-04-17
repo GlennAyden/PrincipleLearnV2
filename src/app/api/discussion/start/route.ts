@@ -1,9 +1,8 @@
-import { after, NextRequest, NextResponse } from 'next/server';
+import { NextRequest, NextResponse } from 'next/server';
 
 import { verifyToken } from '@/lib/jwt';
 import { adminDb } from '@/lib/database';
 import { withApiLogging } from '@/lib/api-logger';
-import { buildSubtopicCacheKey } from '@/lib/quiz-sync';
 import { evaluateModuleDiscussionPrerequisites } from '@/lib/discussion-prerequisites';
 import { resolveDiscussionSubtopicId } from '@/lib/discussion/resolveSubtopic';
 import { assertCourseOwnership, toOwnershipError } from '@/lib/ownership';
@@ -16,9 +15,13 @@ import {
   normalizeThinkingSkillMeta,
 } from '@/lib/discussion/thinkingSkills';
 import {
-  generateDiscussionTemplate,
-  generateModuleDiscussionTemplate,
-} from '@/services/discussion/generateDiscussionTemplate';
+  DISCUSSION_TEMPLATE_PREPARING_CODE,
+  DISCUSSION_TEMPLATE_PREPARING_MESSAGE,
+  fetchReadyDiscussionTemplate,
+  isDiscussionLabel,
+  normalizeIdentifier,
+  queueDiscussionTemplatePreparation,
+} from '@/services/discussion/templatePreparation';
 
 interface DiscussionStep {
   key: string;
@@ -34,13 +37,7 @@ interface DiscussionTemplate {
     steps?: Array<DiscussionStep>;
   }>;
   closing_message?: string;
-  learning_goals?: Array<{
-    id?: string;
-    description?: string;
-    rubric?: GoalRubric;
-    thinking_skill?: unknown;
-    thinkingSkill?: unknown;
-  }>;
+  learning_goals?: unknown[];
 }
 
 interface GoalRubric {
@@ -82,23 +79,6 @@ interface DiscussionMessage {
   metadata: Record<string, unknown> | null;
   created_at: string;
 }
-
-interface SubtopicCacheContent {
-  objectives?: string[];
-  keyTakeaways?: string[];
-  commonPitfalls?: string[];
-  misconceptions?: string[];
-  whatNext?: { summary?: string };
-  pages?: Array<{ paragraphs?: string[] }>;
-  [key: string]: unknown;
-}
-
-const DISCUSSION_TEMPLATE_PREPARING_CODE = 'DISCUSSION_TEMPLATE_PREPARING';
-const DISCUSSION_TEMPLATE_PREPARING_MESSAGE =
-  'Diskusi sedang disiapkan. Coba tekan mulai ulang diskusi beberapa saat lagi.';
-const TEMPLATE_PREPARATION_COOLDOWN_MS = 30_000;
-const templatePreparationLocks = new Set<string>();
-const templatePreparationCooldowns = new Map<string, number>();
 
 async function postHandler(request: NextRequest) {
   try {
@@ -173,28 +153,32 @@ async function postHandler(request: NextRequest) {
       }
     }
 
-    const templateRow = await fetchLatestTemplate({ subtopicId, courseId, subtopicTitle, moduleTitle });
+    const templateRow = await fetchReadyDiscussionTemplate({ subtopicId, courseId, subtopicTitle, moduleTitle });
     if (!templateRow) {
-      scheduleTemplatePreparation({
+      const preparation = await queueDiscussionTemplatePreparation({
         courseId,
         subtopicId,
         subtopicTitle,
         moduleTitle,
-        generationMode: 'ai_regenerated',
-        generationTrigger: 'discussion_start_missing_template',
+        mode: 'ai_regenerated',
+        trigger: 'discussion_start_missing_template',
       });
 
       const response = NextResponse.json(
         {
           code: DISCUSSION_TEMPLATE_PREPARING_CODE,
-          status: 'preparing',
-          error: DISCUSSION_TEMPLATE_PREPARING_MESSAGE,
-          message: DISCUSSION_TEMPLATE_PREPARING_MESSAGE,
+          status: preparation.status === 'failed' ? 'failed' : 'preparing',
+          error: preparation.message || DISCUSSION_TEMPLATE_PREPARING_MESSAGE,
+          message: preparation.message || DISCUSSION_TEMPLATE_PREPARING_MESSAGE,
+          retryAfterSeconds: preparation.retryAfterSeconds,
+          preparation: {
+            jobId: preparation.jobId,
+            status: preparation.status,
+          },
         },
         { status: 202 }
       );
-      response.headers.set('x-log-error-message', DISCUSSION_TEMPLATE_PREPARING_CODE);
-      response.headers.set('Retry-After', '30');
+      response.headers.set('Retry-After', String(preparation.retryAfterSeconds || 30));
       return response;
     }
 
@@ -290,106 +274,6 @@ export const POST = withApiLogging(postHandler, {
   label: 'discussion.start',
 });
 
-async function fetchLatestTemplate(params: {
-  subtopicId: string;
-  courseId?: string;
-  subtopicTitle?: string | null;
-  moduleTitle?: string | null;
-}): Promise<TemplateRecord | null> {
-  const { subtopicId, courseId, subtopicTitle, moduleTitle } = params;
-
-  let templateQuery = adminDb
-    .from('discussion_templates')
-    .select('id, version, template, source')
-    .eq('subtopic_id', subtopicId);
-
-  if (courseId) {
-    templateQuery = templateQuery.eq('course_id', courseId);
-  }
-
-  const { data, error } = await templateQuery
-    .order('version', { ascending: false })
-    .limit(25);
-
-  if (!error && data?.length) {
-    const exactMatch = findMatchingTemplate(data, { subtopicTitle, moduleTitle });
-    if (exactMatch) {
-      return exactMatch;
-    }
-    if (!subtopicTitle) {
-      return data[0];
-    }
-  }
-
-  if (courseId && subtopicTitle) {
-    const { data: fallback, error: fallbackError } = await adminDb
-      .from('discussion_templates')
-      .select('id, version, template, source')
-      .eq('course_id', courseId)
-      .order('version', { ascending: false })
-      .limit(100);
-
-    if (!fallbackError && fallback?.length) {
-      const exactMatch = findMatchingTemplate(fallback, { subtopicTitle, moduleTitle });
-      if (exactMatch) {
-        return exactMatch;
-      }
-    }
-  }
-
-  if (error) {
-    console.error('[DiscussionStart] Failed to load template', error);
-  }
-
-  return null;
-}
-
-function findMatchingTemplate(
-  rows: TemplateRecord[],
-  params: { subtopicTitle?: string | null; moduleTitle?: string | null },
-): TemplateRecord | null {
-  const subtopicTitle = normalizeIdentifier(params.subtopicTitle ?? '');
-  const moduleTitle = normalizeIdentifier(params.moduleTitle ?? '');
-
-  for (const row of rows) {
-    if (sourceMatchesContext(row.source, { subtopicTitle, moduleTitle })) {
-      return row;
-    }
-  }
-
-  return null;
-}
-
-function sourceMatchesContext(
-  source: Record<string, unknown> | undefined,
-  params: { subtopicTitle: string; moduleTitle: string },
-) {
-  const sourceScope = typeof source?.scope === 'string' ? source.scope : '';
-  const sourceSubtopicTitle = normalizeIdentifier(
-    typeof source?.subtopicTitle === 'string' ? source.subtopicTitle : '',
-  );
-  const sourceModuleTitle = normalizeIdentifier(
-    typeof source?.moduleTitle === 'string' ? source.moduleTitle : '',
-  );
-  const wantsModule =
-    (params.subtopicTitle && isDiscussionLabel(params.subtopicTitle)) ||
-    (params.moduleTitle && params.subtopicTitle === params.moduleTitle);
-
-  if (wantsModule) {
-    return (
-      sourceScope === 'module' &&
-      Boolean(params.moduleTitle) &&
-      (sourceModuleTitle === params.moduleTitle || sourceSubtopicTitle === params.moduleTitle)
-    );
-  }
-
-  if (sourceScope === 'module') {
-    return false;
-  }
-
-  return Boolean(params.subtopicTitle) && sourceSubtopicTitle === params.subtopicTitle;
-}
-
 async function fetchExistingSession(userId: string, courseId: string, subtopicId: string): Promise<SessionRecord | null> {
   const { data, error } = await adminDb
     .from('discussion_sessions')
@@ -481,175 +365,6 @@ async function fetchMessages(sessionId: string) {
   return data ?? [];
 }
 
-interface TryRegenerateParams {
-  courseId: string;
-  subtopicId: string;
-  subtopicTitle?: string | null;
-  moduleTitle?: string | null;
-  generationMode?: 'ai_initial' | 'ai_regenerated';
-  generationTrigger?: string;
-}
-
-function scheduleTemplatePreparation(params: TryRegenerateParams) {
-  const lockKey = [
-    params.courseId,
-    params.subtopicId,
-    normalizeIdentifier(params.moduleTitle ?? ''),
-    normalizeIdentifier(params.subtopicTitle ?? ''),
-  ].join(':');
-
-  if (templatePreparationLocks.has(lockKey)) {
-    console.info('[DiscussionStart] Template preparation already queued', {
-      courseId: params.courseId,
-      subtopicId: params.subtopicId,
-    });
-    return;
-  }
-
-  const lastAttemptAt = templatePreparationCooldowns.get(lockKey) ?? 0;
-  if (Date.now() - lastAttemptAt < TEMPLATE_PREPARATION_COOLDOWN_MS) {
-    console.info('[DiscussionStart] Template preparation cooldown active', {
-      courseId: params.courseId,
-      subtopicId: params.subtopicId,
-    });
-    return;
-  }
-
-  templatePreparationCooldowns.set(lockKey, Date.now());
-  templatePreparationLocks.add(lockKey);
-  after(async () => {
-    try {
-      const regenerated = await tryRegenerateTemplate(params);
-      console.info('[DiscussionStart] Background template preparation finished', {
-        courseId: params.courseId,
-        subtopicId: params.subtopicId,
-        regenerated,
-      });
-    } catch (error) {
-      console.error('[DiscussionStart] Background template preparation failed', error);
-    } finally {
-      templatePreparationLocks.delete(lockKey);
-    }
-  });
-}
-
-async function tryRegenerateTemplate({
-  courseId,
-  subtopicId,
-  subtopicTitle,
-  moduleTitle,
-  generationMode = 'ai_regenerated',
-  generationTrigger = 'discussion_start_regeneration',
-}: TryRegenerateParams): Promise<boolean> {
-  try {
-    const normalizedModuleTitle = moduleTitle?.trim() || '';
-    const normalizedSubtopicTitle = subtopicTitle?.trim() || '';
-
-    const { data: subtopicRecord, error: subtopicError } = await adminDb
-      .from('subtopics')
-      .select('id, title, content')
-      .eq('id', subtopicId)
-      .maybeSingle();
-
-    if (subtopicError) {
-      console.warn('[DiscussionStart] Failed to load subtopic for regeneration', subtopicError);
-      return false;
-    }
-
-    if (!subtopicRecord) {
-      console.warn('[DiscussionStart] Subtopic not found for regeneration', {
-        courseId,
-        subtopicId,
-      });
-      return false;
-    }
-
-    const fallbackTitle = typeof subtopicRecord.title === 'string' ? subtopicRecord.title : '';
-    const moduleName = (normalizedModuleTitle || fallbackTitle || 'Modul').trim();
-    const focusTitle = (normalizedSubtopicTitle || fallbackTitle || moduleName).trim();
-
-    const isModuleScope =
-      normalizeIdentifier(focusTitle) === normalizeIdentifier(moduleName) ||
-      isDiscussionLabel(focusTitle);
-
-    if (isModuleScope) {
-      const context = await assembleModuleDiscussionContextFromDb({
-        courseId,
-        moduleTitle: moduleName,
-        moduleRecord: subtopicRecord,
-      });
-
-      if (!context) {
-        console.warn('[DiscussionStart] Unable to assemble module discussion context', {
-          courseId,
-          moduleTitle: moduleName,
-        });
-        return false;
-      }
-
-      const result = await generateModuleDiscussionTemplate({
-        courseId,
-        subtopicId: context.moduleId,
-        moduleTitle: moduleName,
-        summary: context.summary,
-        learningObjectives: context.learningObjectives,
-        keyTakeaways: context.keyTakeaways,
-        misconceptions: context.misconceptions,
-        subtopics: context.subtopics,
-        generationMode,
-        generationTrigger,
-      });
-
-      return Boolean(result);
-    }
-
-    const cacheKey = buildSubtopicCacheKey(courseId, moduleName, focusTitle);
-    const { data: cacheRow, error: cacheError } = await adminDb
-      .from('subtopic_cache')
-      .select('content')
-      .eq('cache_key', cacheKey)
-      .maybeSingle();
-
-    if (cacheError) {
-      console.warn('[DiscussionStart] Failed to load cached subtopic content for regeneration', {
-        courseId,
-        cacheKey,
-        error: cacheError,
-      });
-      return false;
-    }
-
-    const cacheContent = (cacheRow?.content ?? null) as SubtopicCacheContent | null;
-    if (!cacheContent) {
-      console.warn('[DiscussionStart] Cached content missing for regeneration', { cacheKey });
-      return false;
-    }
-
-    const learningObjectives = toStringArray(cacheContent?.objectives);
-    const keyTakeaways = toStringArray(cacheContent?.keyTakeaways);
-    const misconceptions = extractMisconceptions(cacheContent);
-    const summary = buildDiscussionSummary(cacheContent);
-
-    const result = await generateDiscussionTemplate({
-      courseId,
-      subtopicId,
-      moduleTitle: moduleName,
-      subtopicTitle: focusTitle,
-      learningObjectives,
-      summary,
-      keyTakeaways,
-      misconceptions,
-      generationMode,
-      generationTrigger,
-    });
-
-    return Boolean(result);
-  } catch (regenerateError) {
-    console.error('[DiscussionStart] Failed to regenerate discussion template', regenerateError);
-    return false;
-  }
-}
-
 function flattenTemplate(template: DiscussionTemplate | null | undefined) {
   const phases = Array.isArray(template?.phases) ? template.phases : [];
   const flattened: Array<{ phaseId: string; step: DiscussionStep }> = [];
@@ -672,6 +387,11 @@ function flattenTemplate(template: DiscussionTemplate | null | undefined) {
 function getCurrentStep(template: DiscussionTemplate, messages: DiscussionMessage[]) {
   const steps = flattenTemplate(template);
   if (!steps.length) return null;
+
+  const pendingPrompt = getPendingPromptStep(messages);
+  if (pendingPrompt) {
+    return pendingPrompt;
+  }
 
   const agentMessages = messages.filter(
     (message: DiscussionMessage) =>
@@ -718,20 +438,60 @@ function getCurrentStep(template: DiscussionTemplate, messages: DiscussionMessag
   };
 }
 
+function getPendingPromptStep(messages: DiscussionMessage[]) {
+  const lastMessage = messages[messages.length - 1];
+  if (!lastMessage || lastMessage.role !== 'agent' || !lastMessage.metadata) {
+    return null;
+  }
+
+  const type = lastMessage.metadata.type;
+  if (type !== 'retry_prompt' && type !== 'remediation_prompt') {
+    return null;
+  }
+
+  const metadata = lastMessage.metadata;
+  const options = Array.isArray(metadata.options)
+    ? metadata.options.filter((option): option is string => typeof option === 'string')
+    : [];
+
+  return {
+    key:
+      typeof metadata.original_step_key === 'string'
+        ? metadata.original_step_key
+        : lastMessage.step_key ?? 'pending',
+    prompt: lastMessage.content,
+    expected_type:
+      typeof metadata.expected_type === 'string' ? metadata.expected_type : 'open',
+    options,
+    phase:
+      typeof metadata.phase === 'string'
+        ? metadata.phase
+        : type === 'remediation_prompt'
+        ? 'remediation'
+        : 'phase',
+  };
+}
+
 function buildInitialGoals(goals: DiscussionTemplate['learning_goals']): DiscussionSessionGoal[] {
   if (!Array.isArray(goals)) {
     return [];
   }
 
   return goals
-    .filter((goal) => goal && typeof goal.id === 'string')
+    .filter((goal): goal is Record<string, unknown> => {
+      return Boolean(goal) && typeof goal === 'object' && typeof (goal as Record<string, unknown>).id === 'string';
+    })
     .map((goal) => ({
-      id: goal.id!,
-      description: goal.description ?? '',
-      rubric: goal.rubric ?? null,
+      id: String(goal.id),
+      description: typeof goal.description === 'string' ? goal.description : '',
+      rubric: isGoalRubric(goal.rubric) ? goal.rubric : null,
       thinkingSkill: normalizeThinkingSkillMeta(goal.thinking_skill ?? goal.thinkingSkill),
       covered: false,
     }));
+}
+
+function isGoalRubric(value: unknown): value is GoalRubric {
+  return Boolean(value) && typeof value === 'object' && !Array.isArray(value);
 }
 
 function serializeSession(session: SessionRecord) {
@@ -775,208 +535,4 @@ async function ensureProgressRecord(userId: string, courseId: string, subtopicId
   } catch (progressError) {
     console.warn('[DiscussionStart] ensureProgressRecord error', progressError);
   }
-}
-
-function toStringArray(value: unknown): string[] {
-  if (!Array.isArray(value)) return [];
-  return value
-    .map((item) => (typeof item === 'string' ? item.trim() : ''))
-    .filter((item) => item.length > 0);
-}
-
-function buildDiscussionSummary(content: SubtopicCacheContent | null): string {
-  const summaryParts: string[] = [];
-
-  if (content?.whatNext?.summary) {
-    summaryParts.push(String(content.whatNext.summary));
-  }
-
-  if (Array.isArray(content?.keyTakeaways) && content.keyTakeaways.length > 0) {
-    summaryParts.push(
-      'Poin penting:\n' + content.keyTakeaways.map((item: string) => `- ${item}`).join('\n')
-    );
-  }
-
-  if (Array.isArray(content?.objectives) && content.objectives.length > 0) {
-    summaryParts.push(
-      'Tujuan belajar:\n' + content.objectives.map((item: string) => `- ${item}`).join('\n')
-    );
-  }
-
-  if (Array.isArray(content?.pages) && content.pages.length > 0) {
-    const firstPage = content.pages[0];
-    if (Array.isArray(firstPage?.paragraphs) && firstPage.paragraphs.length > 0) {
-      summaryParts.push(firstPage.paragraphs[0]);
-    }
-  }
-
-  return summaryParts.join('\n\n');
-}
-
-function extractMisconceptions(content: SubtopicCacheContent | null): string[] {
-  if (Array.isArray(content?.commonPitfalls) && content.commonPitfalls.length > 0) {
-    return toStringArray(content.commonPitfalls);
-  }
-
-  if (Array.isArray(content?.misconceptions) && content.misconceptions.length > 0) {
-    return toStringArray(content.misconceptions);
-  }
-
-  return [];
-}
-
-function normalizeIdentifier(value: string) {
-  return value.toLowerCase().replace(/\s+/g, ' ').trim();
-}
-
-function isDiscussionLabel(label: string): boolean {
-  const normalized = normalizeIdentifier(label);
-  return (
-    normalized.includes('diskusi penutup') ||
-    normalized.includes('closing discussion') ||
-    normalized.includes('ringkasan diskusi')
-  );
-}
-
-interface ModuleDiscussionContextParams {
-  courseId: string;
-  moduleTitle: string;
-  moduleRecord: { id: string; title?: string | null; content?: string | null };
-}
-
-interface ModuleDiscussionContextResult {
-  moduleId: string;
-  summary: string;
-  learningObjectives: string[];
-  keyTakeaways: string[];
-  misconceptions: string[];
-  subtopics: Array<{
-    title: string;
-    summary: string;
-    objectives: string[];
-    keyTakeaways: string[];
-    misconceptions: string[];
-  }>;
-}
-
-async function assembleModuleDiscussionContextFromDb({
-  courseId,
-  moduleTitle,
-  moduleRecord,
-}: ModuleDiscussionContextParams): Promise<ModuleDiscussionContextResult | null> {
-  let outline: { subtopics?: Array<string | { title?: string; overview?: string }> } | null = null;
-  try {
-    outline = moduleRecord?.content ? JSON.parse(String(moduleRecord.content)) : null;
-  } catch (parseError) {
-    console.warn('[DiscussionStart] Failed to parse module content for aggregation', {
-      courseId,
-      moduleTitle,
-      error: parseError,
-    });
-  }
-
-  const moduleSubtopics = Array.isArray(outline?.subtopics) ? outline.subtopics : [];
-  const aggregated: ModuleDiscussionContextResult['subtopics'] = [];
-  const learningObjectives: string[] = [];
-  const keyTakeaways: string[] = [];
-  const misconceptions: string[] = [];
-
-  for (const sub of moduleSubtopics) {
-    const candidateTitle =
-      typeof sub === 'string'
-        ? sub
-        : typeof sub?.title === 'string'
-        ? sub.title
-        : '';
-
-    if (!candidateTitle || isDiscussionLabel(candidateTitle)) {
-      continue;
-    }
-
-    const cacheKey = buildSubtopicCacheKey(courseId, moduleTitle, candidateTitle);
-    const { data: cacheRow, error: cacheError } = await adminDb
-      .from('subtopic_cache')
-      .select('content')
-      .eq('cache_key', cacheKey)
-      .maybeSingle();
-
-    if (cacheError) {
-      console.warn('[DiscussionStart] Failed to load cached content for module aggregation', {
-        courseId,
-        moduleTitle,
-        candidateTitle,
-        error: cacheError,
-      });
-    }
-
-    const cachedContent = (cacheRow?.content ?? null) as SubtopicCacheContent | null;
-    const objectives = toStringArray(cachedContent?.objectives);
-    const takeaways = toStringArray(cachedContent?.keyTakeaways);
-    const subMisconceptions = extractMisconceptions(cachedContent);
-    const summaryText =
-      buildDiscussionSummary(cachedContent) ||
-      (typeof sub === 'object' && typeof sub?.overview === 'string' ? sub.overview : '') ||
-      objectives.join('; ');
-
-    aggregated.push({
-      title: candidateTitle,
-      summary: summaryText,
-      objectives,
-      keyTakeaways: takeaways,
-      misconceptions: subMisconceptions,
-    });
-
-    pushUniqueRange(learningObjectives, objectives);
-    pushUniqueRange(keyTakeaways, takeaways);
-    pushUniqueRange(misconceptions, subMisconceptions);
-  }
-
-  if (!aggregated.length) {
-    return null;
-  }
-
-  const summary = buildModuleSummary(moduleTitle, aggregated);
-
-  return {
-    moduleId: moduleRecord.id,
-    summary,
-    learningObjectives,
-    keyTakeaways,
-    misconceptions,
-    subtopics: aggregated,
-  };
-}
-
-function pushUniqueRange(target: string[], values: string[]) {
-  for (const value of values) {
-    if (value && !target.includes(value)) {
-      target.push(value);
-    }
-  }
-}
-
-function buildModuleSummary(
-  moduleTitle: string,
-  subtopics: ModuleDiscussionContextResult['subtopics']
-): string {
-  const sections = subtopics.map((item, index) => {
-    const lines: string[] = [`${index + 1}. ${item.title}`];
-    if (item.summary) {
-      lines.push(`Ringkasan: ${item.summary}`);
-    }
-    if (item.objectives.length) {
-      lines.push('Tujuan utama:');
-      lines.push(...item.objectives.map((goal) => `- ${goal}`));
-    }
-    if (item.keyTakeaways.length) {
-      lines.push('Poin penting:');
-      lines.push(...item.keyTakeaways.map((point) => `- ${point}`));
-    }
-    return lines.join('\n');
-  });
-
-  return [
-    `Modul "${moduleTitle}" mencakup ${subtopics.length} subtopik utama dengan fokus berikut:`,
-    ...sections,
-  ].join('\n\n');
 }

@@ -825,10 +825,14 @@ Predefined discussion flow templates for each course and subtopic.
 | `course_id` | `uuid` | **FK** -> `courses(id)` | Course context |
 | `subtopic_id` | `uuid` | **FK** -> `subtopics(id)` | Subtopic context |
 | `version` | `text` | | Template version string |
-| `source` | `jsonb` | | Template source/origin metadata. Runtime stores `source.generation` for research provenance: `mode` (`ai_initial` or `ai_regenerated`), `scope`, `trigger`, `provider`, `model`, `promptVersion`, `attempts`, and `generatedAt`. |
+| `source` | `jsonb` | | Template source/origin metadata. Runtime stores `source.generation` for research provenance: `mode` (`ai_initial` or `ai_regenerated`), `scope`, `trigger`, `provider`, `model`, `promptVersion`, `attempts`, `status`, and `generatedAt`. |
 | `template` | `jsonb` | | Discussion flow structure and steps |
 | `generated_by` | `text` | | Runtime compatibility marker (`auto` for subtopic templates, `auto-module` for module templates). Research labels should read `source.generation.mode` instead of overloading this column. |
 | `created_at` | `timestamptz` | default `now()` | Creation timestamp |
+
+**Runtime status rows:**
+- Valid templates are rows with `generated_by = 'auto'` or `generated_by = 'auto-module'` and `source.generation.status` missing or `ready`.
+- Temporary preparation rows use `generated_by = 'preparation-status'` and store `source.generation.status` as `queued`, `running`, `failed`, or `superseded`. These rows are operational status only and must not be used to start a discussion session.
 
 **RLS Policies:**
 - Public read: `USING (true)` -- All authenticated users can read templates
