@@ -26,6 +26,7 @@ jest.mock('@/lib/database', () => ({
             limit: jest.fn().mockReturnThis(),
             single: jest.fn().mockReturnThis(),
             insert: jest.fn().mockResolvedValue({ data: null, error: null }),
+            update: jest.fn().mockResolvedValue({ data: null, error: null }),
         })),
     },
     DatabaseError: class DatabaseError extends Error {
@@ -43,9 +44,11 @@ jest.mock('bcryptjs', () => ({
 
 // Mock JWT module — use real implementation for token generation
 jest.mock('@/lib/jwt', () => ({
+    ACCESS_TOKEN_MAX_AGE_SECONDS: 15 * 60,
+    REFRESH_TOKEN_MAX_AGE_SECONDS: 3 * 24 * 60 * 60,
     generateAccessToken: jest.fn(() => 'mock-access-token'),
     generateRefreshToken: jest.fn(() => 'mock-refresh-token'),
-    getTokenExpiration: jest.fn(() => new Date(Date.now() + 7 * 24 * 60 * 60 * 1000)),
+    getTokenExpiration: jest.fn(() => new Date(Date.now() + 3 * 24 * 60 * 60 * 1000)),
     verifyToken: jest.fn(),
 }));
 
@@ -57,16 +60,6 @@ jest.mock('@/lib/rate-limit', () => ({
     registerRateLimiter: {
         isAllowed: jest.fn().mockReturnValue(true),
     },
-}));
-
-// Mock validation — use real implementation
-jest.mock('@/lib/validation', () => ({
-    validateEmail: jest.fn((email: string) => {
-        if (!email || email.trim() === '') return { valid: false, message: 'Email is required' };
-        const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
-        if (!emailRegex.test(email)) return { valid: false, message: 'Please enter a valid email address' };
-        return { valid: true };
-    }),
 }));
 
 import { POST } from '@/app/api/auth/login/route';

@@ -11,6 +11,7 @@ import {
   type DiscussionStep,
   type ModulePrerequisiteDetails,
 } from '@/types/discussion';
+import { apiFetch } from '@/lib/api-client';
 
 type OutlineSubtopic = {
   title: string;
@@ -159,9 +160,7 @@ export default function DiscussionModulePage() {
       setCourseLoading(true);
       setCourseError('');
       try {
-        const response = await fetch(`/api/courses/${courseId}`, {
-          credentials: 'include',
-        });
+        const response = await apiFetch(`/api/courses/${courseId}`);
         if (!response.ok) {
           throw new Error('Gagal memuat data kursus');
         }
@@ -273,9 +272,7 @@ export default function DiscussionModulePage() {
           courseId,
           moduleId: String(moduleSubtopicId),
         });
-        const response = await fetch(`/api/discussion/module-status?${params.toString()}`, {
-          credentials: 'include',
-        });
+        const response = await apiFetch(`/api/discussion/module-status?${params.toString()}`);
 
         if (!response.ok) {
           const payload = await response.json().catch(() => null);
@@ -337,10 +334,8 @@ export default function DiscussionModulePage() {
           payload.subtopicId = moduleSubtopicId;
         }
 
-        const response = await fetch('/api/discussion/start', {
+        const response = await apiFetch('/api/discussion/start', {
           method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          credentials: 'include',
           body: JSON.stringify(payload),
         });
 
@@ -394,9 +389,7 @@ export default function DiscussionModulePage() {
         if (apiSubtopicTitle) {
           params.set('subtopicTitle', apiSubtopicTitle);
         }
-        const response = await fetch(`/api/discussion/history?${params.toString()}`, {
-          credentials: 'include',
-        });
+        const response = await apiFetch(`/api/discussion/history?${params.toString()}`);
 
         if (response.status === 404) {
           await startNewSession();
@@ -465,10 +458,8 @@ export default function DiscussionModulePage() {
     setError('');
     setEffortWarning('');
     try {
-      const response = await fetch('/api/discussion/respond', {
+      const response = await apiFetch('/api/discussion/respond', {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        credentials: 'include',
         body: JSON.stringify({
           sessionId: session.id,
           message: payload,

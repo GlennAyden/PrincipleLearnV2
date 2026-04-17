@@ -63,16 +63,70 @@ interface CourseState {
   subtopicDetails?: Record<number, Record<number, SubtopicResponse>>;
 }
 
+type ContentLoadState = 'idle' | 'loading' | 'ready' | 'blocked' | 'error';
+
+const DEFAULT_SKELETON_STEP_COUNT = 5;
+const MAX_SKELETON_STEP_COUNT = 12;
+
+function normalizeSkeletonProgress(
+  stepCount: number | undefined,
+  activeStepIndex: number | undefined,
+) {
+  const activeIndex =
+    typeof activeStepIndex === 'number' && Number.isFinite(activeStepIndex)
+      ? Math.max(0, Math.floor(activeStepIndex))
+      : 0;
+  const fallbackCount = Math.max(
+    DEFAULT_SKELETON_STEP_COUNT,
+    activeIndex + 1,
+  );
+  const normalizedCount =
+    typeof stepCount === 'number' && Number.isFinite(stepCount)
+      ? Math.floor(stepCount)
+      : fallbackCount;
+  const safeStepCount = Math.min(
+    MAX_SKELETON_STEP_COUNT,
+    Math.max(1, normalizedCount),
+  );
+
+  return {
+    activeIndex: Math.min(activeIndex, safeStepCount - 1),
+    stepCount: safeStepCount,
+  };
+}
+
 // Skeleton loading component for subtopic content
-const SkeletonLoading = () => {
+const SkeletonLoading = ({
+  stepCount,
+  activeStepIndex,
+}: {
+  stepCount?: number;
+  activeStepIndex?: number;
+}) => {
+  const skeletonProgress = normalizeSkeletonProgress(stepCount, activeStepIndex);
+
   return (
     <div className={styles.skeletonContainer}>
       {/* Progress bar */}
-      <div className={styles.progressBar}>
-        {Array.from({ length: 7 }).map((_, i) => (
+      <div
+        className={styles.progressBar}
+        aria-label={`Memuat section ${skeletonProgress.activeIndex + 1} dari ${skeletonProgress.stepCount}`}
+      >
+        {Array.from({ length: skeletonProgress.stepCount }).map((_, i) => (
           <span
             key={i}
-            className={`${styles.progressStep} ${i === 0 ? styles.activeStep : ''}`}
+            className={[
+              styles.progressStep,
+              styles.skeletonProgressStep,
+              i < skeletonProgress.activeIndex
+                ? styles.skeletonProgressStepComplete
+                : '',
+              i === skeletonProgress.activeIndex
+                ? styles.skeletonProgressStepCurrent
+                : '',
+            ]
+              .filter(Boolean)
+              .join(' ')}
           />
         ))}
       </div>
@@ -102,6 +156,60 @@ const SkeletonLoading = () => {
   );
 };
 
+function buildSubtopicDetailCacheKey(
+  courseId: string,
+  moduleIndex: number,
+  subtopicIndex: number,
+) {
+  return `pl_subtopic_detail_v1_${courseId}_${moduleIndex}_${subtopicIndex}`;
+}
+
+function isSubtopicResponse(value: unknown): value is SubtopicResponse {
+  if (!value || typeof value !== 'object') return false;
+
+  const candidate = value as Partial<SubtopicResponse>;
+  return (
+    Array.isArray(candidate.objectives) &&
+    Array.isArray(candidate.pages) &&
+    candidate.pages.every(
+      (page) =>
+        page &&
+        typeof page.title === 'string' &&
+        Array.isArray(page.paragraphs) &&
+        page.paragraphs.every((paragraph) => typeof paragraph === 'string'),
+    ) &&
+    Array.isArray(candidate.keyTakeaways) &&
+    Array.isArray(candidate.quiz) &&
+    Boolean(candidate.whatNext) &&
+    typeof candidate.whatNext?.summary === 'string' &&
+    typeof candidate.whatNext?.encouragement === 'string'
+  );
+}
+
+function readCachedSubtopicDetail(cacheKey: string): SubtopicResponse | null {
+  if (typeof window === 'undefined') return null;
+
+  try {
+    const cached = sessionStorage.getItem(cacheKey);
+    if (!cached) return null;
+
+    const parsed = JSON.parse(cached) as unknown;
+    return isSubtopicResponse(parsed) ? parsed : null;
+  } catch {
+    return null;
+  }
+}
+
+function writeCachedSubtopicDetail(cacheKey: string, value: SubtopicResponse) {
+  if (typeof window === 'undefined') return;
+
+  try {
+    sessionStorage.setItem(cacheKey, JSON.stringify(value));
+  } catch {
+    // Ignore quota/private-mode failures; the server cache remains authoritative.
+  }
+}
+
 export default function SubtopicPage() {
   const router = useRouter();
   const { user } = useAuth();
@@ -124,6 +232,11 @@ export default function SubtopicPage() {
     {}
   );
   const subtopicProgressKey = `${courseId}:${moduleIndex}:${subtopicIndex}`;
+  const subtopicDetailCacheKey = buildSubtopicDetailCacheKey(
+    courseId,
+    moduleIndex,
+    subtopicIndex,
+  );
 
   const [askData, setAskData] = useSessionStorage<{ question: string; answer: string }[]>(
     `${keyBase}-ask`,
@@ -165,8 +278,12 @@ export default function SubtopicPage() {
 
   const [course, setCourse] = useState<CourseState | null>(null);
   const [courseLoading, setCourseLoading] = useState(true);
-  const [data, setData] = useState<SubtopicResponse | null>(null);
+  const [data, setData] = useState<SubtopicResponse | null>(() =>
+    readCachedSubtopicDetail(subtopicDetailCacheKey),
+  );
   const [loading, setLoading] = useState(false);
+  const [contentLoadState, setContentLoadState] =
+    useState<ContentLoadState>('idle');
   const [error, setError] = useState<string>('');
   // Bumping this triggers the subtopic loader effect to re-run. The user
   // clicks "Coba lagi" in the error banner to retry without having to
@@ -177,6 +294,7 @@ export default function SubtopicPage() {
   const {
     progress,
     loading: progressLoading,
+    error: progressError,
     refresh: refreshProgress,
   } = useLearningProgress(courseId);
 
@@ -228,6 +346,14 @@ export default function SubtopicPage() {
     setNavWarning(null);
     setReflectionSaved(false);
   }, [courseId, moduleIndex, subtopicIndex]);
+
+  useEffect(() => {
+    const cached = readCachedSubtopicDetail(subtopicDetailCacheKey);
+    setData(cached);
+    setError('');
+    setLoading(false);
+    setContentLoadState(cached ? 'ready' : 'idle');
+  }, [subtopicDetailCacheKey]);
 
   useEffect(() => {
     refreshProgress();
@@ -310,15 +436,27 @@ export default function SubtopicPage() {
     const moduleInfo = course.outline[moduleIndex];
     const subInfo = moduleInfo?.subtopics?.[subtopicIndex];
     if (!moduleInfo || !subInfo) {
+      setContentLoadState('error');
       setError('Invalid module or subtopic');
       return;
     }
     if (progressLoading && !currentProgress) {
+      setContentLoadState('loading');
+      return;
+    }
+    if (progressError && !currentProgress) {
+      setData(null);
+      setLoading(false);
+      setContentLoadState('error');
+      setError(
+        `Gagal memuat progres belajar: ${progressError}. Silakan coba lagi sebelum melanjutkan materi.`,
+      );
       return;
     }
     if (currentProgress && !currentProgress.unlocked) {
       setData(null);
       setLoading(false);
+      setContentLoadState('blocked');
       setError(
         currentProgress.reason ||
           'Selesaikan langkah sebelumnya terlebih dahulu sebelum membuka subtopik ini.',
@@ -331,6 +469,8 @@ export default function SubtopicPage() {
       course?.subtopicDetails?.[moduleIndex]?.[subtopicIndex] ?? null;
     if (cached) {
       setData(cached);
+      writeCachedSubtopicDetail(subtopicDetailCacheKey, cached);
+      setContentLoadState('ready');
       setSubtopicProgress((prev) => {
         if (prev && prev[subtopicProgressKey]) {
           return prev;
@@ -340,7 +480,22 @@ export default function SubtopicPage() {
       return;
     }
 
+    const sessionCached = readCachedSubtopicDetail(subtopicDetailCacheKey);
+    if (sessionCached) {
+      setData(sessionCached);
+      setContentLoadState('ready');
+      setSubtopicProgress((prev) => {
+        if (prev && prev[subtopicProgressKey]) {
+          return prev;
+        }
+        return { ...(prev ?? {}), [subtopicProgressKey]: true };
+      });
+      return;
+    }
+
+    let cancelled = false;
     async function loadSubtopic() {
+      setContentLoadState('loading');
       setLoading(true);
       setError('');
       try {
@@ -349,31 +504,44 @@ export default function SubtopicPage() {
           body: JSON.stringify({
             module: moduleTitle,
             subtopic: subTitle,
-            courseId: courseId
+            courseId,
+            moduleId: moduleInfo.id,
+            moduleIndex,
+            subtopicIndex,
           }),
         });
+        if (cancelled) return;
         if (res.status === 401) {
           // apiFetch already attempted a silent /api/auth/refresh + retry
           // before we got here. Reaching this branch means the refresh
           // itself failed (refresh_token expired or rotated). Send the
           // user to login with a clear banner instead of the generic
           // "Failed to load subtopic" that used to mask auth expiry.
+          setContentLoadState('error');
           setError('Sesi Anda telah berakhir. Mengalihkan ke halaman login...');
           setLoading(false);
           setTimeout(() => router.push('/login'), 1800);
           return;
         }
         if (res.status === 403) {
-          setError('Anda tidak memiliki akses ke subtopic ini');
+          const detail = await res.json().catch(() => null);
+          setContentLoadState('error');
+          setError(
+            detail && typeof detail.error === 'string'
+              ? detail.error
+              : 'Selesaikan langkah sebelumnya terlebih dahulu sebelum membuka subtopic ini',
+          );
           setLoading(false);
           return;
         }
         if (res.status === 404) {
+          setContentLoadState('error');
           setError('Course atau subtopic tidak ditemukan');
           setLoading(false);
           return;
         }
         if (res.status === 429) {
+          setContentLoadState('error');
           setError('Terlalu banyak permintaan ke AI. Tunggu beberapa detik lalu tekan "Coba lagi".');
           setLoading(false);
           return;
@@ -388,12 +556,16 @@ export default function SubtopicPage() {
             detail && typeof detail.error === 'string'
               ? detail.error
               : `Gagal memuat subtopic (status ${res.status}).`;
+          setContentLoadState('error');
           setError(`${reason} Tekan "Coba lagi" untuk mengulang.`);
           setLoading(false);
           return;
         }
         const json = (await res.json()) as SubtopicResponse;
+        if (cancelled) return;
         setData(json);
+        writeCachedSubtopicDetail(subtopicDetailCacheKey, json);
+        setContentLoadState('ready');
 
         // Cache the generated content in course state
         if (course) {
@@ -416,22 +588,32 @@ export default function SubtopicPage() {
           return { ...(prev ?? {}), [subtopicProgressKey]: true };
         });
       } catch (e: unknown) {
-        setError(e instanceof Error ? e.message : 'Unknown error');
+        if (!cancelled) {
+          setContentLoadState('error');
+          setError(e instanceof Error ? e.message : 'Unknown error');
+        }
       } finally {
-        setLoading(false);
+        if (!cancelled) {
+          setLoading(false);
+        }
       }
     }
     loadSubtopic();
+    return () => {
+      cancelled = true;
+    };
 
   }, [
     course,
     moduleIndex,
     subtopicIndex,
     courseId,
+    subtopicDetailCacheKey,
     subtopicProgressKey,
     loadAttempt,
     router,
     progressLoading,
+    progressError,
     currentProgress?.unlocked,
     currentProgress?.reason,
   ]);
@@ -439,52 +621,9 @@ export default function SubtopicPage() {
   const handleRetryLoadSubtopic = useCallback(() => {
     setError('');
     setData(null);
+    setContentLoadState('idle');
     setLoadAttempt((prev) => prev + 1);
   }, []);
-
-  // Background preload adjacent subtopics for faster navigation
-  useEffect(() => {
-    if (!data || !course?.outline) return;
-
-    const currentModule = course.outline[moduleIndex];
-    const prefetchTargets: { module: string; subtopic: string }[] = [];
-
-    // Preload next subtopic in same module
-    const nextSubIdx = subtopicIndex + 1;
-    if (currentModule?.subtopics?.[nextSubIdx]) {
-      const sub = currentModule.subtopics[nextSubIdx];
-      prefetchTargets.push({
-        module: currentModule.module,
-        subtopic: typeof sub === 'string' ? sub : sub.title,
-      });
-    }
-
-    // If last subtopic in module, preload first subtopic of next module
-    if (!currentModule?.subtopics?.[nextSubIdx]) {
-      const nextModule = course.outline[moduleIndex + 1];
-      if (nextModule?.subtopics?.[0]) {
-        const sub = nextModule.subtopics[0];
-        prefetchTargets.push({
-          module: nextModule.module,
-          subtopic: typeof sub === 'string' ? sub : sub.title,
-        });
-      }
-    }
-
-    if (prefetchTargets.length === 0) return;
-
-    // Short delay to let current render settle, then prefetch
-    const timer = setTimeout(() => {
-      prefetchTargets.forEach((target) => {
-        apiFetch('/api/generate-subtopic', {
-          method: 'POST',
-          body: JSON.stringify({ ...target, courseId }),
-        }).catch(() => {});
-      });
-    }, 500);
-
-    return () => clearTimeout(timer);
-  }, [data, course, moduleIndex, subtopicIndex, courseId]);
 
   // Initialize challenge question when opening the tab
   useEffect(() => {
@@ -637,7 +776,24 @@ export default function SubtopicPage() {
 
   if (courseLoading) return <div className={styles.loading}>Memuat kursus…</div>;
   if (!course) return <div className={styles.error}>Kursus tidak ditemukan</div>;
-  if (loading && !data) return <SkeletonLoading />;
+  const isPreparingContent =
+    !data &&
+    !error &&
+    (loading ||
+      progressLoading ||
+      contentLoadState === 'idle' ||
+      contentLoadState === 'loading');
+  const skeletonStepCount = data?.pages.length
+    ? data.pages.length + 3
+    : Math.max(DEFAULT_SKELETON_STEP_COUNT, pageNumber + 1);
+  if (isPreparingContent) {
+    return (
+      <SkeletonLoading
+        stepCount={skeletonStepCount}
+        activeStepIndex={pageNumber}
+      />
+    );
+  }
   if (error) {
     return (
       <div className={styles.error}>
@@ -660,7 +816,14 @@ export default function SubtopicPage() {
       </div>
     );
   }
-  if (!data) return <div className={styles.error}>Konten tidak tersedia.</div>;
+  if (!data) {
+    return (
+      <SkeletonLoading
+        stepCount={skeletonStepCount}
+        activeStepIndex={pageNumber}
+      />
+    );
+  }
 
   const contentCount = data.pages.length;
   const feedbackStep = contentCount + 2;

@@ -54,7 +54,7 @@ PrincipleLearn V3 is a Next.js 15 educational platform with AI-powered course ge
 | Algorithm | HS256 (HMAC-SHA256) -- the default for `jwt.sign()` |
 | Secret | `JWT_SECRET` environment variable (required; startup throws if missing) |
 | Access token expiry | 15 minutes (`'15m'`) |
-| Refresh token expiry | 7 days (`'7d'`) |
+| Refresh token expiry | 3 days (`'3d'`) |
 
 **Token payload (`TokenPayload` interface):**
 
@@ -81,7 +81,7 @@ The full lifecycle from login to logout proceeds as follows:
 ```
 1. Login (POST /api/auth/login)
    +-- Validate credentials (bcrypt.compare)
-   +-- Generate access token (15min) + refresh token (7d, conditional) + CSRF token
+   +-- Generate access token (15min) + refresh token (3d, conditional) + CSRF token
    +-- Set cookies: access_token, refresh_token (if rememberMe), csrf_token
 
 2. Authenticated Request
@@ -115,8 +115,8 @@ All cookies are set in `src/app/api/auth/login/route.ts` and `src/app/api/auth/r
 | Cookie | `httpOnly` | `secure` | `sameSite` | `maxAge` | `path` |
 |--------|-----------|----------|-----------|---------|--------|
 | `access_token` | `true` | prod only | `lax` | 900s (15 min) | `/` |
-| `refresh_token` | `true` | prod only | `lax` | 604800s (7 days) | `/` |
-| `csrf_token` | **`false`** (intentional) | prod only | `lax` | 900s (15 min) | `/` |
+| `refresh_token` | `true` | prod only | `lax` | 259200s (3 days) | `/` |
+| `csrf_token` | **`false`** (intentional) | prod only | `lax` | 900s (15 min), or 259200s with rememberMe | `/` |
 
 **Details:**
 
@@ -281,7 +281,7 @@ All 14 validation schemas and the `parseBody()` helper are defined in a single f
 | `AdminLoginSchema` | `/api/admin/login` | email, password (non-empty) |
 | `AdminRegisterSchema` | `/api/admin/register` | email, strong password (same rules as user registration) |
 | `GenerateCourseSchema` | `/api/generate-course` | topic, goal, level (all required strings), optional extraTopics/problem/assumption |
-| `GenerateSubtopicSchema` | `/api/generate-subtopic` | module, subtopic (required strings), optional courseId |
+| `GenerateSubtopicSchema` | `/api/generate-subtopic` | module, subtopic, courseId (required strings), optional moduleId/moduleIndex/subtopicIndex for strict progress gating |
 | `GenerateExamplesSchema` | `/api/generate-examples` | context (required string) |
 | `AskQuestionSchema` | `/api/ask-question` | question, context, userId, courseId (all required), optional subtopic/indices/metadata |
 | `ChallengeThinkingSchema` | `/api/challenge-thinking` | context (required), level (default 'intermediate') |

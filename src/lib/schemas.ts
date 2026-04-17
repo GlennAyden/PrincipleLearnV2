@@ -77,6 +77,9 @@ export const GenerateSubtopicSchema = z.object({
   module: z.string().trim().min(1, 'module is required'),
   subtopic: z.string().trim().min(1, 'subtopic is required'),
   courseId: z.string().min(1, 'courseId is required'),
+  moduleId: z.string().optional(),
+  moduleIndex: flexibleIndex,
+  subtopicIndex: flexibleIndex,
 });
 
 // ── Quiz schemas ────────────────────────────────────────────────────

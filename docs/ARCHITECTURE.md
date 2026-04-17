@@ -394,7 +394,7 @@ Helper: `parseBody(schema, body)` returns `{ success: true, data }` or `{ succes
 | Function | Purpose | Details |
 |----------|---------|---------|
 | `generateAccessToken(payload)` | Create access JWT | HS256, 15-minute expiry, `type: 'access'` |
-| `generateRefreshToken(payload)` | Create refresh JWT | HS256, 7-day expiry, `type: 'refresh'` |
+| `generateRefreshToken(payload)` | Create refresh JWT | HS256, 3-day expiry, `type: 'refresh'` |
 | `verifyToken(token)` | Verify access tokens | Rejects tokens with `type: 'refresh'` |
 | `verifyRefreshToken(token)` | Verify refresh tokens | Rejects tokens with `type: 'access'` |
 | `getTokenExpiration(token)` | Decode expiry date | Non-verifying decode |
@@ -543,7 +543,7 @@ sequenceDiagram
     API->>AS: verifyPassword(password, user.password_hash)
     AS-->>API: true
     API->>AS: generateAuthTokens(user)
-    AS-->>API: {accessToken (15min), refreshToken (7d)}
+    AS-->>API: {accessToken (15min), refreshToken (3d)}
     API->>AS: generateCsrfToken()
     AS-->>API: csrfToken (32 bytes hex)
     API-->>B: Set-Cookie: access_token (httpOnly)<br/>Set-Cookie: refresh_token (httpOnly)<br/>Set-Cookie: csrf_token (readable)<br/>JSON: {user: {id, email, role, name}}
@@ -796,7 +796,7 @@ Logout --> POST /api/auth/logout (with CSRF header)
 
 ### Server-Side State
 
-- **JWT tokens**: `access_token` (httpOnly, 15min) and `refresh_token` (httpOnly, 7d) in cookies
+- **JWT tokens**: `access_token` (httpOnly, 15min) and `refresh_token` (httpOnly, 3d) in cookies
 - **CSRF token**: `csrf_token` cookie (readable by JavaScript, sent as `x-csrf-token` header)
 - **User context**: Middleware injects `x-user-id`, `x-user-email`, `x-user-role` into request headers
 - **Rate limits**: Persisted in `rate_limits` table (survives server restarts)

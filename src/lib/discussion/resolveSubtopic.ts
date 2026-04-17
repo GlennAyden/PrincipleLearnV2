@@ -12,7 +12,24 @@ export async function resolveDiscussionSubtopicId({
   subtopicTitle,
 }: ResolveParams): Promise<string | null> {
   if (subtopicId) {
-    return subtopicId;
+    if (!courseId) return null;
+
+    try {
+      const { data, error } = await adminDb
+        .from('subtopics')
+        .select('id')
+        .eq('id', subtopicId)
+        .eq('course_id', courseId)
+        .limit(1);
+
+      if (!error && data?.[0]?.id) {
+        return subtopicId;
+      }
+    } catch (error) {
+      console.warn('[Discussion] Failed to validate subtopic id', error);
+    }
+
+    return null;
   }
 
   if (!courseId || !subtopicTitle) {

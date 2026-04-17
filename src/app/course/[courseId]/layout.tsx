@@ -8,6 +8,7 @@ import { useRouter, useParams, useSearchParams } from 'next/navigation';
 import styles from './layout.module.scss';
 import { Level } from '@/context/RequestCourseContext';
 import { useLearningProgress } from '@/hooks/useLearningProgress';
+import { apiFetch } from '@/lib/api-client';
 
 interface Subtopic {
   title: string;
@@ -62,7 +63,7 @@ export default function CourseLayout({ children }: { children: ReactNode }) {
       setLoading(true);
       
       try {
-        const response = await fetch(`/api/courses/${courseId}`);
+        const response = await apiFetch(`/api/courses/${courseId}`);
         const result = await response.json();
         
         if (result.success && result.course) {

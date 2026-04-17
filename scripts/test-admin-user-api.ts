@@ -49,17 +49,17 @@ function logResult(result: TestResult) {
 
 const EXPECTED_TABLES = {
     // Core tables
-    users: ['id', 'email', 'password_hash', 'name', 'role', 'created_at', 'updated_at'],
+    users: ['id', 'email', 'password_hash', 'name', 'role', 'created_at', 'updated_at', 'refresh_token_hash', 'onboarding_completed', 'deleted_at'],
     courses: ['id', 'title', 'description', 'subject', 'difficulty_level', 'estimated_duration', 'created_by', 'created_at', 'updated_at'],
     subtopics: ['id', 'course_id', 'title', 'content', 'order_index', 'created_at', 'updated_at'],
 
     // User activity tables
-    quiz: ['id', 'course_id', 'subtopic_id', 'question', 'options', 'correct_answer', 'explanation', 'created_at'],
-    quiz_submissions: ['id', 'user_id', 'quiz_id', 'course_id', 'subtopic_id', 'module_index', 'subtopic_index', 'answer', 'is_correct', 'reasoning_note', 'created_at'],
-    jurnal: ['id', 'user_id', 'course_id', 'content', 'type', 'reflection', 'created_at', 'updated_at'],
+    quiz: ['id', 'course_id', 'subtopic_id', 'question', 'options', 'correct_answer', 'explanation', 'created_at', 'subtopic_label', 'leaf_subtopic_id'],
+    quiz_submissions: ['id', 'user_id', 'quiz_id', 'course_id', 'subtopic_id', 'module_index', 'subtopic_index', 'answer', 'is_correct', 'reasoning_note', 'attempt_number', 'quiz_attempt_id', 'subtopic_label', 'leaf_subtopic_id', 'created_at'],
+    jurnal: ['id', 'user_id', 'course_id', 'content', 'type', 'reflection', 'subtopic_id', 'module_index', 'subtopic_index', 'subtopic_label', 'created_at', 'updated_at'],
     transcript: ['id', 'user_id', 'course_id', 'subtopic_id', 'content', 'notes', 'created_at', 'updated_at'],
-    feedback: ['id', 'user_id', 'course_id', 'subtopic_id', 'rating', 'comment', 'created_at', 'module_index', 'subtopic_index', 'subtopic_label'],
-    user_progress: ['id', 'user_id', 'course_id', 'subtopic_id', 'is_completed', 'created_at', 'updated_at'],
+    feedback: ['id', 'user_id', 'course_id', 'subtopic_id', 'rating', 'comment', 'origin_jurnal_id', 'created_at', 'module_index', 'subtopic_index', 'subtopic_label'],
+    user_progress: ['id', 'user_id', 'course_id', 'subtopic_id', 'is_completed', 'leaf_subtopic_id', 'completed_at', 'created_at', 'updated_at'],
 
     // Learning activity tables
     ask_question_history: ['id', 'user_id', 'course_id', 'module_index', 'subtopic_index', 'page_number', 'subtopic_label', 'question', 'answer', 'reasoning_note', 'prompt_components', 'created_at', 'prompt_version', 'session_number', 'updated_at'],
@@ -68,7 +68,7 @@ const EXPECTED_TABLES = {
 
     // Discussion tables
     discussion_sessions: ['id', 'user_id', 'course_id', 'subtopic_id', 'template_id', 'status', 'phase', 'learning_goals', 'created_at', 'updated_at'],
-    discussion_messages: ['id', 'session_id', 'role', 'content', 'metadata', 'created_at', 'step_key'],
+    discussion_messages: ['id', 'session_id', 'role', 'content', 'metadata', 'created_at', 'step_key', 'learning_session_id', 'is_prompt_revision', 'revision_of_message_id'],
     discussion_templates: ['id', 'course_id', 'subtopic_id', 'version', 'source', 'template', 'generated_by', 'created_at'],
 
     // Course generation tables

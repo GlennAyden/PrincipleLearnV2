@@ -6,6 +6,7 @@ import { useRouter, useParams, useSearchParams } from 'next/navigation';
 import { useEffect, useState } from 'react';
 import { useLocalStorage } from '@/hooks/useLocalStorage';
 import { useLearningProgress } from '@/hooks/useLearningProgress';
+import { apiFetch } from '@/lib/api-client';
 import styles from './page.module.scss';
 import { Level } from '@/context/RequestCourseContext';
 import {
@@ -127,8 +128,7 @@ function DiscussionCard({
         if (subtopicTitle) {
           params.set('subtopicTitle', subtopicTitle);
         }
-        const res = await fetch(`/api/discussion/history?${params.toString()}`, {
-          credentials: 'include',
+        const res = await apiFetch(`/api/discussion/history?${params.toString()}`, {
           cache: 'no-store',
         });
         if (res.status === 404) {
@@ -284,7 +284,7 @@ export default function CourseOverviewPage() {
     'pl_subtopic_generated',
     {}
   );
-  const { progress } = useLearningProgress(courseId);
+  const { progress, error: progressError } = useLearningProgress(courseId);
 
   // Load course from database instead of localStorage
   useEffect(() => {
@@ -298,7 +298,7 @@ export default function CourseOverviewPage() {
         console.log(`[Course Page] DEBUG: Loading course: ${courseId}`);
         console.log(`[Course Page] DEBUG: Fetching from: /api/courses/${courseId}`);
         
-        const response = await fetch(`/api/courses/${courseId}`);
+        const response = await apiFetch(`/api/courses/${courseId}`);
         console.log(`[Course Page] DEBUG: Response status:`, response.status);
         console.log(`[Course Page] DEBUG: Response ok:`, response.ok);
 
@@ -424,6 +424,9 @@ export default function CourseOverviewPage() {
   const currentModule = course.outline[activeModule];
   const currentModuleProgress =
     progress?.modules.find((item) => item.moduleIndex === activeModule) ?? null;
+  const progressUnavailable = Boolean(progressError && !progress);
+  const progressUnavailableReason =
+    'Gagal memuat progres belajar. Silakan coba lagi sebelum membuka materi atau diskusi.';
   
   // Fungsi untuk memformat overview text, mendeteksi paragraf atau lists
   const formatOverview = (text: string) => {
@@ -490,11 +493,16 @@ export default function CourseOverviewPage() {
                 displayIndex={idx}
                 scope="module"
                 locked={
-                  currentModuleProgress?.discussion
+                  progressUnavailable ||
+                  (currentModuleProgress?.discussion
                     ? !currentModuleProgress.discussion.unlocked
-                    : false
+                    : false)
                 }
-                lockedReason={currentModuleProgress?.discussion.reason ?? null}
+                lockedReason={
+                  progressUnavailable
+                    ? progressUnavailableReason
+                    : currentModuleProgress?.discussion.reason ?? null
+                }
               />
             );
           }
@@ -509,9 +517,11 @@ export default function CourseOverviewPage() {
           const hasGenerated = Boolean(subtopicProgress?.[subtopicKey]);
           const subtopicStatus =
             currentModuleProgress?.subtopics.find((item) => item.subtopicIndex === idx) ?? null;
-          const locked = subtopicStatus ? !subtopicStatus.unlocked : false;
+          const locked = progressUnavailable || (subtopicStatus ? !subtopicStatus.unlocked : false);
           const lockedReason =
-            subtopicStatus?.reason ?? 'Selesaikan langkah sebelumnya terlebih dahulu.';
+            progressUnavailable
+              ? progressUnavailableReason
+              : subtopicStatus?.reason ?? 'Selesaikan langkah sebelumnya terlebih dahulu.';
           const buttonLabel = locked
             ? 'Terkunci'
             : subtopicStatus?.completed

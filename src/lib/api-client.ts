@@ -21,43 +21,60 @@ export function getCsrfToken(): string {
   );
 }
 
+let refreshInFlight: Promise<boolean> | null = null;
+
+async function refreshSession(): Promise<boolean> {
+  if (!refreshInFlight) {
+    refreshInFlight = fetch('/api/auth/refresh', {
+      method: 'POST',
+      credentials: 'include',
+    })
+      .then((response) => response.ok)
+      .catch(() => false)
+      .finally(() => {
+        refreshInFlight = null;
+      });
+  }
+
+  return refreshInFlight;
+}
+
 export async function apiFetch(
   url: string,
   options: RequestInit = {}
 ): Promise<Response> {
   const method = (options.method || 'GET').toUpperCase();
 
-  const headers = new Headers(options.headers);
+  function buildFetchOptions(): RequestInit {
+    const headers = new Headers(options.headers);
 
-  // Auto-include CSRF token for state-changing requests
-  if (method !== 'GET' && method !== 'HEAD' && !headers.has('x-csrf-token')) {
-    headers.set('x-csrf-token', getCsrfToken());
+    // Auto-include CSRF token for state-changing requests. Rebuild this after
+    // token refresh so the header matches the newly rotated csrf_token cookie.
+    if (method !== 'GET' && method !== 'HEAD' && !headers.has('x-csrf-token')) {
+      headers.set('x-csrf-token', getCsrfToken());
+    }
+
+    // Default Content-Type for JSON bodies
+    if (options.body && !headers.has('Content-Type')) {
+      headers.set('Content-Type', 'application/json');
+    }
+
+    return {
+      ...options,
+      method,
+      headers,
+      credentials: 'include',
+    };
   }
 
-  // Default Content-Type for JSON bodies
-  if (options.body && !headers.has('Content-Type')) {
-    headers.set('Content-Type', 'application/json');
-  }
-
-  const fetchOptions: RequestInit = {
-    ...options,
-    method,
-    headers,
-    credentials: 'include',
-  };
-
-  let res = await fetch(url, fetchOptions);
+  let res = await fetch(url, buildFetchOptions());
 
   // Auto-refresh on 401 — skip for auth routes to avoid infinite loops
   if (res.status === 401 && !url.includes('/api/auth/')) {
-    const refreshRes = await fetch('/api/auth/refresh', {
-      method: 'POST',
-      credentials: 'include',
-    });
-
-    if (refreshRes.ok) {
+    const refreshed = await refreshSession();
+    if (refreshed) {
       // Retry the original request with the fresh cookie
-      res = await fetch(url, fetchOptions);
+      res = await fetch(url, buildFetchOptions());
     }
   }
 

@@ -108,7 +108,7 @@ export async function POST(_req: Request) {
       path: '/',
     });
 
-    // Set rotated refresh token cookie (new token, fresh 7-day lifetime)
+    // Set rotated refresh token cookie (new token, fresh 3-day lifetime)
     response.cookies.set('refresh_token', newRefreshToken, {
       httpOnly: true,
       secure: process.env.NODE_ENV === 'production',

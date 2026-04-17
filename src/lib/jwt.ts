@@ -13,12 +13,12 @@ const ACCESS_TOKEN_EXPIRY = '15m'; // 15 minutes (regular users)
 // across dashboard workflows) but far shorter than the previous 2h which widened
 // the window for stolen-token replay. Refresh flow still extends the session.
 const ADMIN_ACCESS_TOKEN_EXPIRY = '30m';
-const REFRESH_TOKEN_EXPIRY = '7d'; // 7 days
+const REFRESH_TOKEN_EXPIRY = '3d'; // 3 days
 
 // Access token lifetimes exposed as seconds for cookie maxAge alignment.
 export const ACCESS_TOKEN_MAX_AGE_SECONDS = 15 * 60;
 export const ADMIN_ACCESS_TOKEN_MAX_AGE_SECONDS = 30 * 60;
-export const REFRESH_TOKEN_MAX_AGE_SECONDS = 7 * 24 * 60 * 60;
+export const REFRESH_TOKEN_MAX_AGE_SECONDS = 3 * 24 * 60 * 60;
 
 interface TokenPayload {
   userId: string;
@@ -89,4 +89,4 @@ export function getTokenExpiration(token: string): Date | null {
   } catch {
     return null;
   }
-} 
+}

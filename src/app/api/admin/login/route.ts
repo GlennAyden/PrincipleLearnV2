@@ -61,7 +61,7 @@ export async function POST(request: Request) {
 
     console.log(`[Admin Login] Login successful for: ${email}`)
 
-    // Generate admin tokens (30m access + 7d refresh) via service
+    // Generate admin tokens (30m access + 3d refresh) via service
     const { accessToken: token, refreshToken } = generateAdminAuthTokens(user)
 
     // Persist the refresh token hash so the refresh endpoint can verify the

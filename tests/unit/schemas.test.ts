@@ -3,6 +3,7 @@ import {
   RegisterSchema,
   AdminRegisterSchema,
   GenerateCourseSchema,
+  GenerateSubtopicSchema,
   QuizSubmitSchema,
   QuizStatusSchema,
   AskQuestionSchema,
@@ -275,7 +276,58 @@ describe('GenerateCourseSchema', () => {
 });
 
 // ---------------------------------------------------------------------------
-// 5. QuizSubmitSchema
+// 5. GenerateSubtopicSchema
+// ---------------------------------------------------------------------------
+describe('GenerateSubtopicSchema', () => {
+  const validData = {
+    module: 'Module 1',
+    subtopic: 'Subtopic A',
+    courseId: 'course-1',
+  };
+
+  it('should accept valid subtopic generation data', () => {
+    const result = GenerateSubtopicSchema.safeParse(validData);
+    expect(result.success).toBe(true);
+  });
+
+  it('should accept optional module and subtopic indices for strict gating', () => {
+    const result = GenerateSubtopicSchema.safeParse({
+      ...validData,
+      moduleId: 'module-uuid',
+      moduleIndex: 0,
+      subtopicIndex: '1',
+    });
+
+    expect(result.success).toBe(true);
+    if (result.success) {
+      expect(result.data.moduleIndex).toBe(0);
+      expect(result.data.subtopicIndex).toBe('1');
+    }
+  });
+
+  it('should trim module and subtopic titles', () => {
+    const result = GenerateSubtopicSchema.safeParse({
+      ...validData,
+      module: '  Module 1  ',
+      subtopic: '  Subtopic A  ',
+    });
+
+    expect(result.success).toBe(true);
+    if (result.success) {
+      expect(result.data.module).toBe('Module 1');
+      expect(result.data.subtopic).toBe('Subtopic A');
+    }
+  });
+
+  it('should reject missing courseId', () => {
+    const { courseId: _, ...rest } = validData;
+    const result = GenerateSubtopicSchema.safeParse(rest);
+    expect(result.success).toBe(false);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// 6. QuizSubmitSchema
 // ---------------------------------------------------------------------------
 describe('QuizSubmitSchema', () => {
   const validAnswer = {

@@ -17,6 +17,7 @@ import {
 } from '@/lib/quiz-content';
 import { withApiLogging } from '@/lib/api-logger';
 import { assertCourseOwnership, toOwnershipError } from '@/lib/ownership';
+import { buildLearningProgressStatus } from '@/lib/learning-progress';
 import type { ChatCompletionMessageParam } from 'openai/resources/chat/completions';
 
 async function postHandler(request: NextRequest) {
@@ -60,7 +61,14 @@ async function postHandler(request: NextRequest) {
     }
     const parsed = parseBody(GenerateSubtopicSchema, rawPayload);
     if (!parsed.success) return parsed.response;
-    const { module: rawModuleTitle, subtopic: rawSubtopic, courseId } = parsed.data;
+    const {
+      module: rawModuleTitle,
+      subtopic: rawSubtopic,
+      courseId,
+      moduleId,
+      moduleIndex,
+      subtopicIndex,
+    } = parsed.data;
 
     // Enforce ownership BEFORE any DB / AI work. Admins bypass.
     try {
@@ -74,6 +82,19 @@ async function postHandler(request: NextRequest) {
         );
       }
       throw ownershipErr;
+    }
+
+    const gateResponse = await enforceSubtopicGenerationAccess({
+      userId: authUserId,
+      courseId,
+      moduleId,
+      moduleTitle: rawModuleTitle,
+      subtopicTitle: rawSubtopic,
+      moduleIndex,
+      subtopicIndex,
+    });
+    if (gateResponse) {
+      return gateResponse;
     }
 
     // Sanitize user-provided prompt inputs before they reach the model.
@@ -737,6 +758,106 @@ async function postHandler(request: NextRequest) {
 }
 
 export const POST = withApiLogging(postHandler, { label: 'generate-subtopic' });
+
+function normalizeGateText(value: string | null | undefined) {
+  return (value ?? '').toLowerCase().replace(/\s+/g, ' ').trim();
+}
+
+function coerceIndex(value: unknown): number | null {
+  if (typeof value === 'number' && Number.isInteger(value) && value >= 0) {
+    return value;
+  }
+
+  if (typeof value === 'string' && value.trim()) {
+    const parsed = Number.parseInt(value, 10);
+    if (Number.isInteger(parsed) && parsed >= 0 && String(parsed) === value.trim()) {
+      return parsed;
+    }
+  }
+
+  return null;
+}
+
+async function enforceSubtopicGenerationAccess(params: {
+  userId: string;
+  courseId: string;
+  moduleId?: string | null;
+  moduleTitle: string;
+  subtopicTitle: string;
+  moduleIndex?: unknown;
+  subtopicIndex?: unknown;
+}): Promise<NextResponse | null> {
+  const requestedModuleIndex = coerceIndex(params.moduleIndex);
+  const requestedSubtopicIndex = coerceIndex(params.subtopicIndex);
+  const normalizedModuleTitle = normalizeGateText(params.moduleTitle);
+  const normalizedSubtopicTitle = normalizeGateText(params.subtopicTitle);
+
+  let progress;
+  try {
+    progress = await buildLearningProgressStatus({
+      courseId: params.courseId,
+      userId: params.userId,
+    });
+  } catch (progressError) {
+    console.error('[GenerateSubtopic] Strict progress gate failed', {
+      courseId: params.courseId,
+      moduleTitle: params.moduleTitle,
+      subtopicTitle: params.subtopicTitle,
+      error: progressError,
+    });
+    return NextResponse.json(
+      { error: 'Gagal memuat progres belajar. Coba lagi sebelum membuka materi.' },
+      { status: 503 },
+    );
+  }
+
+  const moduleStatus = progress.modules.find((candidate) => {
+    if (params.moduleId && candidate.moduleId === params.moduleId) return true;
+    if (requestedModuleIndex !== null && candidate.moduleIndex === requestedModuleIndex) return true;
+    return normalizeGateText(candidate.title) === normalizedModuleTitle;
+  });
+
+  if (!moduleStatus) {
+    return NextResponse.json(
+      { error: 'Module tidak ditemukan dalam progres belajar' },
+      { status: 404 },
+    );
+  }
+
+  if (!moduleStatus.unlocked) {
+    return NextResponse.json(
+      { error: 'Modul sebelumnya perlu diselesaikan terlebih dahulu.' },
+      { status: 403 },
+    );
+  }
+
+  const subtopicStatus = moduleStatus.subtopics.find((candidate) => {
+    if (requestedSubtopicIndex !== null && candidate.subtopicIndex === requestedSubtopicIndex) {
+      return true;
+    }
+    return normalizeGateText(candidate.title) === normalizedSubtopicTitle;
+  });
+
+  if (!subtopicStatus) {
+    return NextResponse.json(
+      { error: 'Subtopic tidak ditemukan dalam progres belajar' },
+      { status: 404 },
+    );
+  }
+
+  if (!subtopicStatus.unlocked) {
+    return NextResponse.json(
+      {
+        error:
+          subtopicStatus.reason ||
+          'Selesaikan generate materi, kuis, dan refleksi subtopic sebelumnya terlebih dahulu.',
+      },
+      { status: 403 },
+    );
+  }
+
+  return null;
+}
 
 interface QuizItem {
   question?: string;

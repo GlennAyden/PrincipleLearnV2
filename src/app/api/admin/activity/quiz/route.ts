@@ -277,7 +277,7 @@ async function activityHandler(req: NextRequest) {
       subtopicIds: topicSubtopicIds,
       dateFrom: dateFromIso,
       dateTo: dateToIso,
-      select: 'id,user_id,quiz_id,course_id,subtopic_id,module_index,subtopic_index,answer,is_correct,reasoning_note,attempt_number,quiz_attempt_id,submitted_at,created_at',
+      select: 'id,user_id,quiz_id,course_id,subtopic_id,module_index,subtopic_index,answer,is_correct,reasoning_note,attempt_number,quiz_attempt_id,created_at',
       limit: pageSize,
       offset,
     })

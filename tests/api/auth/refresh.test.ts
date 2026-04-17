@@ -22,10 +22,12 @@ jest.mock('next/headers', () => ({
     })),
 }));
 
-// Mock JWT module — verifyToken is still imported directly in the route
+// Mock JWT module — refresh route verifies refresh tokens explicitly
 const mockVerifyToken = jest.fn();
 jest.mock('@/lib/jwt', () => ({
-    verifyToken: (...args: any[]) => mockVerifyToken(...args),
+    ACCESS_TOKEN_MAX_AGE_SECONDS: 15 * 60,
+    REFRESH_TOKEN_MAX_AGE_SECONDS: 3 * 24 * 60 * 60,
+    verifyRefreshToken: (...args: any[]) => mockVerifyToken(...args),
 }));
 
 // Mock auth service — findUserById, generateAuthTokens, generateCsrfToken
@@ -35,11 +37,15 @@ const mockGenerateAuthTokens = jest.fn(() => ({
     refreshToken: 'mock-new-refresh-token',
 }));
 const mockGenerateCsrfToken = jest.fn(() => 'mock-csrf-token-hex-string');
+const mockHashRefreshToken = jest.fn((token: string) => `hash:${token}`);
+const mockUpdateUserRefreshTokenHash = jest.fn().mockResolvedValue(undefined);
 
 jest.mock('@/services/auth.service', () => ({
     findUserById: (...args: any[]) => mockFindUserById(...args),
     generateAuthTokens: (...args: any[]) => mockGenerateAuthTokens(...args),
     generateCsrfToken: (...args: any[]) => mockGenerateCsrfToken(...args),
+    hashRefreshToken: (...args: any[]) => mockHashRefreshToken(...args),
+    updateUserRefreshTokenHash: (...args: any[]) => mockUpdateUserRefreshTokenHash(...args),
 }));
 
 import { POST } from '@/app/api/auth/refresh/route';
@@ -234,7 +240,7 @@ describe('POST /api/auth/refresh', () => {
 
             expect(response.status).toBe(401);
             expect(data.error).toBeDefined();
-            expect(data.error).toContain('No refresh token');
+            expect(data.error).toContain('Token refresh tidak tersedia');
         });
 
         it('should return 401 when cookies object has no refresh_token', async () => {
@@ -327,7 +333,7 @@ describe('POST /api/auth/refresh', () => {
             const data = await response.json();
 
             expect(response.status).toBe(401);
-            expect(data.error).toContain('no longer exists');
+            expect(data.error).toContain('Pengguna tidak lagi terdaftar');
         });
 
         it('should clear all cookies when user no longer exists', async () => {

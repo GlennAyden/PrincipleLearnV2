@@ -137,7 +137,7 @@ export function generateAuthTokens(user: { id: string; email: string; role: stri
 
 /**
  * Same shape as generateAuthTokens but uses the admin-specific access-token
- * expiry (30m). Refresh tokens currently stay on the 7-day lifetime because
+ * expiry (30m). Refresh tokens currently stay on the 3-day lifetime because
  * admin sessions still use the standard refresh flow.
  */
 export function generateAdminAuthTokens(user: { id: string; email: string; role: string }) {

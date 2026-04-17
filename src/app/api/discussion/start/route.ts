@@ -6,6 +6,7 @@ import { withApiLogging } from '@/lib/api-logger';
 import { buildSubtopicCacheKey } from '@/lib/quiz-sync';
 import { evaluateModuleDiscussionPrerequisites } from '@/lib/discussion-prerequisites';
 import { resolveDiscussionSubtopicId } from '@/lib/discussion/resolveSubtopic';
+import { assertCourseOwnership, toOwnershipError } from '@/lib/ownership';
 import {
   serializeDiscussionMessages,
   serializeDiscussionStep,
@@ -109,6 +110,19 @@ async function postHandler(request: NextRequest) {
         { error: 'courseId is required' },
         { status: 400 }
       );
+    }
+
+    try {
+      await assertCourseOwnership(tokenPayload.userId, courseId, tokenPayload.role);
+    } catch (ownershipErr) {
+      const asOwnership = toOwnershipError(ownershipErr);
+      if (asOwnership) {
+        return NextResponse.json(
+          { error: asOwnership.message },
+          { status: asOwnership.status },
+        );
+      }
+      throw ownershipErr;
     }
 
     const subtopicId = await resolveDiscussionSubtopicId({

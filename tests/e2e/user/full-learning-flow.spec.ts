@@ -236,6 +236,8 @@ test.describe('Full Learning Flow → Admin Verification', () => {
         module: firstModuleTitle,
         subtopic: firstSubtopicTitle,
         courseId,
+        moduleIndex: 0,
+        subtopicIndex: 0,
       });
 
       expect(res.ok).toBeTruthy();
