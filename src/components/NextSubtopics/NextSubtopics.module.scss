@@ -63,6 +63,26 @@ $transition: 0.25s cubic-bezier(0.4, 0, 0.2, 1);
   }
 }
 
+.lockedButton {
+  color: $gray-400;
+  cursor: pointer;
+  background: #f3f4f6;
+
+  &:hover {
+    background: #f3f4f6;
+    border-color: $gray-200;
+    color: $gray-600;
+  }
+}
+
+.lockedReason {
+  display: block;
+  margin-top: 0.25rem;
+  font-size: 0.75rem;
+  color: $gray-600;
+  line-height: 1.35;
+}
+
 .moduleLabel {
   display: inline-block;
   font-size: 0.75rem;

@@ -775,8 +775,8 @@ export default function DiscussionModulePage() {
         <div className={styles.preparationNotice}>
           <h2>Lengkapi Materi Terlebih Dahulu</h2>
           <p>
-            Diskusi wajib modul akan aktif setelah semua subtopik selesai dipelajari dan seluruh
-            kuis subtopik telah dikerjakan.
+            Diskusi wajib modul akan aktif setelah semua subtopik selesai digenerate, kuis
+            tersimpan, dan refleksi wajib tersimpan.
           </p>
           {prereqDetails && (
             <>
@@ -792,22 +792,28 @@ export default function DiscussionModulePage() {
                 ? ` (≥${prereqDetails.summary.minQuestionsPerSubtopic} per subtopik)`
                 : ''}
             </span>
+            <span>
+              Refleksi tersimpan: {prereqDetails.summary.reflectedSubtopics}/
+              {prereqDetails.summary.expectedSubtopics}
+            </span>
           </div>
               <ul className={styles.preparationStatusList}>
                 {prereqDetails.subtopics.map((item) => {
+                    const quizDone = item.userHasCompletion || item.quizCompleted;
                     const statusLabel = !item.generated
                       ? 'Belum digenerate'
-                      : item.userHasCompletion || item.quizCompleted
-                      ? 'Siap'
-                      : item.quizQuestionCount === 0
-                      ? 'Kuis belum tersedia'
-                      : item.quizQuestionCount < prereqDetails.summary.minQuestionsPerSubtopic
-                      ? 'Kuis belum lengkap'
-                      : 'Kuis belum selesai';
-                    const statusClass =
-                      item.generated && (item.userHasCompletion || item.quizCompleted)
-                        ? styles.statusReady
-                        : styles.statusPending;
+                      : !quizDone
+                      ? item.quizQuestionCount === 0
+                        ? 'Kuis belum tersedia'
+                        : item.quizQuestionCount < prereqDetails.summary.minQuestionsPerSubtopic
+                        ? 'Kuis belum lengkap'
+                        : 'Kuis belum selesai'
+                      : !item.reflectionCompleted
+                      ? 'Refleksi belum tersimpan'
+                      : 'Siap';
+                    const statusClass = item.completed
+                      ? styles.statusReady
+                      : styles.statusPending;
                   return (
                     <li key={item.key} className={styles.preparationStatusItem}>
                       <div>
@@ -829,6 +835,13 @@ export default function DiscussionModulePage() {
                             Kerjakan kuis pada akhir subtopik ini untuk menandai penyelesaian.
                           </p>
                         )}
+                        {item.generated &&
+                          (item.userHasCompletion || item.quizCompleted) &&
+                          !item.reflectionCompleted && (
+                            <p className={styles.preparationHint}>
+                              Harap mengisi feedback dulu pada halaman akhir subtopik ini.
+                            </p>
+                          )}
                         {item.generated &&
                           !item.userHasCompletion &&
                           item.quizQuestionCount < prereqDetails.summary.minQuestionsPerSubtopic && (
@@ -852,6 +865,7 @@ export default function DiscussionModulePage() {
               <li>Buka setiap subtopik pada modul ini melalui menu di kiri.</li>
               <li>Tekan tombol <strong>Get Started</strong> dan tunggu materi selesai digenerate.</li>
               <li>Selesaikan kuis yang tersedia di bagian akhir setiap subtopik.</li>
+              <li>Isi empat refleksi wajib dan rating bintang pada tiap subtopik.</li>
             </ol>
           )}
           <button type="button" className={styles.preparationButton} onClick={handleGoToModule}>

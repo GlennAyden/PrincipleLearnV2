@@ -94,6 +94,16 @@ export function hasStructuredReflectionContent(fields: StructuredReflectionField
   )
 }
 
+export function isStructuredReflectionComplete(fields: StructuredReflectionFields) {
+  return Boolean(
+    fields.understood &&
+      fields.confused &&
+      fields.strategy &&
+      fields.promptEvolution &&
+      fields.contentRating !== null,
+  )
+}
+
 export function serializeStructuredReflection(fields: StructuredReflectionFields) {
   return JSON.stringify({
     understood: fields.understood,

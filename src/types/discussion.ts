@@ -66,6 +66,8 @@ export interface SessionDetail {
 export interface ModulePrerequisiteSummary {
   expectedSubtopics: number;
   generatedSubtopics: number;
+  reflectedSubtopics: number;
+  completedSubtopics: number;
   totalQuizQuestions: number;
   answeredQuizQuestions: number;
   minQuestionsPerSubtopic: number;
@@ -74,10 +76,15 @@ export interface ModulePrerequisiteSummary {
 export interface ModulePrerequisiteItem {
   key: string;
   title: string;
+  subtopicIndex: number;
   generated: boolean;
   quizQuestionCount: number;
   answeredCount: number;
   quizCompleted: boolean;
+  reflectionCompleted: boolean;
+  reflectionId?: string | null;
+  reflectionSubmittedAt?: string | null;
+  completed: boolean;
   missingQuestions: string[];
   userHasCompletion?: boolean;
   completedUsers?: string[];

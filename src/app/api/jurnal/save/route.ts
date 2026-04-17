@@ -9,6 +9,7 @@ import { resolveAuthUserId } from '@/lib/auth-helper'
 import { resolveUserByIdentifier } from '@/services/auth.service'
 import {
   buildReflectionContext,
+  isStructuredReflectionComplete,
   normalizeIndex,
   normalizeReflectionRating,
   normalizeReflectionType,
@@ -244,6 +245,13 @@ async function postHandler(req: NextRequest) {
     const structured = type === 'structured_reflection'
       ? parseStructuredReflectionFields(data)
       : null
+
+    if (structured && !isStructuredReflectionComplete(structured)) {
+      return NextResponse.json(
+        { error: 'Harap isi semua bagian refleksi dan rating sebelum melanjutkan.' },
+        { status: 400 },
+      )
+    }
 
     const normalizedContent =
       type === 'structured_reflection'

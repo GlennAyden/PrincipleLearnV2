@@ -1,5 +1,9 @@
 import { adminDb } from '@/lib/database';
 import { buildSubtopicCacheKey } from '@/lib/quiz-sync';
+import {
+  isStructuredReflectionComplete,
+  parseStructuredReflectionFields,
+} from '@/lib/reflection-submission';
 import type { ModulePrerequisiteDetails, ModulePrerequisiteItem } from '@/types/discussion';
 
 interface SubtopicNode {
@@ -18,6 +22,16 @@ interface CacheContent {
   quiz?: Array<{ question?: string }>;
   completed_users?: unknown[];
   [key: string]: unknown;
+}
+
+interface ReflectionRow {
+  id: string;
+  content: string | Record<string, unknown> | null;
+  subtopic_id: string | null;
+  subtopic_label: string | null;
+  module_index: number | null;
+  subtopic_index: number | null;
+  created_at: string;
 }
 
 const QUIZ_MIN_QUESTIONS_PER_SUBTOPIC = 5;
@@ -60,7 +74,7 @@ export async function evaluateModuleDiscussionPrerequisites(params: {
 
   const { data: moduleRow, error: moduleError } = await adminDb
     .from('subtopics')
-    .select('id, title, content')
+    .select('id, title, content, order_index')
     .eq('id', moduleId)
     .eq('course_id', courseId)
     .limit(1)
@@ -83,11 +97,12 @@ export async function evaluateModuleDiscussionPrerequisites(params: {
 
   const rawSubtopics = Array.isArray(parsedContent?.subtopics) ? parsedContent.subtopics : [];
   const learningSubtopics = rawSubtopics
-    .filter((node) => !isDiscussionNode(node))
-    .map((node) => ({
+    .map((node, index) => ({
       title: extractTitle(node),
       raw: node,
+      index,
     }))
+    .filter((item) => !isDiscussionNode(item.raw))
     .filter((item) => item.title);
 
   const expectedSubtopics = learningSubtopics.length;
@@ -188,6 +203,41 @@ export async function evaluateModuleDiscussionPrerequisites(params: {
 
   const submissionSet = new Set(submissionRows.map((row) => row.quiz_id));
 
+  let reflectionRows: ReflectionRow[] = [];
+  const { data: reflectionData, error: reflectionError } = await adminDb
+    .from('jurnal')
+    .select('id, content, subtopic_id, subtopic_label, module_index, subtopic_index, created_at')
+    .eq('user_id', userId)
+    .eq('course_id', courseId)
+    .eq('subtopic_id', moduleId)
+    .eq('type', 'structured_reflection')
+    .order('created_at', { ascending: false })
+    .limit(300);
+
+  if (reflectionError) {
+    console.warn('[DiscussionPrerequisites] Failed to fetch reflection rows', reflectionError);
+  } else {
+    reflectionRows = (reflectionData ?? []) as ReflectionRow[];
+  }
+
+  const moduleIndex =
+    typeof moduleRow.order_index === 'number' && Number.isFinite(moduleRow.order_index)
+      ? moduleRow.order_index
+      : null;
+
+  function findLatestReflection(item: { title: string; index: number }) {
+    const normalizedTitle = normalizeString(item.title);
+    return reflectionRows.find((row) => {
+      if ((row.subtopic_id ?? null) !== moduleId) return false;
+      if (normalizeString(row.subtopic_label) !== normalizedTitle) return false;
+      if (row.subtopic_index !== null && row.subtopic_index !== item.index) return false;
+      if (moduleIndex !== null && row.module_index !== null && row.module_index !== moduleIndex) {
+        return false;
+      }
+      return true;
+    }) ?? null;
+  }
+
   const statuses: ModulePrerequisiteItem[] = learningSubtopics.map((item) => {
     const cacheKey = buildSubtopicCacheKey(courseId, moduleTitle, item.title);
     const cacheContent = cacheMap.get(cacheKey);
@@ -241,13 +291,27 @@ export async function evaluateModuleDiscussionPrerequisites(params: {
       (quizQuestionCount >= QUIZ_MIN_QUESTIONS_PER_SUBTOPIC &&
         answeredCount >= quizQuestionCount);
 
+    const latestReflection = findLatestReflection(item);
+    const reflectionFields = latestReflection
+      ? parseStructuredReflectionFields({ content: latestReflection.content ?? '' })
+      : null;
+    const reflectionCompleted = reflectionFields
+      ? isStructuredReflectionComplete(reflectionFields)
+      : false;
+    const completed = generated && quizCompleted && reflectionCompleted;
+
     return {
       key: cacheKey,
       title: item.title,
+      subtopicIndex: item.index,
       generated,
       quizQuestionCount,
       answeredCount,
       quizCompleted,
+      reflectionCompleted,
+      reflectionId: latestReflection?.id ?? null,
+      reflectionSubmittedAt: latestReflection?.created_at ?? null,
+      completed,
       missingQuestions,
       completedUsers,
       userHasCompletion,
@@ -255,14 +319,18 @@ export async function evaluateModuleDiscussionPrerequisites(params: {
   });
 
   const generatedCount = statuses.filter((item) => item.generated).length;
+  const reflectedCount = statuses.filter((item) => item.reflectionCompleted).length;
+  const completedCount = statuses.filter((item) => item.completed).length;
   const totalQuizQuestions = statuses.reduce((sum, item) => sum + item.quizQuestionCount, 0);
   const answeredQuizQuestions = statuses.reduce((sum, item) => sum + item.answeredCount, 0);
 
   return {
-    ready: statuses.every((status) => status.generated && status.quizCompleted),
+    ready: statuses.every((status) => status.completed),
     summary: {
       expectedSubtopics,
       generatedSubtopics: generatedCount,
+      reflectedSubtopics: reflectedCount,
+      completedSubtopics: completedCount,
       totalQuizQuestions,
       answeredQuizQuestions,
       minQuestionsPerSubtopic: QUIZ_MIN_QUESTIONS_PER_SUBTOPIC,

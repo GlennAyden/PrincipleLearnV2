@@ -7,6 +7,7 @@ import { useRouter, useParams, useSearchParams } from 'next/navigation';
 import { useLocalStorage } from '@/hooks/useLocalStorage';
 import { useSessionStorage } from '@/hooks/useSessionStorage';
 import { useAuth } from '@/hooks/useAuth';
+import { useLearningProgress } from '@/hooks/useLearningProgress';
 import { apiFetch, readStream } from '@/lib/api-client';
 import AnswerList from '@/components/AskQuestion/AnswerList';
 import ChallengeBox from '@/components/ChallengeThinking/ChallengeBox';
@@ -171,6 +172,13 @@ export default function SubtopicPage() {
   // clicks "Coba lagi" in the error banner to retry without having to
   // navigate away and back.
   const [loadAttempt, setLoadAttempt] = useState(0);
+  const [navWarning, setNavWarning] = useState<string | null>(null);
+  const [reflectionSaved, setReflectionSaved] = useState(false);
+  const {
+    progress,
+    loading: progressLoading,
+    refresh: refreshProgress,
+  } = useLearningProgress(courseId);
 
   // Quiz: status + reshuffle
   interface QuizStatus {
@@ -186,6 +194,7 @@ export default function SubtopicPage() {
     } | null;
   }
   const [quizStatus, setQuizStatus] = useState<QuizStatus | null>(null);
+  const [quizStatusVersion, setQuizStatusVersion] = useState(0);
   const [quizQuestionsOverride, setQuizQuestionsOverride] = useState<SubtopicResponse['quiz'] | null>(null);
   const [reshuffling, setReshuffling] = useState(false);
 
@@ -200,12 +209,29 @@ export default function SubtopicPage() {
       ? activeSubtopic
       : activeSubtopic?.title ?? `Subtopic ${subtopicIndex + 1}`;
   const quizScopeKey = `${courseId}-${moduleIndex}-${subtopicIndex}-${pageNumber}-${quizModuleTitle}-${quizSubtopicTitle}`;
+  const progressModule =
+    progress?.modules.find((item) => item.moduleIndex === moduleIndex) ?? null;
+  const currentProgress =
+    progressModule?.subtopics.find((item) => item.subtopicIndex === subtopicIndex) ?? null;
+  const quizCompleteForGate = Boolean(quizStatus?.completed || currentProgress?.quizCompleted);
+  const reflectionCompleteForGate = Boolean(
+    currentProgress?.reflectionCompleted || reflectionSaved,
+  );
 
   useEffect(() => {
     setQuizStatus(null);
     setQuizQuestionsOverride(null);
     setReshuffling(false);
   }, [quizScopeKey]);
+
+  useEffect(() => {
+    setNavWarning(null);
+    setReflectionSaved(false);
+  }, [courseId, moduleIndex, subtopicIndex]);
+
+  useEffect(() => {
+    refreshProgress();
+  }, [pageNumber, refreshProgress]);
 
   // Load course data — check sessionStorage first to avoid sequential fetch
   useEffect(() => {
@@ -285,6 +311,18 @@ export default function SubtopicPage() {
     const subInfo = moduleInfo?.subtopics?.[subtopicIndex];
     if (!moduleInfo || !subInfo) {
       setError('Invalid module or subtopic');
+      return;
+    }
+    if (progressLoading && !currentProgress) {
+      return;
+    }
+    if (currentProgress && !currentProgress.unlocked) {
+      setData(null);
+      setLoading(false);
+      setError(
+        currentProgress.reason ||
+          'Selesaikan langkah sebelumnya terlebih dahulu sebelum membuka subtopik ini.',
+      );
       return;
     }
     const moduleTitle = moduleInfo.module;
@@ -385,7 +423,18 @@ export default function SubtopicPage() {
     }
     loadSubtopic();
 
-  }, [course, moduleIndex, subtopicIndex, courseId, subtopicProgressKey, loadAttempt, router]);
+  }, [
+    course,
+    moduleIndex,
+    subtopicIndex,
+    courseId,
+    subtopicProgressKey,
+    loadAttempt,
+    router,
+    progressLoading,
+    currentProgress?.unlocked,
+    currentProgress?.reason,
+  ]);
 
   const handleRetryLoadSubtopic = useCallback(() => {
     setError('');
@@ -538,7 +587,7 @@ export default function SubtopicPage() {
     return () => {
       cancelled = true;
     };
-  }, [user?.id, courseId, quizSubtopicTitle, quizModuleTitle]);
+  }, [user?.id, courseId, quizSubtopicTitle, quizModuleTitle, quizStatusVersion]);
 
   // Reshuffle: generate new quiz questions for this subtopic
   const handleQuizReshuffle = useCallback(async () => {
@@ -574,6 +623,18 @@ export default function SubtopicPage() {
     }
   }, [courseId, quizModuleTitle, quizSubtopicTitle]);
 
+  const handleQuizCompleted = useCallback(() => {
+    setQuizStatusVersion((current) => current + 1);
+    refreshProgress();
+    setNavWarning(null);
+  }, [refreshProgress]);
+
+  const handleReflectionSaved = useCallback(() => {
+    setReflectionSaved(true);
+    refreshProgress();
+    setNavWarning(null);
+  }, [refreshProgress]);
+
   if (courseLoading) return <div className={styles.loading}>Memuat kursus…</div>;
   if (!course) return <div className={styles.error}>Kursus tidak ditemukan</div>;
   if (loading && !data) return <SkeletonLoading />;
@@ -605,11 +666,35 @@ export default function SubtopicPage() {
   const feedbackStep = contentCount + 2;
 
   const goNext = () => {
+    if (pageNumber === contentCount + 1 && !quizCompleteForGate) {
+      const message = 'Selesaikan kuis terlebih dahulu. Hasil kuis harus berhasil tersimpan sebelum lanjut.';
+      setNavWarning(message);
+      window.alert(message);
+      return;
+    }
+
+    if (pageNumber === feedbackStep && !quizCompleteForGate) {
+      const message = 'Selesaikan kuis terlebih dahulu sebelum menutup subtopik ini.';
+      setNavWarning(message);
+      window.alert(message);
+      return;
+    }
+
+    if (pageNumber === feedbackStep && !reflectionCompleteForGate) {
+      const message = 'Harap mengisi feedback dulu. Refleksi harus berhasil tersimpan sebelum lanjut.';
+      setNavWarning(message);
+      window.alert(message);
+      return;
+    }
+
     if (pageNumber < feedbackStep) {
+      setNavWarning(null);
       router.push(
         `/course/${courseId}/subtopic/${moduleIndex}/${pageNumber + 1}?module=${moduleIndex}&subIdx=${subtopicIndex}`
       );
     } else {
+      setNavWarning(null);
+      refreshProgress();
       router.push(`/course/${courseId}?module=${moduleIndex}`);
     }
   };
@@ -1119,6 +1204,7 @@ export default function SubtopicPage() {
                 : null
             }
             onReshuffle={handleQuizReshuffle}
+            onCompleted={handleQuizCompleted}
             reshuffling={reshuffling}
           />
         </div>
@@ -1150,6 +1236,7 @@ export default function SubtopicPage() {
             subtopicLabel={quizSubtopicTitle}
             moduleIndex={moduleIndex}
             subtopicIndex={subtopicIndex}
+            onSaved={handleReflectionSaved}
           />
           <NextSubtopics 
             items={course.outline[moduleIndex].subtopics} 
@@ -1160,11 +1247,17 @@ export default function SubtopicPage() {
                 ? course.outline[moduleIndex].module
                 : undefined
             }
+            progressModule={progressModule}
           />
           </div>
       )}
 
       {/* Navigation */}
+      {(navWarning || progressLoading) && (
+        <div className={styles.navWarning} role={navWarning ? 'alert' : 'status'}>
+          {navWarning ?? 'Memeriksa status progres...'}
+        </div>
+      )}
       <div className={styles.navigationButtons}>
         {pageNumber > 0 && (
           <button className={styles.backBtn} onClick={goBack}>

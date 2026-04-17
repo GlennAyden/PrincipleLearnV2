@@ -1,6 +1,7 @@
 // src/components/StructuredReflection/StructuredReflection.tsx
 'use client';
-import React, { useState } from 'react';
+
+import React, { useCallback, useEffect, useState } from 'react';
 import styles from './StructuredReflection.module.scss';
 import { useAuth } from '@/hooks/useAuth';
 import { apiFetch } from '@/lib/api-client';
@@ -16,43 +17,62 @@ interface StructuredReflectionProps {
   courseId: string;
   subtopic?: string;
   // The `subtopics` table row id for the MODULE that contains this leaf
-  // subtopic. Required on new saves so the backend can scope jurnal +
-  // feedback rows per subtopic instead of clobbering the single-row
-  // (user_id, course_id) upsert that caused prior data loss.
+  // subtopic. Required on saves so the backend can scope jurnal + feedback
+  // rows per leaf subtopic.
   subtopicId?: string;
   subtopicLabel?: string;
   moduleIndex?: number;
   subtopicIndex?: number;
+  onSaved?: () => void;
+}
+
+interface ReflectionStatusResponse {
+  status?: {
+    submitted?: boolean;
+    completed?: boolean;
+    revisionCount?: number;
+    latestSubmittedAt?: string | null;
+  };
+  latest?: {
+    fields?: {
+      understood?: string;
+      confused?: string;
+      strategy?: string;
+      promptEvolution?: string;
+      contentRating?: number | null;
+      contentFeedback?: string;
+    };
+  } | null;
 }
 
 const REFLECTION_FIELDS = [
   {
     key: 'understood' as const,
-    icon: '💡',
+    icon: '1',
     title: 'Apa yang Saya Pahami',
     question: 'Apa hal utama yang saya pahami hari ini?',
     placeholder: 'Contoh: Saya sekarang mengerti bahwa loop while terus berjalan selama kondisinya benar...',
   },
   {
     key: 'confused' as const,
-    icon: '❓',
+    icon: '2',
     title: 'Yang Masih Membingungkan',
     question: 'Apa yang masih salah atau membingungkan?',
     placeholder: 'Contoh: Saya masih bingung kapan harus memilih for vs while loop...',
   },
   {
     key: 'strategy' as const,
-    icon: '🗺️',
+    icon: '3',
     title: 'Strategi ke Depan',
     question: 'Apa strategi belajar saya selanjutnya?',
     placeholder: 'Contoh: Saya akan mencoba membuat 3 program kecil yang menggunakan kedua jenis loop...',
   },
   {
     key: 'promptEvolution' as const,
-    icon: '📈',
+    icon: '4',
     title: 'Evolusi Cara Bertanya',
     question: 'Bagaimana cara saya bertanya berubah dari sesi sebelumnya?',
-    placeholder: 'Contoh: Awalnya saya hanya bertanya "apa itu loop", sekarang saya sudah bertanya lebih spesifik tentang perbandingan for vs while...',
+    placeholder: 'Contoh: Awalnya saya hanya bertanya "apa itu loop", sekarang saya bertanya lebih spesifik...',
   },
 ];
 
@@ -65,6 +85,7 @@ export default function StructuredReflection({
   subtopicLabel,
   moduleIndex = 0,
   subtopicIndex = 0,
+  onSaved,
 }: StructuredReflectionProps) {
   const { user } = useAuth();
   const [reflection, setReflection] = useState<ReflectionData>({
@@ -73,38 +94,93 @@ export default function StructuredReflection({
     strategy: '',
     promptEvolution: '',
   });
-
-  // Content satisfaction
   const [rating, setRating] = useState<number>(0);
   const [hoveredStar, setHoveredStar] = useState<number>(0);
   const [feedbackText, setFeedbackText] = useState('');
-
-  const [submitted, setSubmitted] = useState(false);
+  const [hasSubmitted, setHasSubmitted] = useState(false);
+  const [revisionCount, setRevisionCount] = useState(0);
+  const [statusLoading, setStatusLoading] = useState(false);
+  const [savedMessage, setSavedMessage] = useState('');
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
 
-  const updateField = (key: keyof ReflectionData, value: string) => {
-    setReflection(prev => ({ ...prev, [key]: value }));
-  };
+  const loadStatus = useCallback(async () => {
+    if (!courseId) return;
 
-  const filledCount = REFLECTION_FIELDS.filter(f => reflection[f.key].trim()).length;
-  const canSubmit = reflection.understood.trim().length > 0 || rating > 0;
-
-  const handleSubmit = async () => {
-    if (!canSubmit || loading || !user?.id) return;
-
-    setLoading(true);
+    setStatusLoading(true);
     setError('');
 
     try {
-      // Save structured reflection. subtopicId + subtopicLabel are what
-      // the backend uses to scope this row per subtopic; without them
-      // the jurnal row would fall back to the legacy (user, course)
-      // bucket and subsequent reflections would overwrite this one.
+      const params = new URLSearchParams({
+        courseId,
+        moduleIndex: String(moduleIndex),
+        subtopicIndex: String(subtopicIndex),
+      });
+      const label = subtopicLabel || subtopic;
+      if (subtopicId) params.set('subtopicId', subtopicId);
+      if (label) params.set('subtopicLabel', label);
+
+      const res = await apiFetch(`/api/jurnal/status?${params.toString()}`);
+      if (!res.ok) {
+        const detail = await res.json().catch(() => ({}));
+        throw new Error(
+          typeof detail?.error === 'string'
+            ? detail.error
+            : 'Gagal memuat status refleksi',
+        );
+      }
+
+      const data = (await res.json()) as ReflectionStatusResponse;
+      const fields = data.latest?.fields;
+      setHasSubmitted(Boolean(data.status?.submitted));
+      setRevisionCount(data.status?.revisionCount ?? 0);
+
+      if (fields) {
+        setReflection({
+          understood: fields.understood ?? '',
+          confused: fields.confused ?? '',
+          strategy: fields.strategy ?? '',
+          promptEvolution: fields.promptEvolution ?? '',
+        });
+        setRating(typeof fields.contentRating === 'number' ? fields.contentRating : 0);
+        setFeedbackText(fields.contentFeedback ?? '');
+      }
+    } catch (err: unknown) {
+      setError(err instanceof Error ? err.message : 'Gagal memuat status refleksi');
+    } finally {
+      setStatusLoading(false);
+    }
+  }, [courseId, moduleIndex, subtopic, subtopicId, subtopicIndex, subtopicLabel]);
+
+  useEffect(() => {
+    loadStatus();
+  }, [loadStatus]);
+
+  const updateField = (key: keyof ReflectionData, value: string) => {
+    setReflection((prev) => ({ ...prev, [key]: value }));
+    setSavedMessage('');
+  };
+
+  const filledCount = REFLECTION_FIELDS.filter((field) => reflection[field.key].trim()).length;
+  const canSubmit =
+    REFLECTION_FIELDS.every((field) => reflection[field.key].trim().length > 0) &&
+    rating > 0;
+
+  const handleSubmit = async () => {
+    if (!canSubmit || loading) {
+      setError('Harap isi semua bagian refleksi dan rating sebelum melanjutkan.');
+      return;
+    }
+
+    setLoading(true);
+    setError('');
+    setSavedMessage('');
+
+    try {
       const res = await apiFetch('/api/jurnal/save', {
         method: 'POST',
         body: JSON.stringify({
-          userId: user.id,
+          userId: user?.id,
           courseId,
           subtopicId,
           subtopicLabel: subtopicLabel || subtopic,
@@ -121,15 +197,25 @@ export default function StructuredReflection({
           confused: reflection.confused,
           strategy: reflection.strategy,
           promptEvolution: reflection.promptEvolution,
+          contentRating: rating,
+          contentFeedback: feedbackText.trim(),
         }),
       });
 
       if (!res.ok) {
-        const data = await res.json();
+        const data = await res.json().catch(() => ({}));
         throw new Error(data.error || 'Gagal menyimpan refleksi');
       }
 
-      setSubmitted(true);
+      setHasSubmitted(true);
+      setRevisionCount((current) => Math.max(current + 1, 1));
+      setSavedMessage(
+        hasSubmitted
+          ? 'Revisi refleksi berhasil tersimpan.'
+          : 'Refleksi berhasil tersimpan. Kamu bisa melanjutkan setelah ini.',
+      );
+      onSaved?.();
+      await loadStatus();
     } catch (err: unknown) {
       setError(err instanceof Error ? err.message : 'Unknown error');
     } finally {
@@ -137,31 +223,39 @@ export default function StructuredReflection({
     }
   };
 
-  if (submitted) {
-    return (
-      <section className={styles.reflectionSection}>
-        <div className={styles.successMessage}>
-          <span className={styles.successIcon}>✨</span>
-          <h3>Refleksi Tersimpan!</h3>
-          <p>Terima kasih sudah meluangkan waktu untuk refleksi. Catatan ini akan membantu pengajar memahami perkembangan Anda.</p>
-        </div>
-      </section>
-    );
-  }
-
   return (
     <section className={styles.reflectionSection}>
       <div className={styles.header}>
-        <h3 className={styles.title}>📝 Refleksi & Feedback</h3>
+        <h3 className={styles.title}>Refleksi & Feedback</h3>
         <p className={styles.subtitle}>
-          Luangkan waktu sejenak untuk merefleksikan pembelajaran dan berikan penilaianmu.
+          Semua bagian refleksi wajib diisi. Masukan materi tetap opsional.
         </p>
       </div>
 
-      {/* ── Content Satisfaction Rating ── */}
+      {statusLoading && (
+        <p className={styles.statusMessage}>Memuat refleksi terakhir...</p>
+      )}
+
+      {hasSubmitted && (
+        <div className={styles.revisionNotice}>
+          <strong>Refleksi subtopik ini sudah tersimpan.</strong>
+          <span>
+            Form ini berisi versi terakhir dan tetap bisa diperbarui sebagai revisi.
+            {revisionCount > 1 ? ` Total revisi: ${revisionCount}.` : ''}
+          </span>
+        </div>
+      )}
+
+      {savedMessage && (
+        <div className={styles.successMessage}>
+          <h3>{savedMessage}</h3>
+          <p>Perubahan baru tersimpan di server.</p>
+        </div>
+      )}
+
       <div className={styles.ratingSection}>
         <label className={styles.ratingLabel}>
-          <span className={styles.ratingIcon}>⭐</span>
+          <span className={styles.ratingIcon}>★</span>
           Seberapa puas kamu dengan materi ini?
         </label>
         <div className={styles.starsRow}>
@@ -170,7 +264,10 @@ export default function StructuredReflection({
               key={star}
               type="button"
               className={`${styles.starButton} ${star <= (hoveredStar || rating) ? styles.starActive : ''}`}
-              onClick={() => setRating(star)}
+              onClick={() => {
+                setRating(star);
+                setSavedMessage('');
+              }}
               onMouseEnter={() => setHoveredStar(star)}
               onMouseLeave={() => setHoveredStar(0)}
               disabled={loading}
@@ -188,14 +285,16 @@ export default function StructuredReflection({
         <textarea
           className={styles.feedbackTextarea}
           value={feedbackText}
-          onChange={(e) => setFeedbackText(e.target.value)}
+          onChange={(event) => {
+            setFeedbackText(event.target.value);
+            setSavedMessage('');
+          }}
           placeholder="Ada masukan untuk materi ini? (opsional)"
           disabled={loading}
           rows={2}
         />
       </div>
 
-      {/* ── Reflection Fields ── */}
       <div className={styles.reflectionDivider}>
         <span>Refleksi Belajar</span>
         <span className={styles.progressBadge}>{filledCount}/{REFLECTION_FIELDS.length} terisi</span>
@@ -203,7 +302,10 @@ export default function StructuredReflection({
 
       <div className={styles.fieldsGrid}>
         {REFLECTION_FIELDS.map((field) => (
-          <div key={field.key} className={`${styles.fieldCard} ${reflection[field.key].trim() ? styles.filled : ''}`}>
+          <div
+            key={field.key}
+            className={`${styles.fieldCard} ${reflection[field.key].trim() ? styles.filled : ''}`}
+          >
             <label className={styles.fieldLabel}>
               <span className={styles.fieldIcon}>{field.icon}</span>
               <span className={styles.fieldTitle}>{field.title}</span>
@@ -212,7 +314,7 @@ export default function StructuredReflection({
             <textarea
               className={styles.fieldTextarea}
               value={reflection[field.key]}
-              onChange={(e) => updateField(field.key, e.target.value)}
+              onChange={(event) => updateField(field.key, event.target.value)}
               placeholder={field.placeholder}
               disabled={loading}
               rows={3}
@@ -221,7 +323,13 @@ export default function StructuredReflection({
         ))}
       </div>
 
-      {error && <p className={styles.errorMessage}>⚠️ {error}</p>}
+      {error && <p className={styles.errorMessage}>{error}</p>}
+
+      {!canSubmit && (
+        <p className={styles.requiredMessage}>
+          Harap isi feedback dulu: empat textarea refleksi dan rating bintang wajib terisi.
+        </p>
+      )}
 
       <button
         type="button"
@@ -229,7 +337,11 @@ export default function StructuredReflection({
         onClick={handleSubmit}
         disabled={!canSubmit || loading}
       >
-        {loading ? 'Menyimpan...' : '💾 Simpan Refleksi & Feedback'}
+        {loading
+          ? 'Menyimpan...'
+          : hasSubmitted
+            ? 'Simpan Revisi'
+            : 'Simpan Refleksi & Feedback'}
       </button>
     </section>
   );

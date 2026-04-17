@@ -5,6 +5,7 @@
 import { useRouter, useParams, useSearchParams } from 'next/navigation';
 import { useEffect, useState } from 'react';
 import { useLocalStorage } from '@/hooks/useLocalStorage';
+import { useLearningProgress } from '@/hooks/useLearningProgress';
 import styles from './page.module.scss';
 import { Level } from '@/context/RequestCourseContext';
 import {
@@ -87,6 +88,8 @@ interface DiscussionCardProps {
   displaySubtopicTitle: string;
   displayIndex: number;
   scope: 'module' | 'subtopic';
+  locked?: boolean;
+  lockedReason?: string | null;
 }
 
 function DiscussionCard({
@@ -98,6 +101,8 @@ function DiscussionCard({
   displaySubtopicTitle,
   displayIndex,
   scope,
+  locked = false,
+  lockedReason = null,
 }: DiscussionCardProps) {
   const router = useRouter();
   const isModuleScope = scope === 'module';
@@ -175,10 +180,17 @@ function DiscussionCard({
     ? 'Gagal'
     : status === 'in_progress'
     ? 'Berlangsung'
+    : locked
+    ? 'Terkunci'
     : 'Siap';
   const cleanedModuleTitle = cleanTitle(moduleTitle);
 
   const handleNavigate = () => {
+    if (locked) {
+      window.alert(lockedReason || 'Selesaikan prasyarat modul terlebih dahulu.');
+      return;
+    }
+
     const params = new URLSearchParams({
       module: String(moduleIndex),
       subIdx: String(displayIndex),
@@ -230,13 +242,21 @@ function DiscussionCard({
           </p>
         )}
         {error && <p className={styles.discussionError}>{error}</p>}
+        {locked && (
+          <p className={styles.lockedHint}>
+            {lockedReason || 'Diskusi akan terbuka setelah semua prasyarat selesai.'}
+          </p>
+        )}
       </div>
       <button
-        className={styles.getStartedBtn}
+        className={`${styles.getStartedBtn} ${locked ? styles.lockedButton : ''}`}
         onClick={handleNavigate}
         disabled={loading}
+        aria-disabled={locked}
       >
-        {status === 'idle'
+        {locked
+          ? 'Terkunci'
+          : status === 'idle'
           ? 'Mulai Diskusi Wajib'
           : status === 'completed'
           ? 'Lihat Ringkasan Diskusi Wajib'
@@ -264,6 +284,7 @@ export default function CourseOverviewPage() {
     'pl_subtopic_generated',
     {}
   );
+  const { progress } = useLearningProgress(courseId);
 
   // Load course from database instead of localStorage
   useEffect(() => {
@@ -401,6 +422,8 @@ export default function CourseOverviewPage() {
 
   // module yang sedang aktif
   const currentModule = course.outline[activeModule];
+  const currentModuleProgress =
+    progress?.modules.find((item) => item.moduleIndex === activeModule) ?? null;
   
   // Fungsi untuk memformat overview text, mendeteksi paragraf atau lists
   const formatOverview = (text: string) => {
@@ -466,6 +489,12 @@ export default function CourseOverviewPage() {
                 displaySubtopicTitle={discussionDisplay}
                 displayIndex={idx}
                 scope="module"
+                locked={
+                  currentModuleProgress?.discussion
+                    ? !currentModuleProgress.discussion.unlocked
+                    : false
+                }
+                lockedReason={currentModuleProgress?.discussion.reason ?? null}
               />
             );
           }
@@ -478,7 +507,18 @@ export default function CourseOverviewPage() {
               : sub?.overview ?? 'Ringkasan singkat subtopik akan segera tersedia.';
           const subtopicKey = `${courseId}:${activeModule}:${idx}`;
           const hasGenerated = Boolean(subtopicProgress?.[subtopicKey]);
-          const buttonLabel = hasGenerated ? 'Lanjutkan Materi' : 'Mulai Materi';
+          const subtopicStatus =
+            currentModuleProgress?.subtopics.find((item) => item.subtopicIndex === idx) ?? null;
+          const locked = subtopicStatus ? !subtopicStatus.unlocked : false;
+          const lockedReason =
+            subtopicStatus?.reason ?? 'Selesaikan langkah sebelumnya terlebih dahulu.';
+          const buttonLabel = locked
+            ? 'Terkunci'
+            : subtopicStatus?.completed
+              ? 'Lihat Materi'
+              : subtopicStatus?.generated || hasGenerated
+                ? 'Lanjutkan Materi'
+                : 'Mulai Materi';
 
           return (
             <div key={idx} className={styles.card}>
@@ -488,15 +528,21 @@ export default function CourseOverviewPage() {
               <div className={styles.cardTitle}>{title}</div>
               <div className={styles.cardText}>{formatOverview(overview)}</div>
               <button
-                className={styles.getStartedBtn}
-                onClick={() =>
+                className={`${styles.getStartedBtn} ${locked ? styles.lockedButton : ''}`}
+                aria-disabled={locked}
+                onClick={() => {
+                  if (locked) {
+                    window.alert(lockedReason);
+                    return;
+                  }
                   router.push(
                     `/course/${courseId}/subtopic/${activeModule}/0?module=${activeModule}&subIdx=${idx}`
-                  )
-                }
+                  );
+                }}
               >
                 {buttonLabel}
               </button>
+              {locked && <p className={styles.lockedHint}>{lockedReason}</p>}
             </div>
           );
         })}

@@ -365,6 +365,11 @@ $transition: 0.25s cubic-bezier(0.4, 0, 0.2, 1);
   color: $primary-600;
 }
 
+.lockedNavItem {
+  opacity: 0.48;
+  cursor: pointer;
+}
+
 .activeSub {
   background: $primary-50 !important;
   color: $primary-700 !important;

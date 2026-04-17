@@ -294,3 +294,19 @@ $transition: 0.25s cubic-bezier(0.4, 0, 0.2, 1);
     padding: 1rem 1.25rem;
   }
 }
+
+.lockedButton {
+  background: $gray-400;
+
+  &:hover {
+    background: $gray-400;
+    box-shadow: none;
+  }
+}
+
+.lockedHint {
+  margin: 0.5rem 0 0;
+  color: #92400e;
+  font-size: 0.82rem;
+  line-height: 1.45;
+}

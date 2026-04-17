@@ -77,6 +77,8 @@ export interface QuizProps {
   completedState?: QuizCompletedState | null;
   /** Called when the user clicks the Reshuffle button. Parent should generate new questions. */
   onReshuffle?: () => Promise<void> | void;
+  /** Called after a quiz attempt is successfully persisted. */
+  onCompleted?: () => void;
   /** True while the parent is fetching new questions. */
   reshuffling?: boolean;
 }
@@ -91,6 +93,7 @@ export default function Quiz({
   subtopicIndex = 0,
   completedState = null,
   onReshuffle,
+  onCompleted,
   reshuffling = false,
 }: QuizProps) {
   const safeItems = questions;
@@ -220,6 +223,7 @@ export default function Quiz({
             quizAttemptId: typeof result.quizAttemptId === 'string' ? result.quizAttemptId : undefined,
             submittedAt: typeof result.submittedAt === 'string' ? result.submittedAt : undefined,
           });
+          onCompleted?.();
           console.log('Quiz attempt saved successfully:', result.message);
           return result;
         }
@@ -244,7 +248,7 @@ export default function Quiz({
         submittingRef.current = false;
       }
     },
-    [submitted, user, courseId, moduleTitle, subtopic, subtopicTitle, moduleIndex, subtopicIndex],
+    [submitted, user, courseId, moduleTitle, subtopic, subtopicTitle, moduleIndex, subtopicIndex, onCompleted],
   );
 
   const buildAnswersFromState = useCallback(() => {

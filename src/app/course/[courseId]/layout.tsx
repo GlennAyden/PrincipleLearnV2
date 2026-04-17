@@ -7,6 +7,7 @@ import Link from 'next/link';
 import { useRouter, useParams, useSearchParams } from 'next/navigation';
 import styles from './layout.module.scss';
 import { Level } from '@/context/RequestCourseContext';
+import { useLearningProgress } from '@/hooks/useLearningProgress';
 
 interface Subtopic {
   title: string;
@@ -52,6 +53,7 @@ export default function CourseLayout({ children }: { children: ReactNode }) {
   const [loading, setLoading] = useState(true);
   const [showMobileMenu, setShowMobileMenu] = useState<boolean>(false);
   const [isSidebarCollapsed, setIsSidebarCollapsed] = useState<boolean>(false);
+  const { progress } = useLearningProgress(courseId);
 
   useEffect(() => {
     async function loadCourse() {
@@ -215,14 +217,28 @@ export default function CourseLayout({ children }: { children: ReactNode }) {
             </button>
           </div>
 
-          {course.outline.map((mod, idx) => (
+          {course.outline.map((mod, idx) => {
+            const moduleStatus = progress?.modules.find((item) => item.moduleIndex === idx);
+            const moduleLocked = moduleStatus ? !moduleStatus.unlocked : false;
+            const moduleLockedReason =
+              moduleStatus?.discussion.reason ??
+              progress?.nextRequired?.reason ??
+              'Selesaikan modul sebelumnya terlebih dahulu.';
+
+            return (
             <div key={idx} className={styles.navModule}>
               <Link
                 href={`/course/${courseId}?module=${idx}`}
                 className={`${styles.navModuleTitle} ${
                   activeModule === idx ? styles.activeModule : ''
-                }`}
+                } ${moduleLocked ? styles.lockedNavItem : ''}`}
                 title={mod.module}
+                aria-disabled={moduleLocked}
+                onClick={(event) => {
+                  if (!moduleLocked) return;
+                  event.preventDefault();
+                  window.alert(moduleLockedReason);
+                }}
               >
                 <span className={styles.moduleNumber}>{idx + 1}</span>
                 <span className={styles.moduleText}>{mod.module}</span>
@@ -240,6 +256,14 @@ export default function CourseLayout({ children }: { children: ReactNode }) {
                     sub?.isDiscussion === true ||
                     (typeof rawTitle === 'string' &&
                       rawTitle.toLowerCase().includes('diskusi penutup')));
+                const itemStatus = isDiscussion
+                  ? moduleStatus?.discussion
+                  : moduleStatus?.subtopics.find((item) => item.subtopicIndex === j);
+                const itemLocked = itemStatus ? !itemStatus.unlocked : moduleLocked;
+                const itemLockedReason =
+                  itemStatus?.reason ??
+                  moduleLockedReason ??
+                  'Selesaikan langkah sebelumnya terlebih dahulu.';
 
                 const href = isDiscussion
                   ? (() => {
@@ -264,8 +288,14 @@ export default function CourseLayout({ children }: { children: ReactNode }) {
                       href={href}
                       className={`${styles.subListItem} ${
                         j === activeSubIdx ? styles.activeSub : ''
-                      }`}
+                      } ${itemLocked ? styles.lockedNavItem : ''}`}
                       title={cleanTitle}
+                      aria-disabled={itemLocked}
+                      onClick={(event) => {
+                        if (!itemLocked) return;
+                        event.preventDefault();
+                        window.alert(itemLockedReason);
+                      }}
                         >
                           <span className={styles.subtopicNumber}>{j + 1}</span>
                           <span className={styles.subtopicText}>{cleanTitle}</span>
@@ -276,7 +306,8 @@ export default function CourseLayout({ children }: { children: ReactNode }) {
                 </ul>
               )}
             </div>
-          ))}
+            );
+          })}
         </aside>
 
         {/* OVERLAY FOR MOBILE */}

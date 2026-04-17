@@ -140,7 +140,7 @@ async function postHandler(request: NextRequest) {
       if (!prerequisites.ready) {
         return NextResponse.json(
           {
-            error: 'Selesaikan seluruh subtopik dan kuis modul ini sebelum memulai diskusi.',
+            error: 'Selesaikan materi, kuis, dan refleksi seluruh subtopik modul ini sebelum memulai diskusi.',
             prerequisites,
           },
           { status: 409 },

@@ -904,7 +904,8 @@ async function postHandler(req: NextRequest) {
       submittedAt: completedAt,
       evaluatedAnswers,
       questionEvaluations: evaluatedAnswers,
-      discussionUnlocked: true,
+      discussionUnlocked: false,
+      nextRequirement: 'reflection',
       message: `Saved ${matchedRows.length}/${authoritativeQuiz.length} quiz answers - attempt #${persistedAttemptNumber}`,
       details: {
         totalAnswers: answers.length,

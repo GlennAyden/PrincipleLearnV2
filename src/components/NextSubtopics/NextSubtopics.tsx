@@ -4,6 +4,7 @@
 import React from 'react';
 import { useParams, useRouter, useSearchParams } from 'next/navigation';
 import styles from './NextSubtopics.module.scss';
+import type { LearningProgressModule } from '@/hooks/useLearningProgress';
 
 export interface NextSubtopicsProps {
   /** List subtopic titles or objects with title */
@@ -14,6 +15,8 @@ export interface NextSubtopicsProps {
   moduleId?: string;
   /** Judul modul untuk konteks navigasi diskusi */
   moduleTitle?: string;
+  /** Server-side unlock status for this module. */
+  progressModule?: LearningProgressModule | null;
 }
 
 export default function NextSubtopics({
@@ -21,6 +24,7 @@ export default function NextSubtopics({
   moduleIndex,
   moduleId,
   moduleTitle,
+  progressModule,
 }: NextSubtopicsProps) {
   const router = useRouter();
   const { courseId } = useParams<{ courseId: string }>();
@@ -70,46 +74,63 @@ export default function NextSubtopics({
     <div className={styles.wrapper}>
       <h3 className={styles.heading}>Subtopik Selanjutnya</h3>
       <ul className={styles.list}>
-        {nextItems.map(({ idx, moduleIdx, title, isDiscussion }) => (
-          <li key={`${moduleIdx}-${idx}`} className={styles.item}>
-            <button
-              className={styles.button}
-              onClick={() => {
-                if (isDiscussion) {
-                  const params = new URLSearchParams({
-                    module: String(moduleIdx),
-                    subIdx: String(idx),
-                    scope: 'module',
-                  });
-                  if (moduleId) {
-                    params.set('moduleId', moduleId);
+        {nextItems.map(({ idx, moduleIdx, title, isDiscussion }) => {
+          const status = isDiscussion
+            ? progressModule?.discussion
+            : progressModule?.subtopics.find((item) => item.subtopicIndex === idx);
+          const locked = status ? !status.unlocked : false;
+          const reason =
+            status?.reason ??
+            'Selesaikan langkah sebelumnya terlebih dahulu.';
+
+          return (
+            <li key={`${moduleIdx}-${idx}`} className={styles.item}>
+              <button
+                className={`${styles.button} ${locked ? styles.lockedButton : ''}`}
+                aria-disabled={locked}
+                onClick={() => {
+                  if (locked) {
+                    window.alert(reason);
+                    return;
                   }
-                  const label = moduleTitle || title;
-                  if (label) {
-                    params.set('title', label);
+
+                  if (isDiscussion) {
+                    const params = new URLSearchParams({
+                      module: String(moduleIdx),
+                      subIdx: String(idx),
+                      scope: 'module',
+                    });
+                    if (moduleId) {
+                      params.set('moduleId', moduleId);
+                    }
+                    const label = moduleTitle || title;
+                    if (label) {
+                      params.set('title', label);
+                    }
+                    router.push(`/course/${courseId}/discussion/${moduleIdx}?${params.toString()}`);
+                  } else {
+                    router.push(
+                      `/course/${courseId}/subtopic/${moduleIdx}/0?module=${moduleIdx}&subIdx=${idx}`
+                    );
                   }
-                  router.push(`/course/${courseId}/discussion/${moduleIdx}?${params.toString()}`);
-                } else {
-                  router.push(
-                    `/course/${courseId}/subtopic/${moduleIdx}/0?module=${moduleIdx}&subIdx=${idx}`
-                  );
-                }
-              }}
-            >
-              {isDiscussion && (
-                <span className={styles.moduleLabel}>
-                  Diskusi Wajib:
-                </span>
-              )}
-              {moduleIdx !== moduleIndex && (
-                <span className={styles.moduleLabel}>
-                  Modul {moduleIdx + 1}:
-                </span>
-              )}
-              {title}
-            </button>
-          </li>
-        ))}
+                }}
+              >
+                {isDiscussion && (
+                  <span className={styles.moduleLabel}>
+                    Diskusi Wajib:
+                  </span>
+                )}
+                {moduleIdx !== moduleIndex && (
+                  <span className={styles.moduleLabel}>
+                    Modul {moduleIdx + 1}:
+                  </span>
+                )}
+                {title}
+                {locked && <span className={styles.lockedReason}>{reason}</span>}
+              </button>
+            </li>
+          );
+        })}
       </ul>
     </div>
   );

@@ -2,6 +2,7 @@ import { z } from 'zod';
 import { NextResponse } from 'next/server';
 import {
   hasStructuredReflectionContent,
+  isStructuredReflectionComplete,
   normalizeReflectionType,
   parseStructuredReflectionFields,
 } from './reflection-submission';
@@ -242,11 +243,20 @@ export const JurnalSchema = z.object({
   if (normalizeReflectionType(data.type) !== 'structured_reflection') return;
 
   const structured = parseStructuredReflectionFields(data);
-  if (hasStructuredReflectionContent(structured)) return;
+  if (isStructuredReflectionComplete(structured)) return;
+
+  if (hasStructuredReflectionContent(structured)) {
+    ctx.addIssue({
+      code: z.ZodIssueCode.custom,
+      message: 'Structured reflection requires all reflection fields and rating',
+      path: ['content'],
+    });
+    return;
+  }
 
   ctx.addIssue({
     code: z.ZodIssueCode.custom,
-    message: 'Structured reflection requires at least one reflection field or rating',
+    message: 'Structured reflection requires all reflection fields and rating',
     path: ['content'],
   });
 });

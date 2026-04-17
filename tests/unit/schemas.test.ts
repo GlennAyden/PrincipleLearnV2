@@ -662,9 +662,39 @@ describe('JurnalSchema', () => {
     expect(result.success).toBe(false);
   });
 
-  it('should reject missing userId', () => {
+  it('should accept missing userId because routes derive it from auth', () => {
     const result = JurnalSchema.safeParse({ courseId: 'c1', content: 'text' });
+    expect(result.success).toBe(true);
+  });
+
+  it('should reject incomplete structured reflection content', () => {
+    const result = JurnalSchema.safeParse({
+      courseId: 'c1',
+      type: 'structured_reflection',
+      content: {
+        understood: 'Paham',
+        confused: '',
+        strategy: '',
+        promptEvolution: '',
+        contentRating: 4,
+      },
+    });
     expect(result.success).toBe(false);
+  });
+
+  it('should accept complete structured reflection content', () => {
+    const result = JurnalSchema.safeParse({
+      courseId: 'c1',
+      type: 'structured_reflection',
+      content: {
+        understood: 'Paham',
+        confused: 'Masih bingung contoh batas.',
+        strategy: 'Saya akan latihan lagi.',
+        promptEvolution: 'Pertanyaan saya lebih spesifik.',
+        contentRating: 4,
+      },
+    });
+    expect(result.success).toBe(true);
   });
 
   it('should reject missing courseId', () => {
