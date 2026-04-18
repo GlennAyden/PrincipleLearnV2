@@ -389,7 +389,8 @@ async function fetchEvidenceRows(options: ReturnType<typeof normalizeOptions>): 
   if (!options.includeReviewed) {
     query = query
       .neq('coding_status', 'reviewed')
-      .neq('coding_status', 'manual_coded');
+      .neq('coding_status', 'manual_coded')
+      .not('auto_coding_status', 'in', '(completed,needs_review,skipped)');
   }
 
   query = query
@@ -406,6 +407,7 @@ async function fetchEvidenceRows(options: ReturnType<typeof normalizeOptions>): 
     if (!row.id || !row.user_id) return false;
     if (row.research_validity_status === 'excluded') return false;
     if (!options.includeReviewed && (row.coding_status === 'reviewed' || row.coding_status === 'manual_coded')) return false;
+    if (!options.includeReviewed && ['completed', 'needs_review', 'skipped'].includes(String(row.auto_coding_status ?? ''))) return false;
     return true;
   });
 }
@@ -797,7 +799,7 @@ async function updateEvidenceWithCoding(
   };
 
   const evidenceStatus = input.status === 'coded' ? 'coded' : 'needs_review';
-  const codingStatus = input.status === 'coded' ? 'auto_coded' : 'uncoded';
+  const codingStatus = input.classificationId || input.promptStage || input.scores ? 'auto_coded' : 'uncoded';
 
   await adminDb
     .from('research_evidence_items')

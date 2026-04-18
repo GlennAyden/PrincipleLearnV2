@@ -500,6 +500,11 @@ class SupabaseQueryBuilder {
     return this;
   }
 
+  not(column: string, operator: string, value: string) {
+    this.filters.push({ method: 'not', args: [column, operator, value] });
+    return this;
+  }
+
   is(column: string, value: null | boolean) {
     this.filters.push({ method: 'is', args: [column, value] });
     return this;
