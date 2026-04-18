@@ -10,13 +10,50 @@ import {
 
 let hasDiscussionAdminActionsTable: boolean | null = null;
 
+const DISCUSSION_SESSION_SELECT = `
+  id,
+  status,
+  phase,
+  learning_goals,
+  completed_at,
+  completion_reason,
+  completion_summary,
+  created_at,
+  updated_at,
+  user_id,
+  course_id,
+  subtopic_id,
+  users:user_id(email),
+  courses:course_id(title),
+  subtopics:subtopic_id(title)
+`;
+const DISCUSSION_SESSION_BASE_SELECT = `
+  id,
+  status,
+  phase,
+  learning_goals,
+  created_at,
+  updated_at,
+  user_id,
+  course_id,
+  subtopic_id,
+  users:user_id(email),
+  courses:course_id(title),
+  subtopics:subtopic_id(title)
+`;
+
 function isMissingTableError(error: unknown, tableName: string): boolean {
   const err = error as { code?: string; message?: string } | null
   return (
-    err?.code === 'PGRST205' &&
+    (err?.code === 'PGRST205' || err?.code === '42P01') &&
     typeof err?.message === 'string' &&
-    err.message.includes(`'public.${tableName}'`)
+    (err.message.includes(`'public.${tableName}'`) || err.message.includes(`public.${tableName}`))
   );
+}
+
+function isSchemaMismatchError(error: unknown): boolean {
+  const err = error as { code?: string; message?: string } | null
+  return err?.code === '42703' || err?.code === 'PGRST204' || Boolean(err?.message?.includes('completion_'))
 }
 
 function markDiscussionAdminActionsTableUnavailable() {
@@ -39,29 +76,19 @@ async function getHandler(
       return NextResponse.json({ error: 'sessionId is required' }, { status: 400 });
     }
 
-    const { data: sessionData, error: sessionError } = await adminDb
+    let { data: sessionData, error: sessionError } = await adminDb
       .from('discussion_sessions')
-      .select(
-        `
-        id,
-        status,
-        phase,
-        learning_goals,
-        completed_at,
-        completion_reason,
-        completion_summary,
-        created_at,
-        updated_at,
-        user_id,
-        course_id,
-        subtopic_id,
-        users:user_id(email),
-        courses:course_id(title),
-        subtopics:subtopic_id(title)
-      `
-      )
+      .select(DISCUSSION_SESSION_SELECT)
       .eq('id', sessionId)
       .maybeSingle();
+
+    if (sessionError && isSchemaMismatchError(sessionError)) {
+      ({ data: sessionData, error: sessionError } = await adminDb
+        .from('discussion_sessions')
+        .select(DISCUSSION_SESSION_BASE_SELECT)
+        .eq('id', sessionId)
+        .maybeSingle());
+    }
 
     if (sessionError || !sessionData) {
       return NextResponse.json({ error: 'Session not found' }, { status: 404 });
@@ -71,7 +98,8 @@ async function getHandler(
       .from('discussion_messages')
       .select('id, role, content, metadata, step_key, created_at')
       .eq('session_id', sessionId)
-      .order('created_at', { ascending: true });
+      .order('created_at', { ascending: true })
+      .order('id', { ascending: true });
 
     if (messageError) {
       console.error('[AdminDiscussions] Failed to fetch messages', messageError);
@@ -108,10 +136,15 @@ async function getHandler(
       `
       )
       .eq('session_id', sessionId)
-      .order('created_at', { ascending: true });
+      .order('created_at', { ascending: true })
+      .order('id', { ascending: true });
 
     if (assessmentError) {
-      console.error('[AdminDiscussions] Failed to fetch assessments', assessmentError);
+      if (isMissingTableError(assessmentError, 'discussion_assessments')) {
+        console.warn('[AdminDiscussions] discussion_assessments table not found, continuing without assessments');
+      } else {
+        console.error('[AdminDiscussions] Failed to fetch assessments', assessmentError);
+      }
     }
 
     let actions: Record<string, unknown>[] = [];
@@ -121,7 +154,8 @@ async function getHandler(
           .from('discussion_admin_actions')
           .select('id, action, payload, created_at, admin_id, admin_email')
           .eq('session_id', sessionId)
-          .order('created_at', { ascending: true });
+          .order('created_at', { ascending: true })
+          .order('id', { ascending: true });
 
         if (actionsError) {
           if (isMissingTableError(actionsError, 'discussion_admin_actions')) {
@@ -185,7 +219,7 @@ async function getHandler(
         },
       },
       messages: serializeDiscussionMessages(messages ?? []),
-      assessments: assessments ?? [],
+      assessments: assessmentError && isMissingTableError(assessmentError, 'discussion_assessments') ? [] : assessments ?? [],
       adminActions: serializeDiscussionAdminActions(actions as Array<{
         id: string;
         action: string;

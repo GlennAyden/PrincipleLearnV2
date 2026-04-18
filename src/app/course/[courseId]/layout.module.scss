@@ -444,6 +444,17 @@ $transition: 0.25s cubic-bezier(0.4, 0, 0.2, 1);
   }
 }
 
+/* ── Discussion Route Containment ── */
+.discussionContent {
+  display: flex;
+  flex-direction: column;
+  height: calc(100vh - $header-height);
+  height: calc(100svh - $header-height);
+  height: calc(100dvh - $header-height);
+  min-height: 0;
+  overflow: hidden;
+}
+
 /* ── Loading ── */
 .loading {
   display: flex;

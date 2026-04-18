@@ -1003,6 +1003,7 @@ async function postHandler(request: NextRequest) {
             .eq('session_id', session.id)
             .eq('role', 'student')
             .order('created_at', { ascending: false })
+            .order('id', { ascending: false })
             .limit(1);
           const studentMsgId = latestStudentMsg?.[0]?.id ?? null;
           const { scoreAndSave } = await import('@/services/cognitive-scoring.service');
@@ -1386,7 +1387,8 @@ async function fetchMessages(sessionId: string) {
     .from('discussion_messages')
     .select('id, role, content, step_key, metadata, created_at')
     .eq('session_id', sessionId)
-    .order('created_at', { ascending: true });
+    .order('created_at', { ascending: true })
+    .order('id', { ascending: true });
 
   if (error) {
     console.error('[DiscussionRespond] Failed to load messages', error);

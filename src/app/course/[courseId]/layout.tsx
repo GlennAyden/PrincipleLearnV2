@@ -36,6 +36,7 @@ export default function CourseLayout({ children }: { children: ReactNode }) {
   const { courseId } = useParams<{ courseId: string }>();
   const pathname = usePathname();
   const searchParams = useSearchParams();
+  const isDiscussionPage = pathname?.includes('/discussion/');
 
   // Ambil module index dari query param "?module=..."
   const moduleParam = searchParams.get('module');
@@ -335,7 +336,13 @@ export default function CourseLayout({ children }: { children: ReactNode }) {
         )}
 
         {/* MAIN CONTENT */}
-        <main className={styles.content}>{children}</main>
+        <main
+          className={`${styles.content} ${
+            isDiscussionPage ? styles.discussionContent : ''
+          }`}
+        >
+          {children}
+        </main>
       </div>
     </div>
   );

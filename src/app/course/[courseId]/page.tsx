@@ -146,7 +146,7 @@ function DiscussionCard({
         if (subtopicTitle) {
           params.set('subtopicTitle', subtopicTitle);
         }
-        const res = await apiFetch(`/api/discussion/history?${params.toString()}`, {
+        const res = await apiFetch(`/api/discussion/status?${params.toString()}`, {
           cache: 'no-store',
         });
         if (res.status === 404) {

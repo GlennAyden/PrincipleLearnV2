@@ -98,10 +98,11 @@ export async function GET(req: NextRequest) {
         orderBy: { column: 'created_at', ascending: true },
       })
 
+      const orderedMessages = [...messages].sort(compareMessagesByCreatedAtThenId)
       const goals = normalizeGoals(session.learning_goals)
       const goalMap = new Map(goals.map((goal) => [goal.id, goal]))
 
-      const exchanges = buildExchanges(messages, goalMap)
+      const exchanges = buildExchanges(orderedMessages, goalMap)
 
       payload.push({
         id: session.id,
@@ -122,6 +123,12 @@ export async function GET(req: NextRequest) {
     console.error('[Activity][Discussion] Unexpected error:', error)
     return NextResponse.json({ error: 'Failed to fetch discussion logs' }, { status: 500 })
   }
+}
+
+function compareMessagesByCreatedAtThenId(a: DiscussionMessageRow, b: DiscussionMessageRow): number {
+  const byCreatedAt = new Date(a.created_at).getTime() - new Date(b.created_at).getTime()
+  if (byCreatedAt !== 0) return byCreatedAt
+  return a.id.localeCompare(b.id)
 }
 
 function normalizeGoals(rawGoals: unknown): GoalState[] {

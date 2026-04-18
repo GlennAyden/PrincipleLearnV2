@@ -232,7 +232,8 @@ async function fetchMessages(sessionId: string) {
     .from('discussion_messages')
     .select('id, role, content, step_key, metadata, created_at')
     .eq('session_id', sessionId)
-    .order('created_at', { ascending: true });
+    .order('created_at', { ascending: true })
+    .order('id', { ascending: true });
 
   if (error) {
     console.error('[DiscussionHistory] Failed to fetch messages', error);
