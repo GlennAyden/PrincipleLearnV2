@@ -8,6 +8,11 @@ import { aiRateLimiter } from '@/lib/rate-limit';
 import { AskQuestionSchema, parseBody } from '@/lib/schemas';
 import { chatCompletionStream, openAIStreamToReadable, STREAM_HEADERS, sanitizePromptInput } from '@/services/ai.service';
 import { classifyPromptStage } from '@/services/prompt-classifier';
+import {
+  refreshResearchSessionMetrics,
+  resolveResearchLearningSession,
+  syncResearchEvidenceItem,
+} from '@/services/research-session.service';
 import type { ChatCompletionMessageParam } from 'openai/resources/chat/completions';
 
 // OpenAI client and model are centralized in src/lib/openai
@@ -137,6 +142,12 @@ Please answer in the same language as the question above. Base your answer stric
     // promptComponents is now strictly typed by the Zod schema (Bug #13 fix).
     const normalizedComponents = promptComponents ?? null;
     const classification = classifyPromptStage(normalizedQuestion, normalizedComponents);
+    const researchSession = await resolveResearchLearningSession({
+      userId,
+      courseId,
+      sessionNumber: resolvedSessionNumber,
+    });
+    resolvedSessionNumber = researchSession.sessionNumber;
 
     const readable = openAIStreamToReadable(stream, {
       cancelTimeout,
@@ -205,13 +216,28 @@ Please answer in the same language as the question above. Base your answer stric
           prompt_stage: classification.stage,
           stage_confidence: classification.confidence,
           micro_markers: classification.microMarkers,
+          learning_session_id: researchSession.learningSessionId,
+          research_validity_status: 'valid',
+          coding_status: 'auto_coded',
+          raw_evidence_snapshot: {
+            question: normalizedQuestion,
+            answer,
+            prompt_stage: classification.stage,
+            stage_confidence: classification.confidence,
+            micro_markers: classification.microMarkers,
+            prompt_components: normalizedComponents,
+            reasoning_note: (typeof reasoningNote === 'string' ? reasoningNote.trim() : '') || null,
+            is_follow_up: isFollowUp,
+            follow_up_of: followUpOf,
+          },
+          data_collection_week: researchSession.dataCollectionWeek,
           is_follow_up: isFollowUp,
           follow_up_of: followUpOf,
           created_at: timestamp,
           updated_at: timestamp,
         };
 
-        const { error: insertError } = await adminDb
+        const { data: insertedTranscript, error: insertError } = await adminDb
           .from('ask_question_history')
           .insert(transcriptData);
 
@@ -249,13 +275,46 @@ Please answer in the same language as the question above. Base your answer stric
             subtopicIndex: transcriptData.subtopic_index,
           });
 
-          // Generate a deterministic source_id for cognitive scoring
-          const sourceId = `aq_${userId}_${courseId}_${Date.now()}`;
+          const insertedTranscriptId = typeof insertedTranscript?.id === 'string'
+            ? insertedTranscript.id
+            : null;
+          const sourceId = insertedTranscriptId ?? `aq_${userId}_${courseId}_${Date.now()}`;
 
           // Fire-and-forget so the stream's controller.close() isn't blocked
           // by the scoring call (which can take up to 20s per its own timeout).
           void (async () => {
             try {
+              await syncResearchEvidenceItem({
+                sourceType: 'ask_question',
+                sourceId: insertedTranscriptId,
+                sourceTable: 'ask_question_history',
+                userId,
+                courseId,
+                learningSessionId: researchSession.learningSessionId,
+                rmFocus: 'RM2_RM3',
+                promptStage: classification.stage,
+                unitSequence: resolvedSessionNumber,
+                evidenceTitle: normalizedQuestion.slice(0, 120),
+                evidenceText: normalizedQuestion,
+                aiResponseText: answer,
+                evidenceStatus: 'coded',
+                codingStatus: 'auto_coded',
+                researchValidityStatus: 'valid',
+                dataCollectionWeek: researchSession.dataCollectionWeek,
+                autoConfidence: classification.confidence,
+                evidenceSourceSummary: 'Pertanyaan siswa dan jawaban AI dari fitur tanya materi.',
+                rawEvidenceSnapshot: transcriptData.raw_evidence_snapshot,
+                metadata: {
+                  module_index: transcriptData.module_index,
+                  subtopic_index: transcriptData.subtopic_index,
+                  page_number: transcriptData.page_number,
+                  subtopic_label: transcriptData.subtopic_label,
+                  prompt_version: transcriptData.prompt_version,
+                },
+                createdAt: timestamp,
+              });
+              await refreshResearchSessionMetrics(researchSession.learningSessionId);
+
               const { scoreAndSave } = await import('@/services/cognitive-scoring.service');
               await scoreAndSave({
                 source: 'ask_question',

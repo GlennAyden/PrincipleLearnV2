@@ -5,6 +5,11 @@ import { withApiLogging } from '@/lib/api-logger';
 import { FeedbackSchema, parseBody } from '@/lib/schemas';
 import { resolveAuthUserId } from '@/lib/auth-helper';
 import { resolveUserByIdentifier } from '@/services/auth.service';
+import {
+  refreshResearchSessionMetrics,
+  resolveResearchLearningSession,
+  syncResearchEvidenceItem,
+} from '@/services/research-session.service';
 
 function normalizeText(value: unknown) {
   return typeof value === 'string' ? value.trim() : '';
@@ -138,6 +143,47 @@ async function postHandler(req: NextRequest) {
         subtopicIndex: normalizedSubtopicIndex,
         rating: normalizedRating,
       });
+
+      try {
+        const researchTimestamp = new Date().toISOString();
+        const researchSession = await resolveResearchLearningSession({
+          userId: user.id,
+          courseId: normalizedCourseId,
+          occurredAt: researchTimestamp,
+        });
+        await syncResearchEvidenceItem({
+          sourceType: 'journal',
+          sourceId: savedFeedback.id,
+          sourceTable: 'feedback',
+          userId: user.id,
+          courseId: normalizedCourseId,
+          learningSessionId: researchSession.learningSessionId,
+          rmFocus: 'RM2_RM3',
+          evidenceTitle: `Feedback ${subtopicTitle || normalizedSubtopicLabel || 'subtopik'}`,
+          evidenceText: normalizedComment || `Rating: ${normalizedRating ?? '-'}`,
+          evidenceStatus: normalizedComment ? 'raw' : 'needs_review',
+          codingStatus: 'uncoded',
+          researchValidityStatus: normalizedComment ? 'valid' : 'low_information',
+          dataCollectionWeek: researchSession.dataCollectionWeek,
+          evidenceSourceSummary: 'Komentar/rating siswa setelah belajar subtopik.',
+          rawEvidenceSnapshot: {
+            rating: normalizedRating,
+            comment: normalizedComment,
+            subtopic_id: scopedSubtopicId,
+            subtopic_label: subtopicTitle,
+            module_index: normalizedModuleIndex,
+            subtopic_index: normalizedSubtopicIndex,
+          },
+          metadata: {
+            mapped_source_type: 'journal',
+            original_source_type: 'feedback',
+          },
+          createdAt: researchTimestamp,
+        });
+        await refreshResearchSessionMetrics(researchSession.learningSessionId);
+      } catch (researchError) {
+        console.warn('[Feedback] Research evidence sync skipped', researchError);
+      }
     } catch (error) {
       console.error('Error saving feedback to database:', error);
       return NextResponse.json(

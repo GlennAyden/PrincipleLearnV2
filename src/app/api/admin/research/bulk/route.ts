@@ -6,6 +6,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { adminDb } from '@/lib/database';
 import jwt from 'jsonwebtoken';
+import { getPromptStageScore, normalizePromptStage } from '@/lib/research-normalizers';
 
 const JWT_SECRET = process.env.JWT_SECRET!;
 
@@ -33,40 +34,71 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: 'session_id required' }, { status: 400 });
     }
 
-    // Fetch unclassified prompts from session
+    // Fetch prompts from session. The historical table does not always carry
+    // a prompt_classification_id backlink, so we de-duplicate against
+    // prompt_classifications instead of filtering a column that may not exist.
     const { data: prompts } = await adminDb
       .from('ask_question_history')
-      .select('id, question, course_id, user_id, learning_session_id')
+      .select('id, question, course_id, user_id, learning_session_id, session_number')
       .eq('learning_session_id', session_id)
-      .is('prompt_classification_id', null) // Unclassified
       .limit(50); // Safety limit
 
     if (!prompts || prompts.length === 0) {
       return NextResponse.json({ message: 'No unclassified prompts found' });
     }
 
+    const promptIds = prompts.map((prompt: { id: string }) => prompt.id);
+    const { data: existingClassifications } = await adminDb
+      .from('prompt_classifications')
+      .select('prompt_id')
+      .eq('prompt_source', 'ask_question')
+      .in('prompt_id', promptIds);
+    const classifiedIds = new Set(((existingClassifications || []) as Array<{ prompt_id: string }>).map((row) => row.prompt_id));
+    const unclassifiedPrompts = prompts.filter((prompt: { id: string }) => !classifiedIds.has(prompt.id));
+
+    if (unclassifiedPrompts.length === 0) {
+      return NextResponse.json({ message: 'No unclassified prompts found' });
+    }
+
     if (dry_run) {
       return NextResponse.json({
         dry_run: true,
-        prompts_to_classify: prompts.length,
-        sample: prompts.slice(0, 3)
+        prompts_to_classify: unclassifiedPrompts.length,
+        already_classified: prompts.length - unclassifiedPrompts.length,
+        sample: unclassifiedPrompts.slice(0, 3)
       });
     }
 
     // Bulk classify (simple rule-based for demo)
-    const classifications = prompts.map((prompt: { id: string; question: string; course_id: string; user_id: string; learning_session_id: string }) => ({
-      prompt_source: 'ask_question' as const,
-      prompt_id: prompt.id,
-      learning_session_id: prompt.learning_session_id,
-      user_id: prompt.user_id,
-      course_id: prompt.course_id,
-      prompt_text: prompt.question,
-      prompt_stage: classifyPrompt(prompt.question),
-      classified_by: 'bulk_auto',
-      classification_method: 'rule_based',
-      confidence_score: 0.8,
-      created_at: new Date().toISOString()
-    }));
+    const classifications = unclassifiedPrompts.map((prompt: {
+      id: string;
+      question: string;
+      course_id: string;
+      user_id: string;
+      learning_session_id: string;
+      session_number?: number | null;
+    }) => {
+      const stage = normalizePromptStage(classifyPrompt(prompt.question));
+      return {
+        prompt_source: 'ask_question' as const,
+        prompt_id: prompt.id,
+        learning_session_id: prompt.learning_session_id,
+        user_id: prompt.user_id,
+        course_id: prompt.course_id,
+        prompt_text: prompt.question,
+        prompt_sequence: prompt.session_number ?? null,
+        prompt_stage: stage,
+        prompt_stage_score: getPromptStageScore(stage),
+        micro_markers: inferMicroMarkers(prompt.question, stage),
+        primary_marker: inferMicroMarkers(prompt.question, stage)[0] ?? null,
+        classified_by: 'bulk_auto',
+        classification_method: 'rule_based',
+        confidence_score: 0.8,
+        classification_evidence: 'Klasifikasi otomatis berbasis aturan untuk pra-coding RM2.',
+        created_at: new Date().toISOString(),
+        updated_at: new Date().toISOString()
+      };
+    });
 
     const { data, error } = await adminDb
       .from('prompt_classifications')
@@ -99,5 +131,15 @@ function classifyPrompt(prompt: string): 'SCP' | 'SRP' | 'MQP' | 'REFLECTIVE' {
     return 'MQP';
   }
   return 'REFLECTIVE';
+}
+
+function inferMicroMarkers(prompt: string, stage: 'SCP' | 'SRP' | 'MQP' | 'REFLECTIVE'): string[] {
+  const lower = prompt.toLowerCase();
+  const markers = new Set<string>();
+  if (lower.includes('tujuan') || lower.includes('konteks') || lower.includes('diketahui')) markers.add('GCP');
+  if (lower.includes('langkah') || lower.includes('urutan') || lower.includes('proses') || lower.match(/\d+\./)) markers.add('PP');
+  if (lower.includes('evaluasi') || lower.includes('banding') || lower.includes('kenapa') || lower.includes('mengapa') || stage === 'REFLECTIVE') markers.add('ARP');
+  if (markers.size === 0) markers.add(stage === 'SCP' ? 'GCP' : stage === 'MQP' ? 'PP' : 'ARP');
+  return Array.from(markers);
 }
 

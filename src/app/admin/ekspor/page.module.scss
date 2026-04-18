@@ -113,6 +113,32 @@
     }
 }
 
+.checkboxGroup {
+    justify-content: flex-end;
+}
+
+.checkboxLabel {
+    display: flex;
+    flex-direction: row;
+    align-items: center;
+    gap: 0.5rem;
+    color: $gray-700;
+    cursor: pointer;
+
+    input {
+        width: 16px;
+        height: 16px;
+        padding: 0;
+        accent-color: $amber-500;
+    }
+}
+
+.filterHelp {
+    color: $gray-500;
+    font-size: 0.75rem;
+    line-height: 1.4;
+}
+
 /* ========================================
    EXPORT CARDS GRID
    ======================================== */
@@ -185,6 +211,21 @@
 }
 
 .iconIndicators {
+    background: $green-50;
+    color: $green-600;
+}
+
+.iconEvidence {
+    background: #f3e8ff;
+    color: #7e22ce;
+}
+
+.iconLongitudinal {
+    background: #ecfeff;
+    color: #0891b2;
+}
+
+.iconReadiness {
     background: $green-50;
     color: $green-600;
 }

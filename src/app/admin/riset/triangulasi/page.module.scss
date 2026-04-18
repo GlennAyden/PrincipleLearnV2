@@ -1,0 +1,427 @@
+@use '../../tokens' as *;
+
+.page {
+    @include page-container;
+    width: 100%;
+}
+
+.header {
+    @include page-header;
+    display: flex;
+    align-items: flex-start;
+    justify-content: space-between;
+    gap: 1rem;
+    background: white;
+    border: 1px solid $gray-200;
+    border-radius: $radius-sm;
+    padding: 1.25rem 1.5rem;
+    margin-bottom: $section-gap;
+}
+
+.headerIcon {
+    color: $indigo-500;
+}
+
+.headerSub {
+    max-width: 720px;
+}
+
+.headerActions {
+    display: flex;
+    align-items: center;
+    gap: 0.75rem;
+    flex-wrap: wrap;
+}
+
+.primaryBtn {
+    @include primary-button;
+}
+
+.secondaryBtn {
+    @include secondary-button;
+}
+
+.spinning {
+    animation: spin 1s linear infinite;
+}
+
+@keyframes spin {
+    from { transform: rotate(0deg); }
+    to { transform: rotate(360deg); }
+}
+
+.errorCard {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+    background: $red-50;
+    border: 1px solid rgba($red-500, 0.3);
+    border-radius: $radius-sm;
+    color: $red-600;
+    font-size: 0.875rem;
+    margin-bottom: $section-gap;
+    padding: 0.85rem 1rem;
+}
+
+.infoCard {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+    background: $green-50;
+    border: 1px solid rgba($green-500, 0.3);
+    border-radius: $radius-sm;
+    color: $green-700;
+    font-size: 0.875rem;
+    margin-bottom: $section-gap;
+    padding: 0.85rem 1rem;
+}
+
+.summaryGrid {
+    display: grid;
+    grid-template-columns: repeat(5, minmax(0, 1fr));
+    gap: $card-gap;
+    margin-bottom: $section-gap;
+}
+
+.summaryCard {
+    @include stat-card;
+    border-radius: $radius-sm;
+    display: grid;
+    gap: 0.35rem;
+    min-height: 126px;
+
+    strong {
+        color: $gray-800;
+        font-size: 1.6rem;
+        line-height: 1.1;
+    }
+
+    span:last-child {
+        color: $gray-500;
+        font-size: 0.8rem;
+        font-weight: 500;
+    }
+}
+
+.summaryIcon {
+    align-items: center;
+    background: $indigo-50;
+    border-radius: $radius-sm;
+    color: $indigo-600;
+    display: inline-flex;
+    font-size: 1.1rem;
+    height: 36px;
+    justify-content: center;
+    width: 36px;
+}
+
+.iconStrong {
+    background: $green-50;
+    color: $green-600;
+}
+
+.iconPartial {
+    background: $amber-50;
+    color: $amber-600;
+}
+
+.iconConflict {
+    background: $red-50;
+    color: $red-600;
+}
+
+.iconMissing {
+    background: $gray-100;
+    color: $gray-500;
+}
+
+.section {
+    background: white;
+    border: 1px solid $gray-200;
+    border-radius: $radius-sm;
+    box-shadow: $shadow-sm;
+    overflow: hidden;
+}
+
+.sectionHeader {
+    align-items: flex-end;
+    background: $gray-50;
+    border-bottom: 1px solid $gray-200;
+    display: flex;
+    gap: 1rem;
+    justify-content: space-between;
+    padding: 1.25rem 1.5rem;
+
+    h3 {
+        color: $gray-800;
+        font-size: 1rem;
+        font-weight: 700;
+        margin: 0;
+    }
+
+    p {
+        color: $gray-500;
+        font-size: 0.8rem;
+        margin: 0.25rem 0 0;
+    }
+}
+
+.filters {
+    align-items: center;
+    display: flex;
+    gap: 0.75rem;
+    flex-wrap: wrap;
+
+    select {
+        background: white;
+        border: 1px solid $gray-200;
+        border-radius: $radius-sm;
+        color: $gray-700;
+        font-size: 0.85rem;
+        padding: 0.58rem 0.75rem;
+    }
+}
+
+.searchBox {
+    align-items: center;
+    background: white;
+    border: 1px solid $gray-200;
+    border-radius: $radius-sm;
+    color: $gray-400;
+    display: flex;
+    gap: 0.5rem;
+    min-width: 270px;
+    padding: 0.55rem 0.75rem;
+
+    input {
+        border: 0;
+        color: $gray-700;
+        font-size: 0.85rem;
+        min-width: 0;
+        outline: none;
+        width: 100%;
+
+        &::placeholder {
+            color: $gray-400;
+        }
+    }
+}
+
+.tableWrap {
+    overflow-x: auto;
+}
+
+.table {
+    @include data-table;
+    min-width: 1320px;
+
+    td {
+        vertical-align: top;
+    }
+}
+
+.reasonStack {
+    display: grid;
+    gap: 0.25rem;
+    min-width: 145px;
+
+    span,
+    em,
+    strong {
+        color: $gray-600;
+        font-size: 0.74rem;
+        line-height: 1.35;
+    }
+
+    em {
+        color: $gray-500;
+        font-style: normal;
+    }
+
+    strong {
+        color: $primary-600;
+    }
+}
+
+.indicatorCode {
+    background: $gray-50;
+    border: 1px solid $gray-200;
+    border-radius: $radius-sm;
+    color: $gray-800;
+    display: inline-flex;
+    font-family: $font-mono;
+    font-size: 0.78rem;
+    font-weight: 700;
+    padding: 0.3rem 0.5rem;
+    white-space: nowrap;
+}
+
+.studentCell {
+    display: flex;
+    flex-direction: column;
+    gap: 0.2rem;
+    min-width: 165px;
+
+    strong {
+        color: $gray-800;
+        font-size: 0.88rem;
+    }
+
+    span {
+        color: $gray-400;
+        font-family: $font-mono;
+        font-size: 0.72rem;
+    }
+}
+
+.focusBadge {
+    border-radius: $radius-sm;
+    display: inline-flex;
+    font-size: 0.72rem;
+    font-weight: 700;
+    padding: 0.25rem 0.5rem;
+    white-space: nowrap;
+}
+
+.focusRm2 {
+    background: $primary-50;
+    color: $primary-600;
+}
+
+.focusRm3 {
+    background: $green-50;
+    color: $green-700;
+}
+
+.focusUnknown {
+    background: $gray-100;
+    color: $gray-500;
+}
+
+.statusBadge {
+    border-radius: 999px;
+    display: inline-flex;
+    font-size: 0.72rem;
+    font-weight: 700;
+    padding: 0.22rem 0.6rem;
+    white-space: nowrap;
+}
+
+.statusStrong {
+    background: $green-50;
+    color: $green-700;
+}
+
+.statusPartial {
+    background: $amber-50;
+    color: $amber-600;
+}
+
+.statusConflict {
+    background: $red-50;
+    color: $red-600;
+}
+
+.statusMissing {
+    background: $gray-100;
+    color: $gray-500;
+}
+
+.statusUnknown {
+    background: $indigo-50;
+    color: $indigo-600;
+}
+
+.sourceList {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.35rem;
+    max-width: 240px;
+
+    span {
+        background: $primary-50;
+        border-radius: $radius-sm;
+        color: $primary-600;
+        font-size: 0.72rem;
+        font-weight: 600;
+        padding: 0.2rem 0.45rem;
+        text-transform: capitalize;
+    }
+}
+
+.longText,
+.excerpt {
+    color: $gray-600;
+    line-height: 1.45;
+    margin: 0;
+    max-width: 280px;
+}
+
+.excerpt {
+    color: $gray-700;
+    font-style: italic;
+}
+
+.dateText,
+.muted {
+    color: $gray-400;
+    font-size: 0.8rem;
+    white-space: nowrap;
+}
+
+.loading {
+    @include loading-state;
+}
+
+.emptyState {
+    @include empty-state;
+
+    svg {
+        font-size: 2.4rem;
+        margin-bottom: 0.75rem;
+    }
+
+    h3 {
+        color: $gray-700;
+        font-size: 1rem;
+        margin: 0 0 0.35rem;
+    }
+
+    p {
+        margin: 0;
+    }
+}
+
+@media (max-width: 1100px) {
+    .summaryGrid {
+        grid-template-columns: repeat(3, minmax(0, 1fr));
+    }
+}
+
+@media (max-width: 760px) {
+    .page {
+        padding: 1.25rem;
+    }
+
+    .header,
+    .sectionHeader {
+        align-items: stretch;
+        flex-direction: column;
+    }
+
+    .headerActions,
+    .filters {
+        width: 100%;
+    }
+
+    .primaryBtn,
+    .secondaryBtn,
+    .searchBox,
+    .filters select {
+        width: 100%;
+    }
+
+    .summaryGrid {
+        grid-template-columns: 1fr;
+    }
+}

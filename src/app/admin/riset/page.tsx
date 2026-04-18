@@ -4,7 +4,8 @@ import React, { useEffect, useState } from 'react'
 import { useRouter } from 'next/navigation'
 import {
     FiClipboard, FiUsers, FiLayers, FiBarChart2,
-    FiCalendar, FiTag, FiActivity, FiArrowRight
+    FiCalendar, FiTag, FiActivity, FiArrowRight, FiCheckSquare,
+    FiGitMerge, FiArchive, FiDownload
 } from 'react-icons/fi'
 import { useAdmin } from '@/hooks/useAdmin'
 import styles from './page.module.scss'
@@ -208,6 +209,70 @@ export default function RisetDashboard() {
                                     <div className={styles.navLabel}>Indikator Kognitif (RM3)</div>
                                     <div className={styles.navDesc}>
                                         Penilaian indikator CT &amp; Critical Thinking dan matriks silang. Termasuk skor otomatis dari semua fitur interaksi.
+                                    </div>
+                                </div>
+                                <div className={styles.navArrow}><FiArrowRight /></div>
+                            </div>
+
+                            <div
+                                className={styles.navCard}
+                                onClick={() => router.push('/admin/riset/bukti')}
+                            >
+                                <div className={styles.navIconWrap}>
+                                    <FiArchive />
+                                </div>
+                                <div className={styles.navContent}>
+                                    <div className={styles.navLabel}>Evidence Bank RM2/RM3</div>
+                                    <div className={styles.navDesc}>
+                                        Tinjau bukti mentah, respons AI, artefak, dan status coding per siswa untuk menjaga kelengkapan data tesis.
+                                    </div>
+                                </div>
+                                <div className={styles.navArrow}><FiArrowRight /></div>
+                            </div>
+
+                            <div
+                                className={styles.navCard}
+                                onClick={() => router.push('/admin/riset/readiness')}
+                            >
+                                <div className={styles.navIconWrap}>
+                                    <FiCheckSquare />
+                                </div>
+                                <div className={styles.navContent}>
+                                    <div className={styles.navLabel}>Kesiapan Analisis RM2/RM3</div>
+                                    <div className={styles.navDesc}>
+                                        Pantau kelengkapan bukti siswa, hambatan, dan langkah berikutnya sebelum analisis tesis.
+                                    </div>
+                                </div>
+                                <div className={styles.navArrow}><FiArrowRight /></div>
+                            </div>
+
+                            <div
+                                className={styles.navCard}
+                                onClick={() => router.push('/admin/riset/triangulasi')}
+                            >
+                                <div className={styles.navIconWrap}>
+                                    <FiGitMerge />
+                                </div>
+                                <div className={styles.navContent}>
+                                    <div className={styles.navLabel}>Triangulasi Bukti</div>
+                                    <div className={styles.navDesc}>
+                                        Tinjau konsistensi indikator lintas sumber data untuk mendukung temuan RM2 dan RM3.
+                                    </div>
+                                </div>
+                                <div className={styles.navArrow}><FiArrowRight /></div>
+                            </div>
+
+                            <div
+                                className={styles.navCard}
+                                onClick={() => router.push('/admin/ekspor')}
+                            >
+                                <div className={styles.navIconWrap}>
+                                    <FiDownload />
+                                </div>
+                                <div className={styles.navContent}>
+                                    <div className={styles.navLabel}>Ekspor Lampiran Tesis</div>
+                                    <div className={styles.navDesc}>
+                                        Unduh bundle RM2/RM3, readiness, evidence mentah, codebook, dan versi anonim siap lampiran.
                                     </div>
                                 </div>
                                 <div className={styles.navArrow}><FiArrowRight /></div>

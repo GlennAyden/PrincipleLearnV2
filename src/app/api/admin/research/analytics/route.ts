@@ -1,339 +1,565 @@
 /**
  * API Route: Research Analytics
  * GET /api/admin/research/analytics
- * 
- * Provides: counts, stage heatmap, user progression, inter-rater reliability,
- * totalStudents, stageDistribution - all from real DB queries
+ *
+ * Provides RM2/RM3 analytics from raw logs, prompt classifications,
+ * cognitive indicators, auto scores, artifacts, and triangulation records.
  */
 
 import { NextRequest, NextResponse } from 'next/server';
 import { adminDb } from '@/lib/database';
+import { verifyAdminFromCookie } from '@/lib/admin-auth';
 import { withCacheHeaders } from '@/lib/api-middleware';
-import jwt from 'jsonwebtoken';
-import type { PromptStage } from '@/types/research';
-import { PROMPT_STAGE_SCORES } from '@/types/research';
+import type { PromptStage, TransitionStatus } from '@/types/research';
+import {
+  PROMPT_STAGES,
+  determineTrajectoryStatus,
+  formatAnonParticipant,
+  getPromptStageScore,
+  getWeekBucket,
+  normalizePromptStage,
+} from '@/lib/research-normalizers';
 
-const JWT_SECRET = process.env.JWT_SECRET!;
+interface PromptUnit {
+  id: string;
+  user_id: string;
+  course_id?: string | null;
+  learning_session_id?: string | null;
+  prompt_stage: PromptStage;
+  prompt_stage_score: number;
+  created_at?: string | null;
+  session_number?: number | null;
+  source: 'manual_classification' | 'auto_prompt';
+}
 
-function verifyAdminFromCookie(request: NextRequest): { userId: string; role: string } | null {
-    const token = request.cookies.get('access_token')?.value;
-    if (!token) return null;
-    try {
-        const payload = jwt.verify(token, JWT_SECRET) as { userId: string; role: string };
-        if (payload.role?.toLowerCase() !== 'admin') return null;
-        return payload;
-    } catch {
-        return null;
-    }
+interface ScoreRow {
+  id: string;
+  user_id: string;
+  course_id?: string | null;
+  prompt_classification_id?: string | null;
+  prompt_stage?: string | null;
+  created_at?: string | null;
+  cognitive_depth_level?: number | null;
+  ct_total_score?: number | null;
+  cth_total_score?: number | null;
+  ct_decomposition?: number | null;
+  ct_pattern_recognition?: number | null;
+  ct_abstraction?: number | null;
+  ct_algorithm_design?: number | null;
+  ct_evaluation_debugging?: number | null;
+  ct_generalization?: number | null;
+  cth_interpretation?: number | null;
+  cth_analysis?: number | null;
+  cth_evaluation?: number | null;
+  cth_inference?: number | null;
+  cth_explanation?: number | null;
+  cth_self_regulation?: number | null;
+}
+
+interface LearningSessionRow {
+  id: string;
+  user_id: string;
+  course_id: string;
+  session_number?: number | null;
+  session_date?: string | null;
+  dominant_stage?: string | null;
+  dominant_stage_score?: number | null;
+  transition_status?: string | null;
+  total_prompts?: number | null;
+  is_valid_for_analysis?: boolean | null;
 }
 
 interface UserProgression {
-    user_id: string;
-    sessions: number;
+  user_id: string;
+  anonymous_id: string;
+  sessions: number;
+  avg_stage_score: number;
+  stage_distribution: Record<PromptStage, number>;
+  ct_progression: number[];
+  cth_progression: number[];
+  trajectory_status: TransitionStatus;
+  weekly_stage_path: Array<{
+    week: string;
+    dominant_stage: PromptStage;
+    prompt_count: number;
     avg_stage_score: number;
-    stage_distribution: Record<PromptStage, number>;
-    ct_progression: number[];
-    cth_progression: number[];
+  }>;
 }
 
 interface AnalyticsResponse {
-    total_sessions: number;
-    total_classifications: number;
-    total_indicators: number;
-    total_students: number;
-    stage_distribution: Record<PromptStage, number>;
-    stage_heatmap: Record<PromptStage, { sessions: number; avg_ct: number; avg_cth: number }>;
-    user_progression: UserProgression[];
-    inter_rater_kappa: {
-        prompt_stage: number;
-        ct_indicators: number;
-        reliability_status: 'excellent' | 'good' | 'fair' | 'poor';
-    };
+  total_sessions: number;
+  total_classifications: number;
+  total_indicators: number;
+  total_students: number;
+  stage_distribution: Record<PromptStage, number>;
+  stage_heatmap: Record<PromptStage, { sessions: number; avg_ct: number; avg_cth: number }>;
+  user_progression: UserProgression[];
+  data_readiness: {
+    raw_units: number;
+    classified_units: number;
+    scored_units: number;
+    triangulated_findings: number;
+    artifacts: number;
+    classification_rate: number;
+    scoring_rate: number;
+    evidence_rate: number;
+  };
+  trajectory_status_counts: Record<TransitionStatus, number>;
+  transition_matrix: Record<PromptStage, Record<PromptStage, number>>;
+  inter_rater_kappa: {
+    prompt_stage: number;
+    ct_indicators: number;
+    reliability_status: 'excellent' | 'good' | 'fair' | 'poor';
+  };
 }
 
-// GET /api/admin/research/analytics
+const CT_KEYS = [
+  'ct_decomposition',
+  'ct_pattern_recognition',
+  'ct_abstraction',
+  'ct_algorithm_design',
+  'ct_evaluation_debugging',
+  'ct_generalization',
+] as const;
+
+const CTH_KEYS = [
+  'cth_interpretation',
+  'cth_analysis',
+  'cth_evaluation',
+  'cth_inference',
+  'cth_explanation',
+  'cth_self_regulation',
+] as const;
+
 export async function GET(request: NextRequest) {
-    try {
-        const user = verifyAdminFromCookie(request);
-        if (!user) {
-            return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
-        }
+  try {
+    const admin = verifyAdminFromCookie(request);
+    if (!admin) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
 
-        const { searchParams } = new URL(request.url);
-        const _userId = searchParams.get('user_id');
-        const _courseId = searchParams.get('course_id');
+    const { searchParams } = new URL(request.url);
+    const userId = searchParams.get('user_id');
+    const courseId = searchParams.get('course_id');
+    const startDate = searchParams.get('start_date') ?? searchParams.get('startDate');
+    const endDate = searchParams.get('end_date') ?? searchParams.get('endDate');
 
-        // 1. Counts from BOTH manual research tables AND auto-generated data
-        const [
-            { data: sessionsData },
-            { data: classificationsData },
-            { data: indicatorsData },
-            { data: autoPromptsData },
-            { data: autoScoresData },
-        ] = await Promise.all([
-            adminDb.from('learning_sessions').select('id, user_id'),
-            adminDb.from('prompt_classifications').select('id, prompt_stage, user_id'),
-            adminDb.from('cognitive_indicators').select('id'),
-            adminDb.from('ask_question_history').select('id, user_id, prompt_stage, session_number, course_id'),
-            adminDb.from('auto_cognitive_scores').select('id'),
-        ]);
+    const [
+      sessionsResult,
+      classificationsResult,
+      indicatorsResult,
+      autoPromptsResult,
+      autoScoresResult,
+      evidenceItemsResult,
+      artifactsResult,
+      triangulationResult,
+    ] = await Promise.all([
+      fetchSessions(userId, courseId, startDate, endDate),
+      fetchClassifications(userId, courseId, startDate, endDate),
+      fetchIndicators(userId, startDate, endDate),
+      fetchAutoPrompts(userId, courseId, startDate, endDate),
+      fetchAutoScores(userId, courseId, startDate, endDate),
+      fetchCount('research_evidence_items', userId, courseId),
+      fetchCount('research_artifacts', userId, courseId),
+      fetchCount('triangulation_records', userId, null),
+    ]);
 
-        const sessions = sessionsData || [];
-        const classifications = classificationsData || [];
-        const indicators = indicatorsData || [];
-        const autoPrompts = autoPromptsData || [];
-        const autoScores = autoScoresData || [];
+    const sessions = sessionsResult;
+    const classifications = classificationsResult;
+    const classIdsForCourse = new Set(classifications.map((row) => row.id));
+    const indicators = courseId
+      ? indicatorsResult.filter((row) => classIdsForCourse.has(row.prompt_classification_id ?? ''))
+      : indicatorsResult;
+    const autoPrompts = autoPromptsResult;
+    const autoScores = autoScoresResult;
+    const evidenceItems = evidenceItemsResult;
 
-        // Derive auto sessions: unique (user_id, course_id, session_number) combos
-        const autoSessionKeys = new Set(
-            autoPrompts.map((p: { user_id: string; course_id: string; session_number: number }) =>
-                `${p.user_id}_${p.course_id}_${p.session_number ?? 1}`)
-        );
+    const promptUnits = buildPromptUnits(classifications, autoPrompts, sessions);
+    const scores = [...indicators, ...autoScores];
+    const uniqueStudents = new Set<string>([
+      ...sessions.map((row) => row.user_id),
+      ...promptUnits.map((row) => row.user_id),
+      ...scores.map((row) => row.user_id),
+    ].filter(Boolean));
 
-        const totalSessions = sessions.length + autoSessionKeys.size;
-        const totalClassifications = classifications.length + autoPrompts.length;
-        const totalIndicators = indicators.length + autoScores.length;
+    const totalSessions = countSessions(sessions, autoPrompts);
+    const totalClassifications = promptUnits.length;
+    const totalIndicators = indicators.length + autoScores.length;
+    const stageDistribution = buildStageDistribution(promptUnits);
+    const stageHeatmap = buildStageHeatmap(classifications, indicators, autoScores);
+    const transitionMatrix = buildTransitionMatrix(promptUnits);
+    const userProgression = buildUserProgression(promptUnits, scores, totalSessions);
+    const trajectoryStatusCounts = buildTrajectoryStatusCounts(userProgression);
+    const interRaterKappa = await buildInterRaterKappa();
 
-        // Total unique students from both sources
-        const uniqueStudents = new Set([
-            ...sessions.map((s: { user_id: string }) => s.user_id),
-            ...autoPrompts.map((p: { user_id: string }) => p.user_id),
-        ]);
-        const totalStudents = uniqueStudents.size;
+    const dataReadiness = {
+      raw_units: autoPrompts.length,
+      classified_units: totalClassifications,
+      scored_units: totalIndicators,
+      evidence_items: evidenceItems,
+      triangulated_findings: triangulationResult,
+      artifacts: artifactsResult,
+      valid_sessions: sessions.filter((row) => row.is_valid_for_analysis !== false).length,
+      classification_rate: pct(totalClassifications, Math.max(autoPrompts.length, totalClassifications)),
+      scoring_rate: pct(totalIndicators, Math.max(totalClassifications, totalIndicators)),
+      evidence_rate: pct(evidenceItems + artifactsResult + triangulationResult, Math.max(1, uniqueStudents.size * 3)),
+    };
 
-        // 2. Stage distribution from BOTH manual classifications AND auto-classified prompts
-        const stageDistribution: Record<PromptStage, number> = { SCP: 0, SRP: 0, MQP: 0, REFLECTIVE: 0 };
-        classifications.forEach((c: { prompt_stage: string }) => {
-            const stage = c.prompt_stage as PromptStage;
-            if (stage in stageDistribution) {
-                stageDistribution[stage]++;
-            }
-        });
-        autoPrompts.forEach((p: { prompt_stage: string }) => {
-            const stage = (p.prompt_stage || '').toUpperCase() as PromptStage;
-            if (stage in stageDistribution) {
-                stageDistribution[stage]++;
-            }
-        });
+    const response: AnalyticsResponse = {
+      total_sessions: totalSessions,
+      total_classifications: totalClassifications,
+      total_indicators: totalIndicators,
+      total_students: uniqueStudents.size,
+      stage_distribution: stageDistribution,
+      stage_heatmap: stageHeatmap,
+      user_progression: userProgression,
+      data_readiness: dataReadiness,
+      trajectory_status_counts: trajectoryStatusCounts,
+      transition_matrix: transitionMatrix,
+      inter_rater_kappa: interRaterKappa,
+    };
 
-        // 3. Stage heatmap - get classifications with their cognitive indicator scores
-        const stageHeatmap: Record<PromptStage, { sessions: number; avg_ct: number; avg_cth: number }> = {
-            SCP: { sessions: 0, avg_ct: 0, avg_cth: 0 },
-            SRP: { sessions: 0, avg_ct: 0, avg_cth: 0 },
-            MQP: { sessions: 0, avg_ct: 0, avg_cth: 0 },
-            REFLECTIVE: { sessions: 0, avg_ct: 0, avg_cth: 0 }
-        };
+    return withCacheHeaders(NextResponse.json({ success: true, data: response }), 60);
+  } catch (error) {
+    console.error('Analytics error:', error);
+    return NextResponse.json({ error: 'Failed to generate analytics' }, { status: 500 });
+  }
+}
 
-        // Get classifications with linked indicators for heatmap
-        const { data: classWithIndicators } = await adminDb
-            .from('prompt_classifications')
-            .select('prompt_stage, learning_session_id');
+async function fetchSessions(userId?: string | null, courseId?: string | null, startDate?: string | null, endDate?: string | null) {
+  let query = adminDb
+    .from('learning_sessions')
+    .select('id, user_id, course_id, session_number, session_date, dominant_stage, dominant_stage_score, transition_status, total_prompts, is_valid_for_analysis');
+  if (userId) query = query.eq('user_id', userId);
+  if (courseId) query = query.eq('course_id', courseId);
+  if (startDate) query = query.gte('session_date', startDate);
+  if (endDate) query = query.lte('session_date', endDate);
+  query = query.order('session_date', { ascending: true });
+  const { data } = await query;
+  return (data ?? []) as LearningSessionRow[];
+}
 
-        const { data: indicatorScores } = await adminDb
-            .from('cognitive_indicators')
-            .select('prompt_classification_id, ct_total_score, cth_total_score');
+async function fetchClassifications(userId?: string | null, courseId?: string | null, startDate?: string | null, endDate?: string | null) {
+  let query = adminDb
+    .from('prompt_classifications')
+    .select('id, prompt_stage, prompt_stage_score, user_id, course_id, learning_session_id, created_at, prompt_text, prompt_source, prompt_id');
+  if (userId) query = query.eq('user_id', userId);
+  if (courseId) query = query.eq('course_id', courseId);
+  if (startDate) query = query.gte('created_at', `${startDate}T00:00:00`);
+  if (endDate) query = query.lte('created_at', `${endDate}T23:59:59`);
+  query = query.order('created_at', { ascending: true });
+  const { data } = await query;
+  return (data ?? []) as Array<{
+    id: string;
+    prompt_stage?: string | null;
+    prompt_stage_score?: number | null;
+    user_id: string;
+    course_id?: string | null;
+    learning_session_id?: string | null;
+    created_at?: string | null;
+  }>;
+}
 
-        // Build a map of classification_id -> scores
-        const indicatorMap = new Map<string, { ct: number; cth: number }[]>();
-        (indicatorScores || []).forEach((ind: { prompt_classification_id: string; ct_total_score: number; cth_total_score: number }) => {
-            const existing = indicatorMap.get(ind.prompt_classification_id) || [];
-            existing.push({ ct: ind.ct_total_score || 0, cth: ind.cth_total_score || 0 });
-            indicatorMap.set(ind.prompt_classification_id, existing);
-        });
+async function fetchIndicators(userId?: string | null, startDate?: string | null, endDate?: string | null) {
+  let query = adminDb.from('cognitive_indicators').select('*');
+  if (userId) query = query.eq('user_id', userId);
+  if (startDate) query = query.gte('created_at', `${startDate}T00:00:00`);
+  if (endDate) query = query.lte('created_at', `${endDate}T23:59:59`);
+  query = query.order('created_at', { ascending: true });
+  const { data } = await query;
+  return (data ?? []) as ScoreRow[];
+}
 
-        // Build heatmap using stage data
-        const stageCounts: Record<PromptStage, { sessions: Set<string>; ctScores: number[]; cthScores: number[] }> = {
-            SCP: { sessions: new Set(), ctScores: [], cthScores: [] },
-            SRP: { sessions: new Set(), ctScores: [], cthScores: [] },
-            MQP: { sessions: new Set(), ctScores: [], cthScores: [] },
-            REFLECTIVE: { sessions: new Set(), ctScores: [], cthScores: [] }
-        };
+async function fetchAutoPrompts(userId?: string | null, courseId?: string | null, startDate?: string | null, endDate?: string | null) {
+  let query = adminDb
+    .from('ask_question_history')
+    .select('id, user_id, course_id, prompt_stage, stage_confidence, session_number, created_at, learning_session_id, question, answer');
+  if (userId) query = query.eq('user_id', userId);
+  if (courseId) query = query.eq('course_id', courseId);
+  if (startDate) query = query.gte('created_at', `${startDate}T00:00:00`);
+  if (endDate) query = query.lte('created_at', `${endDate}T23:59:59`);
+  query = query.order('created_at', { ascending: true });
+  const { data } = await query;
+  return (data ?? []) as Array<{
+    id: string;
+    user_id: string;
+    course_id?: string | null;
+    prompt_stage?: string | null;
+    session_number?: number | null;
+    created_at?: string | null;
+    learning_session_id?: string | null;
+  }>;
+}
 
-        (classWithIndicators || []).forEach((c: { prompt_stage: string; learning_session_id?: string; id?: string }) => {
-            const stage = c.prompt_stage as PromptStage;
-            if (stage in stageCounts) {
-                if (c.learning_session_id) {
-                    stageCounts[stage].sessions.add(c.learning_session_id);
-                }
-                // Get associated indicator scores
-                const scores = indicatorMap.get((c as { id?: string }).id || '') || [];
-                scores.forEach(s => {
-                    stageCounts[stage].ctScores.push(s.ct);
-                    stageCounts[stage].cthScores.push(s.cth);
-                });
-            }
-        });
+async function fetchAutoScores(userId?: string | null, courseId?: string | null, startDate?: string | null, endDate?: string | null) {
+  let query = adminDb.from('auto_cognitive_scores').select('*');
+  if (userId) query = query.eq('user_id', userId);
+  if (courseId) query = query.eq('course_id', courseId);
+  if (startDate) query = query.gte('created_at', `${startDate}T00:00:00`);
+  if (endDate) query = query.lte('created_at', `${endDate}T23:59:59`);
+  query = query.order('created_at', { ascending: true });
+  const { data } = await query;
+  return (data ?? []) as ScoreRow[];
+}
 
-        for (const stage of ['SCP', 'SRP', 'MQP', 'REFLECTIVE'] as PromptStage[]) {
-            const data = stageCounts[stage];
-            stageHeatmap[stage] = {
-                sessions: data.sessions.size,
-                avg_ct: data.ctScores.length > 0
-                    ? Math.round((data.ctScores.reduce((a, b) => a + b, 0) / data.ctScores.length) * 100) / 100
-                    : 0,
-                avg_cth: data.cthScores.length > 0
-                    ? Math.round((data.cthScores.reduce((a, b) => a + b, 0) / data.cthScores.length) * 100) / 100
-                    : 0
-            };
-        }
+async function fetchCount(table: string, userId?: string | null, courseId?: string | null): Promise<number> {
+  try {
+    let query = adminDb.from(table).select(courseId ? 'id, user_id, course_id' : 'id, user_id');
+    if (userId) query = query.eq('user_id', userId);
+    if (courseId) query = query.eq('course_id', courseId);
+    const { data } = await query;
+    return Array.isArray(data) ? data.length : 0;
+  } catch {
+    return 0;
+  }
+}
 
-        // 4. User progression (top 10 users by session/prompt count)
-        const userSessionCounts = new Map<string, number>();
-        sessions.forEach((s: { user_id: string }) => {
-            userSessionCounts.set(s.user_id, (userSessionCounts.get(s.user_id) || 0) + 1);
-        });
-        // Also count auto-detected sessions per user
-        const userAutoSessionKeys = new Map<string, Set<string>>();
-        autoPrompts.forEach((p: { user_id: string; course_id: string; session_number: number }) => {
-            const key = `${p.course_id}_${p.session_number ?? 1}`;
-            if (!userAutoSessionKeys.has(p.user_id)) userAutoSessionKeys.set(p.user_id, new Set());
-            userAutoSessionKeys.get(p.user_id)!.add(key);
-        });
-        userAutoSessionKeys.forEach((keys, uid) => {
-            userSessionCounts.set(uid, (userSessionCounts.get(uid) || 0) + keys.size);
-        });
+function buildPromptUnits(
+  classifications: Awaited<ReturnType<typeof fetchClassifications>>,
+  autoPrompts: Awaited<ReturnType<typeof fetchAutoPrompts>>,
+  sessions: LearningSessionRow[],
+): PromptUnit[] {
+  const sessionsById = new Map(sessions.map((session) => [session.id, session]));
+  const manualUnits = classifications.map((row) => {
+    const stage = normalizePromptStage(row.prompt_stage);
+    const session = row.learning_session_id ? sessionsById.get(row.learning_session_id) : null;
+    return {
+      id: row.id,
+      user_id: row.user_id,
+      course_id: row.course_id ?? session?.course_id ?? null,
+      learning_session_id: row.learning_session_id ?? null,
+      prompt_stage: stage,
+      prompt_stage_score: Number(row.prompt_stage_score ?? getPromptStageScore(stage)),
+      created_at: row.created_at ?? session?.session_date ?? null,
+      session_number: session?.session_number ?? null,
+      source: 'manual_classification' as const,
+    };
+  });
 
-        const topUsers = Array.from(userSessionCounts.entries())
-            .sort((a, b) => b[1] - a[1])
-            .slice(0, 10)
-            .map(([uid]) => uid);
+  const autoUnits = autoPrompts
+    .filter((row) => row.prompt_stage)
+    .map((row) => {
+      const stage = normalizePromptStage(row.prompt_stage);
+      return {
+        id: row.id,
+        user_id: row.user_id,
+        course_id: row.course_id ?? null,
+        learning_session_id: row.learning_session_id ?? null,
+        prompt_stage: stage,
+        prompt_stage_score: getPromptStageScore(stage),
+        created_at: row.created_at ?? null,
+        session_number: row.session_number ?? null,
+        source: 'auto_prompt' as const,
+      };
+    });
 
-        const userProgression: UserProgression[] = topUsers.map(uid => {
-            // Combine manual classifications + auto-classified prompts
-            const manualClassifications = classifications.filter((c: { user_id: string }) => c.user_id === uid);
-            const autoClassifications = autoPrompts.filter((p: { user_id: string }) => p.user_id === uid);
-            const allClassifications = [
-                ...manualClassifications.map((c: { prompt_stage: string }) => c.prompt_stage),
-                ...autoClassifications.map((p: { prompt_stage: string }) => p.prompt_stage || ''),
-            ];
-            const sessionCount = userSessionCounts.get(uid) || 0;
+  return [...manualUnits, ...autoUnits];
+}
 
-            // Stage distribution for this user
-            const userStageDist: Record<PromptStage, number> = { SCP: 0, SRP: 0, MQP: 0, REFLECTIVE: 0 };
-            let totalStageScore = 0;
-            allClassifications.forEach((stageStr: string) => {
-                const stage = (stageStr || '').toUpperCase() as PromptStage;
-                if (stage in userStageDist) {
-                    userStageDist[stage]++;
-                    totalStageScore += PROMPT_STAGE_SCORES[stage] || 0;
-                }
-            });
+function countSessions(sessions: LearningSessionRow[], autoPrompts: Awaited<ReturnType<typeof fetchAutoPrompts>>): number {
+  const sessionKeys = new Set<string>();
+  sessions.forEach((session) => sessionKeys.add(session.id));
+  autoPrompts.forEach((prompt) => {
+    const key = prompt.learning_session_id
+      ?? `${prompt.user_id}_${prompt.course_id ?? 'course'}_${prompt.session_number ?? getWeekBucket(prompt.created_at)}`;
+    sessionKeys.add(key);
+  });
+  return sessionKeys.size;
+}
 
-            const avgStageScore = allClassifications.length > 0
-                ? Math.round((totalStageScore / allClassifications.length) * 100) / 100
-                : 0;
+function buildStageDistribution(promptUnits: PromptUnit[]): Record<PromptStage, number> {
+  const distribution = emptyStageRecord(0);
+  promptUnits.forEach((unit) => {
+    distribution[unit.prompt_stage] += 1;
+  });
+  return distribution;
+}
 
-            return {
-                user_id: uid,
-                sessions: sessionCount,
-                avg_stage_score: avgStageScore,
-                stage_distribution: userStageDist,
-                ct_progression: [],  // Would need per-session indicator data for full progression
-                cth_progression: []
-            };
-        });
+function buildStageHeatmap(
+  classifications: Awaited<ReturnType<typeof fetchClassifications>>,
+  indicators: ScoreRow[],
+  autoScores: ScoreRow[],
+): Record<PromptStage, { sessions: number; avg_ct: number; avg_cth: number }> {
+  const classById = new Map(classifications.map((row) => [row.id, row]));
+  const stageBuckets = Object.fromEntries(PROMPT_STAGES.map((stage) => [stage, {
+    sessions: new Set<string>(),
+    ctScores: [] as number[],
+    cthScores: [] as number[],
+  }])) as Record<PromptStage, { sessions: Set<string>; ctScores: number[]; cthScores: number[] }>;
 
-        // 5. Inter-rater reliability - query from inter_rater_reliability table
-        let interRaterKappa = {
-            prompt_stage: 0,
-            ct_indicators: 0,
-            reliability_status: 'fair' as 'excellent' | 'good' | 'fair' | 'poor'
-        };
+  classifications.forEach((row) => {
+    const stage = normalizePromptStage(row.prompt_stage);
+    if (row.learning_session_id) stageBuckets[stage].sessions.add(row.learning_session_id);
+  });
 
-        try {
-            const { data: reliabilityData } = await adminDb
-                .from('inter_rater_reliability')
-                .select('*')
-                .order('created_at', { ascending: false })
-                .limit(5);
+  indicators.forEach((row) => {
+    const classification = row.prompt_classification_id ? classById.get(row.prompt_classification_id) : null;
+    if (!classification) return;
+    const stage = normalizePromptStage(classification.prompt_stage);
+    stageBuckets[stage].ctScores.push(totalScore(row, CT_KEYS, row.ct_total_score));
+    stageBuckets[stage].cthScores.push(totalScore(row, CTH_KEYS, row.cth_total_score));
+  });
 
-            if (reliabilityData && reliabilityData.length > 0) {
-                // Get the most recent reliability records
-                const promptReliability = reliabilityData.find(
-                    (r: { coding_type: string }) => r.coding_type === 'prompt_stage'
-                );
-                const ctReliability = reliabilityData.find(
-                    (r: { coding_type: string }) => r.coding_type === 'ct_indicators'
-                );
+  autoScores.forEach((row) => {
+    if (!row.prompt_stage) return;
+    const stage = normalizePromptStage(row.prompt_stage);
+    stageBuckets[stage].ctScores.push(totalScore(row, CT_KEYS, row.ct_total_score));
+    stageBuckets[stage].cthScores.push(totalScore(row, CTH_KEYS, row.cth_total_score));
+  });
 
-                const promptKappa = promptReliability?.cohens_kappa ?? 0;
-                const ctKappa = ctReliability?.cohens_kappa ?? 0;
-                const overallKappa = (promptKappa + ctKappa) / 2;
+  return Object.fromEntries(PROMPT_STAGES.map((stage) => {
+    const bucket = stageBuckets[stage];
+    return [stage, {
+      sessions: bucket.sessions.size,
+      avg_ct: average(bucket.ctScores),
+      avg_cth: average(bucket.cthScores),
+    }];
+  })) as Record<PromptStage, { sessions: number; avg_ct: number; avg_cth: number }>;
+}
 
-                interRaterKappa = {
-                    prompt_stage: Math.round(promptKappa * 100) / 100,
-                    ct_indicators: Math.round(ctKappa * 100) / 100,
-                    reliability_status: overallKappa >= 0.7 ? 'excellent'
-                        : overallKappa >= 0.5 ? 'good'
-                        : overallKappa >= 0.3 ? 'fair'
-                        : 'poor'
-                };
-            } else {
-                // Fallback: calculate from classifications with multiple raters
-                const { data: ratedClassifications } = await adminDb
-                    .from('prompt_classifications')
-                    .select('prompt_id, prompt_stage, classified_by')
-                    .limit(200);
-
-                if (ratedClassifications && ratedClassifications.length > 0) {
-                    // Group by prompt_id to find items with multiple ratings
-                    const promptRatings = new Map<string, { stage: string; rater: string }[]>();
-                    ratedClassifications.forEach((r: { prompt_id: string; prompt_stage: string; classified_by: string }) => {
-                        const existing = promptRatings.get(r.prompt_id) || [];
-                        existing.push({ stage: r.prompt_stage, rater: r.classified_by });
-                        promptRatings.set(r.prompt_id, existing);
-                    });
-
-                    // Find prompts with 2+ ratings
-                    let agreements = 0;
-                    let totalPairs = 0;
-                    promptRatings.forEach(ratings => {
-                        if (ratings.length >= 2) {
-                            // Compare first two ratings
-                            totalPairs++;
-                            if (ratings[0].stage === ratings[1].stage) {
-                                agreements++;
-                            }
-                        }
-                    });
-
-                    const observedAgreement = totalPairs > 0 ? agreements / totalPairs : 0;
-                    // Simple kappa approximation (assumes 4 categories with equal chance)
-                    const expectedAgreement = 0.25;
-                    const kappa = expectedAgreement < 1
-                        ? (observedAgreement - expectedAgreement) / (1 - expectedAgreement)
-                        : 1;
-
-                    interRaterKappa = {
-                        prompt_stage: Math.round(Math.max(0, kappa) * 100) / 100,
-                        ct_indicators: 0,
-                        reliability_status: kappa >= 0.7 ? 'excellent'
-                            : kappa >= 0.5 ? 'good'
-                            : kappa >= 0.3 ? 'fair'
-                            : 'poor'
-                    };
-                }
-            }
-        } catch (reliabilityError) {
-            console.warn('Inter-rater reliability query failed, using defaults:', reliabilityError);
-            // Keep default values
-        }
-
-        const response: AnalyticsResponse = {
-            total_sessions: totalSessions,
-            total_classifications: totalClassifications,
-            total_indicators: totalIndicators,
-            total_students: totalStudents,
-            stage_distribution: stageDistribution,
-            stage_heatmap: stageHeatmap,
-            user_progression: userProgression,
-            inter_rater_kappa: interRaterKappa
-        };
-
-        return withCacheHeaders(NextResponse.json({ success: true, data: response }), 60);
-
-    } catch (error) {
-        console.error('Analytics error:', error);
-        return NextResponse.json({ error: 'Failed to generate analytics' }, { status: 500 });
+function buildTransitionMatrix(promptUnits: PromptUnit[]): Record<PromptStage, Record<PromptStage, number>> {
+  const matrix = Object.fromEntries(PROMPT_STAGES.map((from) => [from, emptyStageRecord(0)])) as Record<PromptStage, Record<PromptStage, number>>;
+  const grouped = groupBy(promptUnits, (unit) => `${unit.user_id}_${unit.course_id ?? 'course'}`);
+  grouped.forEach((units) => {
+    const sorted = sortPromptUnits(units);
+    for (let index = 1; index < sorted.length; index += 1) {
+      matrix[sorted[index - 1].prompt_stage][sorted[index].prompt_stage] += 1;
     }
+  });
+  return matrix;
+}
+
+function buildUserProgression(promptUnits: PromptUnit[], scores: ScoreRow[], totalSessions: number): UserProgression[] {
+  const users = Array.from(new Set(promptUnits.map((unit) => unit.user_id)));
+  const scoresByUser = groupBy(scores, (score) => score.user_id);
+
+  return users.map((userId, index) => {
+    const units = sortPromptUnits(promptUnits.filter((unit) => unit.user_id === userId));
+    const userScores = scoresByUser.get(userId) ?? [];
+    const stageDistribution = buildStageDistribution(units);
+    const stageScores = units.map((unit) => unit.prompt_stage_score);
+    const avgStageScore = average(stageScores);
+    const weeklyStagePath = buildWeeklyStagePath(units);
+    const sessionKeys = new Set(units.map((unit) => unit.learning_session_id ?? `${unit.course_id}_${unit.session_number ?? getWeekBucket(unit.created_at)}`));
+
+    return {
+      user_id: userId,
+      anonymous_id: formatAnonParticipant(index),
+      sessions: sessionKeys.size || Math.min(totalSessions, 1),
+      avg_stage_score: avgStageScore,
+      stage_distribution: stageDistribution,
+      ct_progression: userScores.map((score) => totalScore(score, CT_KEYS, score.ct_total_score)),
+      cth_progression: userScores.map((score) => totalScore(score, CTH_KEYS, score.cth_total_score)),
+      trajectory_status: determineTrajectoryStatus(stageScores),
+      weekly_stage_path: weeklyStagePath,
+    };
+  }).sort((a, b) => b.sessions - a.sessions).slice(0, 20);
+}
+
+function buildWeeklyStagePath(units: PromptUnit[]) {
+  if (units.length === 0) return [];
+  const sorted = sortPromptUnits(units);
+  const firstDate = parseDate(sorted[0].created_at);
+  const grouped = groupBy(sorted, (unit) => getWeekBucket(unit.created_at, firstDate));
+  return Array.from(grouped.entries()).map(([week, weekUnits]) => {
+    const stageCounts = emptyStageRecord(0);
+    weekUnits.forEach((unit) => { stageCounts[unit.prompt_stage] += 1; });
+    const dominantStage = PROMPT_STAGES
+      .slice()
+      .sort((a, b) => stageCounts[b] - stageCounts[a] || getPromptStageScore(b) - getPromptStageScore(a))[0];
+    return {
+      week,
+      dominant_stage: dominantStage,
+      prompt_count: weekUnits.length,
+      avg_stage_score: average(weekUnits.map((unit) => unit.prompt_stage_score)),
+    };
+  });
+}
+
+function buildTrajectoryStatusCounts(userProgression: UserProgression[]): Record<TransitionStatus, number> {
+  const counts: Record<TransitionStatus, number> = {
+    naik_stabil: 0,
+    stagnan: 0,
+    fluktuatif: 0,
+    anomali: 0,
+    turun: 0,
+  };
+  userProgression.forEach((progression) => {
+    counts[progression.trajectory_status] += 1;
+  });
+  return counts;
+}
+
+async function buildInterRaterKappa() {
+  let promptKappa = 0;
+  let ctKappa = 0;
+  try {
+    const { data: reliabilityData } = await adminDb
+      .from('inter_rater_reliability')
+      .select('*')
+      .order('created_at', { ascending: false })
+      .limit(10);
+    const rows = (reliabilityData ?? []) as Array<{ coding_type?: string | null; cohens_kappa?: number | null }>;
+    promptKappa = Number(rows.find((row) => row.coding_type === 'prompt_stage' || row.coding_type === 'prompt_classification')?.cohens_kappa ?? 0);
+    ctKappa = Number(rows.find((row) => row.coding_type === 'ct_indicators' || row.coding_type === 'cognitive_indicators')?.cohens_kappa ?? 0);
+  } catch (error) {
+    console.warn('Inter-rater reliability query failed:', error);
+  }
+
+  const overall = (promptKappa + ctKappa) / 2;
+  return {
+    prompt_stage: round(promptKappa),
+    ct_indicators: round(ctKappa),
+    reliability_status: overall >= 0.7 ? 'excellent' as const
+      : overall >= 0.5 ? 'good' as const
+        : overall >= 0.3 ? 'fair' as const
+          : 'poor' as const,
+  };
+}
+
+function emptyStageRecord(value: number): Record<PromptStage, number> {
+  return { SCP: value, SRP: value, MQP: value, REFLECTIVE: value };
+}
+
+function sortPromptUnits(units: PromptUnit[]): PromptUnit[] {
+  return [...units].sort((a, b) => {
+    const dateDiff = (parseDate(a.created_at)?.getTime() ?? 0) - (parseDate(b.created_at)?.getTime() ?? 0);
+    if (dateDiff !== 0) return dateDiff;
+    return (a.session_number ?? 0) - (b.session_number ?? 0);
+  });
+}
+
+function parseDate(value: unknown): Date | null {
+  const date = new Date(String(value ?? ''));
+  return Number.isNaN(date.getTime()) ? null : date;
+}
+
+function groupBy<T>(rows: T[], keyFn: (row: T) => string): Map<string, T[]> {
+  const map = new Map<string, T[]>();
+  rows.forEach((row) => {
+    const key = keyFn(row);
+    const list = map.get(key) ?? [];
+    list.push(row);
+    map.set(key, list);
+  });
+  return map;
+}
+
+function totalScore(row: ScoreRow, keys: readonly string[], explicit?: number | null): number {
+  const explicitNumber = Number(explicit);
+  if (Number.isFinite(explicitNumber) && explicitNumber > 0) return explicitNumber;
+  return keys.reduce((sum, key) => sum + (Number((row as unknown as Record<string, unknown>)[key]) || 0), 0);
+}
+
+function average(values: number[]): number {
+  const valid = values.filter((value) => Number.isFinite(value));
+  if (valid.length === 0) return 0;
+  return round(valid.reduce((sum, value) => sum + value, 0) / valid.length);
+}
+
+function pct(part: number, total: number): number {
+  if (!total) return 0;
+  return Math.min(100, round((part / total) * 100));
+}
+
+function round(value: number): number {
+  return Math.round(value * 100) / 100;
 }

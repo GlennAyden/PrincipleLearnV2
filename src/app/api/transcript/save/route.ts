@@ -3,6 +3,11 @@ import type { NextRequest } from 'next/server';
 import { DatabaseService } from '@/lib/database';
 import { withApiLogging } from '@/lib/api-logger';
 import { resolveAuthUserId } from '@/lib/auth-helper';
+import {
+  refreshResearchSessionMetrics,
+  resolveResearchLearningSession,
+  syncResearchEvidenceItem,
+} from '@/services/research-session.service';
 
 interface TranscriptSubmission {
   userId: string; // User id or email
@@ -127,6 +132,7 @@ async function postHandler(req: NextRequest) {
     };
 
     let transcript: { id: string } | null = null;
+    let transcriptTable: 'transcript' | 'transcripts' = 'transcript';
     try {
       transcript = await upsertTranscript('transcript');
     } catch (primaryError: unknown) {
@@ -137,6 +143,7 @@ async function postHandler(req: NextRequest) {
 
       // Backward-compatible fallback for environments using plural table naming.
       try {
+        transcriptTable = 'transcripts';
         transcript = await upsertTranscript('transcripts');
       } catch (fallbackError) {
         console.error('[Transcript] Both table names failed:', { primaryError: message, fallbackError });
@@ -151,6 +158,46 @@ async function postHandler(req: NextRequest) {
       subtopic: data.subtopic,
       subtopicId,
     });
+
+    try {
+      const researchTimestamp = new Date().toISOString();
+      const researchSession = await resolveResearchLearningSession({
+        userId: user.id,
+        courseId: data.courseId,
+        occurredAt: researchTimestamp,
+      });
+      await syncResearchEvidenceItem({
+        sourceType: 'ask_question',
+        sourceId: transcript.id,
+        sourceTable: transcriptTable,
+        userId: user.id,
+        courseId: data.courseId,
+        learningSessionId: researchSession.learningSessionId,
+        rmFocus: 'RM2_RM3',
+        evidenceTitle: data.question.slice(0, 120),
+        evidenceText: data.question,
+        aiResponseText: data.answer,
+        evidenceStatus: 'raw',
+        codingStatus: 'uncoded',
+        researchValidityStatus: 'valid',
+        dataCollectionWeek: researchSession.dataCollectionWeek,
+        evidenceSourceSummary: 'Transkrip Q/A pembelajaran yang disimpan siswa.',
+        rawEvidenceSnapshot: {
+          subtopic: data.subtopic,
+          subtopic_id: subtopicId,
+          question: data.question,
+          answer: data.answer,
+        },
+        metadata: {
+          mapped_source_type: 'ask_question',
+          original_source_type: 'transcript',
+        },
+        createdAt: researchTimestamp,
+      });
+      await refreshResearchSessionMetrics(researchSession.learningSessionId);
+    } catch (researchError) {
+      console.warn('[Transcript] Research evidence sync skipped', researchError);
+    }
 
     return NextResponse.json({ success: true, id: transcript!.id });
   } catch (error: unknown) {

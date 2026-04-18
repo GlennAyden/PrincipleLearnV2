@@ -11,6 +11,7 @@ async function getHandler(request: NextRequest) {
 
   const { searchParams } = new URL(request.url);
   const userId = searchParams.get('user_id');
+  const courseId = searchParams.get('course_id');
 
   if (!userId) {
     return NextResponse.json({ error: 'Parameter user_id diperlukan' }, { status: 400 });
@@ -18,11 +19,14 @@ async function getHandler(request: NextRequest) {
 
   try {
     // Fetch all scores for this user
-    const { data: allScores, error } = await adminDb
+    let query = adminDb
       .from('auto_cognitive_scores')
       .select('*')
-      .eq('user_id', userId)
-      .order('created_at', { ascending: true });
+      .eq('user_id', userId);
+    if (courseId) query = query.eq('course_id', courseId);
+    query = query.order('created_at', { ascending: true });
+
+    const { data: allScores, error } = await query;
 
     if (error) {
       console.error('[AutoScoresSummary] Query failed:', error);
@@ -48,8 +52,8 @@ async function getHandler(request: NextRequest) {
       const src = s.source as string;
       if (!bySource[src]) bySource[src] = { count: 0, ct_sum: 0, crt_sum: 0, depth_sum: 0 };
       bySource[src].count++;
-      bySource[src].ct_sum += s.ct_total_score || 0;
-      bySource[src].crt_sum += s.cth_total_score || 0;
+      bySource[src].ct_sum += ctTotal(s);
+      bySource[src].crt_sum += cthTotal(s);
       bySource[src].depth_sum += s.cognitive_depth_level || 0;
     }
 
@@ -77,8 +81,8 @@ async function getHandler(request: NextRequest) {
       indicatorBreakdown[key] = Math.round((sum / scores.length) * 100) / 100;
     }
 
-    const totalCt = scores.reduce((acc: number, s: Record<string, unknown>) => acc + (Number(s.ct_total_score) || 0), 0);
-    const totalCrt = scores.reduce((acc: number, s: Record<string, unknown>) => acc + (Number(s.cth_total_score) || 0), 0);
+    const totalCt = scores.reduce((acc: number, s: Record<string, unknown>) => acc + ctTotal(s), 0);
+    const totalCrt = scores.reduce((acc: number, s: Record<string, unknown>) => acc + cthTotal(s), 0);
 
     // Progression (daily averages)
     const dailyMap = new Map<string, { ct_sum: number; crt_sum: number; count: number; source: string }>();
@@ -87,8 +91,8 @@ async function getHandler(request: NextRequest) {
       const key = `${day}_${s.source}`;
       if (!dailyMap.has(key)) dailyMap.set(key, { ct_sum: 0, crt_sum: 0, count: 0, source: s.source as string });
       const entry = dailyMap.get(key)!;
-      entry.ct_sum += s.ct_total_score || 0;
-      entry.crt_sum += s.cth_total_score || 0;
+      entry.ct_sum += ctTotal(s);
+      entry.crt_sum += cthTotal(s);
       entry.count++;
     }
 
@@ -109,11 +113,11 @@ async function getHandler(request: NextRequest) {
     const followUpComparison = askScores.length > 0 ? {
       follow_up_count: followUps.length,
       follow_up_avg_crt: followUps.length > 0
-        ? Math.round((followUps.reduce((a: number, s: Record<string, unknown>) => a + (Number(s.cth_total_score) || 0), 0) / followUps.length) * 100) / 100
+        ? Math.round((followUps.reduce((a: number, s: Record<string, unknown>) => a + cthTotal(s), 0) / followUps.length) * 100) / 100
         : 0,
       non_follow_up_count: nonFollowUps.length,
       non_follow_up_avg_crt: nonFollowUps.length > 0
-        ? Math.round((nonFollowUps.reduce((a: number, s: Record<string, unknown>) => a + (Number(s.cth_total_score) || 0), 0) / nonFollowUps.length) * 100) / 100
+        ? Math.round((nonFollowUps.reduce((a: number, s: Record<string, unknown>) => a + cthTotal(s), 0) / nonFollowUps.length) * 100) / 100
         : 0,
     } : null;
 
@@ -125,8 +129,8 @@ async function getHandler(request: NextRequest) {
       if (!stageMap.has(stage)) stageMap.set(stage, { count: 0, ct_sum: 0, crt_sum: 0, depth_sum: 0 });
       const entry = stageMap.get(stage)!;
       entry.count++;
-      entry.ct_sum += s.ct_total_score || 0;
-      entry.crt_sum += s.cth_total_score || 0;
+      entry.ct_sum += ctTotal(s);
+      entry.crt_sum += cthTotal(s);
       entry.depth_sum += s.cognitive_depth_level || 0;
     }
 
@@ -158,3 +162,33 @@ async function getHandler(request: NextRequest) {
 }
 
 export const GET = withApiLogging(getHandler, { label: 'admin.auto-scores-summary' });
+
+const CT_KEYS = [
+  'ct_decomposition',
+  'ct_pattern_recognition',
+  'ct_abstraction',
+  'ct_algorithm_design',
+  'ct_evaluation_debugging',
+  'ct_generalization',
+] as const;
+
+const CTH_KEYS = [
+  'cth_interpretation',
+  'cth_analysis',
+  'cth_evaluation',
+  'cth_inference',
+  'cth_explanation',
+  'cth_self_regulation',
+] as const;
+
+function ctTotal(score: Record<string, unknown>): number {
+  const explicit = Number(score.ct_total_score);
+  if (Number.isFinite(explicit) && explicit > 0) return explicit;
+  return CT_KEYS.reduce((sum, key) => sum + (Number(score[key]) || 0), 0);
+}
+
+function cthTotal(score: Record<string, unknown>): number {
+  const explicit = Number(score.cth_total_score);
+  if (Number.isFinite(explicit) && explicit > 0) return explicit;
+  return CTH_KEYS.reduce((sum, key) => sum + (Number(score[key]) || 0), 0);
+}

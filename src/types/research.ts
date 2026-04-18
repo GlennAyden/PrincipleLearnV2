@@ -92,7 +92,16 @@ export type ClassifiedBy = 'auto' | 'manual' | 'researcher_1' | 'researcher_2' |
 /**
  * Prompt Source
  */
-export type PromptSource = 'ask_question' | 'discussion' | 'challenge';
+export type PromptSource =
+    | 'ask_question'
+    | 'discussion'
+    | 'challenge'
+    | 'challenge_response'
+    | 'quiz_submission'
+    | 'journal'
+    | 'artifact'
+    | 'observation'
+    | 'manual_entry';
 
 /**
  * Revision Type
@@ -117,12 +126,19 @@ export type EvidenceStatus = 'supports' | 'neutral' | 'contradicts';
 /**
  * Convergence Status
  */
-export type ConvergenceStatus = 'convergen' | 'partial' | 'contradictory';
+export type ConvergenceStatus = 'convergen' | 'partial' | 'contradictory' | 'missing';
 
 /**
  * Agreement Status
  */
 export type AgreementStatus = 'agreed' | 'disagreed' | 'resolved';
+
+/**
+ * Evidence coding workflow
+ */
+export type ResearchEvidenceStatus = 'raw' | 'coded' | 'triangulated' | 'excluded' | 'needs_review';
+export type EvidenceCodingStatus = 'uncoded' | 'auto_coded' | 'manual_coded' | 'reviewed';
+export type ResearchValidityStatus = 'valid' | 'low_information' | 'duplicate' | 'excluded' | 'manual_note';
 
 // ============================================
 // MAIN INTERFACES
@@ -335,11 +351,18 @@ export interface ResearchArtifact {
 export interface TriangulationRecord {
     id: string;
     user_id: string;
+    course_id?: string;
     learning_session_id?: string;
+    prompt_classification_id?: string;
 
     // Finding
     finding_type: string;
     finding_description: string;
+    rm_focus?: 'RM2' | 'RM3' | 'RM2_RM3' | string;
+    indicator_code?: string | null;
+    triangulation_status?: 'kuat' | 'sebagian' | 'bertentangan' | 'belum_muncul' | string;
+    sources?: Record<string, unknown> | null;
+    evidence_excerpt?: string | null;
 
     // Evidence sources (Bab 3, Tabel 22)
     log_evidence?: string;
@@ -362,7 +385,61 @@ export interface TriangulationRecord {
     final_decision?: string;
     decision_rationale?: string;
 
+    auto_generated?: boolean;
+    generated_by?: string;
+    review_status?: string;
+    auto_coding_run_id?: string | null;
+    support_count?: number;
+    contradiction_count?: number;
+    missing_reason?: string | null;
+    evidence_item_ids?: string[];
+
     researcher_notes?: string;
+    created_at: string;
+    updated_at: string;
+}
+
+/**
+ * Research Evidence Item - ledger lintas sumber
+ */
+export interface ResearchEvidenceItem {
+    id: string;
+    source_type: 'ask_question' | 'challenge_response' | 'quiz_submission' | 'journal' | 'discussion' | 'artifact' | 'observation' | 'manual_note';
+    source_id?: string | null;
+    source_table?: string | null;
+    user_id: string;
+    course_id?: string | null;
+    learning_session_id?: string | null;
+    prompt_classification_id?: string | null;
+    rm_focus: 'RM2' | 'RM3' | 'RM2_RM3';
+    indicator_code?: string | null;
+    prompt_stage?: PromptStage | null;
+    unit_sequence?: number | null;
+    evidence_title?: string | null;
+    evidence_text?: string | null;
+    ai_response_text?: string | null;
+    artifact_text?: string | null;
+    evidence_status: ResearchEvidenceStatus;
+    coding_status: EvidenceCodingStatus;
+    research_validity_status: ResearchValidityStatus;
+    triangulation_status?: 'kuat' | 'sebagian' | 'bertentangan' | 'belum_muncul' | null;
+    data_collection_week?: string | null;
+    auto_confidence?: number | null;
+    evidence_source_summary?: string | null;
+    researcher_notes?: string | null;
+    raw_evidence_snapshot?: Record<string, unknown> | null;
+    metadata?: Record<string, unknown> | null;
+    coded_by?: string | null;
+    coded_at?: string | null;
+    reviewed_by?: string | null;
+    reviewed_at?: string | null;
+    is_auto_generated?: boolean;
+    auto_coding_status?: 'pending' | 'completed' | 'needs_review' | 'failed' | 'skipped' | string;
+    auto_coding_run_id?: string | null;
+    auto_coding_version?: string | null;
+    auto_coding_model?: string | null;
+    auto_coded_at?: string | null;
+    auto_coding_reason?: string | null;
     created_at: string;
     updated_at: string;
 }
@@ -374,6 +451,20 @@ export interface ResearchAnalytics {
   total_students: number;
   stage_distribution: Record<PromptStage, number>;
   stage_heatmap: Record<PromptStage, { sessions: number; avg_ct: number; avg_cth: number }>;
+  data_readiness?: {
+    raw_units: number;
+    classified_units: number;
+    scored_units: number;
+    evidence_items?: number;
+    triangulated_findings: number;
+    artifacts: number;
+    valid_sessions?: number;
+    classification_rate: number;
+    scoring_rate: number;
+    evidence_rate: number;
+  };
+  trajectory_status_counts?: Record<TransitionStatus, number>;
+  transition_matrix?: Record<PromptStage, Record<PromptStage, number>>;
   user_progression: Array<{
     user_id: string;
     sessions: number;
@@ -381,6 +472,13 @@ export interface ResearchAnalytics {
     stage_distribution: Record<PromptStage, number>;
     ct_progression: number[];
     cth_progression: number[];
+    trajectory_status?: TransitionStatus;
+    weekly_stage_path?: Array<{
+      week: string;
+      dominant_stage: PromptStage;
+      prompt_count: number;
+      avg_stage_score: number;
+    }>;
   }>;
   inter_rater_kappa: {
     prompt_stage: number;
@@ -588,7 +686,7 @@ export interface ApiErrorResponse {
 
 export interface ResearchExportOptions {
     format: 'csv' | 'json' | 'xlsx';
-    data_type: 'prompts' | 'classifications' | 'indicators' | 'longitudinal' | 'all';
+    data_type: 'sessions' | 'classifications' | 'indicators' | 'evidence' | 'longitudinal' | 'all';
     user_ids?: string[];
     course_ids?: string[];
     session_numbers?: number[];

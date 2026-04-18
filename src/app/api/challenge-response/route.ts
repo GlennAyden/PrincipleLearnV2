@@ -5,6 +5,11 @@ import { verifyToken } from '@/lib/jwt';
 import { withApiLogging } from '@/lib/api-logger';
 import { withProtection } from '@/lib/api-middleware';
 import { ChallengeResponseSchema, parseBody } from '@/lib/schemas';
+import {
+  refreshResearchSessionMetrics,
+  resolveResearchLearningSession,
+  syncResearchEvidenceItem,
+} from '@/services/research-session.service';
 
 function normalizeIndex(value: unknown) {
   if (typeof value === 'number' && Number.isFinite(value)) return Math.floor(value);
@@ -81,6 +86,11 @@ async function postHandler(req: NextRequest) {
     // Try to save challenge response to database
     try {
       const timestamp = new Date().toISOString();
+      const researchSession = await resolveResearchLearningSession({
+        userId,
+        courseId,
+        occurredAt: timestamp,
+      });
       // `reasoning_note` is persisted so admins can review the learner's
       // reasoning context. Stored as null when the user did not provide one.
       const challengeData = {
@@ -94,6 +104,16 @@ async function postHandler(req: NextRequest) {
         answer: normalizedAnswer,
         feedback: normalizedFeedback,
         reasoning_note: normalizedReasoning ? normalizedReasoning : null,
+        learning_session_id: researchSession.learningSessionId,
+        research_validity_status: 'valid',
+        coding_status: 'uncoded',
+        raw_evidence_snapshot: {
+          question: normalizedQuestion,
+          answer: normalizedAnswer,
+          feedback: normalizedFeedback,
+          reasoning_note: normalizedReasoning ? normalizedReasoning : null,
+        },
+        data_collection_week: researchSession.dataCollectionWeek,
         created_at: timestamp,
         updated_at: timestamp
       };
@@ -110,6 +130,32 @@ async function postHandler(req: NextRequest) {
 
       after(async () => {
         try {
+          await syncResearchEvidenceItem({
+            sourceType: 'challenge_response',
+            sourceId: challengeId,
+            sourceTable: 'challenge_responses',
+            userId,
+            courseId,
+            learningSessionId: researchSession.learningSessionId,
+            rmFocus: 'RM3',
+            evidenceTitle: normalizedQuestion.slice(0, 120),
+            evidenceText: normalizedAnswer,
+            aiResponseText: normalizedFeedback,
+            evidenceStatus: 'raw',
+            codingStatus: 'uncoded',
+            researchValidityStatus: 'valid',
+            dataCollectionWeek: researchSession.dataCollectionWeek,
+            evidenceSourceSummary: 'Respons siswa terhadap pertanyaan tantangan beserta feedback AI.',
+            rawEvidenceSnapshot: challengeData.raw_evidence_snapshot,
+            metadata: {
+              module_index: challengeData.module_index,
+              subtopic_index: challengeData.subtopic_index,
+              page_number: challengeData.page_number,
+            },
+            createdAt: timestamp,
+          });
+          await refreshResearchSessionMetrics(researchSession.learningSessionId);
+
           const { scoreAndSave } = await import('@/services/cognitive-scoring.service');
           const contextSummary = normalizedReasoning
             ? `Reasoning: ${normalizedReasoning.slice(0, 300)}`

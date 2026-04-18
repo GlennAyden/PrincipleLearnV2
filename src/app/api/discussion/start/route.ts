@@ -24,6 +24,7 @@ import {
   normalizeIdentifier,
   queueDiscussionTemplatePreparation,
 } from '@/services/discussion/templatePreparation';
+import { resolveResearchLearningSession } from '@/services/research-session.service';
 
 interface DiscussionStep {
   key: string;
@@ -63,6 +64,8 @@ type SessionRecord = {
   template_id: string;
   course_id: string;
   subtopic_id: string;
+  learning_session_id?: string | null;
+  data_collection_week?: string | null;
 };
 
 interface DiscussionSessionGoal {
@@ -205,6 +208,11 @@ async function postHandler(request: NextRequest) {
       );
     }
 
+    const researchSession = await resolveResearchLearningSession({
+      userId: tokenPayload.userId,
+      courseId,
+    });
+
     let session = await fetchExistingSession(tokenPayload.userId, courseId, subtopicId);
     let didCreate = false;
     if (!session) {
@@ -216,6 +224,8 @@ async function postHandler(request: NextRequest) {
           template: templateRow,
           firstPhaseId: steps[0].phaseId,
           goals: buildInitialGoals(templateRow.template?.learning_goals),
+          learningSessionId: researchSession.learningSessionId,
+          dataCollectionWeek: researchSession.dataCollectionWeek,
         });
         didCreate = true;
       } catch (createError) {
@@ -248,6 +258,17 @@ async function postHandler(request: NextRequest) {
             role: 'agent',
             content: steps[0].step.prompt,
             step_key: steps[0].step.key,
+            learning_session_id: researchSession.learningSessionId,
+            research_validity_status: 'valid',
+            coding_status: 'uncoded',
+            data_collection_week: researchSession.dataCollectionWeek,
+            raw_evidence_snapshot: {
+              type: 'initial_discussion_prompt',
+              prompt: steps[0].step.prompt,
+              step_key: steps[0].step.key,
+              phase: steps[0].phaseId,
+              template_id: templateRow.id,
+            },
             metadata: {
               type: 'agent_response',
               phase: steps[0].phaseId,
@@ -259,6 +280,22 @@ async function postHandler(request: NextRequest) {
         if (initialMessageError) {
           throw new Error('Failed to persist initial discussion prompt');
         }
+      }
+    } else if (!session.learning_session_id && researchSession.learningSessionId) {
+      const { error: sessionResearchError } = await adminDb
+        .from('discussion_sessions')
+        .eq('id', session.id)
+        .update({
+          learning_session_id: researchSession.learningSessionId,
+          data_collection_week: researchSession.dataCollectionWeek,
+        });
+
+      if (!sessionResearchError) {
+        session = {
+          ...session,
+          learning_session_id: researchSession.learningSessionId,
+          data_collection_week: researchSession.dataCollectionWeek,
+        };
       }
     }
 
@@ -292,7 +329,7 @@ export const POST = withApiLogging(postHandler, {
 async function fetchExistingSession(userId: string, courseId: string, subtopicId: string): Promise<SessionRecord | null> {
   const { data, error } = await adminDb
     .from('discussion_sessions')
-    .select('id, status, phase, learning_goals, template_id, course_id, subtopic_id')
+    .select('id, status, phase, learning_goals, template_id, course_id, subtopic_id, learning_session_id, data_collection_week')
     .eq('user_id', userId)
     .eq('course_id', courseId)
     .eq('subtopic_id', subtopicId)
@@ -335,8 +372,19 @@ async function createSession(params: {
   template: TemplateRecord;
   firstPhaseId: string;
   goals: DiscussionSessionGoal[];
+  learningSessionId?: string | null;
+  dataCollectionWeek?: string | null;
 }): Promise<SessionRecord> {
-  const { userId, courseId, subtopicId, template, firstPhaseId, goals } = params;
+  const {
+    userId,
+    courseId,
+    subtopicId,
+    template,
+    firstPhaseId,
+    goals,
+    learningSessionId,
+    dataCollectionWeek,
+  } = params;
 
   const { data, error } = await adminDb
     .from('discussion_sessions')
@@ -348,6 +396,10 @@ async function createSession(params: {
       status: 'in_progress',
       phase: firstPhaseId,
       learning_goals: goals,
+      learning_session_id: learningSessionId ?? null,
+      data_collection_week: dataCollectionWeek ?? null,
+      research_validity_status: 'valid',
+      coding_status: 'uncoded',
     });
 
   const row = Array.isArray(data) ? data[0] : data;

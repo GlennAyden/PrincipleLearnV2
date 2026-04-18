@@ -6,6 +6,7 @@ import { useRouter, usePathname } from 'next/navigation'
 import {
   FiGrid, FiUsers, FiActivity,
   FiLogOut, FiClipboard, FiMenu, FiX,
+  FiDownload,
 } from 'react-icons/fi'
 import styles from './layout.module.scss'
 
@@ -18,6 +19,7 @@ const NAV_ITEMS = [
   { href: '/admin/siswa', label: 'Siswa', icon: FiUsers },
   { href: '/admin/aktivitas', label: 'Aktivitas', icon: FiActivity },
   { href: '/admin/riset', label: 'Riset', icon: FiClipboard },
+  { href: '/admin/ekspor', label: 'Ekspor', icon: FiDownload },
 ]
 
 export default function AdminLayout({ children }: AdminLayoutProps) {

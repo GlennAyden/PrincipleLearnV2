@@ -1,0 +1,525 @@
+@use '../../tokens' as *;
+
+.page {
+    @include page-container;
+    width: 100%;
+}
+
+.header {
+    @include page-header;
+    display: flex;
+    align-items: flex-start;
+    justify-content: space-between;
+    gap: 1rem;
+    background: white;
+    border: 1px solid $gray-200;
+    border-radius: $radius-sm;
+    padding: 1.25rem 1.5rem;
+    margin-bottom: $section-gap;
+}
+
+.headerIcon {
+    color: $primary-600;
+}
+
+.headerSub {
+    max-width: 720px;
+}
+
+.headerActions {
+    display: flex;
+    align-items: center;
+    gap: 0.75rem;
+    flex-wrap: wrap;
+}
+
+.primaryBtn {
+    @include primary-button;
+}
+
+.secondaryBtn {
+    @include secondary-button;
+}
+
+.spinning {
+    animation: spin 1s linear infinite;
+}
+
+@keyframes spin {
+    from { transform: rotate(0deg); }
+    to { transform: rotate(360deg); }
+}
+
+.errorCard {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+    background: $red-50;
+    border: 1px solid rgba($red-500, 0.3);
+    border-radius: $radius-sm;
+    color: $red-600;
+    font-size: 0.875rem;
+    margin-bottom: $section-gap;
+    padding: 0.85rem 1rem;
+}
+
+.infoCard {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+    background: $green-50;
+    border: 1px solid rgba($green-500, 0.3);
+    border-radius: $radius-sm;
+    color: $green-700;
+    font-size: 0.875rem;
+    margin-bottom: $section-gap;
+    padding: 0.85rem 1rem;
+}
+
+.summaryGrid {
+    display: grid;
+    grid-template-columns: repeat(5, minmax(0, 1fr));
+    gap: $card-gap;
+    margin-bottom: $section-gap;
+}
+
+.summaryCard {
+    @include stat-card;
+    border-radius: $radius-sm;
+    display: grid;
+    gap: 0.35rem;
+    min-height: 126px;
+
+    strong {
+        color: $gray-800;
+        font-size: 1.6rem;
+        line-height: 1.1;
+    }
+
+    span:last-child {
+        color: $gray-500;
+        font-size: 0.8rem;
+        font-weight: 500;
+    }
+}
+
+.summaryIcon {
+    align-items: center;
+    background: $primary-50;
+    border-radius: $radius-sm;
+    color: $primary-600;
+    display: inline-flex;
+    font-size: 1.1rem;
+    height: 36px;
+    justify-content: center;
+    width: 36px;
+}
+
+.iconStudents {
+    background: $purple-50;
+    color: $purple-600;
+}
+
+.iconCoded {
+    background: $amber-50;
+    color: $amber-600;
+}
+
+.iconValid {
+    background: $green-50;
+    color: $green-600;
+}
+
+.iconSessions {
+    background: $indigo-50;
+    color: $indigo-600;
+}
+
+.section {
+    background: white;
+    border: 1px solid $gray-200;
+    border-radius: $radius-sm;
+    box-shadow: $shadow-sm;
+    overflow: hidden;
+}
+
+.sectionHeader {
+    align-items: flex-end;
+    background: $gray-50;
+    border-bottom: 1px solid $gray-200;
+    display: flex;
+    gap: 1rem;
+    justify-content: space-between;
+    padding: 1.25rem 1.5rem;
+
+    h3 {
+        color: $gray-800;
+        font-size: 1rem;
+        font-weight: 700;
+        margin: 0;
+    }
+
+    p {
+        color: $gray-500;
+        font-size: 0.8rem;
+        margin: 0.25rem 0 0;
+    }
+}
+
+.filters {
+    align-items: center;
+    display: flex;
+    gap: 0.75rem;
+    flex-wrap: wrap;
+
+    select {
+        background: white;
+        border: 1px solid $gray-200;
+        border-radius: $radius-sm;
+        color: $gray-700;
+        font-size: 0.85rem;
+        padding: 0.58rem 0.75rem;
+    }
+}
+
+.searchBox {
+    align-items: center;
+    background: white;
+    border: 1px solid $gray-200;
+    border-radius: $radius-sm;
+    color: $gray-400;
+    display: flex;
+    gap: 0.5rem;
+    min-width: 280px;
+    padding: 0.55rem 0.75rem;
+
+    input {
+        border: 0;
+        color: $gray-700;
+        font-size: 0.85rem;
+        min-width: 0;
+        outline: none;
+        width: 100%;
+
+        &::placeholder {
+            color: $gray-400;
+        }
+    }
+}
+
+.tableWrap {
+    overflow-x: auto;
+}
+
+.table {
+    @include data-table;
+    min-width: 1540px;
+
+    td {
+        vertical-align: top;
+    }
+}
+
+.detailBtn {
+    background: white;
+    border: 1px solid $gray-200;
+    border-radius: $radius-sm;
+    color: $primary-600;
+    cursor: pointer;
+    font-size: 0.75rem;
+    font-weight: 700;
+    padding: 0.35rem 0.55rem;
+
+    &:hover {
+        border-color: $primary-200;
+        background: $primary-50;
+    }
+}
+
+.detailPanel {
+    background: white;
+    border: 1px solid $gray-200;
+    border-radius: $radius-sm;
+    box-shadow: $shadow-sm;
+    margin-top: $section-gap;
+    overflow: hidden;
+}
+
+.detailHeader {
+    align-items: center;
+    background: $gray-50;
+    border-bottom: 1px solid $gray-200;
+    display: flex;
+    gap: 1rem;
+    justify-content: space-between;
+    padding: 1.25rem 1.5rem;
+
+    h3 {
+        color: $gray-800;
+        font-size: 1rem;
+        font-weight: 700;
+        margin: 0;
+    }
+
+    p {
+        color: $gray-500;
+        font-size: 0.82rem;
+        margin: 0.25rem 0 0;
+    }
+}
+
+.detailGrid {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 1rem;
+    padding: 1.5rem;
+}
+
+.detailBlock {
+    background: $gray-50;
+    border: 1px solid $gray-100;
+    border-radius: $radius-sm;
+    padding: 1rem;
+
+    span {
+        color: $gray-500;
+        display: inline-flex;
+        font-size: 0.72rem;
+        font-weight: 800;
+        letter-spacing: 0.02em;
+        margin-bottom: 0.45rem;
+        text-transform: uppercase;
+    }
+
+    p,
+    pre {
+        color: $gray-700;
+        font-size: 0.82rem;
+        line-height: 1.5;
+        margin: 0;
+        white-space: pre-wrap;
+        word-break: break-word;
+    }
+
+    pre {
+        font-family: $font-mono;
+    }
+}
+
+.studentCell,
+.sessionCell {
+    display: flex;
+    flex-direction: column;
+    gap: 0.2rem;
+
+    strong {
+        color: $gray-800;
+        font-size: 0.88rem;
+    }
+
+    span {
+        color: $gray-400;
+        font-family: $font-mono;
+        font-size: 0.72rem;
+    }
+}
+
+.sourceBadge,
+.focusBadge,
+.stageBadge,
+.statusBadge,
+.indicatorCode {
+    border-radius: $radius-sm;
+    display: inline-flex;
+    font-size: 0.74rem;
+    font-weight: 700;
+    line-height: 1.3;
+    padding: 0.25rem 0.5rem;
+    white-space: nowrap;
+}
+
+.sourceBadge {
+    background: $gray-100;
+    color: $gray-700;
+}
+
+.focusRm2 {
+    background: $primary-50;
+    color: $primary-700;
+}
+
+.focusRm3 {
+    background: $green-50;
+    color: $green-700;
+}
+
+.focusCombined {
+    background: $purple-50;
+    color: $purple-600;
+}
+
+.focusUnknown {
+    background: $gray-100;
+    color: $gray-500;
+}
+
+.stageBadge {
+    background: $amber-50;
+    color: $amber-600;
+}
+
+.indicatorCode {
+    background: $indigo-50;
+    color: $indigo-700;
+    font-family: $font-mono;
+}
+
+.statusAuto {
+    background: $primary-50;
+    color: $primary-700;
+}
+
+.statusManual {
+    background: $purple-50;
+    color: $purple-600;
+}
+
+.statusReviewed {
+    background: $green-50;
+    color: $green-700;
+}
+
+.statusPending {
+    background: $amber-50;
+    color: $amber-600;
+}
+
+.validityValid {
+    background: $green-50;
+    color: $green-700;
+}
+
+.validityReview {
+    background: $amber-50;
+    color: $amber-600;
+}
+
+.validityInvalid {
+    background: $red-50;
+    color: $red-600;
+}
+
+.statusUnknown {
+    background: $gray-100;
+    color: $gray-500;
+}
+
+.previewStack {
+    display: grid;
+    gap: 0.55rem;
+    max-width: 360px;
+}
+
+.previewBlock {
+    background: $gray-50;
+    border: 1px solid $gray-100;
+    border-radius: $radius-sm;
+    padding: 0.55rem 0.65rem;
+}
+
+.previewLabel {
+    color: $gray-500;
+    display: inline-flex;
+    font-size: 0.68rem;
+    font-weight: 700;
+    letter-spacing: 0.02em;
+    margin-bottom: 0.25rem;
+    text-transform: uppercase;
+}
+
+.previewText {
+    color: $gray-700;
+    font-size: 0.8rem;
+    line-height: 1.45;
+    margin: 0;
+    white-space: normal;
+    word-break: break-word;
+}
+
+.dateText {
+    color: $gray-500;
+    font-size: 0.78rem;
+    white-space: nowrap;
+}
+
+.muted {
+    color: $gray-400;
+    font-size: 0.8rem;
+}
+
+.loading {
+    @include loading-state;
+}
+
+.emptyState {
+    @include empty-state;
+
+    svg {
+        font-size: 2.4rem;
+        margin-bottom: 0.75rem;
+    }
+
+    h3 {
+        color: $gray-700;
+        font-size: 1rem;
+        margin: 0 0 0.35rem;
+    }
+
+    p {
+        margin: 0;
+        max-width: 560px;
+    }
+}
+
+@media (max-width: 1180px) {
+    .summaryGrid {
+        grid-template-columns: repeat(3, minmax(0, 1fr));
+    }
+}
+
+@media (max-width: 760px) {
+    .page {
+        padding: 1.25rem;
+    }
+
+    .header,
+    .sectionHeader {
+        align-items: stretch;
+        flex-direction: column;
+    }
+
+    .headerActions,
+    .filters {
+        width: 100%;
+    }
+
+    .primaryBtn,
+    .secondaryBtn,
+    .searchBox,
+    .filters select {
+        width: 100%;
+    }
+
+    .summaryGrid {
+        grid-template-columns: 1fr;
+    }
+
+    .detailHeader {
+        align-items: stretch;
+        flex-direction: column;
+    }
+
+    .detailGrid {
+        grid-template-columns: 1fr;
+    }
+}

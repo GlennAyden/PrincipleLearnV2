@@ -369,17 +369,27 @@ export class DatabaseService {
  * Kept in sync manually as a safety net; auto-detection overwrites this on first use.
  */
 const JSONB_COLUMNS_FALLBACK: Record<string, string[]> = {
+  learning_sessions: ['evidence_summary'],
   subtopics: ['content'],
   quiz: ['options'],
   subtopic_cache: ['content'],
   discussion_templates: ['source', 'template'],
   discussion_sessions: ['learning_goals', 'completion_summary'],
-  discussion_messages: ['metadata'],
+  discussion_messages: ['metadata', 'raw_evidence_snapshot'],
   discussion_admin_actions: ['payload'],
   discussion_assessments: ['assessment_raw'],
   api_logs: ['metadata'],
   course_generation_activity: ['request_payload', 'outline'],
-  ask_question_history: ['prompt_components'],
+  prompt_classifications: ['source_snapshot'],
+  cognitive_indicators: ['indicator_evidence'],
+  ask_question_history: ['prompt_components', 'micro_markers', 'raw_evidence_snapshot'],
+  challenge_responses: ['raw_evidence_snapshot'],
+  quiz_submissions: ['raw_evidence_snapshot'],
+  jurnal: ['raw_evidence_snapshot'],
+  research_artifacts: ['artifact_metadata'],
+  triangulation_records: ['sources'],
+  research_evidence_items: ['raw_evidence_snapshot', 'metadata'],
+  research_auto_coding_runs: ['scope', 'summary'],
 };
 
 /** Auto-detected JSONB columns (populated lazily from database schema). */
@@ -436,7 +446,10 @@ function sanitizeForInsert(tableName: string, data: Record<string, unknown>): Re
       // Non-JSONB column receiving an object — stringify it for TEXT columns
       sanitized[key] = JSON.stringify(value);
     } else if (Array.isArray(value) && !jsonbCols.includes(key)) {
-      sanitized[key] = JSON.stringify(value);
+      // Supabase accepts JS arrays for Postgres array columns (for example
+      // prompt_classifications.micro_markers TEXT[]). JSONB arrays are handled
+      // above; non-JSONB arrays should remain arrays rather than JSON strings.
+      sanitized[key] = value;
     } else {
       sanitized[key] = value;
     }

@@ -15,7 +15,7 @@ import styles from './page.module.scss'
 // INTERFACES
 // ============================================
 
-type IndicatorType = 'computational_thinking' | 'critical_thinking'
+type IndicatorType = 'computational_thinking' | 'critical_thinking' | 'combined'
 
 interface CTIndicators {
     decomposition: number
@@ -143,7 +143,7 @@ export default function KognitifPage() {
     const [currentPage, setCurrentPage] = useState(1)
     const [formData, setFormData] = useState<IndicatorFormData>({
         classification_id: '',
-        indicator_type: 'computational_thinking',
+        indicator_type: 'combined',
         ct_indicators: { ...DEFAULT_CT },
         critical_indicators: { ...DEFAULT_CRITICAL },
         evidence_notes: '',
@@ -258,7 +258,7 @@ export default function KognitifPage() {
     const resetForm = () => {
         setFormData({
             classification_id: '',
-            indicator_type: 'computational_thinking',
+            indicator_type: 'combined',
             ct_indicators: { ...DEFAULT_CT },
             critical_indicators: { ...DEFAULT_CRITICAL },
             evidence_notes: '',
@@ -321,8 +321,8 @@ export default function KognitifPage() {
         try {
             const payload = {
                 ...formData,
-                ct_indicators: formData.indicator_type === 'computational_thinking' ? formData.ct_indicators : null,
-                critical_indicators: formData.indicator_type === 'critical_thinking' ? formData.critical_indicators : null
+                ct_indicators: formData.indicator_type !== 'critical_thinking' ? formData.ct_indicators : null,
+                critical_indicators: formData.indicator_type !== 'computational_thinking' ? formData.critical_indicators : null
             }
 
             const isEdit = modalMode === 'edit' && selectedIndicator
@@ -366,6 +366,9 @@ export default function KognitifPage() {
     )
 
     const getTypeBadge = (type: IndicatorType) => {
+        if (type === 'combined') {
+            return <span className={`${styles.typeBadge} ${styles.typeCritical}`}>12 Indikator</span>
+        }
         if (type === 'computational_thinking') {
             return <span className={`${styles.typeBadge} ${styles.typeCT}`}>CT</span>
         }
@@ -471,6 +474,7 @@ export default function KognitifPage() {
                                         }}
                                     >
                                         <option value="">Semua Tipe</option>
+                                        <option value="combined">12 Indikator Lengkap</option>
                                         <option value="computational_thinking">Computational Thinking</option>
                                         <option value="critical_thinking">Critical Thinking</option>
                                     </select>
@@ -521,61 +525,65 @@ export default function KognitifPage() {
                                                     </td>
                                                     <td>{getTypeBadge(item.indicator_type)}</td>
                                                     <td>
-                                                        {item.indicator_type === 'computational_thinking' && item.ct_indicators ? (
-                                                            <div className={styles.indicatorGrid}>
-                                                                <div className={styles.indicatorCell}>
-                                                                    <div className={styles.indicatorLabel}>Dec</div>
-                                                                    {getScoreBadge(item.ct_indicators.decomposition)}
+                                                        <div style={{ display: 'grid', gap: '0.5rem' }}>
+                                                            {item.ct_indicators && item.indicator_type !== 'critical_thinking' && (
+                                                                <div className={styles.indicatorGrid}>
+                                                                    <div className={styles.indicatorCell}>
+                                                                        <div className={styles.indicatorLabel}>Dec</div>
+                                                                        {getScoreBadge(item.ct_indicators.decomposition)}
+                                                                    </div>
+                                                                    <div className={styles.indicatorCell}>
+                                                                        <div className={styles.indicatorLabel}>Pat</div>
+                                                                        {getScoreBadge(item.ct_indicators.pattern_recognition)}
+                                                                    </div>
+                                                                    <div className={styles.indicatorCell}>
+                                                                        <div className={styles.indicatorLabel}>Abs</div>
+                                                                        {getScoreBadge(item.ct_indicators.abstraction)}
+                                                                    </div>
+                                                                    <div className={styles.indicatorCell}>
+                                                                        <div className={styles.indicatorLabel}>Alg</div>
+                                                                        {getScoreBadge(item.ct_indicators.algorithm_design)}
+                                                                    </div>
+                                                                    <div className={styles.indicatorCell}>
+                                                                        <div className={styles.indicatorLabel}>Eva</div>
+                                                                        {getScoreBadge(item.ct_indicators.evaluation_debugging)}
+                                                                    </div>
+                                                                    <div className={styles.indicatorCell}>
+                                                                        <div className={styles.indicatorLabel}>Gen</div>
+                                                                        {getScoreBadge(item.ct_indicators.generalization)}
+                                                                    </div>
                                                                 </div>
-                                                                <div className={styles.indicatorCell}>
-                                                                    <div className={styles.indicatorLabel}>Pat</div>
-                                                                    {getScoreBadge(item.ct_indicators.pattern_recognition)}
+                                                            )}
+                                                            {item.critical_indicators && item.indicator_type !== 'computational_thinking' && (
+                                                                <div className={styles.indicatorGrid}>
+                                                                    <div className={styles.indicatorCell}>
+                                                                        <div className={styles.indicatorLabel}>Int</div>
+                                                                        {getScoreBadge(item.critical_indicators.interpretation)}
+                                                                    </div>
+                                                                    <div className={styles.indicatorCell}>
+                                                                        <div className={styles.indicatorLabel}>Ana</div>
+                                                                        {getScoreBadge(item.critical_indicators.analysis)}
+                                                                    </div>
+                                                                    <div className={styles.indicatorCell}>
+                                                                        <div className={styles.indicatorLabel}>Eva</div>
+                                                                        {getScoreBadge(item.critical_indicators.evaluation)}
+                                                                    </div>
+                                                                    <div className={styles.indicatorCell}>
+                                                                        <div className={styles.indicatorLabel}>Inf</div>
+                                                                        {getScoreBadge(item.critical_indicators.inference)}
+                                                                    </div>
+                                                                    <div className={styles.indicatorCell}>
+                                                                        <div className={styles.indicatorLabel}>Exp</div>
+                                                                        {getScoreBadge(item.critical_indicators.explanation)}
+                                                                    </div>
+                                                                    <div className={styles.indicatorCell}>
+                                                                        <div className={styles.indicatorLabel}>Reg</div>
+                                                                        {getScoreBadge(item.critical_indicators.self_regulation)}
+                                                                    </div>
                                                                 </div>
-                                                                <div className={styles.indicatorCell}>
-                                                                    <div className={styles.indicatorLabel}>Abs</div>
-                                                                    {getScoreBadge(item.ct_indicators.abstraction)}
-                                                                </div>
-                                                                <div className={styles.indicatorCell}>
-                                                                    <div className={styles.indicatorLabel}>Alg</div>
-                                                                    {getScoreBadge(item.ct_indicators.algorithm_design)}
-                                                                </div>
-                                                                <div className={styles.indicatorCell}>
-                                                                    <div className={styles.indicatorLabel}>Eva</div>
-                                                                    {getScoreBadge(item.ct_indicators.evaluation_debugging)}
-                                                                </div>
-                                                                <div className={styles.indicatorCell}>
-                                                                    <div className={styles.indicatorLabel}>Gen</div>
-                                                                    {getScoreBadge(item.ct_indicators.generalization)}
-                                                                </div>
-                                                            </div>
-                                                        ) : item.critical_indicators ? (
-                                                            <div className={styles.indicatorGrid}>
-                                                                <div className={styles.indicatorCell}>
-                                                                    <div className={styles.indicatorLabel}>Int</div>
-                                                                    {getScoreBadge(item.critical_indicators.interpretation)}
-                                                                </div>
-                                                                <div className={styles.indicatorCell}>
-                                                                    <div className={styles.indicatorLabel}>Ana</div>
-                                                                    {getScoreBadge(item.critical_indicators.analysis)}
-                                                                </div>
-                                                                <div className={styles.indicatorCell}>
-                                                                    <div className={styles.indicatorLabel}>Eva</div>
-                                                                    {getScoreBadge(item.critical_indicators.evaluation)}
-                                                                </div>
-                                                                <div className={styles.indicatorCell}>
-                                                                    <div className={styles.indicatorLabel}>Inf</div>
-                                                                    {getScoreBadge(item.critical_indicators.inference)}
-                                                                </div>
-                                                                <div className={styles.indicatorCell}>
-                                                                    <div className={styles.indicatorLabel}>Exp</div>
-                                                                    {getScoreBadge(item.critical_indicators.explanation)}
-                                                                </div>
-                                                                <div className={styles.indicatorCell}>
-                                                                    <div className={styles.indicatorLabel}>Reg</div>
-                                                                    {getScoreBadge(item.critical_indicators.self_regulation)}
-                                                                </div>
-                                                            </div>
-                                                        ) : '-'}
+                                                            )}
+                                                            {!item.ct_indicators && !item.critical_indicators && '-'}
+                                                        </div>
                                                     </td>
                                                     <td>{item.assessed_by}</td>
                                                     <td>{formatDate(item.assessment_date)}</td>
@@ -815,7 +823,13 @@ export default function KognitifPage() {
                                     </div>
                                     <div className={styles.viewItem}>
                                         <label>Tipe Indikator</label>
-                                        <span>{selectedIndicator.indicator_type === 'computational_thinking' ? 'Computational Thinking' : 'Critical Thinking'}</span>
+                                        <span>
+                                            {selectedIndicator.indicator_type === 'combined'
+                                                ? '12 Indikator Lengkap'
+                                                : selectedIndicator.indicator_type === 'computational_thinking'
+                                                    ? 'Computational Thinking'
+                                                    : 'Critical Thinking'}
+                                        </span>
                                     </div>
                                     <div className={styles.viewItem}>
                                         <label>Dinilai Oleh</label>
@@ -832,7 +846,7 @@ export default function KognitifPage() {
                                 </div>
 
                                 {/* CT Indicators View */}
-                                {selectedIndicator.indicator_type === 'computational_thinking' && selectedIndicator.ct_indicators && (
+                                {selectedIndicator.indicator_type !== 'critical_thinking' && selectedIndicator.ct_indicators && (
                                     <div className={`${styles.indicatorSection} ${styles.ctSection}`}>
                                         <h4>Indikator Computational Thinking</h4>
                                         <div className={styles.viewGrid}>
@@ -865,7 +879,7 @@ export default function KognitifPage() {
                                 )}
 
                                 {/* Critical Indicators View */}
-                                {selectedIndicator.indicator_type === 'critical_thinking' && selectedIndicator.critical_indicators && (
+                                {selectedIndicator.indicator_type !== 'computational_thinking' && selectedIndicator.critical_indicators && (
                                     <div className={`${styles.indicatorSection} ${styles.criticalSection}`}>
                                         <h4>Indikator Critical Thinking</h4>
                                         <div className={styles.viewGrid}>
@@ -953,6 +967,7 @@ export default function KognitifPage() {
                                                 onChange={(e) => setFormData({ ...formData, indicator_type: e.target.value as IndicatorType })}
                                                 required
                                             >
+                                                <option value="combined">12 Indikator Lengkap</option>
                                                 <option value="computational_thinking">Computational Thinking</option>
                                                 <option value="critical_thinking">Critical Thinking</option>
                                             </select>
@@ -970,7 +985,7 @@ export default function KognitifPage() {
                                     </div>
 
                                     {/* CT Indicators */}
-                                    {formData.indicator_type === 'computational_thinking' && (
+                                    {formData.indicator_type !== 'critical_thinking' && (
                                         <div className={`${styles.indicatorSection} ${styles.ctSection}`}>
                                             <h4>Indikator Computational Thinking</h4>
                                             <div className={styles.indicatorInputGrid}>
@@ -1068,7 +1083,7 @@ export default function KognitifPage() {
                                     )}
 
                                     {/* Critical Thinking Indicators */}
-                                    {formData.indicator_type === 'critical_thinking' && (
+                                    {formData.indicator_type !== 'computational_thinking' && (
                                         <div className={`${styles.indicatorSection} ${styles.criticalSection}`}>
                                             <h4>Indikator Critical Thinking</h4>
                                             <div className={styles.indicatorInputGrid}>

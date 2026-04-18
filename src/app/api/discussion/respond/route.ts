@@ -12,6 +12,11 @@ import {
   ThinkingSkillMeta,
   normalizeThinkingSkillMeta,
 } from '@/lib/discussion/thinkingSkills';
+import {
+  refreshResearchSessionMetrics,
+  resolveResearchLearningSession,
+  syncResearchEvidenceItem,
+} from '@/services/research-session.service';
 
 interface SessionRecord {
   id: string;
@@ -22,6 +27,8 @@ interface SessionRecord {
   template_id: string | null;
   subtopic_id: string;
   course_id: string;
+  learning_session_id?: string | null;
+  data_collection_week?: string | null;
 }
 
 interface DiscussionStep {
@@ -376,23 +383,162 @@ type DiscussionMessagePayload = {
   content: string;
   step_key?: string | null;
   metadata?: Record<string, unknown>;
+  learning_session_id?: string | null;
+  research_validity_status?: string;
+  coding_status?: string;
+  raw_evidence_snapshot?: Record<string, unknown>;
+  data_collection_week?: string | null;
 };
 
 type InsertedDiscussionMessage = {
   id: string;
   role: 'agent' | 'student';
+  content: string;
   step_key: string | null;
   metadata: Record<string, unknown> | null;
   created_at: string;
 };
 
+type DiscussionResearchContext = {
+  userId: string;
+  courseId: string;
+  learningSessionId: string | null;
+  dataCollectionWeek: string | null;
+};
+
+const discussionResearchContextCache = new Map<string, Promise<DiscussionResearchContext | null>>();
+
+async function getDiscussionResearchContext(sessionId: string): Promise<DiscussionResearchContext | null> {
+  if (!discussionResearchContextCache.has(sessionId)) {
+    discussionResearchContextCache.set(sessionId, (async () => {
+      const { data: sessionRow, error } = await adminDb
+        .from('discussion_sessions')
+        .select('id, user_id, course_id, learning_session_id, data_collection_week')
+        .eq('id', sessionId)
+        .maybeSingle();
+
+      if (error || !sessionRow) {
+        console.warn('[DiscussionRespond] Failed to load discussion research context', error);
+        return null;
+      }
+
+      const row = sessionRow as {
+        user_id: string;
+        course_id: string;
+        learning_session_id?: string | null;
+        data_collection_week?: string | null;
+      };
+
+      if (row.learning_session_id) {
+        return {
+          userId: row.user_id,
+          courseId: row.course_id,
+          learningSessionId: row.learning_session_id,
+          dataCollectionWeek: row.data_collection_week ?? null,
+        };
+      }
+
+      const researchSession = await resolveResearchLearningSession({
+        userId: row.user_id,
+        courseId: row.course_id,
+      });
+
+      if (researchSession.learningSessionId) {
+        await adminDb
+          .from('discussion_sessions')
+          .eq('id', sessionId)
+          .update({
+            learning_session_id: researchSession.learningSessionId,
+            data_collection_week: researchSession.dataCollectionWeek,
+          });
+      }
+
+      return {
+        userId: row.user_id,
+        courseId: row.course_id,
+        learningSessionId: researchSession.learningSessionId,
+        dataCollectionWeek: researchSession.dataCollectionWeek,
+      };
+    })());
+  }
+
+  return discussionResearchContextCache.get(sessionId)!;
+}
+
+async function enrichDiscussionMessagePayload(payload: DiscussionMessagePayload): Promise<DiscussionMessagePayload> {
+  const context = await getDiscussionResearchContext(payload.session_id);
+  return {
+    ...payload,
+    learning_session_id: payload.learning_session_id ?? context?.learningSessionId ?? null,
+    research_validity_status: payload.research_validity_status ?? 'valid',
+    coding_status: payload.coding_status ?? 'uncoded',
+    data_collection_week: payload.data_collection_week ?? context?.dataCollectionWeek ?? null,
+    raw_evidence_snapshot: payload.raw_evidence_snapshot ?? {
+      session_id: payload.session_id,
+      role: payload.role,
+      content: payload.content,
+      step_key: payload.step_key ?? null,
+      metadata: payload.metadata ?? {},
+    },
+  };
+}
+
+async function syncDiscussionMessageEvidence(messages: InsertedDiscussionMessage[], sessionId: string) {
+  const context = await getDiscussionResearchContext(sessionId);
+  if (!context) return;
+
+  let synced = false;
+  for (const message of messages) {
+    if (message.role !== 'student') continue;
+
+    await syncResearchEvidenceItem({
+      sourceType: 'discussion',
+      sourceId: message.id,
+      sourceTable: 'discussion_messages',
+      userId: context.userId,
+      courseId: context.courseId,
+      learningSessionId: context.learningSessionId,
+      rmFocus: 'RM2_RM3',
+      evidenceTitle: `Diskusi ${message.step_key ?? 'respons siswa'}`,
+      evidenceText: message.content,
+      evidenceStatus: 'raw',
+      codingStatus: 'uncoded',
+      researchValidityStatus: 'valid',
+      dataCollectionWeek: context.dataCollectionWeek,
+      evidenceSourceSummary: 'Jawaban siswa dalam sesi diskusi Socratic.',
+      rawEvidenceSnapshot: {
+        role: message.role,
+        content: message.content,
+        step_key: message.step_key,
+        metadata: message.metadata ?? {},
+      },
+      metadata: {
+        step_key: message.step_key,
+        ...(message.metadata ?? {}),
+      },
+      createdAt: message.created_at,
+    });
+    synced = true;
+  }
+
+  if (synced) {
+    await refreshResearchSessionMetrics(context.learningSessionId);
+  }
+}
+
 async function insertDiscussionMessage(payload: DiscussionMessagePayload) {
-  const { error } = await adminDb.from('discussion_messages').insert(payload);
+  const enrichedPayload = await enrichDiscussionMessagePayload(payload);
+  const { data, error } = await adminDb.from('discussion_messages').insert(enrichedPayload);
   if (error) {
     const msg = typeof error === 'object' && error !== null && 'message' in error
       ? (error as { message: string }).message
       : String(error);
     throw new Error(`Failed to insert discussion message: ${msg}`);
+  }
+
+  const inserted = Array.isArray(data) ? data[0] : data;
+  if (inserted) {
+    await syncDiscussionMessageEvidence([inserted as InsertedDiscussionMessage], payload.session_id);
   }
 }
 
@@ -408,16 +554,19 @@ async function insertDiscussionMessagesBatch(
   messages: DiscussionMessagePayload[]
 ): Promise<InsertedDiscussionMessage[]> {
   if (!messages.length) return [];
+  const enrichedMessages = await Promise.all(messages.map(enrichDiscussionMessagePayload));
   const { data, error } = await adminDb
     .from('discussion_messages')
-    .insert(messages);
+    .insert(enrichedMessages);
   if (error) {
     const msg = typeof error === 'object' && error !== null && 'message' in error
       ? (error as { message: string }).message
       : String(error);
     throw new Error(`Failed to insert discussion messages batch: ${msg}`);
   }
-  return (data ?? []) as InsertedDiscussionMessage[];
+  const insertedMessages = (data ?? []) as InsertedDiscussionMessage[];
+  await syncDiscussionMessageEvidence(insertedMessages, messages[0].session_id);
+  return insertedMessages;
 }
 
 async function insertDiscussionAssessments(params: {
@@ -519,6 +668,27 @@ async function postHandler(request: NextRequest) {
         { error: 'Discussion already completed' },
         { status: 409 }
       );
+    }
+    if (!session.learning_session_id) {
+      const researchSession = await resolveResearchLearningSession({
+        userId: session.user_id,
+        courseId: session.course_id,
+      });
+      if (researchSession.learningSessionId) {
+        const { error: sessionResearchError } = await adminDb
+          .from('discussion_sessions')
+          .eq('id', session.id)
+          .update({
+            learning_session_id: researchSession.learningSessionId,
+            data_collection_week: researchSession.dataCollectionWeek,
+          });
+
+        if (!sessionResearchError) {
+          session.learning_session_id = researchSession.learningSessionId;
+          session.data_collection_week = researchSession.dataCollectionWeek;
+          discussionResearchContextCache.delete(session.id);
+        }
+      }
     }
 
     const templateRow = await fetchTemplate(session);
@@ -1156,7 +1326,7 @@ export const POST = withApiLogging(postHandler, {
 async function fetchSession(sessionId: string): Promise<SessionRecord | null> {
   const { data, error } = await adminDb
     .from('discussion_sessions')
-    .select('id, user_id, status, phase, learning_goals, template_id, subtopic_id, course_id')
+    .select('id, user_id, status, phase, learning_goals, template_id, subtopic_id, course_id, learning_session_id, data_collection_week')
     .eq('id', sessionId)
     .limit(1);
 

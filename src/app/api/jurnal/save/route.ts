@@ -8,6 +8,11 @@ import { JurnalSchema, parseBody } from '@/lib/schemas'
 import { resolveAuthUserId } from '@/lib/auth-helper'
 import { resolveUserByIdentifier } from '@/services/auth.service'
 import {
+  refreshResearchSessionMetrics,
+  resolveResearchLearningSession,
+  syncResearchEvidenceItem,
+} from '@/services/research-session.service'
+import {
   buildReflectionContext,
   isStructuredReflectionComplete,
   normalizeIndex,
@@ -268,6 +273,12 @@ async function postHandler(req: NextRequest) {
       type,
       structured,
     })
+    const researchTimestamp = new Date().toISOString()
+    const researchSession = await resolveResearchLearningSession({
+      userId: user.id,
+      courseId: data.courseId,
+      occurredAt: researchTimestamp,
+    })
 
     const jurnalData = {
       user_id: user.id,
@@ -279,6 +290,16 @@ async function postHandler(req: NextRequest) {
       content: normalizedContent,
       type,
       reflection: JSON.stringify(reflectionContext),
+      learning_session_id: researchSession.learningSessionId,
+      research_validity_status: 'valid',
+      coding_status: type === 'structured_reflection' ? 'auto_coded' : 'uncoded',
+      raw_evidence_snapshot: {
+        type,
+        content: normalizedContent,
+        structured,
+        reflection_context: reflectionContext,
+      },
+      data_collection_week: researchSession.dataCollectionWeek,
     }
 
     const jurnal = await DatabaseService.insertRecord<
@@ -295,6 +316,37 @@ async function postHandler(req: NextRequest) {
       moduleIndex,
       subtopicIndex,
     })
+
+    try {
+      await syncResearchEvidenceItem({
+        sourceType: 'journal',
+        sourceId: jurnal.id,
+        sourceTable: 'jurnal',
+        userId: user.id,
+        courseId: data.courseId,
+        learningSessionId: researchSession.learningSessionId,
+        rmFocus: 'RM2_RM3',
+        evidenceTitle: `Refleksi ${subtopicLabel || type}`,
+        evidenceText: normalizedContent,
+        evidenceStatus: type === 'structured_reflection' ? 'coded' : 'raw',
+        codingStatus: type === 'structured_reflection' ? 'auto_coded' : 'uncoded',
+        researchValidityStatus: 'valid',
+        dataCollectionWeek: researchSession.dataCollectionWeek,
+        evidenceSourceSummary: 'Jurnal/refleksi siswa setelah belajar subtopik.',
+        rawEvidenceSnapshot: jurnalData.raw_evidence_snapshot,
+        metadata: {
+          type,
+          subtopic_id: subtopicId,
+          subtopic_label: subtopicLabel,
+          module_index: moduleIndex,
+          subtopic_index: subtopicIndex,
+        },
+        createdAt: researchTimestamp,
+      })
+      await refreshResearchSessionMetrics(researchSession.learningSessionId)
+    } catch (researchError) {
+      console.warn('[Jurnal] Research evidence sync skipped', researchError)
+    }
 
     let feedbackSaved = false
     let feedbackMirrorAction: 'created' | 'reused' | 'skipped' = 'skipped'

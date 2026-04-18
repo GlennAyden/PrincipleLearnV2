@@ -2,7 +2,7 @@
 // Heuristic classifier for prompt development stages (RM2)
 // Stages: SCP → SRP → MQP → Reflective
 
-export type PromptStage = 'SCP' | 'SRP' | 'MQP' | 'Reflective';
+export type PromptStage = 'SCP' | 'SRP' | 'MQP' | 'REFLECTIVE';
 
 interface PromptComponents {
   tujuan?: string;
@@ -48,7 +48,7 @@ const MULTI_QUESTION_INDICATORS: { pattern: RegExp; label: string }[] = [
  * SCP  (Simple Clarification Prompt): Single direct question, minimal context
  * SRP  (Structured Reformulation Prompt): Question with context/background
  * MQP  (Multi-Question Prompt): Multiple layered questions with full components
- * Reflective: Evaluative, comparative, or justificatory reasoning
+ * REFLECTIVE: Evaluative, comparative, or justificatory reasoning
  */
 export function classifyPromptStage(
   question: string,
@@ -96,7 +96,7 @@ export function classifyPromptStage(
   // Reflective: evaluative language + at least some structure
   if (reflectiveHits >= 2 || (reflectiveHits >= 1 && componentCount >= 2)) {
     const confidence = Math.min(0.55 + reflectiveHits * 0.12 + componentCount * 0.08, 1);
-    return { stage: 'Reflective', confidence, microMarkers: markers };
+    return { stage: 'REFLECTIVE', confidence, microMarkers: markers };
   }
 
   // MQP: multiple questions/layers with rich components

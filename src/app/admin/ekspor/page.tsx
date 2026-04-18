@@ -11,12 +11,63 @@ import { useAdmin } from '@/hooks/useAdmin'
 import styles from './page.module.scss'
 
 type ExportFormat = 'json' | 'csv'
+type ResearchDataType = 'sessions' | 'classifications' | 'indicators' | 'evidence' | 'longitudinal' | 'readiness' | 'all'
 
 interface ExportFilters {
     user_id: string
+    course_id: string
     start_date: string
     end_date: string
+    anonymize: boolean
 }
+
+interface ResearchExportUrlOptions {
+    dataType?: ResearchDataType
+    format: ExportFormat
+    filters: ExportFilters
+    spss?: boolean
+}
+
+const appendOptionalResearchFilters = (params: URLSearchParams, filters: ExportFilters) => {
+    const optionalFilters = {
+        user_id: filters.user_id,
+        course_id: filters.course_id,
+        start_date: filters.start_date,
+        end_date: filters.end_date,
+    }
+
+    Object.entries(optionalFilters).forEach(([key, value]) => {
+        const normalizedValue = value.trim()
+        if (normalizedValue) params.append(key, normalizedValue)
+    })
+
+    if (filters.anonymize) params.append('anonymize', 'true')
+}
+
+const buildResearchExportUrl = ({
+    dataType = 'all',
+    format,
+    filters,
+    spss = false,
+}: ResearchExportUrlOptions) => {
+    const params = new URLSearchParams()
+
+    if (spss) {
+        params.append('spss', 'true')
+        params.append('format', 'csv')
+    } else {
+        params.append('data_type', dataType)
+        params.append('format', format)
+    }
+
+    appendOptionalResearchFilters(params, filters)
+
+    return `/api/admin/research/export?${params.toString()}`
+}
+
+const buildResearchUrl = (dataType: ResearchDataType) =>
+    (format: ExportFormat, filters: ExportFilters) =>
+        buildResearchExportUrl({ dataType, format, filters })
 
 interface ExportCard {
     id: string
@@ -57,77 +108,76 @@ const EXPORT_CARDS: ExportCard[] = [
     {
         id: 'sessions',
         title: 'Sesi Pembelajaran (RM2)',
-        description: 'Data sesi pembelajaran longitudinal termasuk informasi siswa, kursus, dan durasi',
+        description: 'Dataset sesi RM2 siap lampiran tesis: siswa, kursus, urutan sesi, dan durasi belajar',
         icon: <FiCalendar />,
         iconClass: 'iconSessions',
         formats: ['csv', 'json'],
-        buildUrl: (format, filters) => {
-            const params = new URLSearchParams({ type: 'sessions', format })
-            if (filters.user_id) params.append('user_id', filters.user_id)
-            if (filters.start_date) params.append('start_date', filters.start_date)
-            if (filters.end_date) params.append('end_date', filters.end_date)
-            return `/api/admin/research/export?${params.toString()}`
-        },
+        buildUrl: buildResearchUrl('sessions'),
     },
     {
         id: 'classifications',
         title: 'Klasifikasi Prompt (RM2)',
-        description: 'Klasifikasi tahap prompt (SCP, SRP, MQP, Reflective) dengan micro markers dan cognitive depth',
+        description: 'Lampiran coding RM2 untuk tahap prompt SCP, SRP, MQP, Reflective, micro markers, dan cognitive depth',
         icon: <FiTag />,
         iconClass: 'iconClassifications',
         formats: ['csv', 'json'],
-        buildUrl: (format, filters) => {
-            const params = new URLSearchParams({ type: 'classifications', format })
-            if (filters.user_id) params.append('user_id', filters.user_id)
-            if (filters.start_date) params.append('start_date', filters.start_date)
-            if (filters.end_date) params.append('end_date', filters.end_date)
-            return `/api/admin/research/export?${params.toString()}`
-        },
+        buildUrl: buildResearchUrl('classifications'),
     },
     {
         id: 'indicators',
         title: 'Indikator Kognitif (RM3)',
-        description: 'Penilaian indikator CT dan Critical Thinking per klasifikasi prompt',
+        description: 'Skor indikator CT dan Critical Thinking RM3 siap lampiran analisis tesis',
         icon: <FiBarChart2 />,
         iconClass: 'iconIndicators',
         formats: ['csv', 'json'],
-        buildUrl: (format, filters) => {
-            const params = new URLSearchParams({ type: 'indicators', format })
-            if (filters.user_id) params.append('user_id', filters.user_id)
-            if (filters.start_date) params.append('start_date', filters.start_date)
-            if (filters.end_date) params.append('end_date', filters.end_date)
-            return `/api/admin/research/export?${params.toString()}`
-        },
+        buildUrl: buildResearchUrl('indicators'),
+    },
+    {
+        id: 'evidence',
+        title: 'Evidence Bank RM2/RM3',
+        description: 'Prompt mentah, jawaban AI, artefak, dan triangulasi siap dibawa ke lampiran tesis',
+        icon: <FiFileText />,
+        iconClass: 'iconEvidence',
+        formats: ['csv', 'json'],
+        buildUrl: buildResearchUrl('evidence'),
+    },
+    {
+        id: 'longitudinal',
+        title: 'Longitudinal RM2/RM3',
+        description: 'Perkembangan prompt dan indikator kognitif lintas sesi untuk lampiran longitudinal tesis',
+        icon: <FiActivity />,
+        iconClass: 'iconLongitudinal',
+        formats: ['csv', 'json'],
+        buildUrl: buildResearchUrl('longitudinal'),
+    },
+    {
+        id: 'readiness',
+        title: 'Kesiapan Lapangan Tahap 5',
+        description: 'Snapshot kesiapan tiap siswa, checklist satu bulan, aksi prioritas, dan status output RM2/RM3',
+        icon: <FiCheckCircle />,
+        iconClass: 'iconReadiness',
+        formats: ['csv', 'json'],
+        buildUrl: buildResearchUrl('readiness'),
     },
     {
         id: 'full',
-        title: 'Data Lengkap',
-        description: 'Semua data penelitian dalam satu file termasuk sesi, klasifikasi, dan indikator',
+        title: 'Data Lengkap RM2/RM3',
+        description: 'Paket lengkap lampiran tesis: sesi, klasifikasi prompt RM2, indikator RM3, dan metadata penelitian',
         icon: <FiDatabase />,
         iconClass: 'iconFull',
         formats: ['json'],
-        buildUrl: (_format, filters) => {
-            const params = new URLSearchParams({ type: 'full', format: 'json' })
-            if (filters.user_id) params.append('user_id', filters.user_id)
-            if (filters.start_date) params.append('start_date', filters.start_date)
-            if (filters.end_date) params.append('end_date', filters.end_date)
-            return `/api/admin/research/export?${params.toString()}`
-        },
+        buildUrl: (_format, filters) =>
+            buildResearchExportUrl({ dataType: 'all', format: 'json', filters }),
     },
     {
         id: 'spss',
         title: 'Format SPSS',
-        description: 'Data dalam format CSV terstruktur untuk analisis statistik SPSS',
+        description: 'CSV siap SPSS untuk analisis statistik lampiran tesis RM2/RM3',
         icon: <FiFileText />,
         iconClass: 'iconSpss',
         formats: ['csv'],
-        buildUrl: (_format, filters) => {
-            const params = new URLSearchParams({ type: 'spss', format: 'csv' })
-            if (filters.user_id) params.append('user_id', filters.user_id)
-            if (filters.start_date) params.append('start_date', filters.start_date)
-            if (filters.end_date) params.append('end_date', filters.end_date)
-            return `/api/admin/research/export?${params.toString()}`
-        },
+        buildUrl: (_format, filters) =>
+            buildResearchExportUrl({ format: 'csv', filters, spss: true }),
     },
 ]
 
@@ -139,8 +189,10 @@ export default function EksporPage() {
     const [success, setSuccess] = useState<string | null>(null)
     const [filters, setFilters] = useState<ExportFilters>({
         user_id: '',
+        course_id: '',
         start_date: '',
         end_date: '',
+        anonymize: false,
     })
 
     const handleExport = async (card: ExportCard, format: ExportFormat) => {
@@ -205,7 +257,7 @@ export default function EksporPage() {
                         Ekspor Data
                     </h2>
                     <p className={styles.headerSub}>
-                        Unduh data siswa, aktivitas, dan penelitian dalam format JSON atau CSV
+                        Unduh data penelitian RM2/RM3 dan data pendukung siap lampiran tesis dalam format JSON atau CSV
                     </p>
                 </div>
                 <button
@@ -226,7 +278,7 @@ export default function EksporPage() {
             {/* Filters */}
             <div className={styles.filterSection}>
                 <h3 className={styles.filterTitle}>
-                    <FiFilter /> Filter Export (Opsional)
+                    <FiFilter /> Filter Ekspor Lampiran Tesis (Opsional)
                 </h3>
                 <div className={styles.filterGrid}>
                     <div className={styles.filterGroup}>
@@ -236,6 +288,15 @@ export default function EksporPage() {
                             value={filters.user_id}
                             onChange={(e) => setFilters({ ...filters, user_id: e.target.value })}
                             placeholder="UUID siswa (opsional)"
+                        />
+                    </div>
+                    <div className={styles.filterGroup}>
+                        <label>Course ID</label>
+                        <input
+                            type="text"
+                            value={filters.course_id}
+                            onChange={(e) => setFilters({ ...filters, course_id: e.target.value })}
+                            placeholder="UUID kursus (opsional)"
                         />
                     </div>
                     <div className={styles.filterGroup}>
@@ -253,6 +314,17 @@ export default function EksporPage() {
                             value={filters.end_date}
                             onChange={(e) => setFilters({ ...filters, end_date: e.target.value })}
                         />
+                    </div>
+                    <div className={`${styles.filterGroup} ${styles.checkboxGroup}`}>
+                        <label className={styles.checkboxLabel}>
+                            <input
+                                type="checkbox"
+                                checked={filters.anonymize}
+                                onChange={(e) => setFilters({ ...filters, anonymize: e.target.checked })}
+                            />
+                            Anonimkan data siswa
+                        </label>
+                        <span className={styles.filterHelp}>Gunakan untuk lampiran tesis yang dibagikan di luar tim penelitian.</span>
                     </div>
                 </div>
             </div>

@@ -11,6 +11,11 @@ import { resolveUserByIdentifier } from '@/services/auth.service';
 import { syncQuizQuestions, buildSubtopicCacheKey } from '@/lib/quiz-sync';
 import { withQuizCompletionState } from '@/lib/quiz-content';
 import { ensureLeafSubtopic } from '@/lib/leaf-subtopics';
+import {
+  refreshResearchSessionMetrics,
+  resolveResearchLearningSession,
+  syncResearchEvidenceItem,
+} from '@/services/research-session.service';
 
 function normalizeText(value: unknown) {
   return typeof value === 'string' ? value.trim() : '';
@@ -640,6 +645,12 @@ async function postHandler(req: NextRequest) {
     }
 
     const quizAttemptId = randomUUID();
+    const researchTimestamp = new Date().toISOString();
+    const researchSession = await resolveResearchLearningSession({
+      userId: user.id,
+      courseId: data.courseId,
+      occurredAt: researchTimestamp,
+    });
     const matchingResults: Array<{
       questionIndex: number;
       matched: boolean;
@@ -820,6 +831,81 @@ async function postHandler(req: NextRequest) {
 
     const serverCorrectCount = evaluatedAnswers.filter((row) => row.isCorrect).length;
     const serverScore = Math.round((serverCorrectCount / authoritativeQuiz.length) * 100);
+    const quizEvidenceText = evaluatedAnswers
+      .map((row) => {
+        return `Q: ${row.question}\nA: ${row.userAnswer}\nCorrect answer: ${row.correctAnswer}\nCorrect: ${row.isCorrect}\nReasoning: ${row.reasoningNote || '-'}`;
+      })
+      .join('\n---\n');
+    const submissionIdStrings = submissionIds.filter(
+      (id): id is string => typeof id === 'string' && id.length > 0,
+    );
+    const quizEvidenceSnapshot = {
+      attempt_id: persistedAttemptId,
+      attempt_number: persistedAttemptNumber,
+      score: serverScore,
+      correct_count: serverCorrectCount,
+      total_questions: authoritativeQuiz.length,
+      evaluated_answers: evaluatedAnswers,
+      submission_ids: submissionIdStrings,
+      subtopic_id: subtopicId,
+      leaf_subtopic_id: leafSubtopicId,
+      module_title: data.moduleTitle ?? null,
+      subtopic_title: data.subtopicTitle ?? null,
+    };
+
+    try {
+      const updatePayload = {
+        learning_session_id: researchSession.learningSessionId,
+        research_validity_status: 'valid',
+        coding_status: 'uncoded',
+        raw_evidence_snapshot: quizEvidenceSnapshot,
+        data_collection_week: researchSession.dataCollectionWeek,
+      };
+
+      const { error: researchUpdateError } = submissionIdStrings.length > 0
+        ? await adminDb
+            .from('quiz_submissions')
+            .in('id', submissionIdStrings)
+            .update(updatePayload)
+        : await adminDb
+            .from('quiz_submissions')
+            .eq('quiz_attempt_id', persistedAttemptId)
+            .update(updatePayload);
+
+      if (researchUpdateError) {
+        console.warn('[QuizSubmit] Failed to update quiz research metadata', researchUpdateError);
+      }
+
+      await syncResearchEvidenceItem({
+        sourceType: 'quiz_submission',
+        sourceId: persistedAttemptId,
+        sourceTable: 'quiz_submissions',
+        userId: user.id,
+        courseId: data.courseId,
+        learningSessionId: researchSession.learningSessionId,
+        rmFocus: 'RM3',
+        unitSequence: persistedAttemptNumber,
+        evidenceTitle: `Kuis ${data.subtopicTitle || data.moduleTitle || 'subtopik'} attempt ${persistedAttemptNumber}`,
+        evidenceText: quizEvidenceText,
+        evidenceStatus: 'raw',
+        codingStatus: 'uncoded',
+        researchValidityStatus: 'valid',
+        dataCollectionWeek: researchSession.dataCollectionWeek,
+        evidenceSourceSummary: `${serverCorrectCount}/${authoritativeQuiz.length} jawaban benar, skor ${serverScore}.`,
+        rawEvidenceSnapshot: quizEvidenceSnapshot,
+        metadata: {
+          module_index: normalizeIndex(data.moduleIndex),
+          subtopic_index: normalizeIndex(data.subtopicIndex),
+          subtopic_id: subtopicId,
+          leaf_subtopic_id: leafSubtopicId,
+          submission_ids: submissionIdStrings,
+        },
+        createdAt: researchTimestamp,
+      });
+      await refreshResearchSessionMetrics(researchSession.learningSessionId);
+    } catch (researchError) {
+      console.warn('[QuizSubmit] Research evidence sync skipped', researchError);
+    }
 
     console.log('Quiz submission saved to database:', {
       user: user.id,
@@ -854,13 +940,7 @@ async function postHandler(req: NextRequest) {
 
     after(async () => {
       try {
-        const qaText = evaluatedAnswers
-          .map((row) => {
-            return `Q: ${row.question}\nA: ${row.userAnswer}\nCorrect answer: ${row.correctAnswer}\nCorrect: ${row.isCorrect}\nReasoning: ${row.reasoningNote || '-'}`;
-          })
-          .join('\n---\n');
-
-        if (qaText.length < 20) return;
+        if (quizEvidenceText.length < 20) return;
 
         const { scoreAndSave } = await import('@/services/cognitive-scoring.service');
         await scoreAndSave({
@@ -868,7 +948,7 @@ async function postHandler(req: NextRequest) {
           user_id: user.id,
           course_id: data.courseId,
           source_id: persistedAttemptId,
-          user_text: qaText,
+          user_text: quizEvidenceText,
           prompt_or_question: `Kuis subtopik: ${data.subtopicTitle || ''} (attempt ${persistedAttemptNumber})`,
           context_summary: `Skor: ${serverScore}, ${serverCorrectCount}/${authoritativeQuiz.length} benar, attempt ${persistedAttemptNumber}`,
         });
