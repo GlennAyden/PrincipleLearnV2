@@ -471,6 +471,7 @@ class SupabaseQueryBuilder {
   private client: SupabaseClient;
   private filters: Array<{ method: string; args: unknown[] }> = [];
   private selectFields: string = '*';
+  private selectOptions?: { count?: 'exact' | 'planned' | 'estimated'; head?: boolean };
   private orderConfig: { column: string; ascending: boolean } | null = null;
   private limitCount: number | null = null;
   private rangeConfig: { from: number; to: number } | null = null;
@@ -482,8 +483,9 @@ class SupabaseQueryBuilder {
     this.client = client;
   }
 
-  select(fields: string = '*') {
+  select(fields: string = '*', options?: { count?: 'exact' | 'planned' | 'estimated'; head?: boolean }) {
     this.selectFields = fields;
+    this.selectOptions = options;
     return this;
   }
 
@@ -671,10 +673,10 @@ class SupabaseQueryBuilder {
 
   // Execute query (called when await is used on the builder chain)
   // eslint-disable-next-line @typescript-eslint/no-explicit-any -- Supabase thenable interface requires any for dynamic query results
-  async then<T>(resolve: (value: { data: any; error: any }) => T, reject?: (error: any) => T) {
+  async then<T>(resolve: (value: { data: any; error: any; count?: number | null }) => T, reject?: (error: any) => T) {
     try {
       // eslint-disable-next-line @typescript-eslint/no-explicit-any -- dynamic Supabase filter chaining
-      let query: any = this.client.from(this.tableName).select(this.selectFields);
+      let query: any = this.client.from(this.tableName).select(this.selectFields, this.selectOptions);
 
       // Apply filters
       for (const filter of this.filters) {
@@ -702,7 +704,7 @@ class SupabaseQueryBuilder {
         query = query.maybeSingle();
       }
 
-      const { data, error } = await query;
+      const { data, error, count } = await query;
 
       if (error) {
         if (isOptionalMissingTableError(error)) {
@@ -711,10 +713,10 @@ class SupabaseQueryBuilder {
           console.error(`[SupabaseQueryBuilder] Query error:`, error);
         }
         if (reject) return reject(error);
-        return resolve({ data: null, error });
+        return resolve({ data: null, error, count });
       }
 
-      return resolve({ data, error: null });
+      return resolve({ data, error: null, count });
     } catch (error) {
       if (isOptionalMissingTableError(error)) {
         console.warn(`[SupabaseQueryBuilder] Optional table is missing:`, error);
@@ -722,7 +724,7 @@ class SupabaseQueryBuilder {
         console.error(`[SupabaseQueryBuilder] Query error:`, error);
       }
       if (reject) return reject(error);
-      return resolve({ data: null, error });
+      return resolve({ data: null, error, count: null });
     }
   }
 }

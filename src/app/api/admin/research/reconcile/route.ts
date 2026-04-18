@@ -18,6 +18,11 @@ interface ReconcileBody {
   course_id?: unknown;
 }
 
+const DEFAULT_RECONCILE_LIMIT = 50;
+const MAX_RECONCILE_LIMIT = 150;
+
+export const maxDuration = 55;
+
 export async function POST(request: NextRequest) {
   try {
     const admin = verifyAdminFromCookie(request);
@@ -50,7 +55,7 @@ function readUuid(value: unknown): string | undefined {
 
 function readLimit(value: unknown): number {
   const parsed = typeof value === 'number' ? value : parseInt(String(value ?? ''), 10);
-  return Math.min(1000, Math.max(1, Number.isFinite(parsed) ? parsed : 300));
+  return Math.min(MAX_RECONCILE_LIMIT, Math.max(1, Number.isFinite(parsed) ? parsed : DEFAULT_RECONCILE_LIMIT));
 }
 
 function readBoolean(value: unknown, fallback: boolean): boolean {

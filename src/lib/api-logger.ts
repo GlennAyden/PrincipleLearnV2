@@ -5,6 +5,7 @@ import { adminDb } from '@/lib/database';
 interface ApiLogContext {
   label?: string;
   metadata?: Record<string, unknown>;
+  awaitLog?: boolean;
 }
 
 interface ApiLogPayload extends ApiLogContext {
@@ -129,11 +130,13 @@ export function withApiLogging<T extends (...args: any[]) => Promise<Response>>(
     try {
       const response = await handler(...args);
       const duration = Date.now() - startedAt;
-      const errorMessage = await extractErrorMessageFromResponse(response);
+      const errorMessage = context.awaitLog === false
+        ? normalizeLoggedErrorMessage(response.headers.get('x-log-error-message'))
+        : await extractErrorMessageFromResponse(response);
       if (response.headers.has('x-log-error-message')) {
         response.headers.delete('x-log-error-message');
       }
-      await logApiCall({
+      const logTask = logApiCall({
         request,
         status: response.status,
         durationMs: duration,
@@ -141,11 +144,16 @@ export function withApiLogging<T extends (...args: any[]) => Promise<Response>>(
         label: context.label,
         metadata: context.metadata,
       });
+      if (context.awaitLog === false) {
+        void logTask;
+      } else {
+        await logTask;
+      }
       return response;
     } catch (error: unknown) {
       const duration = Date.now() - startedAt;
       const errObj = error as Record<string, unknown> | undefined;
-      await logApiCall({
+      const logTask = logApiCall({
         request,
         status: (errObj?.status as number) ?? 500,
         durationMs: duration,
@@ -154,6 +162,11 @@ export function withApiLogging<T extends (...args: any[]) => Promise<Response>>(
         label: context.label,
         metadata: context.metadata,
       });
+      if (context.awaitLog === false) {
+        void logTask;
+      } else {
+        await logTask;
+      }
       throw error;
     }
   }) as T;

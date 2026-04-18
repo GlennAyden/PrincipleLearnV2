@@ -58,7 +58,7 @@ interface ReconciliationSample {
 
 export async function runResearchDataReconciliation(input: ResearchReconciliationInput = {}): Promise<ResearchReconciliationResult> {
   const dryRun = input.dryRun !== false;
-  const limit = Math.min(1000, Math.max(1, Number(input.limit) || 300));
+  const limit = Math.min(150, Math.max(1, Number(input.limit) || 50));
   const now = new Date().toISOString();
 
   let query = adminDb
@@ -158,8 +158,11 @@ export async function runResearchDataReconciliation(input: ResearchReconciliatio
     if (resolvedSessionId) linkedSessionIds.add(resolvedSessionId);
     const sourceUpdated = await updateSourceResearchLink(row, resolvedSessionId, resolvedWeek);
     if (sourceUpdated) updatedSources += 1;
-    await refreshResearchSessionMetrics(resolvedSessionId);
     pushSample(sample, row, needsSession, needsWeek, resolvedSessionId, resolvedWeek, 'updated');
+  }
+
+  if (!dryRun && linkedSessionIds.size > 0) {
+    await Promise.all(Array.from(linkedSessionIds).map((sessionId) => refreshResearchSessionMetrics(sessionId)));
   }
 
   return {

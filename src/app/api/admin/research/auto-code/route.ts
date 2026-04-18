@@ -21,10 +21,18 @@ interface AutoCodeBody {
   learning_session_id?: unknown;
   session_id?: unknown;
   limit?: unknown;
+  runtime_budget_ms?: unknown;
   dry_run?: unknown;
   include_reviewed?: unknown;
   run_triangulation?: unknown;
 }
+
+const DEFAULT_AUTO_CODE_LIMIT = 3;
+const MAX_AUTO_CODE_LIMIT = 10;
+const DEFAULT_RUNTIME_BUDGET_MS = 35_000;
+const MAX_RUNTIME_BUDGET_MS = 50_000;
+
+export const maxDuration = 55;
 
 async function getHandler(request: NextRequest) {
   const admin = verifyAdminFromCookie(request);
@@ -70,6 +78,7 @@ async function postHandler(request: NextRequest) {
       courseId,
       learningSessionId,
       limit: readLimit(body.limit),
+      runtimeBudgetMs: readRuntimeBudgetMs(body.runtime_budget_ms),
       dryRun: readBoolean(body.dry_run, false),
       includeReviewed: readBoolean(body.include_reviewed, false),
       runTriangulation: readBoolean(body.run_triangulation, true),
@@ -95,7 +104,15 @@ function readUuid(value: unknown): string | undefined {
 
 function readLimit(value: unknown): number {
   const parsed = typeof value === 'number' ? value : parseInt(String(value ?? ''), 10);
-  return Math.min(200, Math.max(1, Number.isFinite(parsed) ? parsed : 50));
+  return Math.min(MAX_AUTO_CODE_LIMIT, Math.max(1, Number.isFinite(parsed) ? parsed : DEFAULT_AUTO_CODE_LIMIT));
+}
+
+function readRuntimeBudgetMs(value: unknown): number {
+  const parsed = typeof value === 'number' ? value : parseInt(String(value ?? ''), 10);
+  return Math.min(
+    MAX_RUNTIME_BUDGET_MS,
+    Math.max(10_000, Number.isFinite(parsed) ? parsed : DEFAULT_RUNTIME_BUDGET_MS)
+  );
 }
 
 function readBoolean(value: unknown, fallback: boolean): boolean {
@@ -109,4 +126,4 @@ function readBoolean(value: unknown, fallback: boolean): boolean {
 }
 
 export const GET = withApiLogging(getHandler, { label: 'admin.research.auto-code.get' });
-export const POST = withApiLogging(postHandler, { label: 'admin.research.auto-code.post' });
+export const POST = withApiLogging(postHandler, { label: 'admin.research.auto-code.post', awaitLog: false });

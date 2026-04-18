@@ -20,6 +20,8 @@ const AUTO_CODER_VERSION = 'stage4.1.0';
 const AUTO_SCORE_METHOD = 'llm_auto_stage4';
 const CLASSIFICATION_METHOD = 'rule_based';
 const TRIANGULATION_REVIEW_STATUS = 'needs_review';
+const DEFAULT_RUNTIME_BUDGET_MS = 35_000;
+const MIN_TRIANGULATION_REMAINING_MS = 8_000;
 
 type EvidenceRow = ResearchEvidenceItem & {
   auto_coding_status?: string | null;
@@ -91,6 +93,7 @@ export interface ResearchAutoCoderOptions {
   courseId?: string;
   learningSessionId?: string;
   limit?: number;
+  runtimeBudgetMs?: number;
   dryRun?: boolean;
   includeReviewed?: boolean;
   runTriangulation?: boolean;
@@ -215,10 +218,12 @@ function emptySummary(): ResearchAutoCoderSummary {
 
 export async function runResearchAutoCoder(options: ResearchAutoCoderOptions = {}): Promise<ResearchAutoCoderResult> {
   const normalized = normalizeOptions(options);
+  const startedAt = Date.now();
   const summary = emptySummary();
   const codedItems: AutoCodedEvidenceResult[] = [];
   let triangulationRecords: AutoTriangulationResult[] = [];
   let runId: string | null = null;
+  let stoppedEarly = false;
 
   if (!normalized.dryRun) {
     runId = await createAutoCodingRun(normalized);
@@ -228,7 +233,13 @@ export async function runResearchAutoCoder(options: ResearchAutoCoderOptions = {
     const evidenceRows = await fetchEvidenceRows(normalized);
     summary.evidence_considered = evidenceRows.length;
 
-    for (const row of evidenceRows) {
+    for (const [index, row] of evidenceRows.entries()) {
+      if (shouldStopForRuntimeBudget(startedAt, normalized.runtimeBudgetMs)) {
+        stoppedEarly = true;
+        summary.evidence_skipped += evidenceRows.length - index;
+        break;
+      }
+
       const item = await codeEvidenceRow(row, normalized, runId);
       codedItems.push(item);
 
@@ -246,11 +257,13 @@ export async function runResearchAutoCoder(options: ResearchAutoCoderOptions = {
       }
     }
 
-    if (normalized.runTriangulation) {
+    if (normalized.runTriangulation && !stoppedEarly && hasTriangulationBudget(startedAt, normalized.runtimeBudgetMs)) {
       triangulationRecords = await generateTriangulation(normalized, runId);
       summary.triangulation_created = triangulationRecords.filter((record) => record.action === 'created').length;
       summary.triangulation_updated = triangulationRecords.filter((record) => record.action === 'updated').length;
       summary.missing_indicator_records = triangulationRecords.filter((record) => record.status === 'belum_muncul').length;
+    } else if (normalized.runTriangulation) {
+      stoppedEarly = true;
     }
 
     if (!normalized.dryRun && runId) {
@@ -271,9 +284,7 @@ export async function runResearchAutoCoder(options: ResearchAutoCoderOptions = {
       coded_items: codedItems,
       triangulation_records: triangulationRecords,
       missing_indicators: triangulationRecords.filter((record) => record.status === 'belum_muncul'),
-      message: normalized.dryRun
-        ? 'Preview auto-coding selesai tanpa menulis data.'
-        : 'Auto-coding RM2/RM3 selesai dan hasilnya disimpan untuk admin.',
+      message: buildCompletionMessage(normalized.dryRun, stoppedEarly),
     };
   } catch (error) {
     if (!normalized.dryRun && runId) {
@@ -288,13 +299,31 @@ function normalizeOptions(options: ResearchAutoCoderOptions): Required<Omit<Rese
     userId: options.userId && isUuid(options.userId) ? options.userId : undefined,
     courseId: options.courseId && isUuid(options.courseId) ? options.courseId : undefined,
     learningSessionId: options.learningSessionId && isUuid(options.learningSessionId) ? options.learningSessionId : undefined,
-    limit: Math.min(200, Math.max(1, Number(options.limit ?? 50) || 50)),
+    limit: Math.min(10, Math.max(1, Number(options.limit ?? 3) || 3)),
+    runtimeBudgetMs: Math.min(50_000, Math.max(10_000, Number(options.runtimeBudgetMs ?? DEFAULT_RUNTIME_BUDGET_MS) || DEFAULT_RUNTIME_BUDGET_MS)),
     dryRun: Boolean(options.dryRun),
     includeReviewed: Boolean(options.includeReviewed),
     runTriangulation: options.runTriangulation !== false,
     requestedBy: options.requestedBy ?? null,
     requestedByEmail: options.requestedByEmail ?? null,
   };
+}
+
+function shouldStopForRuntimeBudget(startedAt: number, runtimeBudgetMs: number): boolean {
+  return Date.now() - startedAt >= runtimeBudgetMs;
+}
+
+function hasTriangulationBudget(startedAt: number, runtimeBudgetMs: number): boolean {
+  return runtimeBudgetMs - (Date.now() - startedAt) >= MIN_TRIANGULATION_REMAINING_MS;
+}
+
+function buildCompletionMessage(dryRun: boolean, stoppedEarly: boolean): string {
+  const base = dryRun
+    ? 'Preview auto-coding selesai tanpa menulis data.'
+    : 'Auto-coding RM2/RM3 selesai dan hasilnya disimpan untuk admin.';
+  return stoppedEarly
+    ? `${base} Sebagian item ditunda agar request tidak melewati batas runtime; jalankan lagi untuk batch berikutnya.`
+    : base;
 }
 
 async function createAutoCodingRun(options: ReturnType<typeof normalizeOptions>): Promise<string | null> {

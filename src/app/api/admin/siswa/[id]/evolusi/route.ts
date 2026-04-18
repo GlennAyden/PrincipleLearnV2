@@ -45,7 +45,11 @@ interface ClassificationRow {
   prompt_stage: string | null
   micro_markers?: unknown
   learning_session_id: string | null
+  confidence_score?: number | string | null
+  auto_stage_confidence?: number | string | null
   confidence_level?: number | string | null
+  classification_evidence?: string | null
+  researcher_notes?: string | null
   coding_notes?: string | null
   created_at: string
 }
@@ -182,7 +186,16 @@ async function selectRowsWithFallback<T>(
   configure: (query: QueryBuilder) => QueryBuilder
 ): Promise<{ data: T[]; error: unknown | null }> {
   for (const selectFields of selectOptions) {
-    const { data, error } = await configure(adminDb.from(tableName).select(selectFields))
+    let data: unknown[] | null = null
+    let error: unknown | null = null
+
+    try {
+      const result = await configure(adminDb.from(tableName).select(selectFields))
+      data = result.data
+      error = result.error
+    } catch (caughtError) {
+      error = caughtError
+    }
 
     if (!error) {
       return { data: (data ?? []) as T[], error: null }
@@ -322,7 +335,8 @@ export async function GET(
       selectRowsWithFallback<ClassificationRow>(
         'prompt_classifications',
         [
-          'id, prompt_id, prompt_source, prompt_stage, micro_markers, learning_session_id, confidence_level, coding_notes, created_at',
+          'id, prompt_id, prompt_source, prompt_stage, micro_markers, learning_session_id, confidence_score, auto_stage_confidence, classification_evidence, researcher_notes, created_at',
+          'id, prompt_id, prompt_source, prompt_stage, micro_markers, learning_session_id, confidence_score, created_at',
           'id, prompt_id, prompt_stage, micro_markers, learning_session_id, created_at',
           'id, prompt_stage, learning_session_id, created_at',
         ],
@@ -373,6 +387,16 @@ export async function GET(
         classificationsByPromptId.get(prompt.id) ??
         (prompt.learning_session_id ? classificationsBySessionId.get(prompt.learning_session_id) ?? [] : [])
       const manualClassification = promptClassifications[0] ?? null
+      const manualConfidence = firstNumber(
+        manualClassification?.confidence_score,
+        manualClassification?.auto_stage_confidence,
+        manualClassification?.confidence_level
+      )
+      const manualNotes = firstString(
+        manualClassification?.researcher_notes,
+        manualClassification?.coding_notes,
+        manualClassification?.classification_evidence
+      )
       const resolvedStage = firstString(manualClassification?.prompt_stage, prompt.prompt_stage) ?? 'N/A'
       const promptSessionId = prompt.learning_session_id ?? manualClassification?.learning_session_id ?? null
       const linkedSession = promptSessionId ? sessionById.get(promptSessionId) ?? null : null
@@ -393,7 +417,7 @@ export async function GET(
         prompt_stage: prompt.prompt_stage ?? 'N/A',
         resolved_prompt_stage: resolvedStage,
         manual_prompt_stage: manualClassification?.prompt_stage ?? null,
-        stage_confidence: firstNumber(prompt.stage_confidence, manualClassification?.confidence_level),
+        stage_confidence: firstNumber(prompt.stage_confidence, manualConfidence),
         session_number: prompt.session_number ?? linkedSession?.session_number ?? null,
         learning_session_id: promptSessionId,
         micro_markers: normalizeMicroMarkers(prompt.micro_markers),
@@ -408,7 +432,7 @@ export async function GET(
           firstString(...promptEvidence.map((item) => item.research_validity_status ?? item.validity_status)) ??
           null,
         researcher_notes:
-          firstString(prompt.researcher_notes, manualClassification?.coding_notes) ??
+          firstString(prompt.researcher_notes, manualNotes) ??
           firstString(...promptEvidence.map((item) => item.researcher_notes)) ??
           null,
         raw_evidence_snapshot:
@@ -443,9 +467,12 @@ export async function GET(
               id: manualClassification.id,
               prompt_stage: manualClassification.prompt_stage,
               learning_session_id: manualClassification.learning_session_id,
-              confidence_level: firstNumber(manualClassification.confidence_level),
+              confidence_score: manualConfidence,
+              confidence_level: manualConfidence,
               micro_markers: normalizeMicroMarkers(manualClassification.micro_markers),
-              coding_notes: manualClassification.coding_notes ?? null,
+              classification_evidence: manualClassification.classification_evidence ?? null,
+              researcher_notes: manualClassification.researcher_notes ?? null,
+              coding_notes: manualNotes,
               created_at: manualClassification.created_at,
             }
           : null,

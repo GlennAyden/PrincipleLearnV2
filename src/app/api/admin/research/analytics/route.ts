@@ -302,10 +302,11 @@ async function fetchAutoScores(userId?: string | null, courseId?: string | null,
 
 async function fetchCount(table: string, userId?: string | null, courseId?: string | null): Promise<number> {
   try {
-    let query = adminDb.from(table).select(courseId ? 'id, user_id, course_id' : 'id, user_id');
+    let query = adminDb.from(table).select('id', { count: 'exact', head: true });
     if (userId) query = query.eq('user_id', userId);
     if (courseId) query = query.eq('course_id', courseId);
-    const { data } = await query;
+    const { count, data } = await query;
+    if (typeof count === 'number') return count;
     return Array.isArray(data) ? data.length : 0;
   } catch {
     return 0;
