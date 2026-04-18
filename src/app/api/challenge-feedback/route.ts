@@ -4,6 +4,7 @@ import { withProtection } from '@/lib/api-middleware';
 import { withApiLogging } from '@/lib/api-logger';
 import { aiRateLimiter } from '@/lib/rate-limit';
 import { ChallengeFeedbackSchema, parseBody } from '@/lib/schemas';
+import { normalizeChallengeFeedback } from '@/lib/challenge-feedback';
 import { chatCompletion, sanitizePromptInput } from '@/services/ai.service';
 import type { ChatCompletionMessageParam } from 'openai/resources/chat/completions';
 
@@ -110,8 +111,14 @@ Please provide appropriate feedback for this answer, considering the user's leve
       maxTokens: 600,
     });
 
-    const feedbackRaw = response.choices?.[0]?.message?.content?.trim() || '';
-    return NextResponse.json({ feedback: feedbackRaw });
+    const feedbackRaw = response.choices?.[0]?.message?.content;
+    const feedback = normalizeChallengeFeedback(feedbackRaw, {
+      question,
+      answer,
+      context,
+    });
+
+    return NextResponse.json({ feedback });
   } catch (err: unknown) {
     console.error('Error generating challenge feedback:', err);
     return NextResponse.json({ error: 'Gagal membuat umpan balik tantangan' }, { status: 500 });

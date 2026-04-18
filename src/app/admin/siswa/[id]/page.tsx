@@ -36,7 +36,7 @@ const TYPE_ICONS: Record<string, string> = {
 
 const TYPE_LABELS: Record<string, string> = {
   course: 'Kursus',
-  quiz: 'Kuis',
+  quiz: 'Percobaan Kuis',
   journal: 'Jurnal',
   reflection: 'Refleksi',
   transcript: 'Transkrip',
@@ -278,7 +278,7 @@ export default function StudentDetailPage() {
           {/* Grid Statistik */}
           <section className={styles.statsGrid}>
             <div className={styles.statItem}><FiFileText className={styles.statIconPurple} /><div><span className={styles.statNum}>{student.totalCourses}</span><span className={styles.statLabel}>Kursus</span></div></div>
-            <div className={styles.statItem}><FiCheckSquare className={styles.statIconGreen} /><div><span className={styles.statNum}>{student.totalQuizzes}</span><span className={styles.statLabel}>Kuis</span></div></div>
+            <div className={styles.statItem}><FiCheckSquare className={styles.statIconGreen} /><div><span className={styles.statNum}>{student.totalQuizzes}</span><span className={styles.statLabel}>Percobaan Kuis</span></div></div>
             <div className={styles.statItem}><FiBookOpen className={styles.statIconBlue} /><div><span className={styles.statNum}>{student.totalReflections ?? student.totalJournals}</span><span className={styles.statLabel}>Refleksi</span></div></div>
             <div className={styles.statItem}><FiMessageCircle className={styles.statIconTeal} /><div><span className={styles.statNum}>{student.totalTranscripts}</span><span className={styles.statLabel}>Transkrip</span></div></div>
             <div className={styles.statItem}><FiHelpCircle className={styles.statIconOrange} /><div><span className={styles.statNum}>{student.totalAskQuestions}</span><span className={styles.statLabel}>Pertanyaan</span></div></div>
@@ -638,8 +638,8 @@ export default function StudentDetailPage() {
                     const completionPct = course.subtopicCount > 0
                       ? Math.round((course.completedSubtopics / course.subtopicCount) * 100)
                       : 0
-                    const quizPct = course.quizCount > 0
-                      ? Math.round((course.quizCorrect / course.quizCount) * 100)
+                    const quizPct = course.quizAnswerCount > 0
+                      ? Math.round((course.quizCorrectAnswerCount / course.quizAnswerCount) * 100)
                       : 0
                     return (
                       <article key={course.id} className={styles.courseCard}>
@@ -654,8 +654,8 @@ export default function StudentDetailPage() {
                             </div>
                           </div>
                           <div>
-                            <span className={styles.courseStatNum}>{course.quizCorrect}/{course.quizCount}</span>
-                            <span className={styles.courseStatLabel}>Akurasi Kuis</span>
+                            <span className={styles.courseStatNum}>{course.quizCorrectAnswerCount}/{course.quizAnswerCount}</span>
+                            <span className={styles.courseStatLabel}>Jawaban Benar ({course.quizAttemptCount} percobaan)</span>
                             <div className={styles.courseBar}>
                               <div className={styles.courseBarFillGreen} style={{ width: `${quizPct}%` }} />
                             </div>

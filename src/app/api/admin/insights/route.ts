@@ -17,12 +17,25 @@ import {
   emptyPromptStageDistribution,
   type PromptStageDistribution,
 } from '@/lib/admin-prompt-stage';
+import { summarizeQuizAttempts } from '@/lib/admin-quiz-attempts';
 
 const JWT_SECRET = process.env.JWT_SECRET!;
 
 // ── Row Interfaces ──
 interface PromptRow { id: string; user_id: string; question: string; prompt_components: unknown; prompt_stage?: string | null; prompt_version: string; session_number: number; reasoning_note: string; created_at: string }
-interface QuizRow { id: string; user_id: string; is_correct: boolean; reasoning_note: string; created_at: string }
+interface QuizRow {
+  id: string
+  user_id: string
+  quiz_attempt_id?: string | null
+  attempt_number?: number | null
+  course_id?: string | null
+  subtopic_id?: string | null
+  leaf_subtopic_id?: string | null
+  subtopic_label?: string | null
+  is_correct: boolean
+  reasoning_note: string
+  created_at: string
+}
 interface ChallengeRow { id: string; user_id: string; reasoning_note?: string | null; created_at: string }
 interface DiscussionRow { id: string; user_id: string; status: string; created_at: string }
 interface PromptClassificationRow { id: string; user_id: string; prompt_stage: string; prompt_stage_score: number; created_at: string; [key: string]: unknown }
@@ -110,7 +123,7 @@ export async function GET(request: NextRequest) {
       promptClassifications,
     ] = await Promise.all([
       safeQuery<PromptRow>('ask_question_history', 'id, user_id, question, prompt_components, prompt_stage, prompt_version, session_number, reasoning_note, created_at', userId ? { user_id: userId } : {}),
-      safeQuery<QuizRow>('quiz_submissions', 'id, user_id, is_correct, reasoning_note, created_at', userId ? { user_id: userId } : {}),
+      safeQuery<QuizRow>('quiz_submissions', 'id, user_id, quiz_attempt_id, attempt_number, course_id, subtopic_id, leaf_subtopic_id, subtopic_label, is_correct, reasoning_note, created_at', userId ? { user_id: userId } : {}),
       safeQuery<ReflectionJournalRow>('jurnal', 'id, user_id, course_id, subtopic_id, subtopic_label, module_index, subtopic_index, content, reflection, type, created_at', userId ? { user_id: userId } : {}),
       safeQuery<ReflectionFeedbackRow>('feedback', 'id, user_id, course_id, subtopic_id, subtopic_label, module_index, subtopic_index, rating, comment, created_at', userId ? { user_id: userId } : {}),
       safeQuery<ChallengeRow>('challenge_responses', 'id, user_id, reasoning_note, created_at', userId ? { user_id: userId } : {}),
@@ -191,11 +204,14 @@ export async function GET(request: NextRequest) {
       ...item,
       submitted_at: item.created_at ?? null,
     }));
+    const quizAttemptList = summarizeQuizAttempts(quizList);
 
     const quizCorrect = quizList.filter(q => q.is_correct).length;
     const quizAccuracy = quizList.length > 0
       ? Math.round((quizCorrect / quizList.length) * 100) : 0;
-    const quizWithReasoning = quizList.filter(q => q.reasoning_note?.trim()).length;
+    const quizWithReasoning = quizAttemptList.filter((attempt) =>
+      attempt.rows.some(q => q.reasoning_note?.trim())
+    ).length;
 
     // ── 3. Reflection Data (RM3) ──
     const structuredReflections = reflectionModel.structuredReflections;
@@ -207,7 +223,7 @@ export async function GET(request: NextRequest) {
     const challengesWithReasoning = challengeList.filter(c => c.reasoning_note?.trim()).length;
 
     // ── 5. Per-student summary ──
-    let studentSummary: { userId: string; email: string; totalPrompts: number; totalQuizzes: number; quizAccuracy: number; totalReflections: number; totalChallenges: number; joinedAt: string; promptStage: string }[] = [];
+    let studentSummary: { userId: string; email: string; totalPrompts: number; totalQuizzes: number; totalQuizAnswerRows: number; quizAccuracy: number; totalReflections: number; totalChallenges: number; joinedAt: string; promptStage: string }[] = [];
     if (!userId) {
       const { data: allUsers } = await adminDb
         .from('users')
@@ -219,6 +235,7 @@ export async function GET(request: NextRequest) {
         const userPrompts = promptList.filter(p => p.user_id === u.id);
         const userClassifications = filteredPromptClassifications.filter(p => p.user_id === u.id);
         const userQuizzes = quizList.filter(q => q.user_id === u.id);
+        const userQuizAttempts = summarizeQuizAttempts(userQuizzes, u.id);
         const userReflections = reflectionModel.byUser.get(u.id) || [];
         const userChallenges = challengeList.filter(c => c.user_id === u.id);
 
@@ -228,7 +245,8 @@ export async function GET(request: NextRequest) {
           userId: u.id,
           email: u.email,
           totalPrompts: userPrompts.length,
-          totalQuizzes: userQuizzes.length,
+          totalQuizzes: userQuizAttempts.length,
+          totalQuizAnswerRows: userQuizzes.length,
           quizAccuracy: userQuizzes.length > 0 ? Math.round((correctQuiz / userQuizzes.length) * 100) : 0,
           totalReflections: userReflections.length,
           totalChallenges: userChallenges.length,
@@ -260,7 +278,8 @@ export async function GET(request: NextRequest) {
         avgComponentsUsed: Math.round(avgComponentsUsed * 10) / 10,
         reasoningRate,
         quizAccuracy,
-        quizTotal: quizList.length,
+        quizTotal: quizAttemptList.length,
+        quizAnswerRows: quizList.length,
         quizWithReasoning,
         reflectionTotal: reflectionModel.totalReflections,
         structuredReflections,

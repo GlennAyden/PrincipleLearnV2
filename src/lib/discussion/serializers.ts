@@ -80,6 +80,17 @@ export function serializeDiscussionStep(step: DiscussionStepDto | null) {
   };
 }
 
+export function resolveDiscussionRelatedCount(value: unknown): number {
+  if (typeof value === 'number' && Number.isFinite(value)) return value;
+  if (Array.isArray(value)) return value.length;
+  if (value && typeof value === 'object' && 'count' in value) {
+    const count = Number((value as { count?: unknown }).count);
+    return Number.isFinite(count) ? count : 0;
+  }
+  const count = Number(value);
+  return Number.isFinite(count) ? count : 0;
+}
+
 export function buildDiscussionHealthScore(params: {
   goals: Array<{ covered?: boolean }>;
   messageCount: number;

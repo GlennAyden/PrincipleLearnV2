@@ -5,6 +5,7 @@ import { NextRequest, NextResponse } from 'next/server'
 import { adminDb } from '@/lib/database'
 import { verifyToken } from '@/lib/jwt'
 import { normalizeText, parseStructuredReflectionFields } from '@/lib/reflection-submission'
+import { summarizeQuizAttempts } from '@/lib/admin-quiz-attempts'
 
 // ── Row Interfaces ──
 interface DiscussionSummaryRow { id: string; status: string; phase?: string; updated_at: string; learning_goals: unknown }
@@ -19,7 +20,18 @@ interface JournalSummaryRow {
 interface TranscriptSummaryRow { id: string; content?: string; created_at: string }
 interface AskSummaryRow { id: string; question: string; created_at: string }
 interface ChallengeSummaryRow { id: string; question?: string; created_at: string }
-interface QuizSummaryRow { id: string; is_correct: boolean; created_at: string }
+interface QuizSummaryRow {
+  id: string
+  user_id?: string | null
+  quiz_attempt_id?: string | null
+  attempt_number?: number | null
+  course_id?: string | null
+  subtopic_id?: string | null
+  leaf_subtopic_id?: string | null
+  subtopic_label?: string | null
+  is_correct: boolean
+  created_at: string
+}
 interface FeedbackSummaryRow { id: string; rating?: number; comment?: string; created_at: string }
 interface IdRow { id: string }
 interface UserRecordRow { id: string; email: string }
@@ -156,7 +168,7 @@ export async function GET(
       transcriptRows,
       askQuestionRows,
       challengeRows,
-      quizRows,
+      _recentQuizRows,
       feedbackRows,
       _courseRows,
       // Count queries
@@ -223,7 +235,7 @@ export async function GET(
       safeQuery<QuizSummaryRow[]>(
         adminDb
           .from('quiz_submissions')
-          .select('id, is_correct, created_at')
+          .select('id, user_id, quiz_attempt_id, attempt_number, course_id, subtopic_id, leaf_subtopic_id, subtopic_label, is_correct, created_at')
           .eq('user_id', userId)
           .order('created_at', { ascending: false })
           .limit(1),
@@ -276,9 +288,13 @@ export async function GET(
         'challenge count',
         []
       ),
-      safeQuery<IdRow[]>(
-        adminDb.from('quiz_submissions').select('id').eq('user_id', userId),
-        'quiz count',
+      safeQuery<QuizSummaryRow[]>(
+        adminDb
+          .from('quiz_submissions')
+          .select('id, user_id, quiz_attempt_id, attempt_number, course_id, subtopic_id, leaf_subtopic_id, subtopic_label, is_correct, created_at')
+          .eq('user_id', userId)
+          .order('created_at', { ascending: false }),
+        'quiz attempt count',
         []
       ),
       safeQuery<IdRow[]>(
@@ -299,7 +315,8 @@ export async function GET(
     const recentTranscript = transcriptRows[0] ?? null
     const recentAsk = askQuestionRows[0] ?? null
     const recentChallenge = challengeRows[0] ?? null
-    const recentQuiz = quizRows[0] ?? null
+    const quizAttemptSummaries = summarizeQuizAttempts(quizCountRows, userId)
+    const recentQuiz = quizAttemptSummaries[0] ?? null
     const recentFeedback = feedbackRows[0] ?? null
     const recentReflection = buildRecentReflection(recentJournal, recentFeedback)
     const reflectionCount = Math.max(journalCountRows.length, feedbackCountRows.length)
@@ -367,9 +384,13 @@ export async function GET(
 
       recentQuiz: recentQuiz
         ? {
-            id: recentQuiz.id,
-            isCorrect: recentQuiz.is_correct ?? false,
-            createdAt: recentQuiz.created_at,
+            id: recentQuiz.representativeId,
+            quizAttemptId: recentQuiz.quizAttemptId,
+            isCorrect: recentQuiz.isCorrect,
+            correctAnswers: recentQuiz.correctAnswerCount,
+            answerRows: recentQuiz.answerRowCount,
+            score: recentQuiz.score,
+            createdAt: recentQuiz.createdAt ?? '',
           }
         : null,
 
@@ -388,7 +409,9 @@ export async function GET(
         transcripts: transcriptCountRows.length,
         askQuestions: askCountRows.length,
         challenges: challengeCountRows.length,
-        quizzes: quizCountRows.length,
+        quizzes: quizAttemptSummaries.length,
+        quizAttempts: quizAttemptSummaries.length,
+        quizAnswerRows: quizCountRows.length,
         feedbacks: feedbackCountRows.length,
         courses: courseCountRows.length,
       },

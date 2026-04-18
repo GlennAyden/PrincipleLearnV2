@@ -220,4 +220,59 @@ describe('GET /api/admin/users/[id]/activity-summary', () => {
     })
     expect(data.totals.reflections).toBe(1)
   })
+
+  it('counts quiz attempts separately from quiz answer rows', async () => {
+    const now = new Date().toISOString()
+    setupMockDatabase({
+      users: [
+        { id: 'user-1', email: 'student@example.com', deleted_at: null },
+      ],
+      discussion_sessions: [],
+      jurnal: [],
+      transcript: [],
+      ask_question_history: [],
+      challenge_responses: [],
+      quiz_submissions: [
+        {
+          id: 'quiz-row-1',
+          user_id: 'user-1',
+          quiz_attempt_id: 'attempt-1',
+          attempt_number: 1,
+          course_id: 'course-1',
+          leaf_subtopic_id: 'leaf-1',
+          is_correct: true,
+          created_at: now,
+        },
+        {
+          id: 'quiz-row-2',
+          user_id: 'user-1',
+          quiz_attempt_id: 'attempt-1',
+          attempt_number: 1,
+          course_id: 'course-1',
+          leaf_subtopic_id: 'leaf-1',
+          is_correct: false,
+          created_at: now,
+        },
+      ],
+      feedback: [],
+      courses: [],
+    })
+
+    const response = await GET(createAdminRequest(), {
+      params: Promise.resolve({ id: 'user-1' }),
+    })
+    const data = await response.json()
+
+    expect(response.status).toBe(200)
+    expect(data.totals.quizzes).toBe(1)
+    expect(data.totals.quizAttempts).toBe(1)
+    expect(data.totals.quizAnswerRows).toBe(2)
+    expect(data.recentQuiz).toMatchObject({
+      quizAttemptId: 'attempt-1',
+      correctAnswers: 1,
+      answerRows: 2,
+      score: 50,
+      isCorrect: false,
+    })
+  })
 })

@@ -1150,8 +1150,23 @@ async function postHandler(request: NextRequest) {
       const remediationRound = countRemediationRounds(messages) + 1;
       const uncoveredGoals = learningGoals.filter((g) => !g.covered);
       const targetGoal = uncoveredGoals[0];
+      const maxRemediationRounds = Math.max(
+        MAX_ATTEMPTS_PER_STEP,
+        learningGoals.length * MAX_ATTEMPTS_PER_STEP,
+      );
 
-      if (targetGoal) {
+      if (remediationRound > maxRemediationRounds && uncoveredGoals.length) {
+        learningGoals = acceptGoalsAfterAttemptLimit(
+          learningGoals,
+          uncoveredGoals.map((goal) => goal.id),
+          'remediation_attempt_limit',
+          activeStep?.step,
+          currentAttemptNumber,
+          `Batas remediation global (${maxRemediationRounds} ronde) tercapai. Sesi dilanjutkan dengan catatan bahwa goal ini masih perlu diperkuat.`,
+        );
+        allGoalsCovered =
+          learningGoals.length > 0 && learningGoals.every((goal) => goal.covered === true);
+      } else if (targetGoal) {
         const targetGoalIds = [targetGoal.id];
 
         // Call the second AI endpoint (generateRemediationQuestion) BEFORE any

@@ -3,7 +3,10 @@ import { NextRequest, NextResponse } from 'next/server';
 import { verifyToken } from '@/lib/jwt';
 import { adminDb } from '@/lib/database';
 import { withApiLogging } from '@/lib/api-logger';
-import { buildDiscussionHealthScore } from '@/lib/discussion/serializers';
+import {
+  buildDiscussionHealthScore,
+  resolveDiscussionRelatedCount,
+} from '@/lib/discussion/serializers';
 
 const DEFAULT_LIMIT = 100;
 const DISCUSSION_SESSION_SELECT = `
@@ -100,7 +103,7 @@ async function getHandler(request: NextRequest) {
       count_messages?: unknown;
     }
     const response = (data ?? [] as DiscussionQueryRow[]).map((item: DiscussionQueryRow) => {
-      const messageCount = Number(item.count_messages || 0);
+      const messageCount = resolveDiscussionRelatedCount(item.count_messages);
       const goals = Array.isArray(item.learning_goals) ? item.learning_goals : [];
       const healthScore = buildDiscussionHealthScore({
         goals,

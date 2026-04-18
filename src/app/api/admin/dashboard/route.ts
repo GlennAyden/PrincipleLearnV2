@@ -23,6 +23,7 @@ import {
   emptyPromptStageDistribution,
   type AdminPromptStage,
 } from '@/lib/admin-prompt-stage'
+import { summarizeQuizAttempts } from '@/lib/admin-quiz-attempts'
 
 const JWT_SECRET = process.env.JWT_SECRET!
 
@@ -30,7 +31,19 @@ const JWT_SECRET = process.env.JWT_SECRET!
 
 interface UserRow { id: string; email: string; role: string; created_at: string }
 interface CourseRow { id: string; title: string; created_at: string; created_by: string }
-interface QuizSubmissionRow { id: string; user_id: string; is_correct: boolean; reasoning_note: string; created_at: string }
+interface QuizSubmissionRow {
+  id: string
+  user_id: string
+  quiz_attempt_id?: string | null
+  attempt_number?: number | null
+  course_id?: string | null
+  subtopic_id?: string | null
+  leaf_subtopic_id?: string | null
+  subtopic_label?: string | null
+  is_correct: boolean
+  reasoning_note: string
+  created_at: string
+}
 interface DiscussionRow { id: string; user_id: string; status: string; learning_goals: unknown; created_at: string }
 interface ChallengeRow { id: string; user_id: string; question: string; created_at: string }
 interface AskHistoryRow { id: string; user_id: string; question: string; prompt_components: unknown; prompt_stage?: string | null; prompt_version: string; session_number: number; created_at: string }
@@ -185,7 +198,7 @@ export async function GET(request: NextRequest) {
       safeQuery<UserRow>('users', 'id, email, role, created_at', { role: 'user' }, { limit: 5000 }),
       // FIX: removed non-existent 'user_id' column — courses use 'created_by'
       safeQuery<CourseRow>('courses', 'id, title, created_at, created_by', {}, queryOpts),
-      safeQuery<QuizSubmissionRow>('quiz_submissions', 'id, user_id, is_correct, reasoning_note, created_at', {}, queryOpts),
+      safeQuery<QuizSubmissionRow>('quiz_submissions', 'id, user_id, quiz_attempt_id, attempt_number, course_id, subtopic_id, leaf_subtopic_id, subtopic_label, is_correct, reasoning_note, created_at', {}, queryOpts),
       safeQuery<DiscussionRow>('discussion_sessions', 'id, user_id, status, learning_goals, created_at', {}, queryOpts),
       safeQuery<ReflectionJournalRow>('jurnal', 'id, user_id, course_id, subtopic_id, subtopic_label, module_index, subtopic_index, type, content, reflection, created_at', {}, queryOpts),
       safeQuery<ChallengeRow>('challenge_responses', 'id, user_id, question, created_at', {}, queryOpts),
@@ -414,6 +427,7 @@ export async function GET(request: NextRequest) {
       // O(1) lookups via pre-built Maps
       const userCourses = coursesByUser.get(userId) || []
       const userQuizzes = quizByUser.get(userId) || []
+      const userQuizAttempts = summarizeQuizAttempts(userQuizzes, userId)
       const userReflections = reflectionsByUser.get(userId) || []
       const userChallenges = challengesByUser.get(userId) || []
       const userDiscussions = discussionsByUser.get(userId) || []
@@ -448,7 +462,8 @@ export async function GET(request: NextRequest) {
         id: userId,
         email: u.email,
         courses: userCourses.length,
-        quizzes: userQuizzes.length,
+        quizzes: userQuizAttempts.length,
+        quizAnswerRows: userQuizzes.length,
         quizAccuracy: userQuizAccuracy,
         journals: userReflections.length,
         challenges: userChallenges.length,

@@ -143,7 +143,9 @@ export interface StudentRow {
   id: string;
   email: string;
   courses: number;
+  /** Count of quiz attempts, not answer rows. */
   quizzes: number;
+  quizAnswerRows?: number;
   quizAccuracy: number;
   journals: number;
   challenges: number;

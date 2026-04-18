@@ -138,6 +138,37 @@ describe('POST /api/challenge-response', () => {
     expect(insertedRow.reasoning_note).toBe(validBody.reasoningNote);
   });
 
+  it('normalizes empty JSON feedback before persistence', async () => {
+    const token = generateJWT({
+      userId: TEST_STUDENT.id,
+      email: TEST_STUDENT.email,
+      role: 'user',
+    });
+
+    const body = {
+      ...validBody,
+      feedback: '{"feedback":""}',
+    };
+
+    const request = createMockNextRequest('POST', '/api/challenge-response', {
+      body,
+      cookies: { access_token: token },
+    });
+
+    const response = await POST(request);
+    const data = await response.json();
+
+    expect(response.status).toBe(200);
+    expect(data.success).toBe(true);
+
+    const insertedRow = mockChallengeInsert.mock.calls[0][0];
+    expect(insertedRow.feedback).toContain('Umpan balik:');
+    expect(insertedRow.feedback).toContain(validBody.question);
+    expect(insertedRow.feedback).not.toBe(body.feedback);
+    expect(insertedRow.feedback.trim()).not.toBe('');
+    expect(insertedRow.raw_evidence_snapshot.feedback).toBe(insertedRow.feedback);
+  });
+
   it('logs DB insert details to api_logs when persistence fails', async () => {
     const token = generateJWT({
       userId: TEST_STUDENT.id,

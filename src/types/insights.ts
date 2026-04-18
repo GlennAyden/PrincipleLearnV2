@@ -13,7 +13,9 @@ export interface InsightsSummary {
   avgComponentsUsed: number
   reasoningRate: number
   quizAccuracy: number
+  /** Count of quiz attempts, not answer rows. */
   quizTotal: number
+  quizAnswerRows?: number
   quizWithReasoning: number
   /** Unified reflection event count from jurnal + feedback, deduped by scope/time. */
   reflectionTotal: number
@@ -47,7 +49,9 @@ export interface InsightsStudentRow {
   userId: string
   email: string
   totalPrompts: number
+  /** Count of quiz attempts, not answer rows. */
   totalQuizzes: number
+  totalQuizAnswerRows?: number
   quizAccuracy: number
   /** Unified reflection total for the student, not raw jurnal rows. */
   totalReflections: number

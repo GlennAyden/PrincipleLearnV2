@@ -162,8 +162,8 @@ export default function AdminSiswaPage() {
     }
     if (activitySummary.recentTranscript) entries.push({ label: 'Transkrip', icon: '📝', title: activitySummary.recentTranscript.title ?? 'Transkrip terbaru', timestamp: activitySummary.recentTranscript.createdAt })
     if (activitySummary.recentAskQuestion) entries.push({ label: 'Pertanyaan', icon: '❓', title: 'Pertanyaan terbaru', timestamp: activitySummary.recentAskQuestion.createdAt, detail: activitySummary.recentAskQuestion.question })
-    if (activitySummary.recentChallenge) entries.push({ label: 'Tantangan', icon: '🧩', title: 'Tantangan terbaru', timestamp: activitySummary.recentChallenge.createdAt, detail: activitySummary.recentChallenge.challengeType ? `Tipe: ${activitySummary.recentChallenge.challengeType}` : null })
-    if (activitySummary.recentQuiz) entries.push({ label: 'Kuis', icon: '✅', title: `Kuis — ${activitySummary.recentQuiz.isCorrect ? 'Benar' : 'Salah'}`, timestamp: activitySummary.recentQuiz.createdAt })
+    if (activitySummary.recentChallenge) entries.push({ label: 'Tantangan', icon: '🧩', title: 'Tantangan terbaru', timestamp: activitySummary.recentChallenge.createdAt, detail: activitySummary.recentChallenge.question ?? (activitySummary.recentChallenge.challengeType ? `Tipe: ${activitySummary.recentChallenge.challengeType}` : null) })
+    if (activitySummary.recentQuiz) entries.push({ label: 'Percobaan Kuis', icon: '✅', title: `Percobaan kuis — ${activitySummary.recentQuiz.score ?? 0}%`, timestamp: activitySummary.recentQuiz.createdAt, detail: `${activitySummary.recentQuiz.correctAnswers ?? 0}/${activitySummary.recentQuiz.answerRows ?? 0} jawaban benar` })
     return entries.sort((a, b) => (parseDate(b.timestamp)?.getTime() ?? 0) - (parseDate(a.timestamp)?.getTime() ?? 0))
   }, [activitySummary])
 
@@ -281,7 +281,7 @@ export default function AdminSiswaPage() {
                           <FiFileText />{u.totalCourses}<span className={styles.keyStatLabel}>kursus</span>
                         </span>
                         <span className={styles.keyStat}>
-                          <FiCheckSquare />{u.totalQuizzes}<span className={styles.keyStatLabel}>kuis</span>
+                          <FiCheckSquare />{u.totalQuizzes}<span className={styles.keyStatLabel}>percobaan</span>
                         </span>
                       </div>
                       <div className={styles.progressRow}>
@@ -331,7 +331,7 @@ export default function AdminSiswaPage() {
 
                 <div className={styles.detailStatsGrid}>
                   <div className={styles.detailStatItem}><span className={styles.detailStatNum}>{selectedUser.totalCourses}</span><span className={styles.detailStatLabel}>Kursus</span></div>
-                  <div className={styles.detailStatItem}><span className={styles.detailStatNum}>{selectedUser.totalQuizzes}</span><span className={styles.detailStatLabel}>Kuis</span></div>
+                  <div className={styles.detailStatItem}><span className={styles.detailStatNum}>{selectedUser.totalQuizzes}</span><span className={styles.detailStatLabel}>Percobaan Kuis</span></div>
                   <div className={styles.detailStatItem}><span className={styles.detailStatNum}>{selectedUser.totalJournals}</span><span className={styles.detailStatLabel}>Refleksi</span></div>
                   <div className={styles.detailStatItem}><span className={styles.detailStatNum}>{selectedUser.totalTranscripts}</span><span className={styles.detailStatLabel}>Transkrip</span></div>
                   <div className={styles.detailStatItem}><span className={styles.detailStatNum}>{selectedUser.totalAskQuestions}</span><span className={styles.detailStatLabel}>Pertanyaan</span></div>
@@ -376,9 +376,9 @@ export default function AdminSiswaPage() {
                       <p className={styles.activityLabel}>{activitySummary?.recentChallenge ? `Tipe: ${activitySummary.recentChallenge.challengeType ?? 'N/A'}` : 'Belum ada tantangan'}</p>
                     </article>
                     <article className={styles.activityCard}>
-                      <h4>Kuis</h4>
-                      <p className={styles.activityValue}>{activitySummary?.totals?.quizzes ?? 0}</p>
-                      <p className={styles.activityLabel}>{activitySummary?.recentQuiz ? `Terakhir: ${activitySummary.recentQuiz.isCorrect ? 'Benar' : 'Salah'}` : 'Belum ada kuis'}</p>
+                      <h4>Percobaan Kuis</h4>
+                      <p className={styles.activityValue}>{activitySummary?.totals?.quizAttempts ?? activitySummary?.totals?.quizzes ?? 0}</p>
+                      <p className={styles.activityLabel}>{activitySummary?.recentQuiz ? `Terakhir: ${activitySummary.recentQuiz.score ?? 0}% (${activitySummary.recentQuiz.correctAnswers ?? 0}/${activitySummary.recentQuiz.answerRows ?? 0} benar)` : 'Belum ada kuis'}</p>
                     </article>
                     <article className={styles.activityCard}>
                       <h4>Kursus</h4>

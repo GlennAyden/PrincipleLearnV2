@@ -8,6 +8,7 @@ import { computeEngagementScore } from '@/lib/engagement'
 import { buildRecentReflection, countUnifiedReflections } from '@/lib/admin-reflection-summary'
 import { normalizeText } from '@/lib/reflection-submission'
 import { deriveAdminPromptStage } from '@/lib/admin-prompt-stage'
+import { summarizeQuizAttempts } from '@/lib/admin-quiz-attempts'
 
 // Row interfaces
 interface UserDetailRow {
@@ -27,9 +28,14 @@ interface CourseDetailRow {
 
 interface QuizDetailRow {
   id: string
+  user_id?: string | null
   quiz_id: string
+  quiz_attempt_id?: string | null
+  attempt_number?: number | null
   course_id: string
   subtopic_id: string
+  leaf_subtopic_id?: string | null
+  subtopic_label?: string | null
   answer: string
   is_correct: boolean
   reasoning_note?: string
@@ -204,7 +210,7 @@ export async function GET(
         []
       ),
       safeQuery<QuizDetailRow[]>(
-        adminDb.from('quiz_submissions').select('id, quiz_id, course_id, subtopic_id, answer, is_correct, reasoning_note, created_at').eq('user_id', userId).order('created_at', { ascending: false }),
+        adminDb.from('quiz_submissions').select('id, user_id, quiz_id, quiz_attempt_id, attempt_number, course_id, subtopic_id, leaf_subtopic_id, subtopic_label, answer, is_correct, reasoning_note, created_at').eq('user_id', userId).order('created_at', { ascending: false }),
         'quiz_submissions',
         []
       ),
@@ -276,16 +282,29 @@ export async function GET(
       subtopicsByCourse[subtopic.course_id].push(subtopic)
     }
 
-    const quizByCourse: Record<string, { total: number; correct: number }> = {}
+    const quizAttemptSummaries = summarizeQuizAttempts(quizSubmissions, userId)
+    const totalQuizAttempts = quizAttemptSummaries.length
+    const totalQuizAnswerRows = quizSubmissions.length
+
+    const quizAnswersByCourse: Record<string, { total: number; correct: number }> = {}
     for (const quiz of quizSubmissions) {
       if (!quiz.course_id) continue
-      if (!quizByCourse[quiz.course_id]) {
-        quizByCourse[quiz.course_id] = { total: 0, correct: 0 }
+      if (!quizAnswersByCourse[quiz.course_id]) {
+        quizAnswersByCourse[quiz.course_id] = { total: 0, correct: 0 }
       }
-      quizByCourse[quiz.course_id].total += 1
+      quizAnswersByCourse[quiz.course_id].total += 1
       if (quiz.is_correct) {
-        quizByCourse[quiz.course_id].correct += 1
+        quizAnswersByCourse[quiz.course_id].correct += 1
       }
+    }
+
+    const quizAttemptsByCourse: Record<string, { total: number }> = {}
+    for (const attempt of quizAttemptSummaries) {
+      if (!attempt.courseId) continue
+      if (!quizAttemptsByCourse[attempt.courseId]) {
+        quizAttemptsByCourse[attempt.courseId] = { total: 0 }
+      }
+      quizAttemptsByCourse[attempt.courseId].total += 1
     }
 
     const completedSubtopicIds = new Set(
@@ -294,7 +313,8 @@ export async function GET(
 
     const coursesDetail = courses.map((course) => {
       const subtopics = subtopicsByCourse[course.id] || []
-      const quizStats = quizByCourse[course.id] || { total: 0, correct: 0 }
+      const quizAnswerStats = quizAnswersByCourse[course.id] || { total: 0, correct: 0 }
+      const quizAttemptStats = quizAttemptsByCourse[course.id] || { total: 0 }
       const completedCount = subtopics.filter((subtopic) => completedSubtopicIds.has(subtopic.id)).length
 
       return {
@@ -303,8 +323,11 @@ export async function GET(
         createdAt: course.created_at,
         subtopicCount: subtopics.length,
         completedSubtopics: completedCount,
-        quizCount: quizStats.total,
-        quizCorrect: quizStats.correct,
+        quizCount: quizAnswerStats.total,
+        quizCorrect: quizAnswerStats.correct,
+        quizAttemptCount: quizAttemptStats.total,
+        quizAnswerCount: quizAnswerStats.total,
+        quizCorrectAnswerCount: quizAnswerStats.correct,
       }
     })
 
@@ -312,7 +335,7 @@ export async function GET(
 
     const engagementScore = computeEngagementScore({
       courses: courses.length,
-      quizzes: quizSubmissions.length,
+      quizzes: totalQuizAttempts,
       journals: reflectionCount,
       transcripts: transcripts.length,
       askQuestions: askQuestions.length,
@@ -369,13 +392,14 @@ export async function GET(
       })
     }
 
-    for (const quiz of quizSubmissions.slice(0, 5)) {
+    for (const quizAttempt of quizAttemptSummaries.slice(0, 5)) {
+      const reasoningNote = quizAttempt.rows.find((row) => row.reasoning_note)?.reasoning_note
       recentActivity.push({
-        id: quiz.id,
+        id: quizAttempt.quizAttemptId ?? quizAttempt.representativeId,
         type: 'quiz',
-        title: `Quiz attempt - ${quiz.is_correct ? 'Correct' : 'Incorrect'}`,
-        detail: quiz.reasoning_note ? quiz.reasoning_note.slice(0, 120) : '',
-        timestamp: quiz.created_at,
+        title: `Percobaan kuis - ${quizAttempt.correctAnswerCount}/${quizAttempt.answerRowCount} jawaban benar`,
+        detail: reasoningNote ? reasoningNote.slice(0, 120) : '',
+        timestamp: quizAttempt.createdAt ?? user.created_at,
       })
     }
 
@@ -477,7 +501,10 @@ export async function GET(
       createdAt: user.created_at,
       totalCourses: courses.length,
       totalTranscripts: transcripts.length,
-      totalQuizzes: quizSubmissions.length,
+      totalQuizzes: totalQuizAttempts,
+      totalQuizAttempts,
+      quizAttemptCount: totalQuizAttempts,
+      totalQuizAnswerRows,
       totalJournals: journals.length,
       totalReflections: reflectionCount,
       totalChallenges: challenges.length,

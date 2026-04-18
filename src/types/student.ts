@@ -16,7 +16,11 @@ export interface StudentListItem {
   createdAt: string;
   totalCourses: number;
   totalTranscripts: number;
+  /** Legacy name kept for compatibility; value is quiz attempts, not answer rows. */
   totalQuizzes: number;
+  totalQuizAttempts?: number;
+  quizAttemptCount?: number;
+  totalQuizAnswerRows?: number;
   totalJournals: number;
   totalReflections?: number;
   totalChallenges: number;
@@ -68,8 +72,12 @@ export interface StudentCourse {
   createdAt: string;
   subtopicCount: number;
   completedSubtopics: number;
+  /** Answer-row count kept for quiz answer accuracy displays. */
   quizCount: number;
   quizCorrect: number;
+  quizAttemptCount: number;
+  quizAnswerCount: number;
+  quizCorrectAnswerCount: number;
 }
 
 export interface StudentActivityEntry {
@@ -138,12 +146,17 @@ export interface ActivitySummary {
   } | null;
   recentChallenge: {
     id: string;
+    question?: string | null;
     challengeType?: string;
     createdAt: string;
   } | null;
   recentQuiz: {
     id: string;
+    quizAttemptId?: string | null;
     isCorrect: boolean;
+    correctAnswers?: number;
+    answerRows?: number;
+    score?: number;
     createdAt: string;
   } | null;
   recentFeedback: {
@@ -158,7 +171,10 @@ export interface ActivitySummary {
     transcripts: number;
     askQuestions: number;
     challenges: number;
+    /** Legacy name kept for compatibility; value is quiz attempts, not answer rows. */
     quizzes: number;
+    quizAttempts?: number;
+    quizAnswerRows?: number;
     feedbacks: number;
     courses: number;
   };

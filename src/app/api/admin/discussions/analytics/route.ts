@@ -2,7 +2,10 @@ import { NextRequest, NextResponse } from 'next/server';
 import { verifyToken } from '@/lib/jwt';
 import { adminDb } from '@/lib/database';
 import { withApiLogging } from '@/lib/api-logger';
-import { buildDiscussionHealthScore } from '@/lib/discussion/serializers';
+import {
+  buildDiscussionHealthScore,
+  resolveDiscussionRelatedCount,
+} from '@/lib/discussion/serializers';
 import type { DiscussionAnalytics, SessionHealthScore } from '@/types/discussion';
 
 async function getHandler(request: NextRequest) {
@@ -75,7 +78,7 @@ async function getHandler(request: NextRequest) {
     let coveredGoals = 0;
 
     const sessionsWithHealth = sessions.map(session => {
-      const messageCount = Number(session.count_messages || 0);
+      const messageCount = resolveDiscussionRelatedCount(session.count_messages);
       totalTurns += messageCount;
 
       const goals = Array.isArray(session.learning_goals) ? session.learning_goals : [];

@@ -4,6 +4,7 @@ import { adminDb, DatabaseError } from '@/lib/database';
 import { verifyToken } from '@/lib/jwt';
 import { withApiLogging } from '@/lib/api-logger';
 import { withProtection } from '@/lib/api-middleware';
+import { normalizeChallengeFeedback } from '@/lib/challenge-feedback';
 import { ChallengeResponseSchema, parseBody } from '@/lib/schemas';
 import {
   refreshResearchSessionMetrics,
@@ -53,9 +54,14 @@ async function postHandler(req: NextRequest) {
       pageNumber,
       question: normalizedQuestion,
       answer: normalizedAnswer,
-      feedback: normalizedFeedback,
+      feedback: rawFeedback,
       reasoningNote: normalizedReasoning,
     } = parsed.data;
+    const normalizedFeedback = normalizeChallengeFeedback(rawFeedback, {
+      question: normalizedQuestion,
+      answer: normalizedAnswer,
+      context: normalizedReasoning,
+    });
 
     const accessToken = req.cookies.get('access_token')?.value;
     let tokenPayload: ReturnType<typeof verifyToken> | null = null;

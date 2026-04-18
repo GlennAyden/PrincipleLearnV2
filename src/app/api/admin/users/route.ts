@@ -6,6 +6,7 @@ import { adminDb } from '@/lib/database'
 import { verifyToken } from '@/lib/jwt'
 import { computeEngagementScore } from '@/lib/engagement'
 import { deriveAdminPromptStage } from '@/lib/admin-prompt-stage'
+import { getQuizAttemptCountsByUser, type QuizAttemptMetricRow } from '@/lib/admin-quiz-attempts'
 import type { StudentListItem } from '@/types/student'
 
 // ─── Auth Helper ──────────────────────────────────────────────────────────────
@@ -62,6 +63,10 @@ interface PromptStageRow {
   created_at?: string | null
 }
 
+interface UserQuizAttemptRow extends QuizAttemptMetricRow {
+  user_id?: string | null
+}
+
 // eslint-disable-next-line @typescript-eslint/no-explicit-any -- Supabase query builder returns complex generic types
 async function optionalRows<T>(query: any, label: string): Promise<T[]> {
   const { data, error } = await query
@@ -88,7 +93,7 @@ export async function GET(request: NextRequest) {
   if (!admin) return unauthorized()
 
   try {
-    const [statsResult, promptClassifications, promptHistory] = await Promise.all([
+    const [statsResult, promptClassifications, promptHistory, quizAttemptRows] = await Promise.all([
       // Single aggregated query via Postgres function (replaces 9 parallel full-table scans)
       adminDb.rpc('get_admin_user_stats'),
       optionalRows<PromptStageRow>(
@@ -98,6 +103,12 @@ export async function GET(request: NextRequest) {
       optionalRows<PromptStageRow>(
         adminDb.from('ask_question_history').select('user_id, prompt_stage, prompt_components, created_at'),
         'ask_question_history prompt stages',
+      ),
+      optionalRows<UserQuizAttemptRow>(
+        adminDb
+          .from('quiz_submissions')
+          .select('id, user_id, quiz_attempt_id, attempt_number, course_id, subtopic_id, leaf_subtopic_id, subtopic_label, created_at'),
+        'quiz attempt counts',
       ),
     ])
 
@@ -111,8 +122,13 @@ export async function GET(request: NextRequest) {
     const rows = data as UserStatsRow[]
     const classificationsByUser = groupByUser(promptClassifications)
     const promptsByUser = groupByUser(promptHistory)
+    const quizCountsByUser = getQuizAttemptCountsByUser(quizAttemptRows)
 
     const result: StudentListItem[] = rows.map((row) => {
+      const quizCounts = quizCountsByUser[row.id]
+      const totalQuizAttempts = quizCounts?.attemptCount ?? row.total_quizzes
+      const totalQuizAnswerRows = quizCounts?.answerRowCount ?? row.total_quizzes
+
       // Course completion rate
       const courseCompletionRate = row.total_progress > 0
         ? Math.round((row.completed_progress / row.total_progress) * 100)
@@ -121,7 +137,7 @@ export async function GET(request: NextRequest) {
       // Engagement score (0–100): shared formula — see src/lib/engagement.ts
       const engagementScore = computeEngagementScore({
         courses: row.total_courses,
-        quizzes: row.total_quizzes,
+        quizzes: totalQuizAttempts,
         journals: row.total_journals,
         transcripts: row.total_transcripts,
         askQuestions: row.total_ask_questions,
@@ -145,7 +161,10 @@ export async function GET(request: NextRequest) {
         createdAt: row.created_at,
         totalCourses: row.total_courses,
         totalTranscripts: row.total_transcripts,
-        totalQuizzes: row.total_quizzes,
+        totalQuizzes: totalQuizAttempts,
+        totalQuizAttempts,
+        quizAttemptCount: totalQuizAttempts,
+        totalQuizAnswerRows,
         totalJournals: row.total_journals,
         totalChallenges: row.total_challenges,
         totalAskQuestions: row.total_ask_questions,

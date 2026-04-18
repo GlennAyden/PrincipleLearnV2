@@ -6,11 +6,23 @@ import { adminDb } from '@/lib/database'
 import { verifyToken } from '@/lib/jwt'
 import { countUnifiedReflections } from '@/lib/admin-reflection-summary'
 import { deriveAdminPromptStage } from '@/lib/admin-prompt-stage'
+import { summarizeQuizAttempts } from '@/lib/admin-quiz-attempts'
 
 // ── Row Interfaces ──
 interface UserExportRow { id: string; email: string; name?: string; role: string; created_at: string; deleted_at?: string | null }
 interface CourseExportRow { id: string; created_by: string; title: string; created_at: string }
-interface QuizExportRow { id: string; user_id: string; is_correct: boolean; created_at: string }
+interface QuizExportRow {
+  id: string
+  user_id: string
+  quiz_attempt_id?: string | null
+  attempt_number?: number | null
+  course_id?: string | null
+  subtopic_id?: string | null
+  leaf_subtopic_id?: string | null
+  subtopic_label?: string | null
+  is_correct: boolean
+  created_at: string
+}
 interface JournalExportRow { id: string; user_id: string; created_at: string }
 interface TranscriptExportRow { id: string; user_id: string; created_at: string }
 interface AskExportRow { id: string; user_id: string; prompt_stage?: string | null; prompt_components?: unknown; created_at: string }
@@ -162,7 +174,7 @@ export async function GET(request: NextRequest) {
         'courses', []
       ),
       safeQuery<QuizExportRow[]>(
-        adminDb.from('quiz_submissions').select('id, user_id, is_correct, created_at'),
+        adminDb.from('quiz_submissions').select('id, user_id, quiz_attempt_id, attempt_number, course_id, subtopic_id, leaf_subtopic_id, subtopic_label, is_correct, created_at'),
         'quiz_submissions', []
       ),
       safeQuery<JournalExportRow[]>(
@@ -235,6 +247,9 @@ export async function GET(request: NextRequest) {
       const feedbacks = feedbackByUser[uid] || []
       const progress = progressByUser[uid] || []
       const reflectionCount = countUnifiedReflections(journals.length, feedbacks.length)
+      const quizAttemptSummaries = summarizeQuizAttempts(quizzes, uid)
+      const totalQuizAttempts = quizAttemptSummaries.length
+      const totalQuizAnswerRows = quizzes.length
 
       const completedCount = progress.filter(p => p.is_completed).length
       const totalProgressEntries = progress.length
@@ -256,7 +271,7 @@ export async function GET(request: NextRequest) {
 
       const totalInteractions =
         courses.length * 3 +
-        quizzes.length * 2 +
+        totalQuizAttempts * 2 +
         reflectionCount * 2 +
         transcripts.length +
         asks.length * 2 +
@@ -293,7 +308,9 @@ export async function GET(request: NextRequest) {
         anonymousId: anonymize ? anonymousId : null,
         joinedAt: toIsoDateOnly(user.created_at),
         totalCourses: courses.length,
-        totalQuizzes: quizzes.length,
+        totalQuizzes: totalQuizAttempts,
+        totalQuizAttempts,
+        totalQuizAnswerRows,
         quizCorrect,
         quizAccuracy: `${quizAccuracy}%`,
         totalJournals: journals.length,
@@ -327,7 +344,7 @@ export async function GET(request: NextRequest) {
 
     // CSV format
     const headers = [
-      'ID', 'Email', 'Name', 'Joined', 'Courses', 'Quizzes', 'Quiz Correct',
+      'ID', 'Email', 'Name', 'Joined', 'Courses', 'Quiz Attempts', 'Quiz Answer Rows', 'Quiz Correct Answers',
       'Quiz Accuracy', 'Journals', 'Reflections', 'Transcripts', 'Questions', 'Challenges',
       'Discussions', 'Feedbacks', 'Avg Rating', 'Prompt Stage', 'Engagement',
       'Completion Rate', 'Last Activity',
@@ -335,7 +352,7 @@ export async function GET(request: NextRequest) {
 
     const rows = exportRows.map(r => [
       r.id, r.email, r.name, r.joinedAt, r.totalCourses, r.totalQuizzes,
-      r.quizCorrect, r.quizAccuracy, r.totalJournals, r.totalReflections ?? r.totalJournals, r.totalTranscripts,
+      r.totalQuizAnswerRows, r.quizCorrect, r.quizAccuracy, r.totalJournals, r.totalReflections ?? r.totalJournals, r.totalTranscripts,
       r.totalAskQuestions, r.totalChallenges, r.totalDiscussions,
       r.totalFeedbacks, r.avgFeedbackRating, r.promptStage,
       r.engagementScore, r.courseCompletionRate, r.lastActivity,
