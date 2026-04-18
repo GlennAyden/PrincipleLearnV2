@@ -172,7 +172,12 @@ export const ChallengeFeedbackSchema = z.object({
 
 export const GenerateExamplesSchema = z.object({
   context: z.string().min(1, 'Missing context in request body'),
-});
+  courseId: z.string().trim().optional(),
+  moduleIndex: flexibleIndex,
+  subtopicIndex: flexibleIndex,
+  pageNumber: flexibleIndex,
+  subtopicLabel: z.string().trim().optional(),
+}).strict();
 
 // Frontend sends these fields after the user submits their challenge
 // answer — all are required for proper provenance in the

@@ -93,6 +93,7 @@ export type ActivityType =
   | 'course'
   | 'ask'
   | 'challenge'
+  | 'example'
   | 'quiz'
   | 'journal'
   | 'reflection'
@@ -119,6 +120,14 @@ export interface ActivitySummary {
     phase: string | null;
     updatedAt: string;
     goalCount: number;
+    completionReason?: string | null;
+    quality?: {
+      met: number;
+      near: number;
+      weak: number;
+      pending: number;
+      total: number;
+    } | null;
   } | null;
   recentJournal: {
     id: string;
@@ -164,6 +173,13 @@ export interface ActivitySummary {
     rating?: number;
     createdAt: string;
   } | null;
+  recentExampleUsage: {
+    id: string;
+    topic: string;
+    examplesCount: number;
+    pageNumber: number;
+    createdAt: string;
+  } | null;
   totals: {
     discussions: number;
     reflections: number;
@@ -176,6 +192,7 @@ export interface ActivitySummary {
     quizAttempts?: number;
     quizAnswerRows?: number;
     feedbacks: number;
+    examples?: number;
     courses: number;
   };
 }

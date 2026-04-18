@@ -28,7 +28,7 @@ export interface GlobalActivityItem {
 // "jurnal" uses Indonesian spelling to match the database table and API routes.
 export type ActivityType =
   | 'generate' | 'ask' | 'challenge' | 'quiz' | 'feedback'
-  | 'jurnal' | 'transcript' | 'learningProfile' | 'discussion';
+  | 'jurnal' | 'transcript' | 'learningProfile' | 'discussion' | 'example';
 
 export interface ActivityAnalytics {
   total: number;

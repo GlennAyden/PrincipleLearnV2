@@ -22,7 +22,8 @@ const TABLES: Record<ActivityType, string> = {
   jurnal: 'jurnal',
   transcript: 'transcript',
   learningProfile: 'learning_profiles',
-  discussion: 'discussion_sessions'
+  discussion: 'discussion_sessions',
+  example: 'example_usage_events',
 };
 
 function computeEngagement(type: ActivityType): number {
@@ -36,6 +37,7 @@ function computeEngagement(type: ActivityType): number {
     transcript: 3,
     generate: 9,
     learningProfile: 2,
+    example: 2,
   };
   return scores[type] || 1;
 }

@@ -126,7 +126,8 @@ export type ActivityType =
   | 'journal'
   | 'transcript'
   | 'feedback'
-  | 'discussion';
+  | 'discussion'
+  | 'example';
 
 /** Enhanced activity item supporting all 8 activity types */
 export interface ActivityItem {

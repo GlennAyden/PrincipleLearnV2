@@ -1006,6 +1006,11 @@ export default function SubtopicPage() {
         method: 'POST',
         body: JSON.stringify({
           context: data.pages[pageNumber].paragraphs.join(' '),
+          courseId,
+          moduleIndex,
+          subtopicIndex,
+          pageNumber,
+          subtopicLabel: quizSubtopicTitle,
         }),
       });
       if (!res.ok) {

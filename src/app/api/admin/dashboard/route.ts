@@ -48,6 +48,7 @@ interface DiscussionRow { id: string; user_id: string; status: string; learning_
 interface ChallengeRow { id: string; user_id: string; question: string; created_at: string }
 interface AskHistoryRow { id: string; user_id: string; question: string; prompt_components: unknown; prompt_stage?: string | null; prompt_version: string; session_number: number; created_at: string }
 interface TranscriptRow { id: string; user_id: string; created_at: string }
+interface ExampleUsageRow { id: string; user_id: string; subtopic_label?: string | null; examples_count?: number | null; created_at: string }
 interface LearningProfileRow { id: string; user_id: string; created_at: string }
 interface PromptClassificationRow { id: string; user_id: string; prompt_stage: string; prompt_stage_score: number; micro_markers: unknown; primary_marker: string; created_at: string }
 interface CognitiveIndicatorRow {
@@ -189,6 +190,7 @@ export async function GET(request: NextRequest) {
       askHistory,
       feedbacks,
       transcripts,
+      exampleUsage,
       learningProfiles,
       // Research tables (may not exist yet)
       promptClassifications,
@@ -205,6 +207,7 @@ export async function GET(request: NextRequest) {
       safeQuery<AskHistoryRow>('ask_question_history', 'id, user_id, question, prompt_components, prompt_stage, prompt_version, session_number, created_at', {}, queryOpts),
       safeQuery<ReflectionFeedbackRow>('feedback', 'id, user_id, course_id, subtopic_id, subtopic_label, module_index, subtopic_index, rating, comment, created_at', {}, queryOpts),
       safeQuery<TranscriptRow>('transcript', 'id, user_id, created_at', {}, queryOpts),
+      safeQuery<ExampleUsageRow>('example_usage_events', 'id, user_id, subtopic_label, examples_count, created_at', {}, queryOpts),
       safeQuery<LearningProfileRow>('learning_profiles', 'id, user_id, created_at', {}, queryOpts),
       // Research tables — graceful fallback if not created
       safeQuery<PromptClassificationRow>('prompt_classifications', 'id, user_id, prompt_stage, prompt_stage_score, micro_markers, primary_marker, created_at', {}, queryOpts),
@@ -221,6 +224,7 @@ export async function GET(request: NextRequest) {
     const challengesByUser = buildUserMap(challenges)
     const askByUser = buildUserMap(askHistory)
     const transcriptsByUser = buildUserMap(transcripts)
+    const examplesByUser = buildUserMap(exampleUsage)
     const reflectionModel = buildUnifiedReflectionModel(journals, feedbacks)
     const reflectionsByUser = reflectionModel.byUser
 
@@ -239,6 +243,7 @@ export async function GET(request: NextRequest) {
       challenges.forEach(c => { if (c.user_id) activeUserIds.add(c.user_id) })
       askHistory.forEach(a => { if (a.user_id) activeUserIds.add(a.user_id) })
       transcripts.forEach(t => { if (t.user_id) activeUserIds.add(t.user_id) })
+      exampleUsage.forEach(e => { if (e.user_id) activeUserIds.add(e.user_id) })
       reflectionModel.events.forEach((event) => { if (event.userId) activeUserIds.add(event.userId) })
       activeStudents = activeUserIds.size
     }
@@ -433,6 +438,7 @@ export async function GET(request: NextRequest) {
       const userDiscussions = discussionsByUser.get(userId) || []
       const userAsk = askByUser.get(userId) || []
       const userTranscripts = transcriptsByUser.get(userId) || []
+      const userExamples = examplesByUser.get(userId) || []
 
       const userCorrect = userQuizzes.filter(q => q.is_correct === true).length
       const userQuizAccuracy = userQuizzes.length > 0 ? Math.round((userCorrect / userQuizzes.length) * 100) : 0
@@ -452,6 +458,7 @@ export async function GET(request: NextRequest) {
         ...userReflections.map(r => r.createdAt),
         ...userDiscussions.map(d => d.created_at),
         ...userTranscripts.map(t => t.created_at),
+        ...userExamples.map(e => e.created_at),
       ].filter(Boolean).map(t => new Date(t).getTime()).filter(t => !isNaN(t))
 
       const lastActivity = allTimestamps.length > 0
@@ -540,6 +547,15 @@ export async function GET(request: NextRequest) {
         email: userMap.get(d.user_id) || 'Unknown',
         detail: `Discussion ${d.status || 'started'}`,
         timestamp: d.created_at,
+      })
+    })
+
+    exampleUsage.slice(-10).forEach(e => {
+      recentItems.push({
+        type: 'example',
+        email: userMap.get(e.user_id) || 'Unknown',
+        detail: e.subtopic_label || 'Beri Contoh dipakai',
+        timestamp: e.created_at,
       })
     })
 

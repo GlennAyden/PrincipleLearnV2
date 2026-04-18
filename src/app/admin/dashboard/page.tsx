@@ -12,7 +12,7 @@ import {
   FiUsers, FiBook, FiCheckSquare, FiTarget, FiMessageCircle,
   FiTrendingUp, FiFileText, FiHelpCircle, FiStar, FiClock,
   FiRefreshCw, FiAlertTriangle, FiActivity, FiGrid,
-  FiEdit3, FiDatabase, FiArrowRight, FiClipboard,
+  FiEdit3, FiDatabase, FiArrowRight, FiClipboard, FiEye,
 } from 'react-icons/fi'
 import { useRouter } from 'next/navigation'
 import { useAdmin } from '@/hooks/useAdmin'
@@ -26,15 +26,15 @@ const STAGE_LABELS: Record<string, string> = { SCP: 'Simple Copy-Paste', SRP: 'S
 
 const ACTIVITY_ICONS: Record<string, React.ReactNode> = {
   course: <FiBook />, ask: <FiHelpCircle />, challenge: <FiTarget />, quiz: <FiCheckSquare />,
-  journal: <FiEdit3 />, transcript: <FiFileText />, feedback: <FiStar />, discussion: <FiMessageCircle />,
+  journal: <FiEdit3 />, transcript: <FiFileText />, feedback: <FiStar />, discussion: <FiMessageCircle />, example: <FiEye />,
 }
 const ACTIVITY_COLORS: Record<string, string> = {
   course: '#6366f1', ask: '#3b82f6', challenge: '#ec4899', quiz: '#f59e0b',
-  journal: '#8b5cf6', transcript: '#06b6d4', feedback: '#f97316', discussion: '#10b981',
+  journal: '#8b5cf6', transcript: '#06b6d4', feedback: '#f97316', discussion: '#10b981', example: '#64748b',
 }
 const ACTIVITY_LABELS: Record<string, string> = {
   course: 'Kursus', ask: 'Tanya Jawab', challenge: 'Tantangan', quiz: 'Kuis',
-  journal: 'Jurnal', transcript: 'Transkrip', feedback: 'Umpan Balik', discussion: 'Diskusi',
+  journal: 'Jurnal', transcript: 'Transkrip', feedback: 'Umpan Balik', discussion: 'Diskusi', example: 'Contoh',
 }
 
 const TABS: { id: DashboardTab; label: string; icon: React.ReactNode }[] = [

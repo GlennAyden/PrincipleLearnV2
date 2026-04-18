@@ -13,7 +13,8 @@ const TABLES: Record<ActivityType, string> = {
   jurnal: 'jurnal',
   transcript: 'transcript',
   learningProfile: 'learning_profiles',
-  discussion: 'discussion_sessions'
+  discussion: 'discussion_sessions',
+  example: 'example_usage_events',
 };
 
 // Dynamic DB rows from multiple tables with varying schemas — string index is unavoidable
@@ -67,7 +68,7 @@ function formatTimestamp(date: Date): string {
 function computeEngagement(type: ActivityType): number {
   const scores: Record<ActivityType, number> = {
     discussion: 10, challenge: 8, jurnal: 7, quiz: 6, ask: 5,
-    feedback: 4, transcript: 3, generate: 9, learningProfile: 2
+    feedback: 4, transcript: 3, generate: 9, learningProfile: 2, example: 2
   };
   return scores[type] || 1;
 }
@@ -136,7 +137,7 @@ async function handler(req: NextRequest) {
         userId: rowUserId,
         userEmail,
         topic: row.subtopic_label || row.topic || row.title || 'N/A',
-        detail: row.question || row.content || row.answer || row.comment || 'Activity',
+        detail: row.question || row.content || row.answer || row.comment || row.usage_scope || 'Activity',
         stage: type === 'ask'
           ? deriveAdminPromptStage({ prompts: [row], interactionCount: 1 })
           : undefined,

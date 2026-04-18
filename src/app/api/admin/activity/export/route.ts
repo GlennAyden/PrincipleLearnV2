@@ -10,7 +10,8 @@ type ActivityType =
   | 'jurnal'
   | 'feedback'
   | 'transcript'
-  | 'discussion';
+  | 'discussion'
+  | 'example';
 
 type DynamicRow = Record<string, unknown>;
 
@@ -106,6 +107,19 @@ const SOURCES: SourceConfig[] = [
     extra: (row) => ({
       status: firstString(row.status),
       completedAt: firstString(row.completed_at),
+    }),
+  },
+  {
+    type: 'example',
+    table: 'example_usage_events',
+    select: 'id,user_id,course_id,module_index,subtopic_index,page_number,subtopic_label,examples_count,usage_scope,data_collection_week,created_at',
+    topic: (row) => firstString(row.subtopic_label) ?? formatModuleSubtopic(row),
+    detail: (row) => `Beri Contoh dipakai (${toNumber(row.examples_count) ?? 0} contoh)`,
+    extra: (row) => ({
+      pageNumber: toNumber(row.page_number),
+      examplesCount: toNumber(row.examples_count),
+      usageScope: firstString(row.usage_scope),
+      dataCollectionWeek: firstString(row.data_collection_week),
     }),
   },
 ];

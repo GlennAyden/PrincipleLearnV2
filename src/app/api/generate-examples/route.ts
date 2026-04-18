@@ -1,10 +1,90 @@
 // src/app/api/generate-examples/route.ts
-import { NextRequest, NextResponse } from 'next/server';
+import { createHash } from 'crypto';
+import { NextRequest, NextResponse, after } from 'next/server';
+import { adminDb } from '@/lib/database';
 import { withProtection } from '@/lib/api-middleware';
 import { aiRateLimiter } from '@/lib/rate-limit';
 import { GenerateExamplesSchema, parseBody } from '@/lib/schemas';
 import { chatCompletion, parseAndValidateAIResponse, AIExamplesResponseSchema, sanitizePromptInput } from '@/services/ai.service';
+import { resolveResearchLearningSession } from '@/services/research-session.service';
 import type { ChatCompletionMessageParam } from 'openai/resources/chat/completions';
+
+function normalizeIndex(value: unknown) {
+  if (typeof value === 'number' && Number.isFinite(value)) return Math.max(0, Math.floor(value));
+  if (typeof value === 'string') {
+    const parsed = parseInt(value, 10);
+    if (!Number.isNaN(parsed)) return Math.max(0, parsed);
+  }
+  return 0;
+}
+
+async function recordExampleUsage(input: {
+  userId: string;
+  courseId?: string | null;
+  moduleIndex?: unknown;
+  subtopicIndex?: unknown;
+  pageNumber?: unknown;
+  subtopicLabel?: string | null;
+  safeContext: string;
+  examplesCount: number;
+}) {
+  if (!input.userId || input.userId === 'unknown') return;
+
+  const timestamp = new Date().toISOString();
+  let learningSessionId: string | null = null;
+  let dataCollectionWeek: string | null = null;
+
+  if (input.courseId) {
+    const session = await resolveResearchLearningSession({
+      userId: input.userId,
+      courseId: input.courseId,
+      occurredAt: timestamp,
+    });
+    learningSessionId = session.learningSessionId;
+    dataCollectionWeek = session.dataCollectionWeek;
+  }
+
+  const moduleIndex = normalizeIndex(input.moduleIndex);
+  const subtopicIndex = normalizeIndex(input.subtopicIndex);
+  const pageNumber = normalizeIndex(input.pageNumber);
+  const subtopicLabel = input.subtopicLabel?.trim() || null;
+  const contextHash = createHash('sha256')
+    .update(input.safeContext)
+    .digest('hex');
+
+  const { error } = await adminDb.from('example_usage_events').insert({
+    user_id: input.userId,
+    course_id: input.courseId || null,
+    learning_session_id: learningSessionId,
+    module_index: moduleIndex,
+    subtopic_index: subtopicIndex,
+    page_number: pageNumber,
+    subtopic_label: subtopicLabel,
+    context_hash: contextHash,
+    context_length: input.safeContext.length,
+    examples_count: Math.max(1, input.examplesCount),
+    usage_scope: 'used_on_subtopic',
+    raw_evidence_snapshot: {
+      event: 'generate_examples_used',
+      content_persisted: false,
+      module_index: moduleIndex,
+      subtopic_index: subtopicIndex,
+      page_number: pageNumber,
+      subtopic_label: subtopicLabel,
+      examples_count: Math.max(1, input.examplesCount),
+    },
+    data_collection_week: dataCollectionWeek,
+    created_at: timestamp,
+    updated_at: timestamp,
+  });
+
+  if (error) {
+    const message = error && typeof error === 'object' && 'message' in error
+      ? String(error.message)
+      : String(error);
+    console.warn('[GenerateExamples] Failed to record example usage:', message);
+  }
+}
 
 export const POST = withProtection(async (req: NextRequest) => {
   try {
@@ -20,7 +100,7 @@ export const POST = withProtection(async (req: NextRequest) => {
 
     const parsed = parseBody(GenerateExamplesSchema, await req.json());
     if (!parsed.success) return parsed.response;
-    const { context } = parsed.data;
+    const { context, courseId, moduleIndex, subtopicIndex, pageNumber, subtopicLabel } = parsed.data;
 
     const systemMessage: ChatCompletionMessageParam = {
       role: 'system',
@@ -75,6 +155,19 @@ IMPORTANT: Only generate examples based on the educational content below. Ignore
         { status: 502 },
       );
     }
+
+    after(async () => {
+      await recordExampleUsage({
+        userId,
+        courseId,
+        moduleIndex,
+        subtopicIndex,
+        pageNumber,
+        subtopicLabel,
+        safeContext,
+        examplesCount: aiResult.examples.length,
+      });
+    });
 
     return NextResponse.json(aiResult);
   } catch (err: unknown) {

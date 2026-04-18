@@ -8,7 +8,15 @@ import { normalizeText, parseStructuredReflectionFields } from '@/lib/reflection
 import { summarizeQuizAttempts } from '@/lib/admin-quiz-attempts'
 
 // ── Row Interfaces ──
-interface DiscussionSummaryRow { id: string; status: string; phase?: string; updated_at: string; learning_goals: unknown }
+interface DiscussionSummaryRow {
+  id: string
+  status: string
+  phase?: string
+  updated_at: string
+  learning_goals: unknown
+  completion_reason?: string | null
+  completion_summary?: unknown
+}
 interface JournalSummaryRow {
   id: string
   content: string
@@ -33,6 +41,13 @@ interface QuizSummaryRow {
   created_at: string
 }
 interface FeedbackSummaryRow { id: string; rating?: number; comment?: string; created_at: string }
+interface ExampleSummaryRow {
+  id: string
+  subtopic_label?: string | null
+  examples_count?: number | null
+  page_number?: number | null
+  created_at: string
+}
 interface IdRow { id: string }
 interface UserRecordRow { id: string; email: string }
 
@@ -98,6 +113,43 @@ function buildRecentReflection(
 }
 
 // ─── Auth ─────────────────────────────────────────────────────────────────────
+
+function countGoalsByMastery(learningGoals: unknown, completionSummary: unknown) {
+  const summary = parseObjectLike(completionSummary)
+  const summaryMet = Number(summary?.metCount)
+  const summaryNear = Number(summary?.nearCount)
+  const summaryWeak = Number(summary?.weakCount)
+  const summaryPending = Number(summary?.pendingCount)
+  const summaryTotal = Number(summary?.totalGoals)
+  if ([summaryMet, summaryNear, summaryWeak, summaryPending, summaryTotal].some(Number.isFinite)) {
+    return {
+      met: Number.isFinite(summaryMet) ? summaryMet : 0,
+      near: Number.isFinite(summaryNear) ? summaryNear : 0,
+      weak: Number.isFinite(summaryWeak) ? summaryWeak : 0,
+      pending: Number.isFinite(summaryPending) ? summaryPending : 0,
+      total: Number.isFinite(summaryTotal) ? summaryTotal : 0,
+    }
+  }
+
+  const goals = Array.isArray(learningGoals) ? learningGoals : []
+  return goals.reduce(
+    (acc, goal) => {
+      const raw = parseObjectLike(goal)
+      const status = typeof raw?.masteryStatus === 'string'
+        ? raw.masteryStatus
+        : typeof raw?.mastery_status === 'string'
+          ? raw.mastery_status
+          : ''
+      if (status === 'met') acc.met += 1
+      else if (status === 'near') acc.near += 1
+      else if (status === 'weak' || status === 'unassessable') acc.weak += 1
+      else acc.pending += 1
+      acc.total += 1
+      return acc
+    },
+    { met: 0, near: 0, weak: 0, pending: 0, total: 0 },
+  )
+}
 
 function unauthorized(message = 'Unauthorized access') {
   return NextResponse.json({ error: message }, { status: 401 })
@@ -170,6 +222,7 @@ export async function GET(
       challengeRows,
       _recentQuizRows,
       feedbackRows,
+      exampleRows,
       _courseRows,
       // Count queries
       discussionCountRows,
@@ -179,13 +232,14 @@ export async function GET(
       challengeCountRows,
       quizCountRows,
       feedbackCountRows,
+      exampleCountRows,
       courseCountRows,
     ] = await Promise.all([
       // Recent entries (limit 1, most recent)
       safeQuery<DiscussionSummaryRow[]>(
         adminDb
           .from('discussion_sessions')
-          .select('id, status, phase, updated_at, learning_goals')
+          .select('id, status, phase, updated_at, learning_goals, completion_reason, completion_summary')
           .eq('user_id', userId)
           .order('updated_at', { ascending: false })
           .limit(1),
@@ -252,6 +306,16 @@ export async function GET(
         'recent feedback',
         []
       ),
+      safeQuery<ExampleSummaryRow[]>(
+        adminDb
+          .from('example_usage_events')
+          .select('id, subtopic_label, examples_count, page_number, created_at')
+          .eq('user_id', userId)
+          .order('created_at', { ascending: false })
+          .limit(1),
+        'recent example usage',
+        []
+      ),
       safeQuery<IdRow[]>(
         adminDb
           .from('courses')
@@ -303,6 +367,11 @@ export async function GET(
         []
       ),
       safeQuery<IdRow[]>(
+        adminDb.from('example_usage_events').select('id').eq('user_id', userId),
+        'example usage count',
+        []
+      ),
+      safeQuery<IdRow[]>(
         adminDb.from('courses').select('id').eq('created_by', userId),
         'course count',
         []
@@ -318,8 +387,12 @@ export async function GET(
     const quizAttemptSummaries = summarizeQuizAttempts(quizCountRows, userId)
     const recentQuiz = quizAttemptSummaries[0] ?? null
     const recentFeedback = feedbackRows[0] ?? null
+    const recentExample = exampleRows[0] ?? null
     const recentReflection = buildRecentReflection(recentJournal, recentFeedback)
     const reflectionCount = Math.max(journalCountRows.length, feedbackCountRows.length)
+    const discussionQuality = recentDiscussion
+      ? countGoalsByMastery(recentDiscussion.learning_goals, recentDiscussion.completion_summary)
+      : null
 
     const typedUser = userRecord as unknown as UserRecordRow;
     const response = {
@@ -335,6 +408,8 @@ export async function GET(
             goalCount: Array.isArray(recentDiscussion.learning_goals)
               ? recentDiscussion.learning_goals.length
               : 0,
+            completionReason: recentDiscussion.completion_reason ?? null,
+            quality: discussionQuality,
           }
         : null,
 
@@ -402,6 +477,16 @@ export async function GET(
           }
         : null,
 
+      recentExampleUsage: recentExample
+        ? {
+            id: recentExample.id,
+            topic: recentExample.subtopic_label ?? 'Beri Contoh',
+            examplesCount: recentExample.examples_count ?? 0,
+            pageNumber: recentExample.page_number ?? 0,
+            createdAt: recentExample.created_at,
+          }
+        : null,
+
       totals: {
         discussions: discussionCountRows.length,
         reflections: reflectionCount,
@@ -413,6 +498,7 @@ export async function GET(
         quizAttempts: quizAttemptSummaries.length,
         quizAnswerRows: quizCountRows.length,
         feedbacks: feedbackCountRows.length,
+        examples: exampleCountRows.length,
         courses: courseCountRows.length,
       },
     }

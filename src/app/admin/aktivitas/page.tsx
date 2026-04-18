@@ -7,6 +7,7 @@ import {
   FiTarget,
   FiCheckSquare,
   FiBookOpen,
+  FiEye,
   FiFilter,
   FiRotateCcw,
 } from 'react-icons/fi'
@@ -95,6 +96,24 @@ interface QuizPaginationMeta {
   totalPages: number
   hasNextPage: boolean
   hasPreviousPage: boolean
+}
+
+interface ExampleUsageItem {
+  id: string
+  timestamp: string
+  rawTimestamp?: string | null
+  topic: string
+  userEmail: string
+  userId: string
+  courseTitle: string
+  courseId?: string | null
+  moduleIndex: number
+  subtopicIndex: number
+  pageNumber: number
+  examplesCount: number
+  contextLength: number
+  usageScope: string
+  dataCollectionWeek?: string | null
 }
 
 interface QuizActivityResponse {
@@ -206,6 +225,7 @@ type SessionDetail = {
 const TABS = [
   { id: 'ask', label: 'Tanya Jawab', icon: FiHelpCircle },
   { id: 'challenge', label: 'Tantangan', icon: FiTarget },
+  { id: 'examples', label: 'Contoh', icon: FiEye },
   { id: 'quiz', label: 'Kuis', icon: FiCheckSquare },
   { id: 'refleksi', label: 'Refleksi', icon: FiBookOpen },
   { id: 'diskusi', label: 'Diskusi', icon: FiRotateCcw },
@@ -214,6 +234,7 @@ const TABS = [
 const TAB_DESCRIPTIONS: Record<string, string> = {
   ask: 'Log tanya jawab otomatis: pertanyaan, jawaban, reasoning, tahap prompt, dan komponen prompt.',
   challenge: 'Jejak tantangan berpikir kritis beserta umpan balik AI.',
+  examples: 'Jejak pemakaian fitur Beri Contoh per subtopik. Isi contoh tetap sementara di sisi siswa.',
   quiz: 'Percobaan kuis: pertanyaan, opsi, jawaban siswa vs kunci, dan status kebenaran.',
   refleksi: 'Refleksi terpadu dari jurnal dan feedback, dengan riwayat per subtopik.',
   diskusi: 'Sesi diskusi Socratic: transkrip, tujuan pembelajaran, dan monitoring baca-saja.',
@@ -255,6 +276,7 @@ function getSessionStatusClass(status?: string) {
 function getGoalMasteryLabel(goal: { covered?: boolean; masteryStatus?: string; acceptedBy?: string | null }) {
   if (goal.masteryStatus === 'met') return 'Kuat'
   if (goal.masteryStatus === 'near') return 'Mendekati'
+  if (goal.masteryStatus === 'weak') return 'Perlu diperkuat'
   if (goal.masteryStatus === 'off_topic') return 'Tidak relevan'
   if (goal.masteryStatus === 'unassessable') return 'Belum dapat dinilai'
   if (goal.acceptedBy === 'remediation_attempt_limit') return 'Lanjut dengan catatan'
@@ -321,6 +343,7 @@ export default function AdminAktivitasPage() {
   // ── Tab data state ──
   const [askLogs, setAskLogs] = useState<AskLogItem[]>([])
   const [challengeLogs, setChallengeLogs] = useState<ChallengeLogItem[]>([])
+  const [exampleLogs, setExampleLogs] = useState<ExampleUsageItem[]>([])
   const [quizLogs, setQuizLogs] = useState<QuizLogItem[]>([])
   const [quizPagination, setQuizPagination] = useState<QuizPaginationMeta | null>(null)
   const [quizPage, setQuizPage] = useState(1)
@@ -345,6 +368,7 @@ export default function AdminAktivitasPage() {
   // ── Derived data ──
   const groupedAskLogs = useMemo(() => groupByTopic(askLogs), [askLogs])
   const groupedChallengeLogs = useMemo(() => groupByTopic(challengeLogs), [challengeLogs])
+  const groupedExampleLogs = useMemo(() => groupByTopic(exampleLogs), [exampleLogs])
   const groupedQuizAttempts = useMemo(() => groupQuizByAttempt(quizLogs), [quizLogs])
 
   const clearAllFilters = () => {
@@ -386,6 +410,13 @@ export default function AdminAktivitasPage() {
         { label: 'Pengguna Unik', value: new Set(challengeLogs.map((l) => l.userId)).size },
       ]
     }
+    if (activeTab === 'examples') {
+      return [
+        { label: 'Pemakaian Contoh', value: exampleLogs.length },
+        { label: 'Subtopik', value: groupedExampleLogs.length },
+        { label: 'Pengguna Unik', value: new Set(exampleLogs.map((l) => l.userId)).size },
+      ]
+    }
     if (activeTab === 'quiz') {
       const correct = quizLogs.filter((l) => l.isCorrect).length
       const accuracy = quizLogs.length > 0 ? Math.round((correct / quizLogs.length) * 100) : 0
@@ -413,18 +444,19 @@ export default function AdminAktivitasPage() {
       { label: 'Sedang Berlangsung', value: sessions.filter((s) => s.status === 'in_progress').length },
       { label: 'Tujuan Tercapai', value: coveredGoals },
     ]
-  }, [activeTab, askLogs, challengeLogs, quizLogs, refleksiLogs, sessions, groupedAskLogs.length, groupedQuizAttempts.length, quizPagination?.totalItems])
+  }, [activeTab, askLogs, challengeLogs, exampleLogs, quizLogs, refleksiLogs, sessions, groupedAskLogs.length, groupedExampleLogs.length, groupedQuizAttempts.length, quizPagination?.totalItems])
 
   const tabCount = useMemo(() => {
     switch (activeTab) {
       case 'ask': return askLogs.length
       case 'challenge': return challengeLogs.length
+      case 'examples': return exampleLogs.length
       case 'quiz': return quizPagination?.totalItems ?? quizLogs.length
       case 'refleksi': return refleksiLogs.length
       case 'diskusi': return sessions.length
       default: return 0
     }
-  }, [activeTab, askLogs.length, challengeLogs.length, quizLogs.length, refleksiLogs.length, sessions.length, groupedQuizAttempts.length, quizPagination?.totalItems])
+  }, [activeTab, askLogs.length, challengeLogs.length, exampleLogs.length, quizLogs.length, refleksiLogs.length, sessions.length, groupedQuizAttempts.length, quizPagination?.totalItems])
 
   const activeTabLabel = TABS.find((t) => t.id === activeTab)?.label ?? 'Aktivitas'
   const activeTabMetaLabel = activeTab === 'quiz' ? 'jawaban' : 'catatan'
@@ -473,6 +505,7 @@ export default function AdminAktivitasPage() {
     const endpointMap: Record<string, string> = {
       ask: 'ask-question',
       challenge: 'challenge',
+      examples: 'examples',
       quiz: 'quiz',
       refleksi: 'jurnal',
     }
@@ -505,6 +538,7 @@ export default function AdminAktivitasPage() {
         switch (activeTab) {
           case 'ask': setAskLogs(data); break
           case 'challenge': setChallengeLogs(data); break
+          case 'examples': setExampleLogs(data); break
           case 'quiz':
             setQuizLogs(quizRecords)
             setQuizPagination(payload.pagination ?? null)
@@ -516,6 +550,7 @@ export default function AdminAktivitasPage() {
         switch (activeTab) {
           case 'ask': setAskLogs([]); break
           case 'challenge': setChallengeLogs([]); break
+          case 'examples': setExampleLogs([]); break
           case 'quiz':
             setQuizLogs([])
             setQuizPagination(null)
@@ -621,6 +656,13 @@ export default function AdminAktivitasPage() {
     const covered = selectedSessionGoals.filter((g) => g.covered).length
     const percentage = total ? Math.round((covered / total) * 100) : 0
     return { total, covered, percentage }
+  }, [selectedSessionGoals])
+  const masteryStats = useMemo(() => {
+    const met = selectedSessionGoals.filter((g) => g.masteryStatus === 'met').length
+    const near = selectedSessionGoals.filter((g) => g.masteryStatus === 'near').length
+    const weak = selectedSessionGoals.filter((g) => g.masteryStatus === 'weak').length
+    const unassessable = selectedSessionGoals.filter((g) => g.masteryStatus === 'unassessable').length
+    return { met, near, weak, unassessable }
   }, [selectedSessionGoals])
   const assessmentsByMessage = useMemo(() => {
     const map = new Map<string, DiscussionAssessment[]>()
@@ -915,6 +957,44 @@ export default function AdminAktivitasPage() {
         {/* ────────────────────────────────────────────────
             Tab 3: Kuis — grouped by attempt
         ──────────────────────────────────────────────── */}
+        {activeTab === 'examples' && (
+          logsLoading ? <Skeleton /> : (
+            <div className={styles.topicGrid}>
+              {groupedExampleLogs.length === 0 ? (
+                <EmptyState message="Belum ada pemakaian fitur Beri Contoh" />
+              ) : (
+                groupedExampleLogs.map(({ topic, items }) => (
+                  <article key={topic} className={styles.topicCard}>
+                    <header>
+                      <h3>{topic}</h3>
+                      <span>{items.length} pemakaian</span>
+                    </header>
+                    <ul>
+                      {items.map((log) => (
+                        <li key={log.id}>
+                          <div className={styles.promptLine}>
+                            <strong>Dipakai pada:</strong>
+                            <p>Halaman {log.pageNumber + 1} · {log.examplesCount} contoh digenerate</p>
+                          </div>
+                          <div className={styles.feedbackBox}>
+                            <strong>Status penyimpanan:</strong>
+                            <p>Isi contoh tetap sementara di browser siswa; admin hanya menyimpan bukti pemakaian fitur.</p>
+                          </div>
+                          <RawDetail title="Lihat Detail" data={log} />
+                          <footer>
+                            <span>{log.userEmail}</span>
+                            <span>{log.timestamp}</span>
+                          </footer>
+                        </li>
+                      ))}
+                    </ul>
+                  </article>
+                ))
+              )}
+            </div>
+          )
+        )}
+
         {activeTab === 'quiz' && (
           logsLoading ? <Skeleton /> : (
             <div className={styles.quizList}>
@@ -1328,6 +1408,13 @@ export default function AdminAktivitasPage() {
                           <strong>Tujuan Tercapai:</strong>
                           <p>
                             {goalStats.covered}/{goalStats.total || '-'} tujuan
+                          </p>
+                        </div>
+                        <div className={styles.feedbackBox}>
+                          <strong>Kualitas Pemahaman:</strong>
+                          <p>
+                            {masteryStats.met} kuat, {masteryStats.near} mendekati, {masteryStats.weak} perlu diperkuat
+                            {masteryStats.unassessable ? `, ${masteryStats.unassessable} belum dapat dinilai` : ''}
                           </p>
                         </div>
                         <div className={styles.feedbackBox}>

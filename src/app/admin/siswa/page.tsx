@@ -143,6 +143,25 @@ export default function AdminSiswaPage() {
   const timelineEntries = useMemo(() => {
     if (!activitySummary) return []
     const entries: Array<{ label: string; icon: string; title: string; timestamp?: string | null; detail?: string | null }> = []
+    if (activitySummary.recentDiscussion?.quality) {
+      const quality = activitySummary.recentDiscussion.quality
+      entries.push({
+        label: 'Kualitas Pemahaman',
+        icon: 'ðŸ§ ',
+        title: `${quality.met} kuat, ${quality.near} mendekati, ${quality.weak} perlu diperkuat`,
+        timestamp: activitySummary.recentDiscussion.updatedAt,
+        detail: `${quality.total} tujuan pembelajaran dalam diskusi terbaru`,
+      })
+    }
+    if (activitySummary.recentExampleUsage) {
+      entries.push({
+        label: 'Contoh',
+        icon: 'ðŸ‘ï¸',
+        title: activitySummary.recentExampleUsage.topic,
+        timestamp: activitySummary.recentExampleUsage.createdAt,
+        detail: `${activitySummary.recentExampleUsage.examplesCount} contoh dipakai pada halaman ${activitySummary.recentExampleUsage.pageNumber + 1}`,
+      })
+    }
     if (activitySummary.recentDiscussion) entries.push({ label: 'Diskusi', icon: '💬', title: 'Diskusi terbaru', timestamp: activitySummary.recentDiscussion.updatedAt, detail: `Fase ${activitySummary.recentDiscussion.phase ?? 'N/A'} · ${activitySummary.recentDiscussion.goalCount} tujuan` })
     if (activitySummary.recentReflection) {
       const reflectionDetail = [
@@ -356,6 +375,15 @@ export default function AdminSiswaPage() {
                       <p className={styles.activityLabel}>{activitySummary?.recentDiscussion ? `Terakhir: ${new Date(activitySummary.recentDiscussion.updatedAt).toLocaleString('id-ID')}` : 'Belum ada diskusi'}</p>
                     </article>
                     <article className={styles.activityCard}>
+                      <h4>Kualitas Pemahaman</h4>
+                      <p className={styles.activityValue}>{activitySummary?.recentDiscussion?.quality?.met ?? 0}</p>
+                      <p className={styles.activityLabel}>
+                        {activitySummary?.recentDiscussion?.quality
+                          ? `${activitySummary.recentDiscussion.quality.weak} perlu diperkuat dari ${activitySummary.recentDiscussion.quality.total} tujuan`
+                          : 'Belum ada kualitas diskusi'}
+                      </p>
+                    </article>
+                    <article className={styles.activityCard}>
                       <h4>Refleksi</h4>
                       <p className={styles.activityValue}>{activitySummary?.totals?.reflections ?? 0}</p>
                       <p className={styles.activityLabel}>{activitySummary?.recentReflection ? (activitySummary.recentReflection.title ?? 'Refleksi terbaru') : 'Belum ada refleksi'}</p>
@@ -379,6 +407,11 @@ export default function AdminSiswaPage() {
                       <h4>Percobaan Kuis</h4>
                       <p className={styles.activityValue}>{activitySummary?.totals?.quizAttempts ?? activitySummary?.totals?.quizzes ?? 0}</p>
                       <p className={styles.activityLabel}>{activitySummary?.recentQuiz ? `Terakhir: ${activitySummary.recentQuiz.score ?? 0}% (${activitySummary.recentQuiz.correctAnswers ?? 0}/${activitySummary.recentQuiz.answerRows ?? 0} benar)` : 'Belum ada kuis'}</p>
+                    </article>
+                    <article className={styles.activityCard}>
+                      <h4>Contoh</h4>
+                      <p className={styles.activityValue}>{activitySummary?.totals?.examples ?? 0}</p>
+                      <p className={styles.activityLabel}>{activitySummary?.recentExampleUsage ? activitySummary.recentExampleUsage.topic : 'Belum memakai Beri Contoh'}</p>
                     </article>
                     <article className={styles.activityCard}>
                       <h4>Kursus</h4>

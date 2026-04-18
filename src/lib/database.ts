@@ -390,6 +390,7 @@ const JSONB_COLUMNS_FALLBACK: Record<string, string[]> = {
   triangulation_records: ['sources'],
   research_evidence_items: ['raw_evidence_snapshot', 'metadata'],
   research_auto_coding_runs: ['scope', 'summary'],
+  example_usage_events: ['raw_evidence_snapshot'],
 };
 
 /** Auto-detected JSONB columns (populated lazily from database schema). */
