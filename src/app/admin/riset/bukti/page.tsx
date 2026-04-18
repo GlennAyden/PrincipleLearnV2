@@ -7,6 +7,8 @@ import {
     FiClock, FiCpu, FiFileText, FiRefreshCw, FiSearch, FiUsers
 } from 'react-icons/fi'
 import { useAdmin } from '@/hooks/useAdmin'
+import { useDebouncedValue } from '@/hooks/useDebouncedValue'
+import { apiFetch } from '@/lib/api-client'
 import styles from './page.module.scss'
 
 type EvidenceSummary = Record<string, unknown>
@@ -37,6 +39,9 @@ interface EvidenceResponse {
     error?: string
     message?: string
     summary?: EvidenceSummary
+    total?: number
+    offset?: number
+    limit?: number
     rows?: EvidenceApiRecord[]
     records?: EvidenceApiRecord[]
     items?: EvidenceApiRecord[]
@@ -47,6 +52,10 @@ interface EvidenceResponse {
         items?: EvidenceApiRecord[]
     } | EvidenceApiRecord[]
 }
+
+const EVIDENCE_PAGE_SIZE = 250
+const MAX_EVIDENCE_PAGES = 20
+const UUID_PATTERN = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i
 
 interface AutoCodeResponse {
     success?: boolean
@@ -385,28 +394,58 @@ export default function ResearchEvidencePage() {
     const [sourceFilter, setSourceFilter] = useState(() => readInitialSearchParam(['source_type'], 'all'))
     const [rmFilter, setRmFilter] = useState(() => readInitialSearchParam(['rm_focus'], 'all'))
     const [codingFilter, setCodingFilter] = useState(() => readInitialSearchParam(['coding_status'], 'all'))
+    const debouncedQuery = useDebouncedValue(query, 350)
 
     const fetchEvidence = useCallback(async () => {
         try {
             setLoading(true)
             setError(null)
 
-            const res = await fetch('/api/admin/research/evidence', {
-                credentials: 'include',
-                cache: 'no-store',
-            })
-            const data: EvidenceResponse = await res.json().catch(() => ({}))
+            const allRows: EvidenceApiRecord[] = []
+            let firstSummary: EvidenceSummary | null = null
+            let reportedTotal: number | null = null
 
-            if (!res.ok || data.success === false) {
-                if (res.status === 404) {
-                    throw new Error('Endpoint Evidence Bank belum tersedia. Halaman ini tetap siap dipakai dan akan terisi otomatis saat API evidence diaktifkan.')
+            for (let page = 0; page < MAX_EVIDENCE_PAGES; page += 1) {
+                const params = new URLSearchParams({
+                    limit: String(EVIDENCE_PAGE_SIZE),
+                    offset: String(page * EVIDENCE_PAGE_SIZE),
+                })
+                const search = debouncedQuery.trim()
+                if (UUID_PATTERN.test(search)) {
+                    params.set('user_id', search)
+                } else if (search) {
+                    params.set('search', search)
+                }
+                if (sourceFilter !== 'all') params.set('source_type', sourceFilter)
+                if (rmFilter !== 'all') params.set('rm_focus', rmFilter)
+                if (codingFilter !== 'all') params.set('coding_status', codingFilter)
+
+                const res = await fetch(`/api/admin/research/evidence?${params.toString()}`, {
+                    credentials: 'include',
+                    cache: 'no-store',
+                })
+                const data: EvidenceResponse = await res.json().catch(() => ({}))
+
+                if (!res.ok || data.success === false) {
+                    if (res.status === 404) {
+                        throw new Error('Endpoint Evidence Bank belum tersedia. Halaman ini tetap siap dipakai dan akan terisi otomatis saat API evidence diaktifkan.')
+                    }
+
+                    throw new Error(data.error || data.message || 'Gagal memuat data evidence')
                 }
 
-                throw new Error(data.error || data.message || 'Gagal memuat data evidence')
+                if (!firstSummary) firstSummary = extractSummary(data)
+                if (typeof data.total === 'number') reportedTotal = data.total
+
+                const pageRows = extractRows(data)
+                allRows.push(...pageRows)
+
+                if (pageRows.length < EVIDENCE_PAGE_SIZE) break
+                if (reportedTotal !== null && allRows.length >= reportedTotal) break
             }
 
-            setRows(extractRows(data).map((row, index) => normalizeRow(row, index)))
-            setSummary(extractSummary(data))
+            setRows(allRows.map((row, index) => normalizeRow(row, index)))
+            setSummary(firstSummary)
         } catch (err) {
             console.error('Error fetching research evidence:', err)
             setError(err instanceof Error ? err.message : 'Gagal memuat data evidence')
@@ -415,7 +454,7 @@ export default function ResearchEvidencePage() {
         } finally {
             setLoading(false)
         }
-    }, [])
+    }, [codingFilter, debouncedQuery, rmFilter, sourceFilter])
 
     const runAutoCoding = useCallback(async () => {
         try {
@@ -423,10 +462,8 @@ export default function ResearchEvidencePage() {
             setError(null)
             setAutoMessage(null)
 
-            const res = await fetch('/api/admin/research/auto-code', {
+            const res = await apiFetch('/api/admin/research/auto-code', {
                 method: 'POST',
-                credentials: 'include',
-                headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({
                     limit: 30,
                     include_reviewed: false,
@@ -462,7 +499,7 @@ export default function ResearchEvidencePage() {
     const sourceOptions = useMemo(() => buildSourceOptions(rows), [rows])
 
     const filteredRows = useMemo(() => {
-        const search = query.trim().toLowerCase()
+        const search = debouncedQuery.trim().toLowerCase()
 
         return rows.filter(row => {
             const matchesSearch = !search || rowSearchText(row).includes(search)
@@ -472,7 +509,7 @@ export default function ResearchEvidencePage() {
 
             return matchesSearch && matchesSource && matchesRm && matchesCoding
         })
-    }, [codingFilter, query, rmFilter, rows, sourceFilter])
+    }, [codingFilter, debouncedQuery, rmFilter, rows, sourceFilter])
 
     const derivedSummary = useMemo(() => {
         const studentKeys = new Set(

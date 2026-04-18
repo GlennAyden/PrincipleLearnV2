@@ -5,18 +5,20 @@ import { NextRequest, NextResponse } from 'next/server'
 import { adminDb } from '@/lib/database'
 import { verifyToken } from '@/lib/jwt'
 import { countUnifiedReflections } from '@/lib/admin-reflection-summary'
+import { deriveAdminPromptStage } from '@/lib/admin-prompt-stage'
 
 // ── Row Interfaces ──
-interface UserExportRow { id: string; email: string; name?: string; role: string; created_at: string }
+interface UserExportRow { id: string; email: string; name?: string; role: string; created_at: string; deleted_at?: string | null }
 interface CourseExportRow { id: string; created_by: string; title: string; created_at: string }
 interface QuizExportRow { id: string; user_id: string; is_correct: boolean; created_at: string }
 interface JournalExportRow { id: string; user_id: string; created_at: string }
 interface TranscriptExportRow { id: string; user_id: string; created_at: string }
-interface AskExportRow { id: string; user_id: string; created_at: string }
+interface AskExportRow { id: string; user_id: string; prompt_stage?: string | null; prompt_components?: unknown; created_at: string }
 interface ChallengeExportRow { id: string; user_id: string; created_at: string }
 interface DiscussionExportRow { id: string; user_id: string; updated_at?: string; created_at: string }
 interface FeedbackExportRow { id: string; user_id: string; rating: number; created_at: string }
 interface ProgressExportRow { user_id: string; subtopic_id: string; is_completed: boolean }
+interface PromptClassificationExportRow { user_id: string; prompt_stage?: string | null; created_at?: string | null }
 
 // ─── Auth ─────────────────────────────────────────────────────────────────────
 
@@ -35,12 +37,21 @@ async function safeQuery<T>(query: any, label: string, fallback: T): Promise<T> 
   try {
     const { data, error } = await query
     if (error) {
-      console.error(`[Export] ${label} query failed:`, error.message)
-      return fallback
+      throw new Error(`[Export] ${label} query failed: ${error.message}`)
     }
     return (data ?? fallback) as T
   } catch (err) {
-    console.error(`[Export] ${label} query threw:`, err)
+    if (err instanceof Error) throw err
+    throw new Error(`[Export] ${label} query failed`)
+  }
+}
+
+// eslint-disable-next-line @typescript-eslint/no-explicit-any -- Supabase query builder returns complex generic types
+async function optionalQuery<T>(query: any, label: string, fallback: T): Promise<T> {
+  try {
+    return await safeQuery<T>(query, label, fallback)
+  } catch (err) {
+    console.warn(`[Export] Optional ${label} query failed:`, err instanceof Error ? err.message : err)
     return fallback
   }
 }
@@ -52,6 +63,20 @@ function parseValidDate(value: unknown): Date | null {
   if (typeof value !== 'string') return null
   const parsed = new Date(value)
   return Number.isNaN(parsed.getTime()) ? null : parsed
+}
+
+function parseStartDate(value: unknown): Date | null {
+  const parsed = parseValidDate(value)
+  if (!parsed) return null
+  parsed.setHours(0, 0, 0, 0)
+  return parsed
+}
+
+function parseEndDate(value: unknown): Date | null {
+  const parsed = parseValidDate(value)
+  if (!parsed) return null
+  parsed.setHours(23, 59, 59, 999)
+  return parsed
 }
 
 function toIsoDateOnly(value: unknown): string {
@@ -100,6 +125,10 @@ export async function GET(request: NextRequest) {
 
     const { searchParams } = new URL(request.url)
     const format = searchParams.get('format') ?? 'csv'
+    const userIdFilter = searchParams.get('user_id') ?? searchParams.get('userId')
+    const startDate = parseStartDate(searchParams.get('start_date') ?? searchParams.get('startDate'))
+    const endDate = parseEndDate(searchParams.get('end_date') ?? searchParams.get('endDate'))
+    const anonymize = searchParams.get('anonymize') === 'true'
 
     if (format !== 'csv' && format !== 'json') {
       return NextResponse.json(
@@ -122,9 +151,10 @@ export async function GET(request: NextRequest) {
       allDiscussions,
       allFeedbacks,
       allProgress,
+      promptClassifications,
     ] = await Promise.all([
       safeQuery<UserExportRow[]>(
-        adminDb.from('users').select('id, email, name, role, created_at'),
+        adminDb.from('users').select('id, email, name, role, created_at, deleted_at'),
         'users', []
       ),
       safeQuery<CourseExportRow[]>(
@@ -144,7 +174,7 @@ export async function GET(request: NextRequest) {
         'transcripts', []
       ),
       safeQuery<AskExportRow[]>(
-        adminDb.from('ask_question_history').select('id, user_id, created_at'),
+        adminDb.from('ask_question_history').select('id, user_id, prompt_stage, prompt_components, created_at'),
         'ask_questions', []
       ),
       safeQuery<ChallengeExportRow[]>(
@@ -163,6 +193,10 @@ export async function GET(request: NextRequest) {
         adminDb.from('user_progress').select('user_id, subtopic_id, is_completed'),
         'user_progress', []
       ),
+      optionalQuery<PromptClassificationExportRow[]>(
+        adminDb.from('prompt_classifications').select('user_id, prompt_stage, created_at'),
+        'prompt_classifications', []
+      ),
     ])
 
     // ── Group by user ─────────────────────────────────────────────────
@@ -175,12 +209,21 @@ export async function GET(request: NextRequest) {
     const discussionByUser = groupBy(allDiscussions, d => d.user_id)
     const feedbackByUser = groupBy(allFeedbacks, f => f.user_id)
     const progressByUser = groupBy(allProgress, p => p.user_id)
+    const classificationsByUser = groupBy(promptClassifications, p => p.user_id)
 
     // Filter to students only
-    const students = users.filter(u => (u.role || '').toLowerCase() !== 'admin')
+    const students = users.filter((user) => {
+      if ((user.role || '').toLowerCase() === 'admin') return false
+      if (user.deleted_at) return false
+      if (userIdFilter && user.id !== userIdFilter) return false
+      const createdAt = parseValidDate(user.created_at)
+      if (startDate && createdAt && createdAt < startDate) return false
+      if (endDate && createdAt && createdAt > endDate) return false
+      return true
+    })
 
     // ── Build export rows ─────────────────────────────────────────────
-    const exportRows = students.map(user => {
+    const exportRows = students.map((user, index) => {
       const uid = user.id
       const courses = coursesByUser[uid] || []
       const quizzes = quizByUser[uid] || []
@@ -205,11 +248,11 @@ export async function GET(request: NextRequest) {
         : 0
 
       const interactionCount = asks.length + challenges.length + discussions.length
-      let promptStage = 'N/A'
-      if (interactionCount >= 15) promptStage = 'REFLECTIVE'
-      else if (interactionCount >= 8) promptStage = 'MQP'
-      else if (interactionCount >= 3) promptStage = 'SRP'
-      else if (interactionCount >= 1) promptStage = 'SCP'
+      const promptStage = deriveAdminPromptStage({
+        classifications: classificationsByUser[uid] || [],
+        prompts: asks,
+        interactionCount,
+      })
 
       const totalInteractions =
         courses.length * 3 +
@@ -241,10 +284,13 @@ export async function GET(request: NextRequest) {
         ? (feedbacks.reduce((sum: number, f) => sum + (f.rating || 0), 0) / feedbacks.length).toFixed(1)
         : 'N/A'
 
+      const anonymousId = `S${String(index + 1).padStart(3, '0')}`
+
       return {
-        id: uid,
-        email: user.email,
-        name: user.name || 'Unknown',
+        id: anonymize ? anonymousId : uid,
+        email: anonymize ? `${anonymousId}@anonymous.local` : user.email,
+        name: anonymize ? anonymousId : user.name || 'Unknown',
+        anonymousId: anonymize ? anonymousId : null,
         joinedAt: toIsoDateOnly(user.created_at),
         totalCourses: courses.length,
         totalQuizzes: quizzes.length,

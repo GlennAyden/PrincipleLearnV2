@@ -7,7 +7,7 @@
  */
 
 import { NextRequest, NextResponse } from 'next/server';
-import { verifyAdminFromCookie } from '@/lib/admin-auth';
+import { requireAdminMutation, verifyAdminFromCookie } from '@/lib/admin-auth';
 import { isUuid } from '@/lib/research-normalizers';
 import { runResearchDataReconciliation } from '@/services/research-data-reconciliation.service';
 
@@ -25,6 +25,9 @@ export const maxDuration = 55;
 
 export async function POST(request: NextRequest) {
   try {
+    const guard = requireAdminMutation(request);
+    if (guard) return guard;
+
     const admin = verifyAdminFromCookie(request);
     if (!admin) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
 

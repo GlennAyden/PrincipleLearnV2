@@ -1,7 +1,7 @@
 // src/lib/admin-auth.ts
 // Shared admin authentication utility — extracted from duplicated code across admin API routes
 
-import type { NextRequest } from 'next/server';
+import { NextRequest, NextResponse } from 'next/server';
 import jwt from 'jsonwebtoken';
 
 const JWT_SECRET = process.env.JWT_SECRET!;
@@ -28,4 +28,37 @@ export function verifyAdminFromCookie(request: NextRequest): AdminPayload | null
   } catch {
     return null;
   }
+}
+
+export function verifyCsrfToken(request: NextRequest): NextResponse | null {
+  if (request.method === 'GET' || request.method === 'HEAD' || request.method === 'OPTIONS') {
+    return null;
+  }
+
+  const csrfCookie = request.cookies.get('csrf_token')?.value;
+  const csrfHeader = request.headers.get('x-csrf-token');
+
+  if (!csrfCookie || !csrfHeader) {
+    return NextResponse.json(
+      { error: 'CSRF token missing' },
+      { status: 403 },
+    );
+  }
+
+  if (csrfCookie !== csrfHeader) {
+    return NextResponse.json(
+      { error: 'Invalid CSRF token' },
+      { status: 403 },
+    );
+  }
+
+  return null;
+}
+
+export function requireAdminMutation(request: NextRequest): NextResponse | null {
+  if (!verifyAdminFromCookie(request)) {
+    return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+  }
+
+  return verifyCsrfToken(request);
 }

@@ -299,7 +299,7 @@ function normalizeOptions(options: ResearchAutoCoderOptions): Required<Omit<Rese
     userId: options.userId && isUuid(options.userId) ? options.userId : undefined,
     courseId: options.courseId && isUuid(options.courseId) ? options.courseId : undefined,
     learningSessionId: options.learningSessionId && isUuid(options.learningSessionId) ? options.learningSessionId : undefined,
-    limit: Math.min(10, Math.max(1, Number(options.limit ?? 3) || 3)),
+    limit: Math.min(120, Math.max(1, Number(options.limit ?? 3) || 3)),
     runtimeBudgetMs: Math.min(50_000, Math.max(10_000, Number(options.runtimeBudgetMs ?? DEFAULT_RUNTIME_BUDGET_MS) || DEFAULT_RUNTIME_BUDGET_MS)),
     dryRun: Boolean(options.dryRun),
     includeReviewed: Boolean(options.includeReviewed),

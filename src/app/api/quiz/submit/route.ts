@@ -937,6 +937,13 @@ async function postHandler(req: NextRequest) {
         completedAt,
       });
     }
+    await markUserProgressCompleted({
+      userId: user.id,
+      courseId: data.courseId,
+      subtopicId,
+      leafSubtopicId,
+      completedAt,
+    });
 
     after(async () => {
       try {
@@ -1099,6 +1106,77 @@ interface CompletionParams {
   userId: string;
   attemptId?: string;
   completedAt?: string;
+}
+
+interface UserProgressCompletionParams {
+  userId: string;
+  courseId: string;
+  subtopicId: string | null;
+  leafSubtopicId: string | null;
+  completedAt: string;
+}
+
+async function markUserProgressCompleted({
+  userId,
+  courseId,
+  subtopicId,
+  leafSubtopicId,
+  completedAt,
+}: UserProgressCompletionParams) {
+  if (!userId || !courseId || !subtopicId) return;
+
+  try {
+    let query = adminDb
+      .from('user_progress')
+      .select('id, completed_at')
+      .eq('user_id', userId)
+      .eq('course_id', courseId)
+      .eq('subtopic_id', subtopicId)
+      .limit(1);
+
+    if (leafSubtopicId) query = query.eq('leaf_subtopic_id', leafSubtopicId);
+
+    const { data: existing, error: selectError } = await query;
+    if (selectError) {
+      console.warn('[QuizSubmit] Failed to read user_progress for quiz completion', selectError);
+      return;
+    }
+
+    const existingRow = Array.isArray(existing) ? existing[0] as { id: string; completed_at?: string | null } | undefined : undefined;
+    const payload = {
+      is_completed: true,
+      completed_at: existingRow?.completed_at ?? completedAt,
+      updated_at: completedAt,
+    };
+
+    if (existingRow?.id) {
+      const { error: updateError } = await adminDb
+        .from('user_progress')
+        .eq('id', existingRow.id)
+        .update(payload);
+      if (updateError) {
+        console.warn('[QuizSubmit] Failed to update user_progress completion', updateError);
+      }
+      return;
+    }
+
+    const { error: insertError } = await adminDb.from('user_progress').insert({
+      user_id: userId,
+      course_id: courseId,
+      subtopic_id: subtopicId,
+      leaf_subtopic_id: leafSubtopicId,
+      is_completed: true,
+      completed_at: completedAt,
+      created_at: completedAt,
+      updated_at: completedAt,
+    });
+
+    if (insertError) {
+      console.warn('[QuizSubmit] Failed to insert user_progress completion', insertError);
+    }
+  } catch (error) {
+    console.warn('[QuizSubmit] Unable to sync user_progress completion', error);
+  }
 }
 
 async function markSubtopicQuizCompletion({

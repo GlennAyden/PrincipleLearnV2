@@ -37,12 +37,30 @@ const DATE_OPTIONS: Intl.DateTimeFormatOptions = {
   minute: '2-digit',
 };
 
+function buildDateRange(dateFromValue?: string | null, dateToValue?: string | null) {
+  const fromValue = dateFromValue?.trim() || '';
+  const toValue = dateToValue?.trim() || fromValue;
+  if (!fromValue && !toValue) return null;
+
+  const startSource = fromValue || toValue;
+  const endSource = toValue || fromValue;
+  const start = new Date(startSource);
+  const end = new Date(endSource);
+  if (Number.isNaN(start.getTime()) || Number.isNaN(end.getTime())) return null;
+
+  start.setHours(0, 0, 0, 0);
+  end.setHours(23, 59, 59, 999);
+  return { start, end };
+}
+
 async function handler(req: NextRequest) {
   try {
     await ensureChallengeResponsesSeeded();
     const { searchParams } = new URL(req.url);
     const userId = searchParams.get('userId');
     const date = searchParams.get('date');
+    const dateFrom = searchParams.get('dateFrom') ?? date;
+    const dateTo = searchParams.get('dateTo');
     const courseId = searchParams.get('course');
     const topic = searchParams.get('topic');
 
@@ -64,15 +82,11 @@ async function handler(req: NextRequest) {
       responses = responses.filter((row) => row.course_id === courseId);
     }
 
-    if (date) {
-      const target = new Date(date);
-      const start = new Date(target);
-      start.setHours(0, 0, 0, 0);
-      const end = new Date(target);
-      end.setHours(23, 59, 59, 999);
+    const dateRange = buildDateRange(dateFrom, dateTo);
+    if (dateRange) {
       responses = responses.filter((row) => {
         const createdAt = new Date(row.created_at);
-        return createdAt >= start && createdAt <= end;
+        return createdAt >= dateRange.start && createdAt <= dateRange.end;
       });
     }
 

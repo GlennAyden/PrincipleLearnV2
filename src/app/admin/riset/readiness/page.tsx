@@ -7,6 +7,7 @@ import {
     FiCpu, FiDatabase, FiDownload, FiGitMerge, FiRefreshCw, FiSearch, FiUsers, FiXCircle
 } from 'react-icons/fi'
 import { useAdmin } from '@/hooks/useAdmin'
+import { apiFetch } from '@/lib/api-client'
 import styles from './page.module.scss'
 
 type ReadinessStatusKey = 'ready' | 'partial' | 'blocked' | 'unknown'
@@ -219,10 +220,8 @@ export default function ResearchReadinessPage() {
             setError(null)
             setActionMessage(null)
 
-            const res = await fetch('/api/admin/research/reconcile', {
+            const res = await apiFetch('/api/admin/research/reconcile', {
                 method: 'POST',
-                credentials: 'include',
-                headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({ dry_run: dryRun, limit: 500 }),
             })
             const data: ReconcileResponse = await res.json().catch(() => ({}))
@@ -252,10 +251,8 @@ export default function ResearchReadinessPage() {
             setError(null)
             setActionMessage(null)
 
-            const res = await fetch('/api/admin/research/auto-code', {
+            const res = await apiFetch('/api/admin/research/auto-code', {
                 method: 'POST',
-                credentials: 'include',
-                headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({
                     user_id: userId,
                     limit: userId ? 40 : 120,

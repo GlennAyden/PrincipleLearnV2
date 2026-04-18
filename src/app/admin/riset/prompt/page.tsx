@@ -8,6 +8,7 @@ import {
     FiCalendar, FiChevronDown, FiChevronUp
 } from 'react-icons/fi'
 import { useAdmin } from '@/hooks/useAdmin'
+import { apiFetch } from '@/lib/api-client'
 import type { LearningSession, PromptStage, MicroMarker } from '@/types/research'
 import { PROMPT_STAGE_LABELS, PROMPT_STAGE_DESCRIPTIONS, MICRO_MARKER_LABELS } from '@/types/research'
 import styles from './page.module.scss'
@@ -50,6 +51,8 @@ interface SessionFormData {
 interface LearningSessionOption {
     id: string
     session_number: number
+    user_id?: string
+    course_id?: string
     users?: { name: string }
     courses?: { title: string }
 }
@@ -149,6 +152,24 @@ export default function PromptEvolutionPage() {
         classified_by: 'admin',
         confidence_score: null
     })
+
+    const userById = React.useMemo(() => new Map(users.map(user => [user.id, user])), [users])
+    const courseById = React.useMemo(() => new Map(courses.map(course => [course.id, course])), [courses])
+
+    const getSessionUser = useCallback((session: { user_id?: string; users?: { name?: string; email?: string } }) => {
+        const fallback = session.user_id ? userById.get(session.user_id) : undefined
+        return {
+            name: session.users?.name || fallback?.name || 'Unknown',
+            email: session.users?.email || fallback?.email || (session.user_id ? session.user_id.slice(0, 8) : '-')
+        }
+    }, [userById])
+
+    const getSessionCourse = useCallback((session: { course_id?: string; courses?: { title?: string } }) => {
+        const fallback = session.course_id ? courseById.get(session.course_id) : undefined
+        return {
+            title: session.courses?.title || fallback?.title || (session.course_id ? session.course_id.slice(0, 8) : 'Kursus tidak diketahui')
+        }
+    }, [courseById])
 
     // ============================================
     // FETCH FUNCTIONS — Sessions
@@ -318,9 +339,8 @@ export default function PromptEvolutionPage() {
         }
 
         try {
-            const res = await fetch(`/api/admin/research/sessions?id=${session.id}`, {
-                method: 'DELETE',
-                credentials: 'include'
+            const res = await apiFetch(`/api/admin/research/sessions?id=${session.id}`, {
+                method: 'DELETE'
             })
 
             if (!res.ok) {
@@ -346,11 +366,10 @@ export default function PromptEvolutionPage() {
                 ? `/api/admin/research/sessions?id=${selectedSession.id}`
                 : '/api/admin/research/sessions'
 
-            const res = await fetch(url, {
+            const res = await apiFetch(url, {
                 method: sessionModalMode === 'edit' ? 'PUT' : 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                credentials: 'include',
                 body: JSON.stringify({
+                    ...(sessionModalMode === 'edit' && selectedSession ? { id: selectedSession.id } : {}),
                     ...sessionFormData,
                     researcher_notes: sessionFormData.notes
                 })
@@ -427,9 +446,8 @@ export default function PromptEvolutionPage() {
         }
 
         try {
-            const res = await fetch(`/api/admin/research/classifications?id=${item.id}`, {
-                method: 'DELETE',
-                credentials: 'include'
+            const res = await apiFetch(`/api/admin/research/classifications?id=${item.id}`, {
+                method: 'DELETE'
             })
 
             if (!res.ok) {
@@ -455,11 +473,12 @@ export default function PromptEvolutionPage() {
                 ? `/api/admin/research/classifications?id=${selectedClassification.id}`
                 : '/api/admin/research/classifications'
 
-            const res = await fetch(url, {
+            const res = await apiFetch(url, {
                 method: classificationModalMode === 'edit' ? 'PUT' : 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                credentials: 'include',
-                body: JSON.stringify(classificationFormData)
+                body: JSON.stringify({
+                    ...(classificationModalMode === 'edit' && selectedClassification ? { id: selectedClassification.id } : {}),
+                    ...classificationFormData
+                })
             })
 
             const data = await res.json()
@@ -634,19 +653,23 @@ export default function PromptEvolutionPage() {
                                             </tr>
                                         </thead>
                                         <tbody>
-                                            {sessions.map((session) => (
+                                            {sessions.map((session) => {
+                                                const sessionUser = getSessionUser(session)
+                                                const sessionCourse = getSessionCourse(session)
+
+                                                return (
                                                 <tr key={session.id}>
                                                     <td>
                                                         <div className={styles.userCell}>
                                                             <span className={styles.userName}>
-                                                                {session.users?.name || 'Unknown'}
+                                                                {sessionUser.name}
                                                             </span>
                                                             <span className={styles.userEmail}>
-                                                                {session.users?.email || session.user_id.slice(0, 8)}
+                                                                {sessionUser.email}
                                                             </span>
                                                         </div>
                                                     </td>
-                                                    <td>{session.courses?.title || session.course_id.slice(0, 8)}</td>
+                                                    <td>{sessionCourse.title}</td>
                                                     <td>#{session.session_number}</td>
                                                     <td>{formatDate(session.session_date)}</td>
                                                     <td>{session.topic_focus || '-'}</td>
@@ -678,7 +701,8 @@ export default function PromptEvolutionPage() {
                                                         </div>
                                                     </td>
                                                 </tr>
-                                            ))}
+                                                )
+                                            })}
                                         </tbody>
                                     </table>
 
@@ -898,12 +922,12 @@ export default function PromptEvolutionPage() {
                                 <div className={styles.viewGrid}>
                                     <div className={styles.viewItem}>
                                         <label>Siswa</label>
-                                        <p>{selectedSession.users?.name || 'Unknown'}</p>
-                                        <small>{selectedSession.users?.email || selectedSession.user_id}</small>
+                                        <p>{getSessionUser(selectedSession).name}</p>
+                                        <small>{getSessionUser(selectedSession).email || selectedSession.user_id}</small>
                                     </div>
                                     <div className={styles.viewItem}>
                                         <label>Kursus</label>
-                                        <p>{selectedSession.courses?.title || selectedSession.course_id}</p>
+                                        <p>{getSessionCourse(selectedSession).title}</p>
                                     </div>
                                     <div className={styles.viewItem}>
                                         <label>Nomor Sesi</label>
@@ -1213,11 +1237,16 @@ export default function PromptEvolutionPage() {
                                             required
                                         >
                                             <option value="">Pilih Sesi</option>
-                                            {classificationSessions.map((session) => (
+                                            {classificationSessions.map((session) => {
+                                                const sessionUser = getSessionUser(session)
+                                                const sessionCourse = getSessionCourse(session)
+
+                                                return (
                                                 <option key={session.id} value={session.id}>
-                                                    Sesi #{session.session_number} - {session.users?.name || 'Unknown'} ({session.courses?.title || 'Kursus tidak diketahui'})
+                                                    Sesi #{session.session_number} - {sessionUser.name} ({sessionCourse.title})
                                                 </option>
-                                            ))}
+                                                )
+                                            })}
                                         </select>
                                         {classificationSessions.length === 0 && (
                                             <small className={styles.helpText}>

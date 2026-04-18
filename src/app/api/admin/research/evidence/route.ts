@@ -7,7 +7,7 @@
 
 import { NextRequest, NextResponse } from 'next/server';
 import { adminDb } from '@/lib/database';
-import { verifyAdminFromCookie } from '@/lib/admin-auth';
+import { requireAdminMutation, verifyAdminFromCookie } from '@/lib/admin-auth';
 import {
   EVIDENCE_SOURCE_TYPES,
   formatAnonParticipant,
@@ -147,9 +147,10 @@ export async function GET(request: NextRequest) {
       search: searchParams.get('search')?.trim().toLowerCase() || '',
     };
 
+    const collectionLimit = Math.min(5000, Math.max((offset + limit) * 3, 250));
     const [ledgerRows, rawRows] = await Promise.all([
-      fetchLedgerEvidence(filters, limit, offset),
-      collectRawEvidence(filters, Math.max(limit * 3, 250)),
+      fetchLedgerEvidence(filters, collectionLimit, 0),
+      collectRawEvidence(filters, collectionLimit),
     ]);
 
     const merged = mergeEvidenceRows(rawRows, ledgerRows);
@@ -174,6 +175,9 @@ export async function GET(request: NextRequest) {
 
 export async function POST(request: NextRequest) {
   try {
+    const guard = requireAdminMutation(request);
+    if (guard) return guard;
+
     const admin = verifyAdminFromCookie(request);
     if (!admin) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
 
@@ -198,6 +202,9 @@ export async function POST(request: NextRequest) {
 
 export async function PUT(request: NextRequest) {
   try {
+    const guard = requireAdminMutation(request);
+    if (guard) return guard;
+
     const admin = verifyAdminFromCookie(request);
     if (!admin) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
 

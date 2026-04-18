@@ -87,8 +87,14 @@ const EXPORT_CARDS: ExportCard[] = [
         icon: <FiUsers />,
         iconClass: 'iconUsers',
         formats: ['csv', 'json'],
-        buildUrl: (format) =>
-            `/api/admin/users/export?format=${format}`,
+        buildUrl: (format, filters) => {
+            const params = new URLSearchParams({ format })
+            if (filters.user_id) params.append('user_id', filters.user_id)
+            if (filters.start_date) params.append('start_date', filters.start_date)
+            if (filters.end_date) params.append('end_date', filters.end_date)
+            if (filters.anonymize) params.append('anonymize', 'true')
+            return `/api/admin/users/export?${params.toString()}`
+        },
     },
     {
         id: 'activity',
@@ -102,6 +108,8 @@ const EXPORT_CARDS: ExportCard[] = [
             if (filters.start_date) params.append('startDate', filters.start_date)
             if (filters.end_date) params.append('endDate', filters.end_date)
             if (filters.user_id) params.append('userId', filters.user_id)
+            if (filters.course_id) params.append('courseId', filters.course_id)
+            if (filters.anonymize) params.append('anonymize', 'true')
             return `/api/admin/activity/export?${params.toString()}`
         },
     },

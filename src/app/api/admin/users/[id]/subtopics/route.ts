@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 
 import { DatabaseService } from '@/lib/database';
 import { verifyToken } from '@/lib/jwt';
+import { verifyCsrfToken } from '@/lib/admin-auth';
 
 function unauthorized() {
   return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
@@ -75,6 +76,9 @@ export async function POST(
   try {
     const adminPayload = await requireAdmin(request);
     if (!adminPayload) return unauthorized();
+
+    const csrfError = verifyCsrfToken(request);
+    if (csrfError) return csrfError;
 
     const { id: userId } = await context.params;
     const body = await request.json().catch(() => null);

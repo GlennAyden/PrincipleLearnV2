@@ -6,6 +6,44 @@ import { withApiLogging } from '@/lib/api-logger';
 import { buildDiscussionHealthScore } from '@/lib/discussion/serializers';
 
 const DEFAULT_LIMIT = 100;
+const DISCUSSION_SESSION_SELECT = `
+  id,
+  status,
+  phase,
+  learning_goals,
+  completed_at,
+  completion_reason,
+  completion_summary,
+  created_at,
+  updated_at,
+  user_id,
+  course_id,
+  subtopic_id,
+  users:user_id(email),
+  courses:course_id(title),
+  subtopics:subtopic_id(title),
+  count_messages:discussion_messages(id)
+`;
+const DISCUSSION_SESSION_BASE_SELECT = `
+  id,
+  status,
+  phase,
+  learning_goals,
+  created_at,
+  updated_at,
+  user_id,
+  course_id,
+  subtopic_id,
+  users:user_id(email),
+  courses:course_id(title),
+  subtopics:subtopic_id(title),
+  count_messages:discussion_messages(id)
+`;
+
+function isSchemaMismatchError(error: unknown): boolean {
+  const err = error as { code?: string; message?: string } | null;
+  return err?.code === '42703' || err?.code === 'PGRST204' || Boolean(err?.message?.includes('completion_'));
+}
 
 async function getHandler(request: NextRequest) {
   try {
@@ -25,44 +63,24 @@ async function getHandler(request: NextRequest) {
     const limitParam = Number(searchParams.get('limit'));
     const limit = Number.isFinite(limitParam) && limitParam > 0 ? limitParam : DEFAULT_LIMIT;
 
-    let query = adminDb
-      .from('discussion_sessions')
-      .select(
-        `
-        id,
-        status,
-        phase,
-        learning_goals,
-        completed_at,
-        completion_reason,
-        completion_summary,
-        created_at,
-        updated_at,
-        user_id,
-        course_id,
-        subtopic_id,
-        users:user_id(email),
-        courses:course_id(title),
-        subtopics:subtopic_id(title),
-        count_messages:discussion_messages(id)
-      `
-      )
-      .order(sortBy, { ascending: false })
-      .limit(limit);
+    const buildQuery = (select: string) => {
+      let builtQuery = adminDb
+        .from('discussion_sessions')
+        .select(select)
+        .order(sortBy, { ascending: false })
+        .limit(limit);
 
-    if (status) {
-      query = query.eq('status', status);
+      if (status) builtQuery = builtQuery.eq('status', status);
+      if (courseId) builtQuery = builtQuery.eq('course_id', courseId);
+      if (subtopicId) builtQuery = builtQuery.eq('subtopic_id', subtopicId);
+      if (userId) builtQuery = builtQuery.eq('user_id', userId);
+      return builtQuery;
+    };
+
+    let { data, error } = await buildQuery(DISCUSSION_SESSION_SELECT);
+    if (error && isSchemaMismatchError(error)) {
+      ({ data, error } = await buildQuery(DISCUSSION_SESSION_BASE_SELECT));
     }
-    if (courseId) {
-      query = query.eq('course_id', courseId);
-    }
-    if (subtopicId) {
-      query = query.eq('subtopic_id', subtopicId);
-    }
-    if (userId) {
-      query = query.eq('user_id', userId);
-    }
-    const { data, error } = await query;
 
     if (error) {
       console.error('[AdminDiscussions] Failed to fetch sessions', error);

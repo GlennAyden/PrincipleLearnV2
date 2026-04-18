@@ -12,6 +12,8 @@ interface QuizSubmission {
   quiz_id: string
   course_id?: string | null
   subtopic_id?: string | null
+  leaf_subtopic_id?: string | null
+  subtopic_label?: string | null
   module_index?: number | null
   subtopic_index?: number | null
   answer: string
@@ -45,6 +47,12 @@ interface Course {
 interface Subtopic {
   id: string
   title: string
+}
+
+interface LeafSubtopic {
+  id: string
+  title: string
+  parent_subtopic_id?: string | null
 }
 
 interface PaginationMeta {
@@ -136,6 +144,7 @@ function buildSubmissionQuery(filters: {
   userId?: string | null
   courseId?: string | null
   subtopicIds?: string[] | null
+  leafSubtopicIds?: string[] | null
   dateFrom?: string | null
   dateTo?: string | null
   select?: string
@@ -151,8 +160,12 @@ function buildSubmissionQuery(filters: {
   }
   if (filters.userId) appendFilter(params, 'user_id', 'eq', filters.userId)
   if (filters.courseId) appendFilter(params, 'course_id', 'eq', filters.courseId)
-  if (filters.subtopicIds && filters.subtopicIds.length > 0) {
+  if (filters.subtopicIds?.length && filters.leafSubtopicIds?.length) {
+    params.append('or', `(subtopic_id.in.(${filters.subtopicIds.join(',')}),leaf_subtopic_id.in.(${filters.leafSubtopicIds.join(',')}))`)
+  } else if (filters.subtopicIds && filters.subtopicIds.length > 0) {
     appendFilter(params, 'subtopic_id', 'in', `(${filters.subtopicIds.join(',')})`)
+  } else if (filters.leafSubtopicIds && filters.leafSubtopicIds.length > 0) {
+    appendFilter(params, 'leaf_subtopic_id', 'in', `(${filters.leafSubtopicIds.join(',')})`)
   }
   if (filters.dateFrom) appendFilter(params, 'created_at', 'gte', filters.dateFrom)
   if (filters.dateTo) appendFilter(params, 'created_at', 'lte', filters.dateTo)
@@ -184,27 +197,58 @@ async function fetchSupabaseRows<T>(table: string, query: URLSearchParams) {
   }
 }
 
-async function fetchTopicSubtopicIds(courseId: string | null, topicFilter: string): Promise<string[]> {
+async function fetchTopicIds(courseId: string | null, topicFilter: string): Promise<{ subtopicIds: string[]; leafSubtopicIds: string[] }> {
   const { restBaseUrl, headers } = buildSupabaseRestConfig()
-  const url = new URL(`${restBaseUrl}/subtopics`)
-  url.searchParams.set('select', 'id,title')
-  url.searchParams.set('title', `ilike.%${topicFilter}%`)
-  if (courseId) appendFilter(url.searchParams, 'course_id', 'eq', courseId)
+  const subtopicsUrl = new URL(`${restBaseUrl}/subtopics`)
+  subtopicsUrl.searchParams.set('select', 'id,title')
+  subtopicsUrl.searchParams.set('title', `ilike.%${topicFilter}%`)
+  if (courseId) appendFilter(subtopicsUrl.searchParams, 'course_id', 'eq', courseId)
 
-  const response = await fetch(url, {
-    method: 'GET',
-    headers,
-  })
+  const leafUrl = new URL(`${restBaseUrl}/leaf_subtopics`)
+  leafUrl.searchParams.set('select', 'id,title')
+  leafUrl.searchParams.set('title', `ilike.%${topicFilter}%`)
+  if (courseId) appendFilter(leafUrl.searchParams, 'course_id', 'eq', courseId)
 
-  if (!response.ok) {
-    const body = await response.text().catch(() => '')
-    throw new Error(`Failed to resolve topic filter: ${response.status} ${body}`)
+  async function fetchTopicRows(url: URL, label: string): Promise<{ rows: Array<{ id?: string }>; error: Error | null }> {
+    try {
+      const response = await fetch(url, { method: 'GET', headers })
+      if (!response.ok) {
+        const body = await response.text().catch(() => '')
+        return { rows: [], error: new Error(`Failed to resolve ${label} topic filter: ${response.status} ${body}`) }
+      }
+      return {
+        rows: (await response.json().catch(() => [])) as Array<{ id?: string }>,
+        error: null,
+      }
+    } catch (error) {
+      return {
+        rows: [],
+        error: error instanceof Error ? error : new Error(String(error)),
+      }
+    }
   }
 
-  const rows = (await response.json().catch(() => [])) as Array<{ id?: string }>
-  return rows
-    .map((row) => row.id)
-    .filter((id): id is string => typeof id === 'string' && id.length > 0)
+  const [subtopicResult, leafResult] = await Promise.all([
+    fetchTopicRows(subtopicsUrl, 'subtopic'),
+    fetchTopicRows(leafUrl, 'leaf subtopic'),
+  ])
+
+  if (subtopicResult.error && leafResult.error) {
+    throw new Error(`${subtopicResult.error.message}; ${leafResult.error.message}`)
+  }
+  if (subtopicResult.error) {
+    console.warn('[Activity API] Could not resolve topic against subtopics:', subtopicResult.error.message)
+  }
+  if (leafResult.error) {
+    console.warn('[Activity API] Could not resolve topic against leaf_subtopics:', leafResult.error.message)
+  }
+
+  const subtopicRows = subtopicResult.rows
+  const leafRows = leafResult.rows
+  return {
+    subtopicIds: subtopicRows.map((row) => row.id).filter((id): id is string => typeof id === 'string' && id.length > 0),
+    leafSubtopicIds: leafRows.map((row) => row.id).filter((id): id is string => typeof id === 'string' && id.length > 0),
+  }
 }
 
 async function activityHandler(req: NextRequest) {
@@ -223,9 +267,12 @@ async function activityHandler(req: NextRequest) {
     console.log('[Activity API] Request params:', { userId, date, dateTo, courseId, topic: topicFilter, page, pageSize })
 
     let topicSubtopicIds: string[] | null = null
+    let topicLeafSubtopicIds: string[] | null = null
     if (topicFilter) {
-      topicSubtopicIds = await fetchTopicSubtopicIds(courseId, topicFilter)
-      if (topicSubtopicIds.length === 0) {
+      const topicIds = await fetchTopicIds(courseId, topicFilter)
+      topicSubtopicIds = topicIds.subtopicIds
+      topicLeafSubtopicIds = topicIds.leafSubtopicIds
+      if (topicSubtopicIds.length === 0 && topicLeafSubtopicIds.length === 0) {
         return NextResponse.json({
           data: [],
           pagination: {
@@ -260,6 +307,7 @@ async function activityHandler(req: NextRequest) {
       userId,
       courseId,
       subtopicIds: topicSubtopicIds,
+      leafSubtopicIds: topicLeafSubtopicIds,
       dateFrom: dateFromIso,
       dateTo: dateToIso,
       select: 'id',
@@ -275,9 +323,10 @@ async function activityHandler(req: NextRequest) {
       userId,
       courseId,
       subtopicIds: topicSubtopicIds,
+      leafSubtopicIds: topicLeafSubtopicIds,
       dateFrom: dateFromIso,
       dateTo: dateToIso,
-      select: 'id,user_id,quiz_id,course_id,subtopic_id,module_index,subtopic_index,answer,is_correct,reasoning_note,attempt_number,quiz_attempt_id,created_at',
+      select: 'id,user_id,quiz_id,course_id,subtopic_id,leaf_subtopic_id,subtopic_label,module_index,subtopic_index,answer,is_correct,reasoning_note,attempt_number,quiz_attempt_id,created_at',
       limit: pageSize,
       offset,
     })
@@ -323,6 +372,7 @@ async function hydrateQuizSubmissions(quizSubmissions: QuizSubmission[]): Promis
   const userCache = new Map<string, User | null>()
   const quizCache = new Map<string, Quiz | null>()
   const subtopicCache = new Map<string, Subtopic | null>()
+  const leafSubtopicCache = new Map<string, LeafSubtopic | null>()
   const courseCache = new Map<string, Course | null>()
 
   const payload: QuizActivityItem[] = []
@@ -331,7 +381,8 @@ async function hydrateQuizSubmissions(quizSubmissions: QuizSubmission[]): Promis
     if (!quiz) continue
 
     const resolvedCourseId = submission.course_id ?? quiz.course_id
-    const [subtopic, course, user] = await Promise.all([
+    const [leafSubtopic, subtopic, course, user] = await Promise.all([
+      fetchCached(leafSubtopicCache, submission.leaf_subtopic_id ?? null, 'leaf_subtopics'),
       fetchCached(subtopicCache, submission.subtopic_id ?? quiz.subtopic_id, 'subtopics'),
       fetchCached(courseCache, resolvedCourseId, 'courses'),
       fetchCached(userCache, submission.user_id, 'users'),
@@ -345,8 +396,8 @@ async function hydrateQuizSubmissions(quizSubmissions: QuizSubmission[]): Promis
       rawTimestamp: submissionTimestamp ? submissionTimestamp.toISOString() : null,
       userEmail: user?.email ?? 'Unknown User',
       userId: submission.user_id,
-      topic: subtopic?.title ?? 'Tanpa Subtopik',
-      subtopicId: submission.subtopic_id ?? quiz.subtopic_id ?? null,
+      topic: submission.subtopic_label ?? leafSubtopic?.title ?? subtopic?.title ?? 'Tanpa Subtopik',
+      subtopicId: submission.leaf_subtopic_id ?? submission.subtopic_id ?? quiz.subtopic_id ?? null,
       courseTitle: course?.title ?? 'Tanpa Kursus',
       question: quiz.question,
       options: Array.isArray(quiz.options) ? quiz.options : [],

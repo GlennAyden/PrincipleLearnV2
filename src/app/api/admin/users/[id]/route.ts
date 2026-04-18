@@ -5,6 +5,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { adminDb } from '@/lib/database'
 import { verifyToken } from '@/lib/jwt'
+import { verifyCsrfToken } from '@/lib/admin-auth'
 
 function unauthorized(message = 'Unauthorized') {
   return NextResponse.json({ error: message }, { status: 401 })
@@ -22,6 +23,9 @@ export async function DELETE(
   request: NextRequest,
   context: { params: Promise<{ id: string }> }
 ) {
+  const csrfError = verifyCsrfToken(request)
+  if (csrfError) return csrfError
+
   const admin = requireAdmin(request)
   if (!admin) return unauthorized()
 

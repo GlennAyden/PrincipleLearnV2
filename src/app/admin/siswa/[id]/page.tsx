@@ -121,8 +121,10 @@ interface EvolusiPromptItem {
   id: string
   question: string
   prompt_stage: string
+  resolved_prompt_stage?: string | null
   session_number: number | null
   micro_markers: Record<string, unknown> | null
+  resolved_micro_markers?: Record<string, unknown> | null
   created_at: string
 }
 
@@ -203,15 +205,21 @@ export default function StudentDetailPage() {
     fetch(`/api/admin/research/auto-scores/summary?user_id=${params.id}`, {
       credentials: 'include',
     })
-      .then(r => r.json())
+      .then(async (res) => {
+        const data = await res.json().catch(() => ({}))
+        if (!res.ok) {
+          throw new Error(data.error || data.message || 'Gagal memuat data kognitif')
+        }
+        return data
+      })
       .then(data => {
-        if (data.success !== false) {
+        if (data.success !== false && data.overall) {
           setKognitifData(data)
         } else {
           setKognitifError(data.error || 'Gagal memuat data kognitif')
         }
       })
-      .catch(() => setKognitifError('Gagal memuat data kognitif'))
+      .catch((err) => setKognitifError(err instanceof Error ? err.message : 'Gagal memuat data kognitif'))
       .finally(() => setKognitifLoading(false))
   }, [activeSection, kognitifData, kognitifLoading, params.id])
 
@@ -426,7 +434,9 @@ export default function StudentDetailPage() {
                       <h3 className={styles.evolusiSubtitle}>Riwayat Prompt ({evolusiData.promptHistory.length})</h3>
                       <div className={styles.promptList}>
                         {evolusiData.promptHistory.map((p) => {
-                          const cfg = STAGE_CONFIG[p.prompt_stage] ?? STAGE_CONFIG['N/A']
+                          const promptStage = p.resolved_prompt_stage || p.prompt_stage || 'N/A'
+                          const microMarkers = p.resolved_micro_markers || p.micro_markers
+                          const cfg = STAGE_CONFIG[promptStage] ?? STAGE_CONFIG['N/A']
                           return (
                             <article key={p.id} className={styles.promptItem}>
                               <div className={styles.promptMeta}>
@@ -435,9 +445,9 @@ export default function StudentDetailPage() {
                                 <time>{formatDateTime(p.created_at)}</time>
                               </div>
                               <p className={styles.promptText}>{p.question}</p>
-                              {p.micro_markers && Object.keys(p.micro_markers).length > 0 && (
+                              {microMarkers && Object.keys(microMarkers).length > 0 && (
                                 <div className={styles.microMarkers}>
-                                  {Object.entries(p.micro_markers).map(([key, val]) => (
+                                  {Object.entries(microMarkers).map(([key, val]) => (
                                     <span key={key} className={styles.markerChip}>{key}: {String(val)}</span>
                                   ))}
                                 </div>
@@ -460,7 +470,7 @@ export default function StudentDetailPage() {
                 <div className={styles.loadingState}>Memuat data kognitif...</div>
               ) : kognitifError ? (
                 <div className={styles.errorState}>{kognitifError}</div>
-              ) : !kognitifData || kognitifData.overall.total_count === 0 ? (
+              ) : !kognitifData?.overall || kognitifData.overall.total_count === 0 ? (
                 <div className={styles.emptyState}>Belum ada data skor kognitif otomatis untuk siswa ini.</div>
               ) : (
                 <>

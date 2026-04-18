@@ -3,8 +3,18 @@ import { NextResponse } from 'next/server'
 import type { NextRequest } from 'next/server'
 import jwt from 'jsonwebtoken'
 import { adminDb } from '@/lib/database'
+import { countUnifiedReflections } from '@/lib/admin-reflection-summary'
+import { deriveAdminPromptStage } from '@/lib/admin-prompt-stage'
 import type { ExportFormat, InsightsStudentRow } from '@/types/insights'
 const JWT_SECRET = process.env.JWT_SECRET!
+
+interface UserExportRow { id: string; email: string; created_at: string }
+interface PromptExportRow { id: string; user_id: string; prompt_stage?: string | null; created_at: string }
+interface QuizExportRow { id: string; user_id: string; is_correct: boolean; created_at: string }
+interface ReflectionExportRow { id: string; user_id: string; created_at: string }
+interface ChallengeExportRow { id: string; user_id: string; created_at: string }
+interface ClassificationExportRow { id: string; user_id: string; prompt_stage?: string | null; prompt_stage_score?: number | null; created_at: string }
+interface AutoScoreExportRow { id: string; user_id: string; ct_total_score?: number | null; created_at: string }
 
 function verifyAdminFromCookie(request: NextRequest): { userId: string; email: string; role: string } | null {
   const token = request.cookies.get('access_token')?.value
@@ -44,6 +54,56 @@ function generateCSV(students: InsightsStudentRow[]): string {
   return [headers, ...rows].map(row => row.join(',')).join('\\n')
 }
 
+// eslint-disable-next-line @typescript-eslint/no-explicit-any -- Supabase query builder returns complex generic types
+async function queryRows<T>(query: any, label: string, optional = false): Promise<T[]> {
+  const { data, error } = await query
+  if (error) {
+    if (optional) {
+      console.warn(`[Insights Export] Optional query ${label} failed:`, error.message)
+      return []
+    }
+    throw new Error(`[Insights Export] Query ${label} failed: ${error.message}`)
+  }
+  return (data ?? []) as T[]
+}
+
+function groupBy<T>(items: T[], key: (item: T) => string): Record<string, T[]> {
+  const result: Record<string, T[]> = {}
+  for (const item of items) {
+    const value = key(item)
+    if (!result[value]) result[value] = []
+    result[value].push(item)
+  }
+  return result
+}
+
+function parseDate(value: unknown): Date | null {
+  if (typeof value !== 'string') return null
+  const parsed = new Date(value)
+  return Number.isNaN(parsed.getTime()) ? null : parsed
+}
+
+function latestIso(...groups: Array<Array<{ created_at?: string }>>): string {
+  const dates = groups
+    .flat()
+    .map((item) => parseDate(item.created_at))
+    .filter((date): date is Date => date !== null)
+  if (dates.length === 0) return ''
+  return new Date(Math.max(...dates.map((date) => date.getTime()))).toISOString()
+}
+
+function derivePromptStage(
+  prompts: PromptExportRow[],
+  challenges: ChallengeExportRow[],
+  classifications: ClassificationExportRow[],
+): string {
+  return deriveAdminPromptStage({
+    classifications,
+    prompts,
+    interactionCount: prompts.length + challenges.length,
+  })
+}
+
 export async function GET(request: NextRequest) {
   try {
     const admin = verifyAdminFromCookie(request)
@@ -54,26 +114,90 @@ export async function GET(request: NextRequest) {
     const { searchParams } = new URL(request.url)
     const format = (searchParams.get('format') || 'csv') as ExportFormat
 
-    // Fetch student data (reuse insights logic, simplified)
-    const { data: users } = await adminDb
-      .from('users')
-      .select('id, email, created_at')
-      .eq('role', 'user')
+    const [
+      users,
+      prompts,
+      quizzes,
+      journals,
+      feedbacks,
+      challenges,
+      classifications,
+      autoScores,
+    ] = await Promise.all([
+      queryRows<UserExportRow>(
+        adminDb.from('users').select('id, email, created_at').eq('role', 'user'),
+        'users',
+      ),
+      queryRows<PromptExportRow>(
+        adminDb.from('ask_question_history').select('id, user_id, prompt_stage, created_at'),
+        'ask_question_history',
+      ),
+      queryRows<QuizExportRow>(
+        adminDb.from('quiz_submissions').select('id, user_id, is_correct, created_at'),
+        'quiz_submissions',
+      ),
+      queryRows<ReflectionExportRow>(
+        adminDb.from('jurnal').select('id, user_id, created_at'),
+        'jurnal',
+      ),
+      queryRows<ReflectionExportRow>(
+        adminDb.from('feedback').select('id, user_id, created_at'),
+        'feedback',
+      ),
+      queryRows<ChallengeExportRow>(
+        adminDb.from('challenge_responses').select('id, user_id, created_at'),
+        'challenge_responses',
+      ),
+      queryRows<ClassificationExportRow>(
+        adminDb.from('prompt_classifications').select('id, user_id, prompt_stage, prompt_stage_score, created_at'),
+        'prompt_classifications',
+        true,
+      ),
+      queryRows<AutoScoreExportRow>(
+        adminDb.from('auto_cognitive_scores').select('id, user_id, ct_total_score, created_at'),
+        'auto_cognitive_scores',
+        true,
+      ),
+    ])
 
-    const studentSummary: InsightsStudentRow[] = (users || []).map((u: { id: string; email: string; created_at: string }) => ({
-      userId: u.id,
-      email: u.email,
-      totalPrompts: Math.floor(Math.random() * 50),
-      totalQuizzes: Math.floor(Math.random() * 20),
-      quizAccuracy: Math.floor(Math.random() * 90),
-      totalReflections: Math.floor(Math.random() * 15),
-      totalChallenges: Math.floor(Math.random() * 10),
-      joinedAt: u.created_at,
-      promptStage: ['SCP', 'SRP', 'MQP', 'Reflektif'][Math.floor(Math.random() * 4)],
-      ctScore: Math.floor(Math.random() * 80),
-      lastActivity: new Date(Date.now() - Math.random() * 30 * 24 * 60 * 60 * 1000).toISOString(),
-      cohort: '2024-Q1'
-    }))
+    const promptsByUser = groupBy(prompts, (item) => item.user_id)
+    const quizzesByUser = groupBy(quizzes, (item) => item.user_id)
+    const journalsByUser = groupBy(journals, (item) => item.user_id)
+    const feedbacksByUser = groupBy(feedbacks, (item) => item.user_id)
+    const challengesByUser = groupBy(challenges, (item) => item.user_id)
+    const classificationsByUser = groupBy(classifications, (item) => item.user_id)
+    const scoresByUser = groupBy(autoScores, (item) => item.user_id)
+
+    const studentSummary: InsightsStudentRow[] = users.map((u) => {
+      const userPrompts = promptsByUser[u.id] ?? []
+      const userQuizzes = quizzesByUser[u.id] ?? []
+      const userJournals = journalsByUser[u.id] ?? []
+      const userFeedbacks = feedbacksByUser[u.id] ?? []
+      const userChallenges = challengesByUser[u.id] ?? []
+      const userClassifications = classificationsByUser[u.id] ?? []
+      const userScores = scoresByUser[u.id] ?? []
+      const correctQuizzes = userQuizzes.filter((quiz) => quiz.is_correct).length
+      const scoreValues = userScores
+        .map((score) => Number(score.ct_total_score))
+        .filter((value) => Number.isFinite(value))
+
+      return {
+        userId: u.id,
+        email: u.email,
+        totalPrompts: userPrompts.length,
+        totalQuizzes: userQuizzes.length,
+        quizAccuracy: userQuizzes.length > 0 ? Math.round((correctQuizzes / userQuizzes.length) * 100) : 0,
+        totalReflections: countUnifiedReflections(userJournals.length, userFeedbacks.length),
+        totalChallenges: userChallenges.length,
+        joinedAt: u.created_at,
+        promptStage: derivePromptStage(userPrompts, userChallenges, userClassifications),
+        ctScore: scoreValues.length > 0
+          ? Math.round((scoreValues.reduce((sum, value) => sum + value, 0) / scoreValues.length) * 100) / 100
+          : undefined,
+        lastActivity: latestIso(userPrompts, userQuizzes, userJournals, userFeedbacks, userChallenges, userClassifications, userScores) || u.created_at,
+        cohort: parseDate(u.created_at)?.toISOString().slice(0, 7),
+      }
+    })
 
     let content: string
     let contentType: string

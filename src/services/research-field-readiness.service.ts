@@ -275,7 +275,10 @@ async function fetchUsers(userId?: string | null): Promise<StudentRow[]> {
   let query = adminDb.from('users').select('id, name, email, role, created_at');
   if (userId) query = query.eq('id', userId);
   query = query.order('created_at', { ascending: true });
-  const { data } = await query;
+  const { data, error } = await query;
+  if (error) {
+    throw new Error(`Gagal memuat users untuk readiness: ${error.message ?? 'query error'}`);
+  }
   return (data ?? []) as StudentRow[];
 }
 
@@ -300,10 +303,13 @@ async function fetchRows(
       query = query.lte(dateColumn, value);
     }
     const { data, error } = await query;
-    if (error) return [];
+    if (error) {
+      throw new Error(`Gagal memuat ${table} untuk readiness: ${error.message ?? 'query error'}`);
+    }
     return (data ?? []) as CountedRow[];
-  } catch {
-    return [];
+  } catch (error) {
+    if (error instanceof Error) throw error;
+    throw new Error(`Gagal memuat ${table} untuk readiness`);
   }
 }
 

@@ -7,6 +7,8 @@ import {
     FiRefreshCw, FiSearch, FiXCircle
 } from 'react-icons/fi'
 import { useAdmin } from '@/hooks/useAdmin'
+import { useDebouncedValue } from '@/hooks/useDebouncedValue'
+import { apiFetch } from '@/lib/api-client'
 import styles from './page.module.scss'
 
 type TriangulationStatusKey = 'kuat' | 'sebagian' | 'bertentangan' | 'belum_muncul' | 'unknown'
@@ -70,6 +72,10 @@ const FOCUS_OPTIONS = [
     { value: 'RM2', label: 'RM2' },
     { value: 'RM3', label: 'RM3' },
 ]
+
+const TRIANGULATION_PAGE_SIZE = 200
+const MAX_TRIANGULATION_PAGES = 25
+const UUID_PATTERN = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i
 
 function normalizeStatus(status: string | null | undefined): TriangulationStatusKey {
     const value = (status || '').toLowerCase()
@@ -174,24 +180,44 @@ export default function ResearchTriangulationPage() {
     const [query, setQuery] = useState(() => readInitialSearchParam(['user_id', 'q']))
     const [statusFilter, setStatusFilter] = useState(() => readInitialSearchParam(['status'], 'all'))
     const [focusFilter, setFocusFilter] = useState(() => readInitialSearchParam(['rm_focus'], 'all'))
+    const debouncedQuery = useDebouncedValue(query, 350)
 
     const fetchTriangulation = useCallback(async () => {
         try {
             setLoading(true)
             setError(null)
 
-            const res = await fetch('/api/admin/research/triangulation', {
-                credentials: 'include',
-                cache: 'no-store',
-            })
-            const data: TriangulationResponse = await res.json().catch(() => ({}))
+            const allRecords: TriangulationRecord[] = []
+            let firstSummary: TriangulationSummary | null = null
 
-            if (!res.ok || data.success === false) {
-                throw new Error(data.error || data.message || 'Gagal memuat data triangulasi')
+            for (let page = 0; page < MAX_TRIANGULATION_PAGES; page += 1) {
+                const params = new URLSearchParams({
+                    limit: String(TRIANGULATION_PAGE_SIZE),
+                    offset: String(page * TRIANGULATION_PAGE_SIZE),
+                })
+                const search = debouncedQuery.trim()
+                if (UUID_PATTERN.test(search)) params.set('user_id', search)
+                if (focusFilter !== 'all') params.set('rm_focus', focusFilter)
+
+                const res = await fetch(`/api/admin/research/triangulation?${params.toString()}`, {
+                    credentials: 'include',
+                    cache: 'no-store',
+                })
+                const data: TriangulationResponse = await res.json().catch(() => ({}))
+
+                if (!res.ok || data.success === false) {
+                    throw new Error(data.error || data.message || 'Gagal memuat data triangulasi')
+                }
+
+                if (!firstSummary) firstSummary = data.summary || null
+                const pageRecords = Array.isArray(data.records) ? data.records : []
+                allRecords.push(...pageRecords)
+
+                if (pageRecords.length < TRIANGULATION_PAGE_SIZE) break
             }
 
-            setSummary(data.summary || null)
-            setRecords(Array.isArray(data.records) ? data.records : [])
+            setSummary(firstSummary)
+            setRecords(allRecords)
         } catch (err) {
             console.error('Error fetching research triangulation:', err)
             setError(err instanceof Error ? err.message : 'Gagal memuat data triangulasi')
@@ -199,7 +225,7 @@ export default function ResearchTriangulationPage() {
         } finally {
             setLoading(false)
         }
-    }, [])
+    }, [debouncedQuery, focusFilter])
 
     const runAutoTriangulation = useCallback(async () => {
         try {
@@ -207,10 +233,8 @@ export default function ResearchTriangulationPage() {
             setError(null)
             setAutoMessage(null)
 
-            const res = await fetch('/api/admin/research/auto-code', {
+            const res = await apiFetch('/api/admin/research/auto-code', {
                 method: 'POST',
-                credentials: 'include',
-                headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({
                     limit: 50,
                     include_reviewed: false,
@@ -267,7 +291,7 @@ export default function ResearchTriangulationPage() {
     }
 
     const filteredRecords = useMemo(() => {
-        const search = query.trim().toLowerCase()
+        const search = debouncedQuery.trim().toLowerCase()
 
         return records.filter(record => {
             const statusKey = normalizeStatus(record.status)
@@ -287,7 +311,7 @@ export default function ResearchTriangulationPage() {
 
             return statusMatch && focusMatch && (!search || searchable.includes(search))
         })
-    }, [focusFilter, query, records, statusFilter])
+    }, [debouncedQuery, focusFilter, records, statusFilter])
 
     if (authLoading) {
         return <div className={styles.loading}>Memuat...</div>

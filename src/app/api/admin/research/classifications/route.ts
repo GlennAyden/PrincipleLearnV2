@@ -8,7 +8,7 @@
 
 import { NextRequest, NextResponse } from 'next/server';
 import { adminDb } from '@/lib/database';
-import { verifyAdminFromCookie } from '@/lib/admin-auth';
+import { requireAdminMutation, verifyAdminFromCookie } from '@/lib/admin-auth';
 import type { PromptClassification } from '@/types/research';
 import {
   coerceUuid,
@@ -124,6 +124,9 @@ export async function GET(request: NextRequest) {
 
 export async function POST(request: NextRequest) {
   try {
+    const guard = requireAdminMutation(request);
+    if (guard) return guard;
+
     const admin = verifyAdminFromCookie(request);
     if (!admin) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
 
@@ -164,6 +167,9 @@ export async function POST(request: NextRequest) {
 
 export async function PUT(request: NextRequest) {
   try {
+    const guard = requireAdminMutation(request);
+    if (guard) return guard;
+
     const admin = verifyAdminFromCookie(request);
     if (!admin) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
 
@@ -212,6 +218,9 @@ export async function PUT(request: NextRequest) {
 
 export async function DELETE(request: NextRequest) {
   try {
+    const guard = requireAdminMutation(request);
+    if (guard) return guard;
+
     const admin = verifyAdminFromCookie(request);
     if (!admin) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
 

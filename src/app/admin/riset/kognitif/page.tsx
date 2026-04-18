@@ -8,6 +8,7 @@ import {
     FiGrid, FiChevronDown, FiChevronUp
 } from 'react-icons/fi'
 import { useAdmin } from '@/hooks/useAdmin'
+import { apiFetch } from '@/lib/api-client'
 import type { PromptStage, ResearchAnalytics } from '@/types/research'
 import styles from './page.module.scss'
 
@@ -167,42 +168,61 @@ export default function KognitifPage() {
     // FETCH FUNCTIONS
     // ============================================
 
-    const fetchClassifications = useCallback(async () => {
-        try {
-            const res = await fetch('/api/admin/research/classifications?limit=100', { credentials: 'include' })
-            const data = await res.json()
-            if (res.ok && data.data) {
-                setClassifications(data.data.map((c: { id: string; prompt_text: string; prompt_stage: string; learning_sessions?: { session_number: number; users?: { name: string } } }) => ({
-                    id: c.id,
-                    prompt_text: c.prompt_text,
-                    prompt_stage: c.prompt_stage,
-                    session_number: c.learning_sessions?.session_number,
-                    user_name: c.learning_sessions?.users?.name
-                })))
-            }
-        } catch (err) {
-            console.error('Error fetching classifications:', err)
-        }
-    }, [])
+    const fetchAllPages = useCallback(async <T,>(buildUrl: (offset: number, limit: number) => string): Promise<T[]> => {
+        const limit = 200
+        let offset = 0
+        const rows: T[] = []
 
-    const fetchIndicators = useCallback(async () => {
-        try {
-            setLoading(true)
-            setError(null)
-
-            let url = '/api/admin/research/indicators?limit=100'
-            if (filterType) {
-                url += `&type=${filterType}`
-            }
-
-            const res = await fetch(url, { credentials: 'include' })
+        for (let page = 0; page < 50; page++) {
+            const res = await fetch(buildUrl(offset, limit), { credentials: 'include' })
             const data = await res.json()
 
             if (!res.ok) {
                 throw new Error(data.error || 'Gagal memuat data')
             }
 
-            setIndicators(data.data || [])
+            const pageRows = Array.isArray(data.data) ? data.data as T[] : []
+            rows.push(...pageRows)
+
+            const total = typeof data.total === 'number' ? data.total : rows.length
+            if (pageRows.length === 0 || rows.length >= total || pageRows.length < limit) break
+            offset += pageRows.length
+        }
+
+        return rows
+    }, [])
+
+    const fetchClassifications = useCallback(async () => {
+        try {
+            const rows = await fetchAllPages<{ id: string; prompt_text: string; prompt_stage: string; learning_sessions?: { session_number: number; users?: { name: string } } }>(
+                (offset, limit) => `/api/admin/research/classifications?limit=${limit}&offset=${offset}`
+            )
+            setClassifications(rows.map((c) => ({
+                id: c.id,
+                prompt_text: c.prompt_text,
+                prompt_stage: c.prompt_stage,
+                session_number: c.learning_sessions?.session_number,
+                user_name: c.learning_sessions?.users?.name
+            })))
+        } catch (err) {
+            console.error('Error fetching classifications:', err)
+        }
+    }, [fetchAllPages])
+
+    const fetchIndicators = useCallback(async () => {
+        try {
+            setLoading(true)
+            setError(null)
+
+            const rows = await fetchAllPages<CognitiveIndicator>((offset, limit) => {
+                let url = `/api/admin/research/indicators?limit=${limit}&offset=${offset}`
+                if (filterType) {
+                    url += `&type=${filterType}`
+                }
+                return url
+            })
+
+            setIndicators(rows)
             setCurrentPage(1)
         } catch (err) {
             console.error('Error fetching indicators:', err)
@@ -210,7 +230,7 @@ export default function KognitifPage() {
         } finally {
             setLoading(false)
         }
-    }, [filterType])
+    }, [filterType, fetchAllPages])
 
     const fetchAnalytics = useCallback(async () => {
         try {
@@ -297,9 +317,8 @@ export default function KognitifPage() {
         if (!confirm('Apakah Anda yakin ingin menghapus penilaian ini?')) return
 
         try {
-            const res = await fetch(`/api/admin/research/indicators?id=${id}`, {
-                method: 'DELETE',
-                credentials: 'include'
+            const res = await apiFetch(`/api/admin/research/indicators?id=${id}`, {
+                method: 'DELETE'
             })
 
             if (!res.ok) {
@@ -330,10 +349,8 @@ export default function KognitifPage() {
                 ? `/api/admin/research/indicators?id=${selectedIndicator.id}`
                 : '/api/admin/research/indicators'
 
-            const res = await fetch(url, {
+            const res = await apiFetch(url, {
                 method: isEdit ? 'PUT' : 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                credentials: 'include',
                 body: JSON.stringify(payload)
             })
 

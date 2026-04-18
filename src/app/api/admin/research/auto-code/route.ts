@@ -9,7 +9,7 @@
  */
 
 import { NextRequest, NextResponse } from 'next/server';
-import { verifyAdminFromCookie } from '@/lib/admin-auth';
+import { requireAdminMutation, verifyAdminFromCookie } from '@/lib/admin-auth';
 import { adminDb } from '@/lib/database';
 import { withApiLogging } from '@/lib/api-logger';
 import { isUuid } from '@/lib/research-normalizers';
@@ -28,7 +28,7 @@ interface AutoCodeBody {
 }
 
 const DEFAULT_AUTO_CODE_LIMIT = 3;
-const MAX_AUTO_CODE_LIMIT = 10;
+const MAX_AUTO_CODE_LIMIT = 120;
 const DEFAULT_RUNTIME_BUDGET_MS = 35_000;
 const MAX_RUNTIME_BUDGET_MS = 50_000;
 
@@ -64,6 +64,9 @@ async function getHandler(request: NextRequest) {
 }
 
 async function postHandler(request: NextRequest) {
+  const guard = requireAdminMutation(request);
+  if (guard) return guard;
+
   const admin = verifyAdminFromCookie(request);
   if (!admin) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
 

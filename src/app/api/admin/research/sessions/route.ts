@@ -10,6 +10,7 @@
 
 import { NextRequest, NextResponse } from 'next/server';
 import { adminDb } from '@/lib/database';
+import { verifyCsrfToken } from '@/lib/admin-auth';
 import jwt from 'jsonwebtoken';
 import type {
     LearningSession,
@@ -108,6 +109,9 @@ export async function GET(request: NextRequest) {
 // POST: Create new learning session
 export async function POST(request: NextRequest) {
     try {
+        const csrfError = verifyCsrfToken(request);
+        if (csrfError) return csrfError;
+
         const user = verifyAdminFromCookie(request);
         if (!user) {
             return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
@@ -194,6 +198,9 @@ export async function POST(request: NextRequest) {
 // PUT: Update existing learning session
 export async function PUT(request: NextRequest) {
     try {
+        const csrfError = verifyCsrfToken(request);
+        if (csrfError) return csrfError;
+
         const user = verifyAdminFromCookie(request);
         if (!user) {
             return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
@@ -271,6 +278,9 @@ export async function PUT(request: NextRequest) {
 // DELETE: Delete a learning session
 export async function DELETE(request: NextRequest) {
     try {
+        const csrfError = verifyCsrfToken(request);
+        if (csrfError) return csrfError;
+
         const user = verifyAdminFromCookie(request);
         if (!user) {
             return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });

@@ -27,8 +27,8 @@ export interface StudentListItem {
   promptStage: string;
   /** Composite engagement score 0–100 */
   engagementScore: number;
-  /** ISO date string of last activity */
-  lastActivity: string;
+  /** ISO date string of last activity, or null when the user has not generated activity yet */
+  lastActivity: string | null;
   /** 0–100 percentage of completed subtopics across all courses */
   courseCompletionRate: number;
 }

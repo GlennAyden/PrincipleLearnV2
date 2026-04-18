@@ -2,7 +2,7 @@
 
 import { NextResponse } from 'next/server'
 import type { NextRequest } from 'next/server'
-import { DatabaseService } from '@/lib/database'
+import { DB_ERROR_CODES, DatabaseError, DatabaseService } from '@/lib/database'
 import { withProtection } from '@/lib/api-middleware'
 
 interface Transcript {
@@ -22,6 +22,22 @@ function extractSubtopicFromNotes(notes?: string) {
   return match?.[1]?.trim() || null;
 }
 
+function buildDateRange(dateFromValue?: string | null, dateToValue?: string | null) {
+  const fromValue = dateFromValue?.trim() || '';
+  const toValue = dateToValue?.trim() || fromValue;
+  if (!fromValue && !toValue) return null;
+
+  const startSource = fromValue || toValue;
+  const endSource = toValue || fromValue;
+  const start = new Date(startSource);
+  const end = new Date(endSource);
+  if (Number.isNaN(start.getTime()) || Number.isNaN(end.getTime())) return null;
+
+  start.setHours(0, 0, 0, 0);
+  end.setHours(23, 59, 59, 999);
+  return { start, end };
+}
+
 interface User {
   id: string;
   email: string;
@@ -33,6 +49,15 @@ interface Subtopic {
   content: string;
 }
 
+function isMissingTableError(error: unknown, tableName: string): boolean {
+  if (error instanceof DatabaseError && error.code === DB_ERROR_CODES.TABLE_NOT_FOUND) {
+    return true;
+  }
+
+  const message = error instanceof Error ? error.message : String(error ?? '');
+  return message.includes(`public.${tableName}`);
+}
+
 async function handler(req: NextRequest) {
   console.log('[Activity API] Starting transcript activity fetch');
   
@@ -40,10 +65,12 @@ async function handler(req: NextRequest) {
     const { searchParams } = new URL(req.url)
     const userId = searchParams.get('userId')
     const date = searchParams.get('date')
+    const dateFrom = searchParams.get('dateFrom') ?? date
+    const dateTo = searchParams.get('dateTo')
     const course = searchParams.get('course')
     const topic = searchParams.get('topic')
   
-    console.log('[Activity API] Request params:', { userId, date, course, topic });
+    console.log('[Activity API] Request params:', { userId, date: dateFrom, dateTo, course, topic });
 
     // Get all transcripts from database
     let transcripts: Transcript[] = [];
@@ -52,10 +79,12 @@ async function handler(req: NextRequest) {
         orderBy: { column: 'created_at', ascending: false }
       });
     } catch (dbError) {
-      const message = dbError instanceof Error ? dbError.message : '';
-      if (!message.includes("public.transcript")) {
+      if (!isMissingTableError(dbError, 'transcript')) {
         console.error('[Activity API] Database error fetching transcripts:', dbError);
-        return NextResponse.json([], { status: 200 });
+        return NextResponse.json(
+          { error: 'Failed to fetch transcript logs', detail: dbError instanceof Error ? dbError.message : String(dbError) },
+          { status: 500 }
+        );
       }
 
       try {
@@ -64,7 +93,10 @@ async function handler(req: NextRequest) {
         });
       } catch (fallbackError) {
         console.error('[Activity API] Database error fetching transcripts fallback table:', fallbackError);
-        return NextResponse.json([], { status: 200 });
+        return NextResponse.json(
+          { error: 'Failed to fetch transcript logs', detail: fallbackError instanceof Error ? fallbackError.message : String(fallbackError) },
+          { status: 500 }
+        );
       }
     }
 
@@ -80,18 +112,13 @@ async function handler(req: NextRequest) {
     }
     
     // Filter by date if specified
-    if (date) {
-      const targetDate = new Date(date);
-      const startOfDay = new Date(targetDate);
-      startOfDay.setHours(0, 0, 0, 0);
-      const endOfDay = new Date(targetDate);
-      endOfDay.setHours(23, 59, 59, 999);
-      
+    const dateRange = buildDateRange(dateFrom, dateTo);
+    if (dateRange) {
       filteredTranscripts = filteredTranscripts.filter(transcript => {
         const transcriptDate = new Date(transcript.created_at);
-        return transcriptDate >= startOfDay && transcriptDate <= endOfDay;
+        return transcriptDate >= dateRange.start && transcriptDate <= dateRange.end;
       });
-      console.log(`[Activity API] Filtered by date ${date}: ${filteredTranscripts.length} transcripts`);
+      console.log(`[Activity API] Filtered by date range ${dateFrom ?? '-'} - ${dateTo ?? dateFrom ?? '-'}: ${filteredTranscripts.length} transcripts`);
     }
     
     // Filter by course if specified

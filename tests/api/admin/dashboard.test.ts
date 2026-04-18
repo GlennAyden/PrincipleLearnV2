@@ -464,9 +464,7 @@ describe('GET /api/admin/dashboard', () => {
     });
 
     describe('Edge Cases', () => {
-        it('should handle database errors gracefully', async () => {
-            // Make adminDb.from throw — safeQuery catches exceptions and returns []
-            // so the route returns 200 with empty data rather than 500
+        it('should surface database errors instead of returning misleading empty metrics', async () => {
             mockFrom.mockImplementation(() => {
                 throw new Error('Database connection failed');
             });
@@ -476,12 +474,8 @@ describe('GET /api/admin/dashboard', () => {
             const response = await GET(request);
             const data = await response.json();
 
-            // safeQuery is resilient — returns empty arrays on failure
-            // so the dashboard still renders with zero counts
-            expect(response.status).toBe(200);
-            expect(data.kpi).toBeDefined();
-            expect(data.kpi.activeStudents).toBe(0);
-            expect(data.kpi.totalCourses).toBe(0);
+            expect(response.status).toBe(500);
+            expect(data.error).toBe('Internal server error');
         });
     });
 });

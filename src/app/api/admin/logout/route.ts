@@ -4,6 +4,7 @@ import { NextResponse } from 'next/server'
 import type { NextRequest } from 'next/server'
 import { verifyToken } from '@/lib/jwt'
 import { adminDb } from '@/lib/database'
+import { verifyCsrfToken } from '@/lib/admin-auth'
 
 export async function POST(req: NextRequest) {
   try {
@@ -16,6 +17,9 @@ export async function POST(req: NextRequest) {
     if (!payload || (payload.role ?? '').toLowerCase() !== 'admin') {
       return NextResponse.json({ error: 'Akses ditolak' }, { status: 403 })
     }
+
+    const csrfError = verifyCsrfToken(req)
+    if (csrfError) return csrfError
 
     // Invalidate refresh token hash in DB so rotation is impossible after logout
     try {

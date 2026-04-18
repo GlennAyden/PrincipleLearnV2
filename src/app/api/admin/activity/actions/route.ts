@@ -6,17 +6,15 @@ async function handler(req: NextRequest) {
   try {
     const body: ActivityActionRequest = await req.json();
 
-    // Log action (future table: activity_admin_actions)
-    console.log(`[Admin Action] ${body.action} on ${body.activityId}: ${body.reason || 'No reason'}`);
+    console.warn(`[Admin Action] Unsupported action ${body.action} on ${body.activityId}: ${body.reason || 'No reason'}`);
 
-    // Mock responses - implement per-type logic
-    const responses = {
-      flag: 'Activity flagged for review',
-      reset: 'Activity reset completed',
-      notify: 'Notification sent to user'
-    };
-
-    return NextResponse.json({ success: true, message: responses[body.action] });
+    return NextResponse.json(
+      {
+        success: false,
+        error: 'Admin activity actions are not enabled yet. Monitoring is read-only.',
+      },
+      { status: 501 },
+    );
   } catch {
     return NextResponse.json({ error: 'Action failed' }, { status: 500 });
   }

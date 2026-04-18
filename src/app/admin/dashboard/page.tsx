@@ -39,6 +39,7 @@ const ACTIVITY_LABELS: Record<string, string> = {
 
 const TABS: { id: DashboardTab; label: string; icon: React.ReactNode }[] = [
   { id: 'overview', label: 'Ringkasan', icon: <FiGrid /> },
+  { id: 'system', label: 'Sistem', icon: <FiActivity /> },
 ]
 const TIME_RANGES: { value: TimeRange; label: string }[] = [
   { value: '7d', label: '7 Hari' }, { value: '30d', label: '30 Hari' },

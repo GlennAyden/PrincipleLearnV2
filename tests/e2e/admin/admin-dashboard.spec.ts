@@ -12,8 +12,8 @@ import { test, expect, type Page } from '@playwright/test';
 
 // Test data for admin
 const TEST_ADMIN = {
-    email: 'admin@example.com',
-    password: 'AdminPassword123!',
+    email: process.env.E2E_ADMIN_EMAIL || 'admin@principlelearn.com',
+    password: process.env.E2E_ADMIN_PASSWORD || 'AdminPassword123!',
     name: 'Test Admin',
 };
 

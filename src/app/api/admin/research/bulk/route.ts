@@ -5,6 +5,7 @@
 
 import { NextRequest, NextResponse } from 'next/server';
 import { adminDb } from '@/lib/database';
+import { verifyCsrfToken } from '@/lib/admin-auth';
 import jwt from 'jsonwebtoken';
 import { getPromptStageScore, normalizePromptStage } from '@/lib/research-normalizers';
 
@@ -24,6 +25,9 @@ function verifyAdmin(request: NextRequest) {
 // POST /api/admin/research/bulk/classify-history
 export async function POST(request: NextRequest) {
   try {
+    const csrfError = verifyCsrfToken(request);
+    if (csrfError) return csrfError;
+
     const admin = verifyAdmin(request);
     if (!admin) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
 

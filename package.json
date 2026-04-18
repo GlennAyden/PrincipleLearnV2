@@ -18,6 +18,7 @@
     "test:e2e": "playwright test",
     "test:e2e:user": "playwright test tests/e2e/user",
     "test:e2e:admin": "playwright test tests/e2e/admin",
+    "test:e2e:admin:smoke": "playwright test tests/e2e/admin/admin-smoke.spec.ts --project=chromium",
     "test:e2e:ui": "playwright test --ui",
     "test:e2e:headed": "playwright test --headed",
     "test:all": "npm run test:unit && npm run test:e2e",

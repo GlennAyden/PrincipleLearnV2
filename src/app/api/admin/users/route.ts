@@ -5,6 +5,7 @@ import { NextRequest, NextResponse } from 'next/server'
 import { adminDb } from '@/lib/database'
 import { verifyToken } from '@/lib/jwt'
 import { computeEngagementScore } from '@/lib/engagement'
+import { deriveAdminPromptStage } from '@/lib/admin-prompt-stage'
 import type { StudentListItem } from '@/types/student'
 
 // ─── Auth Helper ──────────────────────────────────────────────────────────────
@@ -24,10 +25,10 @@ function requireAdmin(request: NextRequest) {
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
 
-function toIsoDateOnly(value: unknown): string {
-  if (!value) return new Date().toISOString().split('T')[0]
-  const parsed = typeof value === 'string' ? new Date(value) : null
-  if (!parsed || Number.isNaN(parsed.getTime())) return new Date().toISOString().split('T')[0]
+function toOptionalIsoDateOnly(value: unknown): string | null {
+  if (!value || typeof value !== 'string') return null
+  const parsed = new Date(value)
+  if (Number.isNaN(parsed.getTime())) return null
   return parsed.toISOString().split('T')[0]
 }
 
@@ -54,14 +55,53 @@ interface UserStatsRow {
 
 // ─── GET Handler ──────────────────────────────────────────────────────────────
 
+interface PromptStageRow {
+  user_id: string
+  prompt_stage?: string | null
+  prompt_components?: unknown
+  created_at?: string | null
+}
+
+// eslint-disable-next-line @typescript-eslint/no-explicit-any -- Supabase query builder returns complex generic types
+async function optionalRows<T>(query: any, label: string): Promise<T[]> {
+  const { data, error } = await query
+  if (error) {
+    console.warn(`[Admin Users] Optional ${label} query failed:`, error.message)
+    return []
+  }
+  return Array.isArray(data) ? data as T[] : []
+}
+
+function groupByUser<T extends { user_id?: string | null }>(rows: T[]): Record<string, T[]> {
+  const grouped: Record<string, T[]> = {}
+  for (const row of rows) {
+    if (!row.user_id) continue
+    if (!grouped[row.user_id]) grouped[row.user_id] = []
+    grouped[row.user_id].push(row)
+  }
+  return grouped
+}
+
 export async function GET(request: NextRequest) {
   // Auth guard
   const admin = requireAdmin(request)
   if (!admin) return unauthorized()
 
   try {
-    // Single aggregated query via Postgres function (replaces 9 parallel full-table scans)
-    const { data, error } = await adminDb.rpc('get_admin_user_stats')
+    const [statsResult, promptClassifications, promptHistory] = await Promise.all([
+      // Single aggregated query via Postgres function (replaces 9 parallel full-table scans)
+      adminDb.rpc('get_admin_user_stats'),
+      optionalRows<PromptStageRow>(
+        adminDb.from('prompt_classifications').select('user_id, prompt_stage, created_at'),
+        'prompt_classifications',
+      ),
+      optionalRows<PromptStageRow>(
+        adminDb.from('ask_question_history').select('user_id, prompt_stage, prompt_components, created_at'),
+        'ask_question_history prompt stages',
+      ),
+    ])
+
+    const { data, error } = statsResult
 
     if (error || !data) {
       console.error('[Admin Users] Error fetching user stats:', error)
@@ -69,6 +109,8 @@ export async function GET(request: NextRequest) {
     }
 
     const rows = data as UserStatsRow[]
+    const classificationsByUser = groupByUser(promptClassifications)
+    const promptsByUser = groupByUser(promptHistory)
 
     const result: StudentListItem[] = rows.map((row) => {
       // Course completion rate
@@ -88,13 +130,12 @@ export async function GET(request: NextRequest) {
         feedbacks: row.total_feedbacks,
       })
 
-      // Prompt stage heuristic
       const interactionCount = row.total_ask_questions + row.total_challenges + row.total_discussions
-      let promptStage = 'N/A'
-      if (interactionCount >= 15) promptStage = 'REFLECTIVE'
-      else if (interactionCount >= 8) promptStage = 'MQP'
-      else if (interactionCount >= 3) promptStage = 'SRP'
-      else if (interactionCount >= 1) promptStage = 'SCP'
+      const promptStage = deriveAdminPromptStage({
+        classifications: classificationsByUser[row.id] ?? [],
+        prompts: promptsByUser[row.id] ?? [],
+        interactionCount,
+      })
 
       return {
         id: row.id,
@@ -112,7 +153,7 @@ export async function GET(request: NextRequest) {
         totalFeedbacks: row.total_feedbacks,
         promptStage,
         engagementScore,
-        lastActivity: toIsoDateOnly(row.last_activity),
+        lastActivity: toOptionalIsoDateOnly(row.last_activity),
         courseCompletionRate,
       }
     })

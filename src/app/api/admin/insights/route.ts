@@ -10,19 +10,25 @@ import {
   type ReflectionFeedbackRow,
   type ReflectionJournalRow,
 } from '@/lib/analytics/reflection-model';
+import {
+  addStageToDistribution,
+  countPromptComponents,
+  deriveAdminPromptStage,
+  emptyPromptStageDistribution,
+  type PromptStageDistribution,
+} from '@/lib/admin-prompt-stage';
 
 const JWT_SECRET = process.env.JWT_SECRET!;
 
 // ── Row Interfaces ──
-interface PromptRow { id: string; user_id: string; question: string; prompt_components: unknown; prompt_version: string; session_number: number; reasoning_note: string; created_at: string }
+interface PromptRow { id: string; user_id: string; question: string; prompt_components: unknown; prompt_stage?: string | null; prompt_version: string; session_number: number; reasoning_note: string; created_at: string }
 interface QuizRow { id: string; user_id: string; is_correct: boolean; reasoning_note: string; created_at: string }
-interface ChallengeRow { id: string; user_id: string; created_at: string }
+interface ChallengeRow { id: string; user_id: string; reasoning_note?: string | null; created_at: string }
 interface DiscussionRow { id: string; user_id: string; status: string; created_at: string }
 interface PromptClassificationRow { id: string; user_id: string; prompt_stage: string; prompt_stage_score: number; created_at: string; [key: string]: unknown }
 interface InsightsUserRow { id: string; email: string; created_at: string }
-interface PromptComponents { tujuan?: string; konteks?: string; batasan?: string }
 // Unified type for promptList (can be either PromptRow or mapped PromptClassificationRow)
-interface PromptListItem { id: string; user_id: string; reasoning_note?: string; prompt_components?: unknown; session_number?: number; created_at: string }
+interface PromptListItem { id: string; user_id: string; prompt_stage?: string | null; prompt_stage_score?: number | null; reasoning_note?: string; prompt_components?: unknown; session_number?: number; created_at: string }
 
 function verifyAdminFromCookie(request: NextRequest): { userId: string; email: string; role: string } | null {
   const token = request.cookies.get('access_token')?.value
@@ -59,13 +65,12 @@ async function safeQuery<T = Record<string, unknown>>(
     }
     const { data, error } = await query
     if (error) {
-      console.warn(`[Insights] Query ${tableName} failed:`, error.message || error)
-      return []
+      throw new Error(`[Insights] Query ${tableName} failed: ${error.message || 'unknown Supabase error'}`)
     }
     return Array.isArray(data) ? data : []
   } catch (err) {
-    console.warn(`[Insights] Query ${tableName} exception:`, err)
-    return []
+    if (err instanceof Error) throw err
+    throw new Error(`[Insights] Query ${tableName} failed`)
   }
 }
 
@@ -104,11 +109,11 @@ export async function GET(request: NextRequest) {
       // Research tables
       promptClassifications,
     ] = await Promise.all([
-      safeQuery<PromptRow>('ask_question_history', 'id, user_id, question, prompt_components, prompt_version, session_number, reasoning_note, created_at', userId ? { user_id: userId } : {}),
+      safeQuery<PromptRow>('ask_question_history', 'id, user_id, question, prompt_components, prompt_stage, prompt_version, session_number, reasoning_note, created_at', userId ? { user_id: userId } : {}),
       safeQuery<QuizRow>('quiz_submissions', 'id, user_id, is_correct, reasoning_note, created_at', userId ? { user_id: userId } : {}),
       safeQuery<ReflectionJournalRow>('jurnal', 'id, user_id, course_id, subtopic_id, subtopic_label, module_index, subtopic_index, content, reflection, type, created_at', userId ? { user_id: userId } : {}),
       safeQuery<ReflectionFeedbackRow>('feedback', 'id, user_id, course_id, subtopic_id, subtopic_label, module_index, subtopic_index, rating, comment, created_at', userId ? { user_id: userId } : {}),
-      safeQuery<ChallengeRow>('challenge_responses', 'id, user_id, created_at', userId ? { user_id: userId } : {}),
+      safeQuery<ChallengeRow>('challenge_responses', 'id, user_id, reasoning_note, created_at', userId ? { user_id: userId } : {}),
       safeQuery<DiscussionRow>('discussion_sessions', 'id, user_id, status, created_at'),
       safeQuery<PromptClassificationRow>('prompt_classifications', '*'),
     ]);
@@ -126,7 +131,7 @@ export async function GET(request: NextRequest) {
     const hasResearchRM2 = filteredPromptClassifications.length > 0
     let promptList: PromptListItem[] = filteredPrompts
     let avgComponentsUsed = 0
-    const stageDistribution: Record<string, number> = { SCP: 0, SRP: 0, MQP: 0, Reflektif: 0 }
+    const stageDistribution: PromptStageDistribution = emptyPromptStageDistribution()
 
     if (hasResearchRM2) {
       // Filter research data by time/user
@@ -137,26 +142,18 @@ export async function GET(request: NextRequest) {
 
       promptList = filteredPC.map(pc => ({
         ...pc,
-        prompt_stage: pc.prompt_stage === 'REFLECTIVE' ? 'Reflektif' : pc.prompt_stage,
+        prompt_stage: pc.prompt_stage,
         prompt_stage_score: pc.prompt_stage_score || 1
       }))
 
       filteredPC.forEach(pc => {
-        const stage = pc.prompt_stage || 'SCP'
-        stageDistribution[stage] = (stageDistribution[stage] || 0) + 1
+        addStageToDistribution(stageDistribution, pc.prompt_stage)
       })
     } else {
       // Heuristic fallback
       const promptsWithComponents = promptList.filter(p => p.prompt_components)
       avgComponentsUsed = promptsWithComponents.length > 0
-        ? promptsWithComponents.reduce((sum: number, p) => {
-          const comps = (typeof p.prompt_components === 'string' ? JSON.parse(p.prompt_components) : p.prompt_components) as PromptComponents | null
-          let count = 0
-          if (comps?.tujuan) count++
-          if (comps?.konteks) count++
-          if (comps?.batasan) count++
-          return sum + count
-        }, 0) / promptsWithComponents.length
+        ? promptsWithComponents.reduce((sum: number, p) => sum + countPromptComponents(p.prompt_components), 0) / promptsWithComponents.length
         : 0
     }
 
@@ -176,15 +173,7 @@ export async function GET(request: NextRequest) {
       .map(([session, items]) => {
         const withComps = items.filter(i => i.prompt_components);
         const avgComps = withComps.length > 0
-          ? withComps.reduce((s: number, i) => {
-            const c = (typeof i.prompt_components === 'string'
-              ? JSON.parse(i.prompt_components) : i.prompt_components) as PromptComponents | null;
-            let n = 0;
-            if (c?.tujuan) n++;
-            if (c?.konteks) n++;
-            if (c?.batasan) n++;
-            return s + n;
-          }, 0) / withComps.length
+          ? withComps.reduce((s: number, i) => s + countPromptComponents(i.prompt_components), 0) / withComps.length
           : 0;
         const withReason = items.filter(i => i.reasoning_note?.trim());
         return {
@@ -215,11 +204,10 @@ export async function GET(request: NextRequest) {
 
     // ── 4. Challenge Responses ──
     const challengeList = filteredChallenges;
-    // Note: challenge_responses table has no reasoning_note column; always 0.
-    const challengesWithReasoning = 0;
+    const challengesWithReasoning = challengeList.filter(c => c.reasoning_note?.trim()).length;
 
     // ── 5. Per-student summary ──
-    let studentSummary: { userId: string; email: string; totalPrompts: number; totalQuizzes: number; quizAccuracy: number; totalReflections: number; totalChallenges: number; joinedAt: string }[] = [];
+    let studentSummary: { userId: string; email: string; totalPrompts: number; totalQuizzes: number; quizAccuracy: number; totalReflections: number; totalChallenges: number; joinedAt: string; promptStage: string }[] = [];
     if (!userId) {
       const { data: allUsers } = await adminDb
         .from('users')
@@ -229,6 +217,7 @@ export async function GET(request: NextRequest) {
       const userList = Array.isArray(allUsers) ? allUsers as InsightsUserRow[] : [];
       studentSummary = userList.map(u => {
         const userPrompts = promptList.filter(p => p.user_id === u.id);
+        const userClassifications = filteredPromptClassifications.filter(p => p.user_id === u.id);
         const userQuizzes = quizList.filter(q => q.user_id === u.id);
         const userReflections = reflectionModel.byUser.get(u.id) || [];
         const userChallenges = challengeList.filter(c => c.user_id === u.id);
@@ -244,6 +233,11 @@ export async function GET(request: NextRequest) {
           totalReflections: userReflections.length,
           totalChallenges: userChallenges.length,
           joinedAt: u.created_at,
+          promptStage: deriveAdminPromptStage({
+            classifications: userClassifications,
+            prompts: userPrompts,
+            interactionCount: userPrompts.length + userChallenges.length,
+          }),
         };
       }).sort((a, b) => b.totalPrompts - a.totalPrompts);
     }

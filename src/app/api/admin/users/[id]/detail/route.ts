@@ -7,6 +7,7 @@ import { verifyToken } from '@/lib/jwt'
 import { computeEngagementScore } from '@/lib/engagement'
 import { buildRecentReflection, countUnifiedReflections } from '@/lib/admin-reflection-summary'
 import { normalizeText } from '@/lib/reflection-submission'
+import { deriveAdminPromptStage } from '@/lib/admin-prompt-stage'
 
 // Row interfaces
 interface UserDetailRow {
@@ -55,6 +56,8 @@ interface AskDetailRow {
   question: string
   course_id: string
   subtopic_label: string
+  prompt_stage?: string | null
+  prompt_components?: unknown
   created_at: string
 }
 
@@ -107,6 +110,12 @@ interface LearningProfileRow {
   learningGoals?: string
   challenges?: string
   [key: string]: unknown
+}
+
+interface PromptClassificationDetailRow {
+  user_id: string
+  prompt_stage?: string | null
+  created_at?: string | null
 }
 
 function requireAdmin(request: NextRequest) {
@@ -187,6 +196,7 @@ export async function GET(
       feedbacks,
       userProgress,
       learningProfile,
+      promptClassifications,
     ] = await Promise.all([
       safeQuery<CourseDetailRow[]>(
         adminDb.from('courses').select('id, title, created_at').eq('created_by', userId).order('created_at', { ascending: false }),
@@ -209,7 +219,7 @@ export async function GET(
         []
       ),
       safeQuery<AskDetailRow[]>(
-        adminDb.from('ask_question_history').select('id, question, course_id, subtopic_label, created_at').eq('user_id', userId).order('created_at', { ascending: false }),
+        adminDb.from('ask_question_history').select('id, question, course_id, subtopic_label, prompt_stage, prompt_components, created_at').eq('user_id', userId).order('created_at', { ascending: false }),
         'ask_questions',
         []
       ),
@@ -237,6 +247,11 @@ export async function GET(
         adminDb.from('learning_profiles').select('*').eq('user_id', userId).maybeSingle(),
         'learning_profile',
         null
+      ),
+      safeQuery<PromptClassificationDetailRow[]>(
+        adminDb.from('prompt_classifications').select('user_id, prompt_stage, created_at').eq('user_id', userId).order('created_at', { ascending: false }),
+        'prompt_classifications',
+        []
       ),
     ])
 
@@ -307,11 +322,11 @@ export async function GET(
     })
 
     const interactionCount = askQuestions.length + challenges.length + discussions.length
-    let promptStage = 'N/A'
-    if (interactionCount >= 15) promptStage = 'REFLECTIVE'
-    else if (interactionCount >= 8) promptStage = 'MQP'
-    else if (interactionCount >= 3) promptStage = 'SRP'
-    else if (interactionCount >= 1) promptStage = 'SCP'
+    const promptStage = deriveAdminPromptStage({
+      classifications: promptClassifications,
+      prompts: askQuestions,
+      interactionCount,
+    })
 
     const totalSubtopics = allSubtopics.length
     const completedSubtopicsCount = completedSubtopicIds.size

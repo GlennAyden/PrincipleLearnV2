@@ -39,7 +39,7 @@ export interface DashboardKPI {
 
 /** RM2 data with research integration support */
 export interface RM2Data {
-  stages: Record<string, number>; // e.g. { SCP: 5, SRP: 10, MQP: 3, Reflektif: 2 }
+  stages: Record<string, number>; // e.g. { SCP: 5, SRP: 10, MQP: 3, REFLECTIVE: 2 }
   totalPrompts: number;
   /** Whether data comes from research tables or heuristic fallback */
   hasResearchData: boolean;

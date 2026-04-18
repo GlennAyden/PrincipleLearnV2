@@ -2,29 +2,31 @@
 'use client'
 
 import React, { useState } from 'react'
-import { useRouter } from 'next/navigation'
 import Link from 'next/link'
+import { apiFetch } from '@/lib/api-client'
 import styles from './page.module.scss'
 
 export default function AdminRegisterPage() {
   const [email, setEmail] = useState('')
   const [password, setPassword] = useState('')
   const [error, setError] = useState('')
+  const [success, setSuccess] = useState('')
   const [loading, setLoading] = useState(false)
-  const router = useRouter()
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
     setError('')
+    setSuccess('')
     setLoading(true)
     try {
-      const res = await fetch('/api/admin/register', {
+      const res = await apiFetch('/api/admin/register', {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ email, password }),
       })
       if (res.ok) {
-        router.push('/admin/login')
+        setSuccess('Admin berhasil didaftarkan.')
+        setEmail('')
+        setPassword('')
       } else {
         const data = await res.json()
         setError(data.error || 'Pendaftaran gagal')
@@ -41,6 +43,7 @@ export default function AdminRegisterPage() {
       <h1 className={styles.title}>Daftar Admin</h1>
 
       {error && <div className={styles.error}>{error}</div>}
+      {success && <div className={styles.success}>{success}</div>}
 
       <label className={styles.label}>
         Email
@@ -75,7 +78,7 @@ export default function AdminRegisterPage() {
       </button>
 
       <div className={styles.back}>
-        <Link href="/admin/login">Kembali ke Login</Link>
+        <Link href="/admin/dashboard">Kembali ke Dashboard</Link>
       </div>
     </form>
   )

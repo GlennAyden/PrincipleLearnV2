@@ -159,7 +159,7 @@ export async function GET(request: NextRequest) {
       fetchAutoScores(userId, courseId, startDate, endDate),
       fetchCount('research_evidence_items', userId, courseId),
       fetchCount('research_artifacts', userId, courseId),
-      fetchCount('triangulation_records', userId, null),
+      fetchCount('triangulation_records', userId, courseId),
     ]);
 
     const sessions = sessionsResult;

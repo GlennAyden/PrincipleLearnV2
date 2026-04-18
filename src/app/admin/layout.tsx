@@ -8,6 +8,7 @@ import {
   FiLogOut, FiClipboard, FiMenu, FiX,
   FiDownload,
 } from 'react-icons/fi'
+import { apiFetch } from '@/lib/api-client'
 import styles from './layout.module.scss'
 
 interface AdminLayoutProps {
@@ -36,7 +37,7 @@ export default function AdminLayout({ children }: AdminLayoutProps) {
   }, [pathname])
 
   const handleLogout = async () => {
-    await fetch('/api/admin/logout', { method: 'POST', credentials: 'include' })
+    await apiFetch('/api/admin/logout', { method: 'POST' })
     router.push('/admin/login')
   }
 

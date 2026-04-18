@@ -22,7 +22,6 @@ export function middleware(req: NextRequest) {
     '/api/auth/refresh',
     '/api/auth/logout',
     '/api/admin/login',
-    '/api/admin/register',
   ]
   
   // Check if the current route is public or an auth API route
@@ -152,8 +151,14 @@ export function middleware(req: NextRequest) {
     const csrfCookie = req.cookies.get('csrf_token')?.value
     const csrfHeader = req.headers.get('x-csrf-token')
 
-    // Only enforce CSRF if the cookie exists (admin login doesn't set one)
-    if (csrfCookie && csrfCookie !== csrfHeader) {
+    if (!csrfCookie || !csrfHeader) {
+      return NextResponse.json(
+        { error: 'Token CSRF wajib disertakan' },
+        { status: 403 }
+      )
+    }
+
+    if (csrfCookie !== csrfHeader) {
       return NextResponse.json(
         { error: 'Token CSRF tidak cocok' },
         { status: 403 }

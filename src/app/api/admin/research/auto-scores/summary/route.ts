@@ -10,8 +10,8 @@ async function getHandler(request: NextRequest) {
   }
 
   const { searchParams } = new URL(request.url);
-  const userId = searchParams.get('user_id');
-  const courseId = searchParams.get('course_id');
+  const userId = searchParams.get('user_id') ?? searchParams.get('userId');
+  const courseId = searchParams.get('course_id') ?? searchParams.get('courseId');
 
   if (!userId) {
     return NextResponse.json({ error: 'Parameter user_id diperlukan' }, { status: 400 });

@@ -15,6 +15,14 @@ import {
   type ReflectionFeedbackRow,
   type ReflectionJournalRow,
 } from '@/lib/analytics/reflection-model'
+import {
+  addStageToDistribution,
+  averagePromptStageScore,
+  classifyPromptComponents,
+  deriveAdminPromptStage,
+  emptyPromptStageDistribution,
+  type AdminPromptStage,
+} from '@/lib/admin-prompt-stage'
 
 const JWT_SECRET = process.env.JWT_SECRET!
 
@@ -25,7 +33,7 @@ interface CourseRow { id: string; title: string; created_at: string; created_by:
 interface QuizSubmissionRow { id: string; user_id: string; is_correct: boolean; reasoning_note: string; created_at: string }
 interface DiscussionRow { id: string; user_id: string; status: string; learning_goals: unknown; created_at: string }
 interface ChallengeRow { id: string; user_id: string; question: string; created_at: string }
-interface AskHistoryRow { id: string; user_id: string; question: string; prompt_components: unknown; prompt_version: string; session_number: number; created_at: string }
+interface AskHistoryRow { id: string; user_id: string; question: string; prompt_components: unknown; prompt_stage?: string | null; prompt_version: string; session_number: number; created_at: string }
 interface TranscriptRow { id: string; user_id: string; created_at: string }
 interface LearningProfileRow { id: string; user_id: string; created_at: string }
 interface PromptClassificationRow { id: string; user_id: string; prompt_stage: string; prompt_stage_score: number; micro_markers: unknown; primary_marker: string; created_at: string }
@@ -110,13 +118,12 @@ async function safeQuery<T = Record<string, unknown>>(
     const { data, error } = await query
     if (error) {
       // Table might not exist yet — return empty
-      console.warn(`[Dashboard] Query ${tableName} failed:`, error.message || error)
-      return []
+      throw new Error(`[Dashboard] Query ${tableName} failed: ${error.message || 'unknown Supabase error'}`)
     }
     return Array.isArray(data) ? data : []
   } catch (err) {
-    console.warn(`[Dashboard] Query ${tableName} exception:`, err)
-    return []
+    if (err instanceof Error) throw err
+    throw new Error(`[Dashboard] Query ${tableName} failed`)
   }
 }
 
@@ -137,23 +144,6 @@ function buildUserMap<T extends { user_id?: string; created_by?: string }>(
 }
 
 // ── Heuristic Prompt Stage Classification (fallback) ─────────────────────────
-
-function classifyPromptStageHeuristic(promptComponents: unknown): string {
-  if (!promptComponents) return 'SCP'
-  const comps = typeof promptComponents === 'string'
-    ? (() => { try { return JSON.parse(promptComponents) } catch { return {} } })()
-    : promptComponents
-
-  let count = 0
-  if (comps?.tujuan) count++
-  if (comps?.konteks) count++
-  if (comps?.batasan) count++
-
-  if (count >= 3) return 'Reflektif'
-  if (count >= 2) return 'MQP'
-  if (count >= 1) return 'SRP'
-  return 'SCP'
-}
 
 // ── Main GET Handler ─────────────────────────────────────────────────────────
 
@@ -199,7 +189,7 @@ export async function GET(request: NextRequest) {
       safeQuery<DiscussionRow>('discussion_sessions', 'id, user_id, status, learning_goals, created_at', {}, queryOpts),
       safeQuery<ReflectionJournalRow>('jurnal', 'id, user_id, course_id, subtopic_id, subtopic_label, module_index, subtopic_index, type, content, reflection, created_at', {}, queryOpts),
       safeQuery<ChallengeRow>('challenge_responses', 'id, user_id, question, created_at', {}, queryOpts),
-      safeQuery<AskHistoryRow>('ask_question_history', 'id, user_id, question, prompt_components, prompt_version, session_number, created_at', {}, queryOpts),
+      safeQuery<AskHistoryRow>('ask_question_history', 'id, user_id, question, prompt_components, prompt_stage, prompt_version, session_number, created_at', {}, queryOpts),
       safeQuery<ReflectionFeedbackRow>('feedback', 'id, user_id, course_id, subtopic_id, subtopic_label, module_index, subtopic_index, rating, comment, created_at', {}, queryOpts),
       safeQuery<TranscriptRow>('transcript', 'id, user_id, created_at', {}, queryOpts),
       safeQuery<LearningProfileRow>('learning_profiles', 'id, user_id, created_at', {}, queryOpts),
@@ -289,7 +279,7 @@ export async function GET(request: NextRequest) {
 
     // ── 2. RM2 — Prompt Stage Distribution ──────────────────────────────────
     const hasResearchRM2 = promptClassifications.length > 0
-    let stageDistribution: Record<string, number> = { SCP: 0, SRP: 0, MQP: 0, Reflektif: 0 }
+    let stageDistribution: Record<string, number> = emptyPromptStageDistribution()
     let totalPrompts = 0
     let avgStageScore = 0
     let microMarkerDistribution: Record<string, number> | undefined = undefined
@@ -298,14 +288,11 @@ export async function GET(request: NextRequest) {
       // Use research data from prompt_classifications table (already time-filtered)
       totalPrompts = promptClassifications.length
 
-      const researchStages: Record<string, number> = { SCP: 0, SRP: 0, MQP: 0, REFLECTIVE: 0 }
-      let totalScore = 0
+      const researchStages = emptyPromptStageDistribution()
       const markerDist: Record<string, number> = { GCP: 0, PP: 0, ARP: 0 }
 
       promptClassifications.forEach(pc => {
-        const stage = pc.prompt_stage || 'SCP'
-        if (stage in researchStages) researchStages[stage]++
-        totalScore += pc.prompt_stage_score || 1
+        addStageToDistribution(researchStages, pc.prompt_stage)
 
         // Micro markers
         if (pc.primary_marker) {
@@ -318,9 +305,9 @@ export async function GET(request: NextRequest) {
         SCP: researchStages.SCP,
         SRP: researchStages.SRP,
         MQP: researchStages.MQP,
-        Reflektif: researchStages.REFLECTIVE,
+        REFLECTIVE: researchStages.REFLECTIVE,
       }
-      avgStageScore = totalPrompts > 0 ? Math.round((totalScore / totalPrompts) * 100) / 100 : 0
+      avgStageScore = averagePromptStageScore(promptClassifications)
       microMarkerDistribution = markerDist
     } else {
       // Fallback: Heuristic classification from ask_question_history (already time-filtered)
@@ -328,10 +315,9 @@ export async function GET(request: NextRequest) {
       let totalScore = 0
 
       askHistory.forEach(a => {
-        const stage = classifyPromptStageHeuristic(a.prompt_components)
+        const stage = classifyPromptComponents(a.prompt_components)
         stageDistribution[stage] = (stageDistribution[stage] || 0) + 1
-        const scoreMap: Record<string, number> = { SCP: 1, SRP: 2, MQP: 3, Reflektif: 4 }
-        totalScore += scoreMap[stage] || 1
+        totalScore += averagePromptStageScore([{ prompt_stage: stage }])
       })
 
       avgStageScore = totalPrompts > 0 ? Math.round((totalScore / totalPrompts) * 100) / 100 : 0
@@ -437,25 +423,11 @@ export async function GET(request: NextRequest) {
       const userCorrect = userQuizzes.filter(q => q.is_correct === true).length
       const userQuizAccuracy = userQuizzes.length > 0 ? Math.round((userCorrect / userQuizzes.length) * 100) : 0
 
-      // Determine prompt stage
-      let userStage = 'N/A'
-      if (hasResearchRM2) {
-        const userPC = pcByUser.get(userId) || []
-        if (userPC.length > 0) {
-          // Get the most recent classification
-          const sorted = [...userPC].sort((a, b) =>
-            new Date(b.created_at).getTime() - new Date(a.created_at).getTime()
-          )
-          userStage = sorted[0].prompt_stage || 'SCP'
-          if (userStage === 'REFLECTIVE') userStage = 'Reflektif'
-        }
-      } else if (userAsk.length > 0) {
-        // Heuristic fallback
-        const lastAsk = [...userAsk].sort((a, b) =>
-          new Date(b.created_at).getTime() - new Date(a.created_at).getTime()
-        )[0]
-        userStage = classifyPromptStageHeuristic(lastAsk?.prompt_components)
-      }
+      const userStage: AdminPromptStage = deriveAdminPromptStage({
+        classifications: hasResearchRM2 ? pcByUser.get(userId) || [] : [],
+        prompts: userAsk,
+        interactionCount: userAsk.length + userChallenges.length + userDiscussions.length,
+      })
 
       // Last activity
       const allTimestamps = [

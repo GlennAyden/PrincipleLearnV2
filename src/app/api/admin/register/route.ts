@@ -1,13 +1,14 @@
 // principle-learn/src/app/api/admin/register/route.ts
 
-import { NextResponse } from 'next/server'
+import { NextRequest, NextResponse } from 'next/server'
 import { cookies } from 'next/headers'
 import { DatabaseService, DatabaseError } from '@/lib/database'
 import { verifyToken } from '@/lib/jwt'
+import { verifyCsrfToken } from '@/lib/admin-auth'
 import { AdminRegisterSchema, parseBody } from '@/lib/schemas'
 import { findUserByEmail, hashPassword } from '@/services/auth.service'
 
-export async function POST(request: Request) {
+export async function POST(request: NextRequest) {
   try {
     // Require existing admin authentication to create new admin accounts.
     //
@@ -45,6 +46,10 @@ export async function POST(request: Request) {
         { status: 403 }
       )
     }
+
+    const csrfError = verifyCsrfToken(request)
+    if (csrfError) return csrfError
+
     // adminId is available here if we ever need to attribute the creation.
     void adminId
 

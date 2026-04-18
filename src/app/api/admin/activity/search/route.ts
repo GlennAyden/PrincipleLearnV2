@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { adminDb } from '@/lib/database';
 import type { GlobalActivityItem, ActivityType } from '@/types/activity';
 import { withProtection } from '@/lib/api-middleware';
+import { deriveAdminPromptStage } from '@/lib/admin-prompt-stage';
 
 const TABLES: Record<ActivityType, string> = {
   generate: 'course_generation_activity',
@@ -18,13 +19,18 @@ const TABLES: Record<ActivityType, string> = {
 // Dynamic DB rows from multiple tables with varying schemas — string index is unavoidable
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 type DynamicRow = Record<string, any>;
+type SearchActivityItem = GlobalActivityItem & { sortTime: number };
 
 async function safeQuery(table: string): Promise<DynamicRow[]> {
   try {
-    const { data } = await adminDb.from(table).select('*').limit(1000);
+    const { data, error } = await adminDb.from(table).select('*').limit(1000);
+    if (error) {
+      throw new Error(`[Activity Search] Query ${table} failed: ${error.message}`);
+    }
     return Array.isArray(data) ? (data as DynamicRow[]) : [];
-  } catch {
-    return [];
+  } catch (error) {
+    if (error instanceof Error) throw error;
+    throw new Error(`[Activity Search] Query ${table} failed`);
   }
 }
 
@@ -66,6 +72,27 @@ function computeEngagement(type: ActivityType): number {
   return scores[type] || 1;
 }
 
+async function getUserEmailMap(userIds: string[]): Promise<Map<string, string>> {
+  const uniqueIds = Array.from(new Set(userIds.filter(Boolean)));
+  if (uniqueIds.length === 0) return new Map();
+
+  const { data, error } = await adminDb
+    .from('users')
+    .select('id,email')
+    .in('id', uniqueIds);
+
+  if (error) {
+    throw new Error(`[Activity Search] Query users failed: ${error.message}`);
+  }
+
+  return new Map(
+    (data ?? []).map((user: { id: string; email?: string | null }) => [
+      user.id,
+      user.email ?? 'Unknown User',
+    ]),
+  );
+}
+
 async function handler(req: NextRequest) {
   const { searchParams } = new URL(req.url);
   const timeRange = searchParams.get('timeRange') || '7d';
@@ -76,46 +103,70 @@ async function handler(req: NextRequest) {
   const pageSize = parseInt(searchParams.get('size') || '50');
 
   const dateFilter = getDateFilter(timeRange);
-  const allItems: GlobalActivityItem[] = [];
+  const rawItems: Array<{ type: ActivityType; row: DynamicRow }> = [];
 
   for (const [typeStr, table] of Object.entries(TABLES)) {
     const type = typeStr as ActivityType;
     if (types && !types.includes(type)) continue;
 
     const items = await safeQuery(table);
-    const filtered = items
-      .filter(item => {
-        const ts = new Date(item.created_at || item.updated_at || '1970');
-        if (ts < dateFilter) return false;
-        if (userId && item.user_id !== userId) return false;
-        if (q) {
-          const fields = Object.values(item).join(' ').toLowerCase();
-          if (!fields.includes(q.toLowerCase())) return false;
-        }
-        return true;
-      })
-      .map(item => {
-        const ts = new Date(item.created_at || item.updated_at || '1970');
-        return {
-          id: item.id,
-          type,
-          timestamp: formatTimestamp(ts),
-          userId: item.user_id || 'unknown',
-          userEmail: 'user@email.com', // From cache in prod
-          topic: item.subtopic_label || item.topic || item.title || 'N/A',
-          detail: item.question || item.content || item.answer || item.comment || 'Activity',
-          stage: item.prompt_components ? 'SRP' : undefined,
-          engagementScore: computeEngagement(type),
-          courseId: item.course_id
-        } as GlobalActivityItem;
-      });
-
-    allItems.push(...filtered);
+    rawItems.push(...items.map((row) => ({ type, row })));
   }
 
-  const sorted = allItems.sort((a, b) =>
-    new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime()
-  ).slice((page - 1) * pageSize, page * pageSize);
+  const userEmailMap = await getUserEmailMap(
+    rawItems
+      .map(({ row }) => (typeof row.user_id === 'string' ? row.user_id : null))
+      .filter((value): value is string => Boolean(value)),
+  );
+  const queryText = q?.toLowerCase();
+
+  const allItems: SearchActivityItem[] = rawItems
+    .map(({ type, row }) => {
+      const ts = new Date(row.created_at || row.updated_at || '1970');
+      const rowUserId = row.user_id || 'unknown';
+      const userEmail = typeof rowUserId === 'string'
+        ? userEmailMap.get(rowUserId) ?? 'Unknown User'
+        : 'Unknown User';
+
+      return {
+        id: row.id,
+        type,
+        timestamp: formatTimestamp(ts),
+        sortTime: Number.isNaN(ts.getTime()) ? 0 : ts.getTime(),
+        userId: rowUserId,
+        userEmail,
+        topic: row.subtopic_label || row.topic || row.title || 'N/A',
+        detail: row.question || row.content || row.answer || row.comment || 'Activity',
+        stage: type === 'ask'
+          ? deriveAdminPromptStage({ prompts: [row], interactionCount: 1 })
+          : undefined,
+        engagementScore: computeEngagement(type),
+        courseId: row.course_id
+      };
+    })
+    .filter(item => {
+      if (item.sortTime < dateFilter.getTime()) return false;
+      if (userId && item.userId !== userId) return false;
+      if (queryText) {
+        const fields = [
+          item.id,
+          item.type,
+          item.userId,
+          item.userEmail,
+          item.topic,
+          item.detail,
+          item.stage,
+          item.courseId,
+        ].join(' ').toLowerCase();
+        if (!fields.includes(queryText)) return false;
+      }
+      return true;
+    });
+
+  const sorted = allItems
+    .sort((a, b) => b.sortTime - a.sortTime)
+    .slice((page - 1) * pageSize, page * pageSize)
+    .map(({ sortTime: _sortTime, ...item }) => item);
 
   return NextResponse.json({
     items: sorted,

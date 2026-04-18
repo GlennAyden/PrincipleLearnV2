@@ -17,6 +17,7 @@ import {
   FiActivity,
 } from 'react-icons/fi'
 import { useAdmin } from '@/hooks/useAdmin'
+import { apiFetch } from '@/lib/api-client'
 import type { StudentListItem, ActivitySummary } from '@/types/student'
 
 const STAGE_CONFIG: Record<string, { label: string; color: string; bg: string }> = {
@@ -101,7 +102,7 @@ export default function AdminSiswaPage() {
     const { id, email } = deleteConfirm
     try {
       setDeleteInProgress(id)
-      const res = await fetch(`/api/admin/users/${id}`, { method: 'DELETE', credentials: 'include' })
+      const res = await apiFetch(`/api/admin/users/${id}`, { method: 'DELETE' })
       if (!res.ok) { const d = await res.json(); throw new Error(d.error || 'Gagal menghapus') }
       setUsers((prev) => prev.filter((u) => u.id !== id))
       if (selectedUserId === id) setSelectedUserId(null)

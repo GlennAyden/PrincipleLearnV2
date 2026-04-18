@@ -8,6 +8,7 @@
 
 import { NextRequest, NextResponse } from 'next/server';
 import { openai } from '@/lib/openai';
+import { verifyCsrfToken } from '@/lib/admin-auth';
 import jwt from 'jsonwebtoken';
 import type { PromptStage, MicroMarker } from '@/types/research';
 
@@ -41,6 +42,9 @@ function verifyAdmin(request: NextRequest) {
 // POST /api/admin/research/classify
 export async function POST(request: NextRequest) {
     try {
+        const csrfError = verifyCsrfToken(request);
+        if (csrfError) return csrfError;
+
         const admin = verifyAdmin(request);
         if (!admin) {
             return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });

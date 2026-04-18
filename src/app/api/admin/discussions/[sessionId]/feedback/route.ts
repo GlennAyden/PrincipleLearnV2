@@ -2,12 +2,16 @@ import { NextRequest, NextResponse } from 'next/server';
 
 import { verifyToken } from '@/lib/jwt';
 import { withApiLogging } from '@/lib/api-logger';
+import { verifyCsrfToken } from '@/lib/admin-auth';
 
 async function postHandler(
   request: NextRequest,
   context: { params: Promise<{ sessionId: string }> }
 ) {
   try {
+    const csrfError = verifyCsrfToken(request);
+    if (csrfError) return csrfError;
+
     const token = request.cookies.get('access_token')?.value;
     const payload = token ? verifyToken(token) : null;
     if (!payload || (payload.role ?? '').toLowerCase() !== 'admin') {
