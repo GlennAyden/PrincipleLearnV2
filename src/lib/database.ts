@@ -311,6 +311,7 @@ export class DatabaseService {
         'rate_limits',
         'api_logs',
         'quiz_submissions',
+        'auto_cognitive_scores',
         'feedback',
         'discussion_templates',
       ];
