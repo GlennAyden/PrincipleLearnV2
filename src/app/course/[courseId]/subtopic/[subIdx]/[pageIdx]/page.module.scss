@@ -627,19 +627,85 @@ $transition: 0.25s cubic-bezier(0.4, 0, 0.2, 1);
 
 /* ── Responsive ── */
 @media (max-width: 640px) {
-  .initialButtons { flex-direction: column; }
-  .tabNav { overflow-x: auto; }
+  .progressBar { margin-bottom: 1.25rem; }
+  .topicTitle { font-size: 1.25rem; margin-bottom: 1rem; }
+  .sectionContainer { padding: 1rem; margin: 1.5rem 0; }
+  .cardContainer { padding: 1rem; margin: 1.5rem 0; }
+
+  .initialButtons {
+    flex-direction: column;
+    align-items: stretch;
+  }
+
+  .initialBtn {
+    width: 100%;
+    min-height: 44px;
+    justify-content: center;
+  }
+
+  .tabNav {
+    overflow-x: auto;
+    overflow-y: hidden;
+    -webkit-overflow-scrolling: touch;
+    scrollbar-width: none;
+  }
+
+  .tabNav::-webkit-scrollbar { display: none; }
+
   .tab { font-size: 0.78rem; padding: 0.6rem 0.85rem; min-height: 44px; }
-  .closeBtn { width: 36px; height: 36px; }
+  .closeBtn { width: 44px; height: 44px; }
+
+  .challengeActions {
+    gap: 0.6rem;
+  }
+
+  .regenerateBtn {
+    align-self: stretch;
+    width: 100%;
+    min-height: 44px;
+    justify-content: center;
+  }
+
+  .answerInputContainer {
+    flex-direction: column;
+    align-items: stretch;
+  }
+
+  .answerInput {
+    min-height: 44px;
+    padding: 0.75rem 0.9rem;
+  }
+
+  .submitButton {
+    width: 100%;
+    min-height: 44px;
+  }
+
+  .navigationButtons {
+    flex-direction: column;
+    align-items: stretch;
+    gap: 0.65rem;
+    margin-top: 1.5rem;
+  }
+
+  .backBtn,
+  .nextBtn {
+    width: 100%;
+    min-height: 44px;
+    justify-content: center;
+    margin-left: 0;
+  }
+
   .skeletonButtonsContainer {
     flex-direction: column;
     align-items: stretch;
   }
   .skeletonButton { max-width: none; }
-  .topicTitle { font-size: 1.25rem; }
-  .sectionContainer { padding: 1rem; }
-  .cardContainer { padding: 1rem; }
-  .initialBtn { min-height: 44px; }
+  .skeletonNavButton {
+    width: 100%;
+    max-width: none;
+    height: 44px;
+  }
 }
 
 @media (prefers-reduced-motion: reduce) {

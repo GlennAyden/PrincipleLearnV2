@@ -4,7 +4,7 @@
 
 import { ReactNode, useEffect, useState } from 'react';
 import Link from 'next/link';
-import { useRouter, useParams, useSearchParams } from 'next/navigation';
+import { useRouter, useParams, usePathname, useSearchParams } from 'next/navigation';
 import styles from './layout.module.scss';
 import { Level } from '@/context/RequestCourseContext';
 import { useLearningProgress } from '@/hooks/useLearningProgress';
@@ -34,6 +34,7 @@ interface Course {
 export default function CourseLayout({ children }: { children: ReactNode }) {
   const router = useRouter();
   const { courseId } = useParams<{ courseId: string }>();
+  const pathname = usePathname();
   const searchParams = useSearchParams();
 
   // Ambil module index dari query param "?module=..."
@@ -103,13 +104,17 @@ export default function CourseLayout({ children }: { children: ReactNode }) {
     loadCourse();
   }, [courseId]);
 
-  // Close mobile menu when changing routes
+  // Close mobile menu when the route changes
   useEffect(() => {
     setShowMobileMenu(false);
-  }, [router]);
+  }, [pathname]);
 
   const toggleSidebar = () => {
     setIsSidebarCollapsed((prev) => !prev);
+  };
+
+  const closeMobileMenu = () => {
+    setShowMobileMenu(false);
   };
 
   const handleLogout = () => {
@@ -130,13 +135,14 @@ export default function CourseLayout({ children }: { children: ReactNode }) {
       <header className={styles.header}>
         <div className={styles.headerContent}>
           <div className={styles.headerLeft}>
-            <button onClick={() => router.back()} className={styles.backBtn} aria-label="Go back">
+            <button type="button" onClick={() => router.back()} className={styles.backBtn} aria-label="Go back">
               <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" width="24" height="24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
                 <path d="M19 12H5M12 19l-7-7 7-7"/>
               </svg>
               <span>Back</span>
             </button>
             <button 
+              type="button"
               className={styles.mobileMenuToggle} 
               onClick={() => setShowMobileMenu(!showMobileMenu)}
               aria-label="Toggle menu"
@@ -166,7 +172,7 @@ export default function CourseLayout({ children }: { children: ReactNode }) {
             <div className={styles.userLevel}>
               <span className={styles.levelBadge}>{course.level}</span>
             </div>
-            <button className={styles.logoutBtn} onClick={handleLogout} aria-label="Logout">
+            <button type="button" className={styles.logoutBtn} onClick={handleLogout} aria-label="Logout">
               <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" width="24" height="24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
                 <path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4" />
                 <polyline points="16 17 21 12 16 7" />
@@ -227,86 +233,94 @@ export default function CourseLayout({ children }: { children: ReactNode }) {
               'Selesaikan modul sebelumnya terlebih dahulu.';
 
             return (
-            <div key={idx} className={styles.navModule}>
-              <Link
-                href={`/course/${courseId}?module=${idx}`}
-                className={`${styles.navModuleTitle} ${
-                  activeModule === idx ? styles.activeModule : ''
-                } ${moduleLocked ? styles.lockedNavItem : ''}`}
-                title={mod.module}
-                aria-disabled={moduleLocked}
-                onClick={(event) => {
-                  if (!moduleLocked) return;
-                  event.preventDefault();
-                  window.alert(moduleLockedReason);
-                }}
-              >
-                <span className={styles.moduleNumber}>{idx + 1}</span>
-                <span className={styles.moduleText}>{mod.module}</span>
-              </Link>
+              <div key={idx} className={styles.navModule}>
+                <Link
+                  href={`/course/${courseId}?module=${idx}`}
+                  className={`${styles.navModuleTitle} ${
+                    activeModule === idx ? styles.activeModule : ''
+                  } ${moduleLocked ? styles.lockedNavItem : ''}`}
+                  title={mod.module}
+                  aria-disabled={moduleLocked}
+                  onClick={(event) => {
+                    if (moduleLocked) {
+                      event.preventDefault();
+                      window.alert(moduleLockedReason);
+                      return;
+                    }
 
-              {activeModule === idx && !isSidebarCollapsed && (
-                <ul className={styles.subList}>
-              {mod.subtopics.map((sub, j) => {
-                const rawTitle = typeof sub === 'string' ? sub : sub.title;
-                // Remove redundant numbering patterns like "2. " or "2.1 " at the beginning
-                const cleanTitle = rawTitle.replace(/^\d+\.\s*\d+\.?\s*/g, '').replace(/^\d+\.\s*/g, '');
-                const isDiscussion =
-                  typeof sub === 'object' &&
-                  (sub?.type === 'discussion' ||
-                    sub?.isDiscussion === true ||
-                    (typeof rawTitle === 'string' &&
-                      rawTitle.toLowerCase().includes('diskusi penutup')));
-                const itemStatus = isDiscussion
-                  ? moduleStatus?.discussion
-                  : moduleStatus?.subtopics.find((item) => item.subtopicIndex === j);
-                const itemLocked = itemStatus ? !itemStatus.unlocked : moduleLocked;
-                const itemLockedReason =
-                  itemStatus?.reason ??
-                  moduleLockedReason ??
-                  'Selesaikan langkah sebelumnya terlebih dahulu.';
+                    closeMobileMenu();
+                  }}
+                >
+                  <span className={styles.moduleNumber}>{idx + 1}</span>
+                  <span className={styles.moduleText}>{mod.module}</span>
+                </Link>
 
-                const href = isDiscussion
-                  ? (() => {
-                      const params = new URLSearchParams({
-                        module: String(idx),
-                        subIdx: String(j),
-                        scope: 'module',
-                      });
-                      if (mod.id) {
-                        params.set('moduleId', String(mod.id));
-                      }
-                      if (typeof mod.module === 'string' && mod.module.trim()) {
-                        params.set('title', mod.module);
-                      }
-                      return `/course/${courseId}/discussion/${idx}?${params.toString()}`;
-                    })()
-                  : `/course/${courseId}/subtopic/${idx}/0?module=${idx}&subIdx=${j}`;
+                {activeModule === idx && !isSidebarCollapsed && (
+                  <ul className={styles.subList}>
+                    {mod.subtopics.map((sub, j) => {
+                      const rawTitle = typeof sub === 'string' ? sub : sub.title;
+                      // Remove redundant numbering patterns like "2. " or "2.1 " at the beginning
+                      const cleanTitle = rawTitle.replace(/^\d+\.\s*\d+\.?\s*/g, '').replace(/^\d+\.\s*/g, '');
+                      const isDiscussion =
+                        typeof sub === 'object' &&
+                        (sub?.type === 'discussion' ||
+                          sub?.isDiscussion === true ||
+                          (typeof rawTitle === 'string' &&
+                            rawTitle.toLowerCase().includes('diskusi penutup')));
+                      const itemStatus = isDiscussion
+                        ? moduleStatus?.discussion
+                        : moduleStatus?.subtopics.find((item) => item.subtopicIndex === j);
+                      const itemLocked = itemStatus ? !itemStatus.unlocked : moduleLocked;
+                      const itemLockedReason =
+                        itemStatus?.reason ??
+                        moduleLockedReason ??
+                        'Selesaikan langkah sebelumnya terlebih dahulu.';
 
-                return (
-                  <li key={j}>
-                    <Link
-                      href={href}
-                      className={`${styles.subListItem} ${
-                        j === activeSubIdx ? styles.activeSub : ''
-                      } ${itemLocked ? styles.lockedNavItem : ''}`}
-                      title={cleanTitle}
-                      aria-disabled={itemLocked}
-                      onClick={(event) => {
-                        if (!itemLocked) return;
-                        event.preventDefault();
-                        window.alert(itemLockedReason);
-                      }}
-                        >
-                          <span className={styles.subtopicNumber}>{j + 1}</span>
-                          <span className={styles.subtopicText}>{cleanTitle}</span>
-                        </Link>
-                      </li>
-                    );
-                  })}
-                </ul>
-              )}
-            </div>
+                      const href = isDiscussion
+                        ? (() => {
+                            const params = new URLSearchParams({
+                              module: String(idx),
+                              subIdx: String(j),
+                              scope: 'module',
+                            });
+                            if (mod.id) {
+                              params.set('moduleId', String(mod.id));
+                            }
+                            if (typeof mod.module === 'string' && mod.module.trim()) {
+                              params.set('title', mod.module);
+                            }
+                            return `/course/${courseId}/discussion/${idx}?${params.toString()}`;
+                          })()
+                        : `/course/${courseId}/subtopic/${idx}/0?module=${idx}&subIdx=${j}`;
+
+                      return (
+                        <li key={j}>
+                          <Link
+                            href={href}
+                            className={`${styles.subListItem} ${
+                              j === activeSubIdx ? styles.activeSub : ''
+                            } ${itemLocked ? styles.lockedNavItem : ''}`}
+                            title={cleanTitle}
+                            aria-disabled={itemLocked}
+                            onClick={(event) => {
+                              if (itemLocked) {
+                                event.preventDefault();
+                                window.alert(itemLockedReason);
+                                return;
+                              }
+
+                              closeMobileMenu();
+                            }}
+                          >
+                            <span className={styles.subtopicNumber}>{j + 1}</span>
+                            <span className={styles.subtopicText}>{cleanTitle}</span>
+                          </Link>
+                        </li>
+                      );
+                    })}
+                  </ul>
+                )}
+              </div>
             );
           })}
         </aside>

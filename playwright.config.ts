@@ -67,6 +67,12 @@ export default defineConfig({
         {
             name: 'chromium',
             use: { ...devices['Desktop Chrome'] },
+            testIgnore: '**/mobile/*.spec.ts',
+        },
+        {
+            name: 'mobile-chrome',
+            use: { ...devices['Pixel 5'] },
+            testMatch: '**/mobile/*.spec.ts',
         },
         // Optional: Add more browsers for cross-browser testing
         // {

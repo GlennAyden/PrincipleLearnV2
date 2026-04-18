@@ -3,7 +3,7 @@
 'use client';
 
 import { useRouter, useParams, useSearchParams } from 'next/navigation';
-import { useEffect, useState } from 'react';
+import { useEffect, useState, type ReactNode } from 'react';
 import { useLocalStorage } from '@/hooks/useLocalStorage';
 import { useLearningProgress } from '@/hooks/useLearningProgress';
 import { apiFetch } from '@/lib/api-client';
@@ -51,6 +51,24 @@ function getPhaseLabel(phase?: string) {
 function cleanTitle(value?: string) {
   if (!value) return '';
   return value.replace(/^\d+\.\s*\d+\.?\s*/g, '').replace(/^\d+\.\s*/g, '');
+}
+
+function DetailDisclosure({ children }: { children: ReactNode }) {
+  const [isOpen, setIsOpen] = useState(false);
+
+  return (
+    <div className={`${styles.detailBlock} ${isOpen ? styles.detailBlockOpen : ''}`}>
+      <button
+        type="button"
+        className={styles.detailToggle}
+        aria-expanded={isOpen}
+        onClick={() => setIsOpen((current) => !current)}
+      >
+        {isOpen ? 'Sembunyikan detail' : 'Lihat detail'}
+      </button>
+      <div className={styles.cardText}>{children}</div>
+    </div>
+  );
 }
 
 // Skeleton loading component for course outline
@@ -220,7 +238,7 @@ function DiscussionCard({
           <span className={`${styles.discussionBadge} ${badgeClass}`}>{statusLabel}</span>
         )}
       </div>
-      <div className={styles.cardText}>
+      <DetailDisclosure>
         <p>
           {isModuleScope ? (
             <>
@@ -249,7 +267,7 @@ function DiscussionCard({
             {lockedReason || 'Diskusi akan terbuka setelah semua prasyarat selesai.'}
           </p>
         )}
-      </div>
+      </DetailDisclosure>
       <button
         className={`${styles.getStartedBtn} ${locked ? styles.lockedButton : ''}`}
         onClick={handleNavigate}
@@ -538,7 +556,7 @@ export default function CourseOverviewPage() {
                 {activeModule + 1}.{idx + 1}
               </div>
               <div className={styles.cardTitle}>{title}</div>
-              <div className={styles.cardText}>{formatOverview(overview)}</div>
+              <DetailDisclosure>{formatOverview(overview)}</DetailDisclosure>
               <button
                 className={`${styles.getStartedBtn} ${locked ? styles.lockedButton : ''}`}
                 aria-disabled={locked}

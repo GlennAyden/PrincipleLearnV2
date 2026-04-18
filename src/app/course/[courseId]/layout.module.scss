@@ -34,7 +34,9 @@ $transition: 0.25s cubic-bezier(0.4, 0, 0.2, 1);
 .container {
   display: flex;
   flex-direction: column;
-  height: 100vh;
+  min-height: 100vh;
+  min-height: 100svh;
+  min-height: 100dvh;
   background: $gray-50;
 }
 
@@ -54,6 +56,7 @@ $transition: 0.25s cubic-bezier(0.4, 0, 0.2, 1);
   display: flex;
   align-items: center;
   justify-content: space-between;
+  gap: 0.75rem;
   height: $header-height;
 }
 
@@ -62,6 +65,7 @@ $transition: 0.25s cubic-bezier(0.4, 0, 0.2, 1);
   display: flex;
   align-items: center;
   gap: 0.5rem;
+  flex-shrink: 0;
 }
 
 .backBtn {
@@ -71,7 +75,8 @@ $transition: 0.25s cubic-bezier(0.4, 0, 0.2, 1);
   background: transparent;
   border: 1px solid $gray-200;
   color: $gray-600;
-  padding: 0.4rem 0.75rem;
+  padding: 0.45rem 0.85rem;
+  min-height: 44px;
   border-radius: $radius-md;
   cursor: pointer;
   font-weight: 500;
@@ -92,7 +97,9 @@ $transition: 0.25s cubic-bezier(0.4, 0, 0.2, 1);
   background: none;
   border: none;
   color: $gray-600;
-  padding: 0.4rem;
+  padding: 0.5rem;
+  min-width: 44px;
+  min-height: 44px;
   cursor: pointer;
   border-radius: $radius-sm;
   svg { width: 22px; height: 22px; }
@@ -102,6 +109,7 @@ $transition: 0.25s cubic-bezier(0.4, 0, 0.2, 1);
   display: flex;
   align-items: center;
   gap: 0.5rem;
+  min-width: 0;
   text-decoration: none;
   color: $primary-600;
   padding: 0.4rem 0.5rem;
@@ -125,6 +133,7 @@ $transition: 0.25s cubic-bezier(0.4, 0, 0.2, 1);
   -webkit-background-clip: text;
   -webkit-text-fill-color: transparent;
   background-clip: text;
+  white-space: nowrap;
 }
 
 .userLevel { margin-right: 0.25rem; }
@@ -152,7 +161,8 @@ $transition: 0.25s cubic-bezier(0.4, 0, 0.2, 1);
   color: $gray-500;
   border-radius: $radius-md;
   cursor: pointer;
-  padding: 0.4rem 0.75rem;
+  padding: 0.45rem 0.85rem;
+  min-height: 44px;
   font-size: 0.85rem;
   font-weight: 500;
   transition: all $transition;
@@ -170,6 +180,7 @@ $transition: 0.25s cubic-bezier(0.4, 0, 0.2, 1);
 /* ── Grid Layout ── */
 .grid {
   flex: 1;
+  min-height: 0;
   display: grid;
   grid-template-columns: $sidebar-width 1fr;
   position: relative;
@@ -185,8 +196,12 @@ $transition: 0.25s cubic-bezier(0.4, 0, 0.2, 1);
   background: white;
   border-right: 1px solid $gray-200;
   overflow-y: auto;
+  -webkit-overflow-scrolling: touch;
+  overscroll-behavior: contain;
   padding: 1rem 0.75rem;
   height: calc(100vh - $header-height);
+  height: calc(100svh - $header-height);
+  height: calc(100dvh - $header-height);
   transition: transform $transition, padding $transition, width $transition;
   scrollbar-width: thin;
   scrollbar-color: $gray-300 transparent;
@@ -244,6 +259,8 @@ $transition: 0.25s cubic-bezier(0.4, 0, 0.2, 1);
   color: $gray-400;
   border-radius: $radius-sm;
   padding: 0.35rem;
+  min-width: 44px;
+  min-height: 44px;
   cursor: pointer;
   display: flex;
   align-items: center;
@@ -409,8 +426,13 @@ $transition: 0.25s cubic-bezier(0.4, 0, 0.2, 1);
 .content {
   padding: 2rem 2.5rem;
   overflow-y: auto;
-  height: calc(100vh - $header-height);
+  min-height: calc(100vh - $header-height);
+  min-height: calc(100svh - $header-height);
+  min-height: calc(100dvh - $header-height);
   background: $gray-50;
+  min-width: 0;
+  -webkit-overflow-scrolling: touch;
+  overscroll-behavior: contain;
   scrollbar-width: thin;
   scrollbar-color: $gray-300 transparent;
 
@@ -427,7 +449,9 @@ $transition: 0.25s cubic-bezier(0.4, 0, 0.2, 1);
   display: flex;
   align-items: center;
   justify-content: center;
-  height: 100vh;
+  min-height: 100vh;
+  min-height: 100svh;
+  min-height: 100dvh;
   font-size: 0.95rem;
   color: $gray-500;
   background: $gray-50;
@@ -446,12 +470,33 @@ $transition: 0.25s cubic-bezier(0.4, 0, 0.2, 1);
 
   .grid { display: block; }
 
+  .headerContent {
+    padding: 0 0.85rem;
+    gap: 0.5rem;
+  }
+
+  .brandContainer {
+    padding: 0.3rem 0.4rem;
+    gap: 0.4rem;
+  }
+
+  .brandIcon {
+    width: 22px;
+    height: 22px;
+  }
+
+  .brand {
+    font-size: 1rem;
+  }
+
   .sidebar {
     position: fixed;
     top: $header-height;
     left: 0;
-    width: 280px;
+    width: min(84vw, 320px);
     height: calc(100vh - $header-height);
+    height: calc(100svh - $header-height);
+    height: calc(100dvh - $header-height);
     transform: translateX(-100%);
     z-index: 90;
     box-shadow: 4px 0 24px rgba(0, 0, 0, 0.08);
@@ -465,7 +510,9 @@ $transition: 0.25s cubic-bezier(0.4, 0, 0.2, 1);
     top: $header-height;
     left: 0;
     width: 100%;
-    height: 100%;
+    height: calc(100vh - $header-height);
+    height: calc(100svh - $header-height);
+    height: calc(100dvh - $header-height);
     background-color: rgba(0, 0, 0, 0.3);
     z-index: 80;
     backdrop-filter: blur(2px);
@@ -474,11 +521,35 @@ $transition: 0.25s cubic-bezier(0.4, 0, 0.2, 1);
   .content { padding: 1.25rem; }
   .brand { font-size: 1.1rem; }
   .backBtn span { display: none; }
+
+  .backBtn,
+  .logoutBtn {
+    padding: 0.45rem;
+  }
 }
 
 @media (max-width: 480px) {
+  .headerContent {
+    padding: 0 0.65rem;
+    gap: 0.4rem;
+  }
+
+  .brandContainer {
+    gap: 0;
+    padding: 0.25rem 0.35rem;
+  }
+
+  .brand {
+    display: none;
+  }
+
   .userLevel { display: none; }
+
   .content { padding: 1rem; }
+
+  .sidebar {
+    width: min(88vw, 300px);
+  }
 }
 
 @media (max-width: 640px) {

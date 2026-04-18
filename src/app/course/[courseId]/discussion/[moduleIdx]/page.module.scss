@@ -1155,7 +1155,7 @@ $transition: 0.25s cubic-bezier(0.4, 0, 0.2, 1);
 
   .discussionTop {
     flex-direction: column;
-    padding: 0.75rem;
+    padding: 0.65rem;
   }
 
   .chatTitleBlock h2 { font-size: 0.95rem; }
@@ -1163,11 +1163,17 @@ $transition: 0.25s cubic-bezier(0.4, 0, 0.2, 1);
 
   .goalToggle {
     width: 100%;
+    min-height: 44px;
+    align-items: flex-start;
+    padding: 0.55rem 0.65rem;
   }
 
   .goalDropdown {
-    width: 100%;
+    left: 0.65rem;
+    right: 0.65rem;
+    width: auto;
     max-height: 52vh;
+    padding: 0.85rem 1rem;
   }
 
   .currentGoalPreview {
@@ -1177,13 +1183,13 @@ $transition: 0.25s cubic-bezier(0.4, 0, 0.2, 1);
 
   .thread {
     width: 100%;
-    padding: 0.75rem 0 1rem;
+    padding: 0.6rem 0 0.9rem;
     max-height: none;
   }
 
   .message {
     max-width: 92%;
-    padding: 0.75rem 0.85rem;
+    padding: 0.7rem 0.8rem;
   }
 
   .messageAgent {
@@ -1195,25 +1201,66 @@ $transition: 0.25s cubic-bezier(0.4, 0, 0.2, 1);
   }
 
   .composerDock {
-    padding-top: 0.55rem;
+    padding-top: 0.45rem;
   }
 
   .responseWrapper {
-    grid-template-columns: minmax(0, 1fr) auto;
+    grid-template-columns: minmax(0, 1fr);
     padding: 0.55rem;
+    align-items: stretch;
+  }
+
+  .responseWrapper > * {
+    width: 100%;
   }
 
   .charCount {
-    grid-column: 1 / 2;
-    justify-self: flex-end;
+    grid-column: auto;
+    justify-self: end;
   }
 
   .sendButton {
-    min-width: 64px;
+    min-width: 0;
+    width: 100%;
+    height: 44px;
   }
 
   .optionItem { min-height: 44px; }
-  .preparationButton { min-height: 44px; }
-  .primaryButton { min-height: 44px; }
-  .mcqSubmit { min-height: 44px; }
+  .preparationButton {
+    min-height: 44px;
+    width: 100%;
+  }
+
+  .primaryButton {
+    min-height: 44px;
+    width: 100%;
+    justify-content: center;
+  }
+
+  .mcqSubmit {
+    min-height: 44px;
+    width: 100%;
+  }
+
+  .completionActions {
+    flex-direction: column;
+    align-items: stretch;
+  }
+
+  .secondaryButton {
+    width: 100%;
+    min-height: 44px;
+  }
+
+  .actions {
+    justify-content: stretch;
+  }
+
+  .goalToggleMeta {
+    min-width: 0;
+  }
+
+  .goalProgressTrack {
+    min-width: 68px;
+  }
 }

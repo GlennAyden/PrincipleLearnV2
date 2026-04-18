@@ -152,6 +152,26 @@ $transition: 0.25s cubic-bezier(0.4, 0, 0.2, 1);
   }
 }
 
+.detailBlock {
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+}
+
+.detailToggle {
+  display: none;
+  min-height: 44px;
+  align-items: center;
+  justify-content: center;
+  border: 1px solid $primary-200;
+  border-radius: 8px;
+  background: $primary-50;
+  color: $primary-700;
+  cursor: pointer;
+  font-size: 0.85rem;
+  font-weight: 700;
+}
+
 .discussionMeta {
   margin-top: 0.25rem;
   font-size: 0.82rem;
@@ -294,10 +314,51 @@ $transition: 0.25s cubic-bezier(0.4, 0, 0.2, 1);
 
 /* ── Responsive ── */
 @media (max-width: 640px) {
+  .headerOverview {
+    margin-bottom: 1.5rem;
+    padding-bottom: 1rem;
+  }
+
   .topicHeading { font-size: 1.3rem; }
 
   .card {
-    padding: 1rem 1.25rem;
+    padding: 0.9rem 1rem;
+    gap: 0.4rem;
+  }
+
+  .cardTitleRow {
+    flex-direction: column;
+    align-items: flex-start;
+  }
+
+  .discussionBadge {
+    max-width: 100%;
+    white-space: normal;
+  }
+
+  .cardText {
+    max-height: none;
+    overflow: visible;
+  }
+
+  .detailToggle {
+    display: inline-flex;
+    width: 100%;
+  }
+
+  .detailBlock .cardText {
+    display: none;
+  }
+
+  .detailBlockOpen .cardText {
+    display: block;
+  }
+
+  .getStartedBtn {
+    width: 100%;
+    min-height: 44px;
+    align-self: stretch;
+    justify-content: center;
   }
 }
 
