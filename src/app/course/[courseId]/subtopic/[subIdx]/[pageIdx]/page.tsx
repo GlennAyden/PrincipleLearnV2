@@ -958,6 +958,7 @@ export default function SubtopicPage() {
             courseId: courseId,
             moduleIndex: moduleIndex,
             subtopicIndex: subtopicIndex,
+            subtopicLabel: quizSubtopicTitle,
             pageNumber: pageNumber,
             question: challengeQ,
             answer: challengeAnswer,
@@ -1131,7 +1132,7 @@ export default function SubtopicPage() {
                       context={data.pages[pageNumber].paragraphs.join(' ')}
                       onAnswer={(q, a) => setAskData([...askData, { question: q, answer: a }])}
                       courseId={courseId}
-                      subtopic={`Module ${moduleIndex + 1}, Subtopic ${subtopicIndex + 1}`}
+                      subtopic={quizSubtopicTitle}
                       moduleIndex={moduleIndex}
                       subtopicIndex={subtopicIndex}
                       pageNumber={pageNumber}

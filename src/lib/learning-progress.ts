@@ -24,6 +24,7 @@ interface DiscussionSessionRow {
 
 interface UserProgressRow {
   subtopic_id: string | null
+  leaf_subtopic_id?: string | null
   is_completed: boolean | null
   completed_at: string | null
 }
@@ -166,9 +167,9 @@ function reasonForSubtopic(unlocked: boolean, item: ModulePrerequisiteItem, modu
 
   const missing = missingForSubtopic(item)
   if (!missing.length) return null
-  if (missing.includes('refleksi')) return 'Harap mengisi feedback dulu sebelum melanjutkan.'
+  if (missing.includes('materi')) return 'Buka dan generate materi terlebih dahulu.'
   if (missing.includes('kuis')) return 'Selesaikan kuis terlebih dahulu.'
-  return 'Buka dan generate materi terlebih dahulu.'
+  return 'Harap mengisi feedback dulu sebelum melanjutkan.'
 }
 
 async function fetchDiscussionCompletion(userId: string, courseId: string, moduleIds: string[]) {
@@ -199,10 +200,11 @@ async function fetchDiscussionCompletion(userId: string, courseId: string, modul
 
   const { data: progressRows, error: progressError } = await adminDb
     .from('user_progress')
-    .select('subtopic_id, is_completed, completed_at')
+    .select('subtopic_id, leaf_subtopic_id, is_completed, completed_at')
     .eq('user_id', userId)
     .eq('course_id', courseId)
     .in('subtopic_id', moduleIds)
+    .is('leaf_subtopic_id', null)
 
   if (progressError) {
     console.warn('[LearningProgress] Failed to load user progress', progressError)

@@ -16,6 +16,7 @@ interface ChallengeResponseRow {
   answer: string;
   feedback: string | null;
   reasoning_note: string | null;
+  raw_evidence_snapshot?: Record<string, unknown> | null;
   created_at: string;
 }
 
@@ -26,6 +27,14 @@ interface User {
 
 interface Course {
   id: string;
+  title: string | null;
+}
+
+interface LeafSubtopicRow {
+  id: string;
+  course_id: string;
+  module_index: number | null;
+  subtopic_index: number | null;
   title: string | null;
 }
 
@@ -51,6 +60,40 @@ function buildDateRange(dateFromValue?: string | null, dateToValue?: string | nu
   start.setHours(0, 0, 0, 0);
   end.setHours(23, 59, 59, 999);
   return { start, end };
+}
+
+function firstString(...values: unknown[]): string | null {
+  for (const value of values) {
+    if (typeof value === 'string' && value.trim()) {
+      return value.trim();
+    }
+  }
+  return null;
+}
+
+function leafKey(courseId: string | null | undefined, moduleIndex: number | null, subtopicIndex: number | null) {
+  if (!courseId || moduleIndex === null || subtopicIndex === null) return null;
+  return `${courseId}:${moduleIndex}:${subtopicIndex}`;
+}
+
+async function fetchLeafSubtopicTitles(courseId?: string | null) {
+  try {
+    const rows = await DatabaseService.getRecords<LeafSubtopicRow>('leaf_subtopics', {
+      ...(courseId ? { filter: { course_id: courseId } } : {}),
+    });
+
+    const map = new Map<string, string>();
+    for (const row of rows) {
+      const key = leafKey(row.course_id, row.module_index, row.subtopic_index);
+      if (key && row.title) {
+        map.set(key, row.title);
+      }
+    }
+    return map;
+  } catch (error) {
+    console.warn('[Activity][Challenge] Failed to fetch leaf_subtopics:', error);
+    return new Map<string, string>();
+  }
 }
 
 async function handler(req: NextRequest) {
@@ -92,6 +135,7 @@ async function handler(req: NextRequest) {
 
     const userCache = new Map<string, User | null>();
     const courseCache = new Map<string, Course | null>();
+    const leafTitleByIndex = await fetchLeafSubtopicTitles(courseId);
 
     async function getUser(userIdValue?: string | null) {
       if (!userIdValue) return null;
@@ -119,7 +163,12 @@ async function handler(req: NextRequest) {
 
     const payload = [];
     for (const row of responses) {
-      const topicLabel = `Module ${Number(row.module_index ?? 0) + 1}, Subtopic ${Number(row.subtopic_index ?? 0) + 1}`;
+      const mappedLeafTitle = leafTitleByIndex.get(
+        leafKey(row.course_id, row.module_index, row.subtopic_index) ?? '',
+      );
+      const topicLabel =
+        firstString(row.raw_evidence_snapshot?.subtopic_label, mappedLeafTitle) ??
+        `Module ${Number(row.module_index ?? 0) + 1}, Subtopic ${Number(row.subtopic_index ?? 0) + 1}`;
 
       if (topic && !topicLabel.toLowerCase().includes(topic.toLowerCase())) {
         continue;

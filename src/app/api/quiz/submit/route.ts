@@ -157,7 +157,6 @@ function matchCachedQuizToRow(
   item: CachedQuizItem,
   latestRows: QuizRowRecord[],
   latestFirstRows: QuizRowRecord[],
-  index: number,
 ): QuizRowRecord | null {
   const normalizedQuestion = normalizeQuizText(item.question);
   const itemOptionsKey = optionsSignature(item.options);
@@ -180,9 +179,6 @@ function matchCachedQuizToRow(
     );
     if (optionsMatch) return optionsMatch;
   }
-
-  const fallbackRow = latestRows[index];
-  if (fallbackRow?.id) return fallbackRow;
 
   if (itemOptionsKey) {
     const latestOptionsMatch = latestFirstRows.find(
@@ -207,8 +203,8 @@ function buildAuthoritativeQuiz(
     const latestFirstRows = [...quizRows].reverse();
 
     return cachedQuizItems
-      .map((item, index) => {
-        const matchedRow = matchCachedQuizToRow(item, latestRows, latestFirstRows, index);
+      .map((item) => {
+        const matchedRow = matchCachedQuizToRow(item, latestRows, latestFirstRows);
         const quizId = typeof matchedRow?.id === 'string' ? matchedRow.id : '';
         const correctAnswer = resolveCorrectAnswer(item, matchedRow);
 
@@ -375,7 +371,6 @@ function matchAnswerToQuestion(
   },
   authoritativeQuiz: AuthoritativeQuizQuestion[],
   usedQuizIds: Set<string>,
-  index: number,
 ): { quiz: AuthoritativeQuizQuestion | null; method: string } {
   const availableQuiz = authoritativeQuiz.filter((quiz) => !usedQuizIds.has(quiz.quizId));
   const normalizedQuestion = normalizeQuizText(answer.question);
@@ -404,11 +399,6 @@ function matchAnswerToQuestion(
       return commonTokens.length >= Math.max(2, Math.ceil(answerTokens.length * 0.5));
     }) ?? null;
     if (similarityMatch) return { quiz: similarityMatch, method: 'content_similarity' };
-  }
-
-  const indexMatch = authoritativeQuiz[index];
-  if (indexMatch && !usedQuizIds.has(indexMatch.quizId)) {
-    return { quiz: indexMatch, method: 'index_position' };
   }
 
   return { quiz: null, method: 'no_match' };
@@ -682,7 +672,6 @@ async function postHandler(req: NextRequest) {
         answer,
         authoritativeQuiz,
         usedQuizIds,
-        i,
       );
 
       if (!matchingQuiz) {

@@ -207,12 +207,28 @@ async function postHandler(req: NextRequest) {
         quiz_regenerated_at: new Date().toISOString(),
       },
     );
-    await adminDb
+    const { error: cacheError } = await adminDb
       .from('subtopic_cache')
       .eq('cache_key', cacheKey)
       .update({ content: updatedContent });
+
+    if (cacheError) {
+      throw cacheError;
+    }
   } catch (cacheError) {
-    console.warn('[QuizRegenerate] Cache update failed (new quiz still usable via response)', cacheError);
+    console.error('[QuizRegenerate] Cache update failed after quiz rows were inserted', {
+      cacheError,
+      courseId,
+      moduleTitle,
+      subtopicTitle,
+    });
+    return NextResponse.json(
+      {
+        error: 'Kuis baru tersimpan, tetapi cache materi gagal diperbarui. Silakan muat ulang halaman sebelum mencoba lagi.',
+        code: 'QUIZ_CACHE_UPDATE_FAILED',
+      },
+      { status: 500 },
+    );
   }
 
   return NextResponse.json({

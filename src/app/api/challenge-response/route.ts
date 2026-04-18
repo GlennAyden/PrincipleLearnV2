@@ -51,6 +51,7 @@ async function postHandler(req: NextRequest) {
       courseId,
       moduleIndex,
       subtopicIndex,
+      subtopicLabel,
       pageNumber,
       question: normalizedQuestion,
       answer: normalizedAnswer,
@@ -118,6 +119,7 @@ async function postHandler(req: NextRequest) {
           answer: normalizedAnswer,
           feedback: normalizedFeedback,
           reasoning_note: normalizedReasoning ? normalizedReasoning : null,
+          subtopic_label: subtopicLabel || null,
         },
         data_collection_week: researchSession.dataCollectionWeek,
         created_at: timestamp,
@@ -156,6 +158,7 @@ async function postHandler(req: NextRequest) {
             metadata: {
               module_index: challengeData.module_index,
               subtopic_index: challengeData.subtopic_index,
+              subtopic_label: subtopicLabel || null,
               page_number: challengeData.page_number,
             },
             createdAt: timestamp,

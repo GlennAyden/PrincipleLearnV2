@@ -183,6 +183,7 @@ export const ChallengeResponseSchema = z.object({
   courseId: z.string().trim().min(1, 'courseId is required'),
   moduleIndex: flexibleIndex,
   subtopicIndex: flexibleIndex,
+  subtopicLabel: z.string().trim().optional().default(''),
   pageNumber: flexibleIndex,
   question: z.string().trim().min(1, 'question is required'),
   answer: z.string().trim().min(1, 'answer is required'),

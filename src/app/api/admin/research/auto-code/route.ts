@@ -28,9 +28,9 @@ interface AutoCodeBody {
 }
 
 const DEFAULT_AUTO_CODE_LIMIT = 3;
-const MAX_AUTO_CODE_LIMIT = 120;
-const DEFAULT_RUNTIME_BUDGET_MS = 35_000;
-const MAX_RUNTIME_BUDGET_MS = 50_000;
+const MAX_AUTO_CODE_LIMIT = 10;
+const DEFAULT_RUNTIME_BUDGET_MS = 20_000;
+const MAX_RUNTIME_BUDGET_MS = 25_000;
 
 export const maxDuration = 55;
 
