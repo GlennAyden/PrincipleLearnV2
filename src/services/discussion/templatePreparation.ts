@@ -1,6 +1,7 @@
 import { adminDb } from '@/lib/database';
 import { buildSubtopicCacheKey } from '@/lib/quiz-sync';
 import {
+  DiscussionTemplateGenerationError,
   generateDiscussionTemplate,
   generateModuleDiscussionTemplate,
 } from '@/services/discussion/generateDiscussionTemplate';
@@ -64,17 +65,19 @@ export interface PreparationState {
   message: string;
   retryAfterSeconds: number;
   error?: string | null;
+  errorCode?: string | null;
+  failureCount?: number;
 }
 
 export const DISCUSSION_TEMPLATE_PREPARING_CODE = 'DISCUSSION_TEMPLATE_PREPARING';
 export const DISCUSSION_TEMPLATE_PREPARATION_FAILED_CODE = 'DISCUSSION_TEMPLATE_PREPARATION_FAILED';
 export const DISCUSSION_TEMPLATE_PREPARING_MESSAGE =
-  'Diskusi sedang disiapkan. Coba tekan mulai ulang diskusi beberapa saat lagi.';
+  'Diskusi sedang disiapkan. Sistem sedang menyiapkan pertanyaan personal untuk modul ini.';
 export const DISCUSSION_TEMPLATE_FAILED_MESSAGE =
-  'Diskusi belum berhasil disiapkan. Coba tekan mulai ulang diskusi beberapa saat lagi.';
+  'Diskusi belum berhasil disiapkan. Tekan Mulai Ulang Diskusi. Jika tetap gagal, hubungi admin.';
 
 const PREPARATION_GENERATED_BY = 'preparation-status';
-const PREPARATION_RETRY_AFTER_SECONDS = 30;
+const PREPARATION_RETRY_AFTER_SECONDS = 8;
 const RUNNING_STALE_MS = 90_000;
 const QUEUED_STALE_MS = 120_000;
 
@@ -99,7 +102,8 @@ export async function fetchReadyDiscussionTemplate(
   let templateQuery = adminDb
     .from('discussion_templates')
     .select('id, version, template, source, generated_by')
-    .eq('subtopic_id', subtopicId);
+    .eq('subtopic_id', subtopicId)
+    .in('generated_by', ['auto', 'auto-module']);
 
   if (courseId) {
     templateQuery = templateQuery.eq('course_id', courseId);
@@ -124,6 +128,7 @@ export async function fetchReadyDiscussionTemplate(
       .from('discussion_templates')
       .select('id, version, template, source, generated_by')
       .eq('course_id', courseId)
+      .in('generated_by', ['auto', 'auto-module'])
       .order('version', { ascending: false })
       .limit(150);
 
@@ -208,16 +213,19 @@ export async function prepareDiscussionTemplateNow(
       running,
       params,
       'failed',
-      'AI belum berhasil menyiapkan template diskusi dalam batas waktu.',
+      'AI belum berhasil menyiapkan template diskusi personal.',
+      'template_not_saved',
     );
     return stateFromPreparationRow(failed);
   } catch (error) {
     console.error('[DiscussionTemplatePreparation] Template preparation failed', error);
+    const errorDetails = getPreparationErrorDetails(error);
     const failed = await updatePreparationRow(
       running,
       params,
       'failed',
-      userSafePreparationError(error),
+      errorDetails.message,
+      errorDetails.code,
     );
     return stateFromPreparationRow(failed);
   }
@@ -366,9 +374,10 @@ async function updatePreparationRow(
   },
   status: PreparationStatus,
   errorMessage?: string,
+  errorCode?: string,
 ): Promise<TemplateRecord> {
   const version = new Date().toISOString();
-  const source = buildPreparationSource(params, status, version, row.source, errorMessage);
+  const source = buildPreparationSource(params, status, version, row.source, errorMessage, errorCode);
   const { data, error } = await adminDb
     .from('discussion_templates')
     .eq('id', row.id)
@@ -393,6 +402,7 @@ function buildPreparationSource(
   timestamp: string,
   previousSource?: Record<string, unknown>,
   errorMessage?: string,
+  errorCode?: string,
 ) {
   const previousGeneration =
     previousSource && typeof previousSource.generation === 'object' && previousSource.generation
@@ -404,6 +414,16 @@ function buildPreparationSource(
       : typeof previousGeneration.startedAt === 'string'
       ? previousGeneration.startedAt
       : null;
+  const previousFailureCount =
+    typeof previousGeneration.failureCount === 'number'
+      ? previousGeneration.failureCount
+      : 0;
+  const failureCount = status === 'failed' ? previousFailureCount + 1 : previousFailureCount;
+  const previousRunCount =
+    typeof previousGeneration.runCount === 'number'
+      ? previousGeneration.runCount
+      : 0;
+  const runCount = status === 'running' ? previousRunCount + 1 : previousRunCount;
 
   return {
     ...(previousSource ?? {}),
@@ -422,6 +442,9 @@ function buildPreparationSource(
       startedAt,
       finishedAt: status === 'failed' || status === 'superseded' ? timestamp : null,
       error: errorMessage ?? null,
+      errorCode: errorCode ?? null,
+      failureCount,
+      runCount,
     },
   };
 }
@@ -542,6 +565,11 @@ function stateFromPreparationRow(row: TemplateRecord): PreparationState {
       : {};
   const status = getPreparationStatus(row.source) ?? 'queued';
   const error = typeof generation.error === 'string' ? generation.error : null;
+  const errorCode = typeof generation.errorCode === 'string' ? generation.errorCode : null;
+  const failureCount =
+    typeof generation.failureCount === 'number' && Number.isFinite(generation.failureCount)
+      ? generation.failureCount
+      : 0;
 
   return {
     status,
@@ -552,19 +580,33 @@ function stateFromPreparationRow(row: TemplateRecord): PreparationState {
         : DISCUSSION_TEMPLATE_PREPARING_MESSAGE,
     retryAfterSeconds: PREPARATION_RETRY_AFTER_SECONDS,
     error,
+    errorCode,
+    failureCount,
   };
 }
 
-function userSafePreparationError(error: unknown) {
+function getPreparationErrorDetails(error: unknown) {
   const message = error instanceof Error ? error.message : String(error);
+  if (error instanceof DiscussionTemplateGenerationError) {
+    return {
+      code: error.code,
+      message: 'AI belum berhasil menyiapkan template diskusi personal.',
+    };
+  }
   if (
     /cached content missing|subtopic not found|unable to assemble module discussion context/i.test(
       message,
     )
   ) {
-    return message;
+    return {
+      code: 'discussion_context_missing',
+      message,
+    };
   }
-  return 'AI belum berhasil menyiapkan template diskusi dalam batas waktu.';
+  return {
+    code: 'discussion_template_preparation_failed',
+    message: 'AI belum berhasil menyiapkan template diskusi personal.',
+  };
 }
 
 function isModuleScope(params: DiscussionTemplateContext) {

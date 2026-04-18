@@ -170,6 +170,8 @@ function DiscussionCard({
   const badgeClass =
     status === 'completed'
       ? styles.discussionBadgeDone
+      : status === 'failed'
+      ? styles.discussionBadgeFailed
       : styles.discussionBadgeProgress;
 
   const learningGoals = session?.learningGoals ?? [];

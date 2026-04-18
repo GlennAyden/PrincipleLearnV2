@@ -15,6 +15,8 @@ import {
   normalizeThinkingSkillMeta,
 } from '@/lib/discussion/thinkingSkills';
 import {
+  DISCUSSION_TEMPLATE_FAILED_MESSAGE,
+  DISCUSSION_TEMPLATE_PREPARATION_FAILED_CODE,
   DISCUSSION_TEMPLATE_PREPARING_CODE,
   DISCUSSION_TEMPLATE_PREPARING_MESSAGE,
   fetchReadyDiscussionTemplate,
@@ -166,11 +168,24 @@ async function postHandler(request: NextRequest) {
 
       const response = NextResponse.json(
         {
-          code: DISCUSSION_TEMPLATE_PREPARING_CODE,
+          code:
+            preparation.status === 'failed'
+              ? DISCUSSION_TEMPLATE_PREPARATION_FAILED_CODE
+              : DISCUSSION_TEMPLATE_PREPARING_CODE,
           status: preparation.status === 'failed' ? 'failed' : 'preparing',
-          error: preparation.message || DISCUSSION_TEMPLATE_PREPARING_MESSAGE,
-          message: preparation.message || DISCUSSION_TEMPLATE_PREPARING_MESSAGE,
+          error:
+            preparation.message ||
+            (preparation.status === 'failed'
+              ? DISCUSSION_TEMPLATE_FAILED_MESSAGE
+              : DISCUSSION_TEMPLATE_PREPARING_MESSAGE),
+          message:
+            preparation.message ||
+            (preparation.status === 'failed'
+              ? DISCUSSION_TEMPLATE_FAILED_MESSAGE
+              : DISCUSSION_TEMPLATE_PREPARING_MESSAGE),
           retryAfterSeconds: preparation.retryAfterSeconds,
+          errorCode: preparation.errorCode,
+          failureCount: preparation.failureCount,
           preparation: {
             jobId: preparation.jobId,
             status: preparation.status,

@@ -24,6 +24,11 @@ type TemplateRecord = {
   id: string;
   template: DiscussionTemplate;
   version: string;
+  source?: {
+    generation?: {
+      status?: string;
+    };
+  };
   generated_by?: string | null;
 };
 
@@ -188,19 +193,20 @@ async function fetchTemplate(session: SessionRecord): Promise<TemplateRecord | n
   if (session.template_id) {
     const { data, error } = await adminDb
       .from('discussion_templates')
-      .select('id, template, version')
+      .select('id, template, version, source, generated_by')
       .eq('id', session.template_id)
       .limit(1);
 
-    if (!error && data?.[0]) {
+    if (!error && data?.[0] && isUsableTemplateRow(data[0])) {
       return data[0];
     }
   }
 
   const { data, error } = await adminDb
     .from('discussion_templates')
-    .select('id, template, version, generated_by')
+    .select('id, template, version, source, generated_by')
     .eq('subtopic_id', session.subtopic_id)
+    .in('generated_by', ['auto', 'auto-module'])
     .order('version', { ascending: false })
     .limit(25);
 
@@ -213,10 +219,12 @@ async function fetchTemplate(session: SessionRecord): Promise<TemplateRecord | n
 }
 
 function isUsableTemplateRow(row: TemplateRecord) {
-  if (row.generated_by === 'preparation-status') {
+  const generatedBy = String(row.generated_by ?? '');
+  if (generatedBy !== 'auto' && generatedBy !== 'auto-module') {
     return false;
   }
-  return Array.isArray(row.template?.phases) && row.template.phases.length > 0;
+  const status = row.source?.generation?.status;
+  return (!status || status === 'ready') && Array.isArray(row.template?.phases) && row.template.phases.length > 0;
 }
 
 async function fetchMessages(sessionId: string) {

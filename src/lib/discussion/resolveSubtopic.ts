@@ -41,9 +41,10 @@ export async function resolveDiscussionSubtopicId({
       .from('discussion_templates')
       .select('subtopic_id')
       .eq('course_id', courseId)
+      .in('generated_by', ['auto', 'auto-module'])
       .contains('source', { subtopicTitle })
       .order('version', { ascending: false })
-      .limit(1);
+      .limit(25);
 
     if (!templateError && templateMatch?.[0]?.subtopic_id) {
       return templateMatch[0].subtopic_id as string;

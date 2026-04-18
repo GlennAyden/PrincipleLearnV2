@@ -60,6 +60,9 @@ interface TemplateSource {
   keyTakeaways?: string[];
   learningObjectives?: string[];
   subtopicTitle?: string;
+  generation?: {
+    status?: string;
+  };
 }
 
 type TemplateRecord = {
@@ -67,6 +70,7 @@ type TemplateRecord = {
   template: DiscussionTemplate;
   version: string;
   source?: TemplateSource;
+  generated_by?: string | null;
 };
 
 interface DiscussionGoalState {
@@ -926,28 +930,43 @@ async function fetchTemplate(session: SessionRecord): Promise<TemplateRecord | n
   if (session.template_id) {
     const { data, error } = await adminDb
       .from('discussion_templates')
-      .select('id, template, version, source')
+      .select('id, template, version, source, generated_by')
       .eq('id', session.template_id)
       .limit(1);
 
-    if (!error && data?.[0]) {
+    if (!error && data?.[0] && isUsableTemplateRow(data[0])) {
       return data[0];
     }
   }
 
   const { data, error } = await adminDb
     .from('discussion_templates')
-    .select('id, template, version, source')
+    .select('id, template, version, source, generated_by')
     .eq('subtopic_id', session.subtopic_id)
+    .in('generated_by', ['auto', 'auto-module'])
     .order('version', { ascending: false })
-    .limit(1);
+    .limit(25);
 
   if (error) {
     console.error('[DiscussionRespond] Failed to fallback template', error);
     return null;
   }
 
-  return data?.[0] ?? null;
+  return (data ?? []).find(isUsableTemplateRow) ?? null;
+}
+
+function isUsableTemplateRow(row: TemplateRecord) {
+  const generatedBy = String(row.generated_by ?? '');
+  if (generatedBy !== 'auto' && generatedBy !== 'auto-module') {
+    return false;
+  }
+
+  const status = row.source?.generation?.status;
+  return (
+    (!status || status === 'ready') &&
+    Array.isArray(row.template?.phases) &&
+    row.template.phases.length > 0
+  );
 }
 
 async function fetchMessages(sessionId: string) {

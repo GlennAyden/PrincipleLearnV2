@@ -4,6 +4,7 @@ import {
   ThinkingSkillMeta,
   buildThinkingSkillGuidanceLines,
 } from '@/lib/discussion/thinkingSkills';
+import type { ChatCompletionCreateParamsNonStreaming } from 'openai/resources/chat/completions';
 
 interface TemplateStep {
   key: string;
@@ -64,12 +65,37 @@ interface ModuleDiscussionTemplateParams {
 }
 
 type DiscussionTemplateGenerationMode = 'ai_initial' | 'ai_regenerated';
+type TemplateGenerationFailureCode =
+  | 'token_budget_exhausted'
+  | 'empty_response'
+  | 'invalid_json'
+  | 'invalid_schema'
+  | 'openai_request_failed';
 
 const TEMPLATE_PROMPT_VERSION = 'discussion-template-v2';
 const TEMPLATE_GENERATION_ATTEMPTS = 1;
-const TEMPLATE_OPENAI_TIMEOUT_MS = 42_000;
-const SUBTOPIC_MAX_COMPLETION_TOKENS = 2400;
-const MODULE_MAX_COMPLETION_TOKENS = 3000;
+const TEMPLATE_OPENAI_TIMEOUT_MS = 52_000;
+const SUBTOPIC_MAX_COMPLETION_TOKENS = 7000;
+const MODULE_MAX_COMPLETION_TOKENS = 9000;
+const TEMPLATE_REASONING_EFFORT = 'low' as const;
+const discussionTemplateModel =
+  process.env.OPENAI_DISCUSSION_TEMPLATE_MODEL || defaultOpenAIModel;
+
+export class DiscussionTemplateGenerationError extends Error {
+  public readonly code: TemplateGenerationFailureCode;
+  public readonly details?: Record<string, unknown>;
+
+  constructor(
+    message: string,
+    code: TemplateGenerationFailureCode,
+    details?: Record<string, unknown>,
+  ) {
+    super(message);
+    this.name = 'DiscussionTemplateGenerationError';
+    this.code = code;
+    this.details = details;
+  }
+}
 
 function isTemplateStep(step: unknown): step is TemplateStep {
   if (!step || typeof step !== 'object') return false;
@@ -322,6 +348,14 @@ export async function generateDiscussionTemplate(
       templateVersion: version,
     };
   } catch (error) {
+    if (error instanceof DiscussionTemplateGenerationError) {
+      console.error('[DiscussionTemplate] Template generation failed', {
+        scope: 'subtopic',
+        code: error.code,
+        details: error.details,
+      });
+      throw error;
+    }
     console.error('[DiscussionTemplate] Error generating template', error);
     return null;
   }
@@ -396,6 +430,14 @@ export async function generateModuleDiscussionTemplate(
       templateVersion: version,
     };
   } catch (error) {
+    if (error instanceof DiscussionTemplateGenerationError) {
+      console.error('[DiscussionTemplate] Template generation failed', {
+        scope: 'module',
+        code: error.code,
+        details: error.details,
+      });
+      throw error;
+    }
     console.error('[DiscussionTemplate] Error generating module template', error);
     return null;
   }
@@ -406,14 +448,22 @@ async function requestTemplateFromOpenAI(params: {
   messages: Array<{ role: 'system' | 'user'; content: string }>;
   maxCompletionTokens: number;
 }): Promise<{ template: DiscussionTemplatePayload; attempts: number } | null> {
+  let lastFailure: DiscussionTemplateGenerationError | null = null;
+
   for (let attempt = 1; attempt <= TEMPLATE_GENERATION_ATTEMPTS; attempt += 1) {
     try {
-      const completion = await openai.chat.completions.create({
-        model: defaultOpenAIModel,
+      const requestBody: ChatCompletionCreateParamsNonStreaming = {
+        model: discussionTemplateModel,
         messages: params.messages,
         response_format: responseFormat,
         max_completion_tokens: params.maxCompletionTokens,
-      }, {
+      };
+
+      if (supportsReasoningEffort(discussionTemplateModel)) {
+        requestBody.reasoning_effort = TEMPLATE_REASONING_EFFORT;
+      }
+
+      const completion = await openai.chat.completions.create(requestBody, {
         maxRetries: 0,
         timeout: TEMPLATE_OPENAI_TIMEOUT_MS,
       });
@@ -423,27 +473,62 @@ async function requestTemplateFromOpenAI(params: {
         | { content?: string | null; refusal?: string | null }
         | undefined;
       const raw = message?.content;
-
-      logCompletionDiagnostics({
+      const finishReason = choice?.finish_reason ?? null;
+      const diagnostics = buildCompletionDiagnostics({
         scope: params.scope,
         attempt,
-        finishReason: choice?.finish_reason ?? null,
+        finishReason,
         refusal: message?.refusal ?? null,
         usage: completion.usage ?? null,
         hasContent: Boolean(raw && raw.trim()),
+        maxCompletionTokens: params.maxCompletionTokens,
       });
 
+      logCompletionDiagnostics(diagnostics);
+
       if (!raw || !raw.trim()) {
+        lastFailure = new DiscussionTemplateGenerationError(
+          finishReason === 'length'
+            ? 'OpenAI exhausted the completion token budget before returning visible template JSON.'
+            : 'OpenAI returned an empty discussion template response.',
+          finishReason === 'length' ? 'token_budget_exhausted' : 'empty_response',
+          diagnostics,
+        );
         console.warn('[DiscussionTemplate] Empty response from OpenAI', {
           scope: params.scope,
           attempt,
-          model: defaultOpenAIModel,
+          finishReason,
+          model: discussionTemplateModel,
         });
         continue;
       }
 
-      const parsed = JSON.parse(raw);
+      let parsed: unknown;
+      try {
+        parsed = JSON.parse(raw);
+      } catch (parseError) {
+        lastFailure = new DiscussionTemplateGenerationError(
+          'OpenAI returned discussion template content that was not valid JSON.',
+          'invalid_json',
+          {
+            ...diagnostics,
+            parseError: safeErrorMessage(parseError),
+          },
+        );
+        console.error('[DiscussionTemplate] Failed to parse template JSON', {
+          scope: params.scope,
+          attempt,
+          error: parseError,
+        });
+        continue;
+      }
+
       if (!isValidTemplate(parsed)) {
+        lastFailure = new DiscussionTemplateGenerationError(
+          'OpenAI returned discussion template JSON that did not match the required structure.',
+          'invalid_schema',
+          diagnostics,
+        );
         console.error('[DiscussionTemplate] Validation failed: invalid template structure', {
           scope: params.scope,
           attempt,
@@ -453,6 +538,20 @@ async function requestTemplateFromOpenAI(params: {
 
       return { template: parsed, attempts: attempt };
     } catch (error) {
+      if (error instanceof DiscussionTemplateGenerationError) {
+        lastFailure = error;
+        continue;
+      }
+      lastFailure = new DiscussionTemplateGenerationError(
+        'OpenAI request failed while preparing discussion template.',
+        'openai_request_failed',
+        {
+          scope: params.scope,
+          attempt,
+          model: discussionTemplateModel,
+          error: safeErrorMessage(error),
+        },
+      );
       console.error('[DiscussionTemplate] OpenAI template attempt failed', {
         scope: params.scope,
         attempt,
@@ -464,18 +563,32 @@ async function requestTemplateFromOpenAI(params: {
   console.error('[DiscussionTemplate] Template generation exhausted attempts', {
     scope: params.scope,
     attempts: TEMPLATE_GENERATION_ATTEMPTS,
-    model: defaultOpenAIModel,
+    model: discussionTemplateModel,
+    code: lastFailure?.code,
+    details: lastFailure?.details,
   });
-  return null;
+  throw (
+    lastFailure ??
+    new DiscussionTemplateGenerationError(
+      'OpenAI did not return a usable discussion template.',
+      'empty_response',
+      {
+        scope: params.scope,
+        attempts: TEMPLATE_GENERATION_ATTEMPTS,
+        model: discussionTemplateModel,
+      },
+    )
+  );
 }
 
-function logCompletionDiagnostics(params: {
+function buildCompletionDiagnostics(params: {
   scope: 'subtopic' | 'module';
   attempt: number;
   finishReason: string | null;
   refusal: string | null;
   usage: unknown;
   hasContent: boolean;
+  maxCompletionTokens: number;
 }) {
   const usage = params.usage as
     | {
@@ -488,7 +601,7 @@ function logCompletionDiagnostics(params: {
       }
     | null;
 
-  console.info('[DiscussionTemplate] OpenAI completion diagnostics', {
+  return {
     scope: params.scope,
     attempt: params.attempt,
     finishReason: params.finishReason,
@@ -498,8 +611,16 @@ function logCompletionDiagnostics(params: {
     completionTokens: usage?.completion_tokens,
     reasoningTokens: usage?.completion_tokens_details?.reasoning_tokens,
     totalTokens: usage?.total_tokens,
-    model: defaultOpenAIModel,
-  });
+    model: discussionTemplateModel,
+    reasoningEffort: supportsReasoningEffort(discussionTemplateModel)
+      ? TEMPLATE_REASONING_EFFORT
+      : null,
+    maxCompletionTokens: params.maxCompletionTokens,
+  };
+}
+
+function logCompletionDiagnostics(params: Record<string, unknown>) {
+  console.info('[DiscussionTemplate] OpenAI completion diagnostics', params);
 }
 
 function buildGenerationMetadata(params: {
@@ -514,12 +635,26 @@ function buildGenerationMetadata(params: {
     scope: params.scope,
     trigger: params.trigger,
     provider: 'openai',
-    model: defaultOpenAIModel,
+    model: discussionTemplateModel,
     promptVersion: TEMPLATE_PROMPT_VERSION,
     attempts: params.attempts,
     generatedAt: params.generatedAt,
     status: 'ready',
   };
+}
+
+function supportsReasoningEffort(model: string) {
+  const normalized = model.toLowerCase();
+  return (
+    normalized.startsWith('gpt-5') ||
+    normalized.startsWith('o1') ||
+    normalized.startsWith('o3') ||
+    normalized.startsWith('o4')
+  );
+}
+
+function safeErrorMessage(error: unknown) {
+  return error instanceof Error ? error.message : String(error);
 }
 
 function buildSystemPrompt() {
@@ -530,6 +665,7 @@ function buildSystemPrompt() {
     'Phases must progress from diagnosis to synthesis and ensure coverage of the learning goals.',
     'Each step should encourage reflection, justification, or application rather than giving direct answers.',
     'Provide measurable rubrics for each learning goal to help facilitators evaluate responses.',
+    'Keep the template concise: prefer one strong prompt per phase, short options, and rubric bullets that are specific but not long.',
     'Add a closing message that the coach can deliver when mastery is achieved.',
   ].join('\n');
 }
@@ -568,12 +704,12 @@ function buildPrompt({
     ...thinkingSkillLines,
     '',
     'Requirements:',
-    '- Create four phases: diagnosis, exploration, practice, synthesis.',
-    '- Each phase must have at least one step with a unique `key`.',
+    '- Create exactly four phases: diagnosis, exploration, practice, synthesis.',
+    '- Each phase should have one high-quality step with a unique `key`.',
     '- Include at least one step with `expected_type` set to "mcq" complete with `options`, `answer`, and feedback.',
     '- Ensure every step lists relevant `goal_refs` referencing the learning goals you define.',
-    '- Learning goals should be 3-5 statements derived from objectives and takeaways.',
-    '- For each learning goal, provide a `rubric` object containing `success_summary`, a `checklist` of concrete indicators (2-4 items), and optional `failure_signals` describing common misconceptions.',
+    '- Learning goals should be exactly 4 statements derived from objectives and takeaways.',
+    '- For each learning goal, provide a concise `rubric` object containing `success_summary`, a `checklist` of concrete indicators (2-3 items), and optional `failure_signals` describing common misconceptions.',
     '- Every learning goal MUST include a `thinking_skill` object describing the related indicator (`domain`, `indicator`, and `indicator_description`).',
     '- The set of learning goals must cover at least one Critical Thinking indicator and one Computational Thinking indicator (preferably balanced).',
     '- Reference both thinking skill categories across the phases so that learners practice CT and CPT in tandem.',
@@ -643,11 +779,13 @@ function buildModulePrompt({
     '',
     'Instruksi:',
     '- Rancang diskusi Socratic yang meninjau seluruh modul, pastikan setiap subtopik disentuh.',
-    '- Gunakan fase diagnosis, eksplorasi, latihan, dan sintesis untuk mengaitkan konsep lintas subtopik.',
+    '- Gunakan tepat empat fase: diagnosis, eksplorasi, latihan, dan sintesis untuk mengaitkan konsep lintas subtopik.',
+    '- Setiap fase sebaiknya berisi satu prompt utama yang tajam dan kontekstual.',
     '- Soroti hubungan antar subtopik dan bagaimana konsep awal mendukung konsep lanjutan.',
     '- Dalam setiap langkah, kaitkan pertanyaan dengan learning goals relevan dan minta peserta menghubungkan antar topik.',
     '- Pastikan ada minimal satu pertanyaan MCQ dengan opsi, jawaban, dan umpan balik.',
-    '- Pastikan rubric goal mengevaluasi pemahaman menyeluruh terhadap seluruh modul, bukan sekadar subtopik tunggal.',
+    '- Buat tepat 4 learning goal dan pastikan rubric goal mengevaluasi pemahaman menyeluruh terhadap seluruh modul, bukan sekadar subtopik tunggal.',
+    '- Jaga output tetap ringkas: pertanyaan, opsi, feedback, dan rubric harus padat tetapi tetap spesifik.',
     '- Setiap learning goal wajib memiliki `thinking_skill` sesuai daftar indikator (lengkapi domain, indicator, indicator_description).',
     '- Susun goal sehingga keduanya mencakup indikator Critical Thinking dan Computational Thinking, dan pastikan langkah diskusi memancing kedua jenis kemampuan tersebut.',
     '- Tambahkan closing message yang mengajak peserta menerapkan pengetahuan modul secara terpadu.',

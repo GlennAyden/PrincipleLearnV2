@@ -130,6 +130,12 @@ $transition: 0.25s cubic-bezier(0.4, 0, 0.2, 1);
   color: $green-700;
 }
 
+.discussionBadgeFailed {
+  background: #fef2f2;
+  border-color: #fecaca;
+  color: #b91c1c;
+}
+
 /* ── Card Text ── */
 .cardText {
   font-size: 0.9rem;

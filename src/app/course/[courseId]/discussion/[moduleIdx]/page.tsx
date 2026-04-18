@@ -43,9 +43,12 @@ const PHASE_LABELS: Record<string, string> = {
 };
 
 const DISCUSSION_TEMPLATE_PREPARING_CODE = 'DISCUSSION_TEMPLATE_PREPARING';
+const DISCUSSION_TEMPLATE_FAILED_CODE = 'DISCUSSION_TEMPLATE_PREPARATION_FAILED';
 const DISCUSSION_PREPARING_MESSAGE =
-  'Diskusi sedang disiapkan. Coba tekan mulai ulang diskusi beberapa saat lagi.';
-const DISCUSSION_PREPARING_DEFAULT_RETRY_SECONDS = 30;
+  'Diskusi sedang disiapkan. Sistem sedang menyiapkan pertanyaan personal untuk modul ini.';
+const DISCUSSION_FAILED_MESSAGE =
+  'Diskusi belum berhasil disiapkan. Tekan coba siapkan ulang. Jika tetap gagal, hubungi admin.';
+const DISCUSSION_PREPARING_DEFAULT_RETRY_SECONDS = 8;
 
 type ApiErrorPayload = {
   code?: string;
@@ -53,6 +56,9 @@ type ApiErrorPayload = {
   message?: string;
   status?: string;
   retryAfterSeconds?: number;
+  retryable?: boolean;
+  errorCode?: string | null;
+  failureCount?: number;
   prerequisites?: ModulePrerequisiteDetails;
 };
 
@@ -184,6 +190,7 @@ export default function DiscussionModulePage() {
   const [error, setError] = useState('');
   const [requiresPreparation, setRequiresPreparation] = useState(false);
   const [discussionPreparing, setDiscussionPreparing] = useState(false);
+  const [discussionPreparationFailed, setDiscussionPreparationFailed] = useState(false);
   const [preparingMessage, setPreparingMessage] = useState(DISCUSSION_PREPARING_MESSAGE);
   const [preparingRetryAfterSeconds, setPreparingRetryAfterSeconds] = useState(
     DISCUSSION_PREPARING_DEFAULT_RETRY_SECONDS,
@@ -218,6 +225,29 @@ export default function DiscussionModulePage() {
     setRemediationRound(0);
     setEffortWarning('');
     setShowGoalPanel(false);
+  }, []);
+
+  const showPreparingPanel = useCallback((message: string, retryAfterSeconds: number) => {
+    setRequiresPreparation(false);
+    setDiscussionPreparing(true);
+    setDiscussionPreparationFailed(false);
+    setPreparingMessage(message);
+    setPreparingRetryAfterSeconds(retryAfterSeconds);
+    setError('');
+  }, []);
+
+  const showPreparationFailedPanel = useCallback((message: string, retryAfterSeconds: number) => {
+    setRequiresPreparation(false);
+    setDiscussionPreparing(true);
+    setDiscussionPreparationFailed(true);
+    setPreparingMessage(message);
+    setPreparingRetryAfterSeconds(retryAfterSeconds);
+    setError('');
+  }, []);
+
+  const hidePreparationPanel = useCallback(() => {
+    setDiscussionPreparing(false);
+    setDiscussionPreparationFailed(false);
   }, []);
 
   const syncInteractionStateFromMessages = useCallback((nextMessages: DiscussionMessage[]) => {
@@ -362,7 +392,7 @@ export default function DiscussionModulePage() {
       setPrereqDetails(null);
       setPrereqChecked(true);
       setRequiresPreparation(false);
-      setDiscussionPreparing(false);
+      hidePreparationPanel();
       return;
     }
 
@@ -390,7 +420,7 @@ export default function DiscussionModulePage() {
         if (!cancelled) {
           setPrereqDetails(data);
           setRequiresPreparation(!data.ready);
-          setDiscussionPreparing(false);
+          hidePreparationPanel();
           if (data.ready) {
             setError('');
           } else {
@@ -404,7 +434,7 @@ export default function DiscussionModulePage() {
         if (!cancelled) {
           setPrereqDetails(null);
           setRequiresPreparation(true);
-          setDiscussionPreparing(false);
+          hidePreparationPanel();
           clearDiscussionState();
           setError(err instanceof Error ? err.message : 'Gagal memeriksa prasyarat diskusi');
         }
@@ -420,7 +450,7 @@ export default function DiscussionModulePage() {
     return () => {
       cancelled = true;
     };
-  }, [clearDiscussionState, courseId, discussionScope, moduleSubtopicId]);
+  }, [clearDiscussionState, courseId, discussionScope, hidePreparationPanel, moduleSubtopicId]);
 
   useEffect(() => {
     if (!courseId || !apiSubtopicTitle) return;
@@ -428,7 +458,7 @@ export default function DiscussionModulePage() {
       if (!prereqChecked) return;
       if (requiresPreparation) {
         clearDiscussionState();
-        setDiscussionPreparing(false);
+        hidePreparationPanel();
         setLoading(false);
         setInitializing(false);
         return;
@@ -464,7 +494,7 @@ export default function DiscussionModulePage() {
         if (!cancelled) {
           clearDiscussionState();
           setRequiresPreparation(true);
-          setDiscussionPreparing(false);
+          hidePreparationPanel();
           setPrereqDetails(responsePayload?.prerequisites ?? null);
           setError(
             payloadMessage(
@@ -479,22 +509,17 @@ export default function DiscussionModulePage() {
       if (response.status === 202) {
         if (!cancelled) {
           clearDiscussionState();
-          setRequiresPreparation(false);
-          setDiscussionPreparing(true);
-          setPreparingMessage(payloadMessage(responsePayload, DISCUSSION_PREPARING_MESSAGE));
-          setPreparingRetryAfterSeconds(retryAfterSeconds);
-          setError('');
+          showPreparingPanel(
+            payloadMessage(responsePayload, DISCUSSION_PREPARING_MESSAGE),
+            retryAfterSeconds,
+          );
         }
         return;
       }
 
       if (response.ok) {
         if (!cancelled) {
-          setRequiresPreparation(false);
-          setDiscussionPreparing(true);
-          setPreparingMessage('Diskusi siap dimulai. Memuat sesi...');
-          setPreparingRetryAfterSeconds(1);
-          setError('');
+          showPreparingPanel('Diskusi siap dimulai. Memuat sesi...', 1);
           setReloadKey((value) => value + 1);
         }
         return;
@@ -502,11 +527,21 @@ export default function DiscussionModulePage() {
 
       if (!cancelled) {
         clearDiscussionState();
-        setRequiresPreparation(false);
-        setDiscussionPreparing(true);
-        setPreparingMessage(payloadMessage(responsePayload, DISCUSSION_PREPARING_MESSAGE));
-        setPreparingRetryAfterSeconds(retryAfterSeconds);
-        setError('');
+        const failed =
+          responsePayload?.code === DISCUSSION_TEMPLATE_FAILED_CODE ||
+          responsePayload?.status === 'failed' ||
+          response.status >= 500;
+        if (failed) {
+          showPreparationFailedPanel(
+            payloadMessage(responsePayload, DISCUSSION_FAILED_MESSAGE),
+            retryAfterSeconds,
+          );
+        } else {
+          showPreparingPanel(
+            payloadMessage(responsePayload, DISCUSSION_PREPARING_MESSAGE),
+            retryAfterSeconds,
+          );
+        }
       }
     }
 
@@ -524,11 +559,20 @@ export default function DiscussionModulePage() {
           const retryAfterSeconds = responseRetryAfterSeconds(response, responsePayload);
           if (!cancelled) {
             clearDiscussionState();
-            setRequiresPreparation(false);
-            setDiscussionPreparing(true);
-            setPreparingMessage(payloadMessage(responsePayload, DISCUSSION_PREPARING_MESSAGE));
-            setPreparingRetryAfterSeconds(retryAfterSeconds);
-            setError('');
+            if (
+              responsePayload?.code === DISCUSSION_TEMPLATE_FAILED_CODE ||
+              responsePayload?.status === 'failed'
+            ) {
+              showPreparationFailedPanel(
+                payloadMessage(responsePayload, DISCUSSION_FAILED_MESSAGE),
+                retryAfterSeconds,
+              );
+            } else {
+              showPreparingPanel(
+                payloadMessage(responsePayload, DISCUSSION_PREPARING_MESSAGE),
+                retryAfterSeconds,
+              );
+            }
           }
           await prepareDiscussionTemplate(payload);
           return;
@@ -543,7 +587,7 @@ export default function DiscussionModulePage() {
           if (!cancelled) {
             clearDiscussionState();
             setRequiresPreparation(true);
-            setDiscussionPreparing(false);
+            hidePreparationPanel();
             setPrereqDetails(responsePayload?.prerequisites ?? null);
             setError(
               payloadMessage(
@@ -557,15 +601,28 @@ export default function DiscussionModulePage() {
 
         if (!response.ok) {
           const responsePayload = await readApiPayload(response);
-          if (responsePayload?.code === DISCUSSION_TEMPLATE_PREPARING_CODE) {
+          if (
+            responsePayload?.code === DISCUSSION_TEMPLATE_PREPARING_CODE ||
+            responsePayload?.code === DISCUSSION_TEMPLATE_FAILED_CODE ||
+            responsePayload?.status === 'failed'
+          ) {
             const retryAfterSeconds = responseRetryAfterSeconds(response, responsePayload);
             if (!cancelled) {
               clearDiscussionState();
-              setRequiresPreparation(false);
-              setDiscussionPreparing(true);
-              setPreparingMessage(payloadMessage(responsePayload, DISCUSSION_PREPARING_MESSAGE));
-              setPreparingRetryAfterSeconds(retryAfterSeconds);
-              setError('');
+              if (
+                responsePayload?.code === DISCUSSION_TEMPLATE_FAILED_CODE ||
+                responsePayload?.status === 'failed'
+              ) {
+                showPreparationFailedPanel(
+                  payloadMessage(responsePayload, DISCUSSION_FAILED_MESSAGE),
+                  retryAfterSeconds,
+                );
+              } else {
+                showPreparingPanel(
+                  payloadMessage(responsePayload, DISCUSSION_PREPARING_MESSAGE),
+                  retryAfterSeconds,
+                );
+              }
             }
             await prepareDiscussionTemplate(payload);
             return;
@@ -577,7 +634,7 @@ export default function DiscussionModulePage() {
         if (!cancelled) {
           const normalized = normalizeDiscussionResponse(data);
           setRequiresPreparation(false);
-          setDiscussionPreparing(false);
+          hidePreparationPanel();
           setError('');
           setSession(normalized.session);
           setMessages(normalized.messages);
@@ -589,13 +646,13 @@ export default function DiscussionModulePage() {
           const message = err instanceof Error ? err.message : 'Tidak dapat memulai sesi diskusi';
           if (/unable to resolve discussion context/i.test(message) || /discussion session not found/i.test(message)) {
             setRequiresPreparation(true);
-            setDiscussionPreparing(false);
+            hidePreparationPanel();
             clearDiscussionState();
             setError(
               'Diskusi wajib baru tersedia setelah semua subtopik modul selesai dipelajari dan digenerate.'
             );
           } else {
-            setDiscussionPreparing(false);
+            hidePreparationPanel();
             setError(message);
           }
         }
@@ -610,7 +667,7 @@ export default function DiscussionModulePage() {
     async function loadHistory() {
       setLoading(true);
       setError('');
-      setDiscussionPreparing(false);
+      hidePreparationPanel();
       clearDiscussionState();
       try {
         const params = new URLSearchParams({
@@ -632,7 +689,7 @@ export default function DiscussionModulePage() {
           }
           if (!cancelled) {
             setRequiresPreparation(true);
-            setDiscussionPreparing(false);
+            hidePreparationPanel();
             setError(
               'Diskusi wajib baru tersedia setelah semua subtopik modul selesai dipelajari dan digenerate.'
             );
@@ -653,7 +710,7 @@ export default function DiscussionModulePage() {
         if (!cancelled) {
           const normalized = normalizeDiscussionResponse(data);
           setRequiresPreparation(false);
-          setDiscussionPreparing(false);
+          hidePreparationPanel();
           setError('');
           setSession(normalized.session);
           setMessages(normalized.messages);
@@ -665,13 +722,13 @@ export default function DiscussionModulePage() {
           const message = err instanceof Error ? err.message : 'Tidak dapat memuat sesi diskusi';
           if (/unable to resolve discussion context/i.test(message) || /discussion session not found/i.test(message)) {
             setRequiresPreparation(true);
-            setDiscussionPreparing(false);
+            hidePreparationPanel();
             clearDiscussionState();
             setError(
               'Diskusi wajib baru tersedia setelah semua subtopik modul selesai dipelajari dan digenerate.'
             );
           } else {
-            setDiscussionPreparing(false);
+            hidePreparationPanel();
             setError(message);
           }
         }
@@ -691,12 +748,15 @@ export default function DiscussionModulePage() {
     apiSubtopicTitle,
     clearDiscussionState,
     courseId,
+    hidePreparationPanel,
     moduleSubtopicId,
     moduleTitle,
     discussionScope,
     prereqChecked,
     requiresPreparation,
     reloadKey,
+    showPreparationFailedPanel,
+    showPreparingPanel,
     syncInteractionStateFromMessages,
   ]);
 
@@ -908,7 +968,7 @@ export default function DiscussionModulePage() {
     session?.status === 'completed'
       ? styles.badgeDone
       : session?.status === 'failed'
-      ? styles.badgeProgress
+      ? styles.badgeFailed
       : session?.status === 'in_progress'
       ? styles.badgeProgress
       : styles.badgeIdle;
@@ -1123,15 +1183,34 @@ export default function DiscussionModulePage() {
           </button>
         </div>
       ) : discussionPreparing ? (
-        <div className={styles.preparationNotice}>
-          <h2>Diskusi Sedang Disiapkan</h2>
+        <div
+          className={`${styles.preparationNotice} ${
+            discussionPreparationFailed ? styles.preparationFailed : ''
+          }`}
+          role={discussionPreparationFailed ? 'alert' : undefined}
+        >
+          <h2>
+            {discussionPreparationFailed
+              ? 'Template Diskusi Belum Berhasil Disiapkan'
+              : 'Diskusi Sedang Disiapkan'}
+          </h2>
           <p>{preparingMessage}</p>
           <ol className={styles.preparationList}>
-            <li>
-              Tunggu sekitar {preparingRetryAfterSeconds} detik agar sistem selesai
-              menyiapkan pertanyaan diskusi.
-            </li>
-            <li>Tekan tombol di bawah ini untuk mengecek ulang kesiapan diskusi.</li>
+            {discussionPreparationFailed ? (
+              <>
+                <li>Diskusi wajib tetap terkunci sampai template personal berhasil dibuat dari materi modul ini.</li>
+                <li>Tekan tombol di bawah ini untuk mencoba menyiapkan ulang template diskusi.</li>
+                <li>Jika masih gagal setelah beberapa percobaan, hubungi admin agar konfigurasi AI dan data modul diperiksa.</li>
+              </>
+            ) : (
+              <>
+                <li>
+                  Tunggu sekitar {preparingRetryAfterSeconds} detik agar sistem selesai
+                  menyiapkan pertanyaan diskusi.
+                </li>
+                <li>Tekan tombol di bawah ini untuk mengecek ulang kesiapan diskusi.</li>
+              </>
+            )}
           </ol>
           <button
             type="button"
@@ -1139,7 +1218,11 @@ export default function DiscussionModulePage() {
             onClick={() => setReloadKey((value) => value + 1)}
             disabled={loading}
           >
-            {loading ? 'Memeriksa...' : 'Mulai Ulang Diskusi'}
+            {loading
+              ? 'Menyiapkan...'
+              : discussionPreparationFailed
+              ? 'Coba Siapkan Ulang'
+              : 'Cek Kesiapan Diskusi'}
           </button>
         </div>
       ) : initializing ? (
