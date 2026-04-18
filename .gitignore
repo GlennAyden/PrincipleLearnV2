@@ -67,10 +67,17 @@ yarn-error.log*
 /.windsurf/
 /.zencoder/
 /.claude/skills/
+/.claude/agents/
 /.claude/scheduled_tasks.lock
 /.vscode/
 /skills/
 /skills-lock.json
+
+# local Codex/dev-server logs and verification artifacts
+/.codex-dev-*.log
+/audit-artifacts/
+/audit-*.png
+/output/
 
 # typescript
 *.tsbuildinfo
