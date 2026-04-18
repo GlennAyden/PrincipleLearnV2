@@ -226,6 +226,9 @@ erDiagram
         text status
         text phase
         jsonb learning_goals
+        timestamptz completed_at
+        text completion_reason
+        jsonb completion_summary
         timestamptz created_at
         timestamptz updated_at
     }
@@ -251,7 +254,23 @@ erDiagram
         jsonb source
         jsonb template
         text generated_by
-        text status
+        timestamptz created_at
+    }
+
+    discussion_assessments {
+        uuid id PK
+        uuid session_id FK
+        uuid student_message_id FK
+        uuid prompt_message_id FK
+        uuid user_id FK
+        uuid course_id FK
+        uuid subtopic_id FK
+        text goal_id
+        text assessment_status
+        integer proximity_score
+        boolean passed
+        integer attempt_number
+        jsonb assessment_raw
         timestamptz created_at
     }
 
@@ -477,6 +496,8 @@ erDiagram
 
     discussion_sessions ||--o{ discussion_messages : "contains"
     discussion_sessions ||--o{ discussion_admin_actions : "audited by"
+    discussion_sessions ||--o{ discussion_assessments : "assessed by"
+    discussion_messages ||--o{ discussion_assessments : "student answer"
 
     learning_sessions ||--o{ ask_question_history : "records"
     learning_sessions ||--o{ discussion_messages : "captures"
@@ -788,7 +809,10 @@ Tracks guided discussion sessions between students and the AI agent.
 | `template_id` | `uuid` | **FK** -> `discussion_templates(id)` | Template used to start the session |
 | `status` | `text` | | Session status (e.g., `in_progress`, `completed`, `failed`) |
 | `phase` | `text` | | Current discussion phase |
-| `learning_goals` | `jsonb` | | Session learning objectives |
+| `learning_goals` | `jsonb` | | Session learning objectives plus proximity status and mentor notes |
+| `completed_at` | `timestamptz` | | Time when the discussion requirement was completed |
+| `completion_reason` | `text` | | Why the session was allowed to complete (all goals met, near enough, remediation exhausted, etc.) |
+| `completion_summary` | `jsonb` | | Final research summary of strengths, weak goals, and completion metadata |
 | `created_at` | `timestamptz` | default `now()` | Session start |
 | `updated_at` | `timestamptz` | default `now()` | Last activity |
 
@@ -812,6 +836,45 @@ Individual messages within a discussion session, from both the AI agent and the 
 | `created_at` | `timestamptz` | default `now()` | Message timestamp |
 
 **Self-Referential FK:** `revision_of_message_id` links revised prompts back to their originals, enabling prompt revision tracking for research analysis.
+
+---
+
+### 5.2a `discussion_assessments`
+
+Normalized read-model for research analysis of each student discussion answer against each learning goal.
+
+| Column | Type | Constraints | Description |
+|--------|------|-------------|-------------|
+| `id` | `uuid` | **PK** | Assessment row identifier |
+| `session_id` | `uuid` | **FK** -> `discussion_sessions(id)` ON DELETE CASCADE | Parent discussion session |
+| `student_message_id` | `uuid` | **FK** -> `discussion_messages(id)` ON DELETE CASCADE | Student answer being assessed |
+| `prompt_message_id` | `uuid` | **FK** -> `discussion_messages(id)` | AI prompt that the student answered |
+| `user_id` | `uuid` | **FK** -> `users(id)` | Student |
+| `course_id` | `uuid` | **FK** -> `courses(id)` | Course context |
+| `subtopic_id` | `uuid` | **FK** -> `subtopics(id)` | Module/subtopic context |
+| `step_key` | `text` | | Discussion step key |
+| `phase` | `text` | | Discussion phase |
+| `goal_id` | `text` | | Learning goal id from template/session JSON |
+| `goal_description` | `text` | | Snapshot of the goal text |
+| `assessment_status` | `text` | check: `met`, `near`, `weak`, `off_topic`, `unassessable` | Proximity label |
+| `proximity_score` | `integer` | 0-100 | Proximity score |
+| `passed` | `boolean` | | Whether the answer is accepted for progress |
+| `attempt_number` | `integer` | | Attempt number for the current step |
+| `remediation_round` | `integer` | nullable | Remediation sequence if applicable |
+| `quality_flag` | `text` | | Answer quality flag |
+| `evaluator` | `text` | | `mcq`, `llm`, or `fallback` |
+| `model` | `text` | | AI model used for LLM evaluation |
+| `evaluation_version` | `text` | | Evaluator contract version |
+| `coach_feedback` | `text` | | Mentor feedback shown to student |
+| `ideal_answer` | `text` | | Short model answer for learning support |
+| `scaffold_action` | `text` | | retry, advance, remediation, complete, etc. |
+| `advance_allowed` | `boolean` | | Whether the student was allowed to continue after this answer |
+| `evidence_excerpt` | `text` | | Evidence excerpt from the student answer |
+| `assessment_raw` | `jsonb` | | Raw evaluator payload |
+| `created_at` | `timestamptz` | default `now()` | Assessment timestamp |
+
+**RLS Policies:**
+- `Service role full access to discussion_assessments` -- backend/admin API only.
 
 ---
 
@@ -1186,6 +1249,7 @@ These tables are accessible only through the service-role client:
 
 - `api_logs`
 - `discussion_admin_actions`
+- `discussion_assessments`
 - `inter_rater_reliability`
 
 ### 8.5 Practical Impact
@@ -1384,7 +1448,9 @@ The following columns store structured JSON data. The `get_jsonb_columns()` data
 | `course_generation_activity` | `request_payload` | Original course generation request parameters |
 | `course_generation_activity` | `outline` | Generated course outline structure |
 | `discussion_sessions` | `learning_goals` | Array of learning objective objects |
+| `discussion_sessions` | `completion_summary` | Final discussion completion summary |
 | `discussion_messages` | `metadata` | Message context (prompt info, step data) |
+| `discussion_assessments` | `assessment_raw` | Raw evaluator payload for each goal assessment |
 | `discussion_templates` | `source` | Template origin metadata |
 | `discussion_templates` | `template` | Discussion flow steps and structure |
 | `discussion_admin_actions` | `payload` | Action-specific parameters |

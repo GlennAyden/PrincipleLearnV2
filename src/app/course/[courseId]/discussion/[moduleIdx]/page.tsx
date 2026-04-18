@@ -117,6 +117,23 @@ function numberFromMetadata(value: unknown) {
   return 0;
 }
 
+function getGoalStatusLabel(goal: { covered?: boolean; masteryStatus?: string; acceptedBy?: string | null }) {
+  if (goal.masteryStatus === 'met') return 'kuat';
+  if (goal.masteryStatus === 'near') return 'mendekati';
+  if (goal.acceptedBy === 'remediation_attempt_limit') return 'lanjut dengan catatan';
+  if (goal.covered) return 'diproses';
+  return 'perlu bimbingan';
+}
+
+function getAssessmentStatusLabel(value: unknown) {
+  const status = String(value ?? '').toLowerCase();
+  if (status === 'met') return 'sesuai';
+  if (status === 'near') return 'mendekati';
+  if (status === 'off_topic') return 'belum relevan';
+  if (status === 'unassessable') return 'belum dapat dinilai';
+  return 'masih perlu diperkuat';
+}
+
 function deriveInteractionState(nextMessages: DiscussionMessage[]) {
   const lastMessage = nextMessages[nextMessages.length - 1];
   const metadata = lastMessage?.metadata ?? {};
@@ -210,6 +227,8 @@ export default function DiscussionModulePage() {
   const [effortWarning, setEffortWarning] = useState('');
 
   const threadEndRef = useRef<HTMLDivElement | null>(null);
+  const threadRef = useRef<HTMLDivElement | null>(null);
+  const lastMessageCountRef = useRef(0);
   const goalToggleRef = useRef<HTMLButtonElement | null>(null);
   const goalPanelRef = useRef<HTMLDivElement | null>(null);
 
@@ -259,7 +278,18 @@ export default function DiscussionModulePage() {
   }, []);
 
   useEffect(() => {
-    if (threadEndRef.current) {
+    const previousCount = lastMessageCountRef.current;
+    lastMessageCountRef.current = messages.length;
+
+    if (!threadEndRef.current || !threadRef.current) return;
+
+    const thread = threadRef.current;
+    const distanceFromBottom =
+      thread.scrollHeight - thread.scrollTop - thread.clientHeight;
+    const shouldFollowConversation =
+      previousCount === 0 || distanceFromBottom < 720;
+
+    if (shouldFollowConversation) {
       threadEndRef.current.scrollIntoView({ behavior: 'smooth' });
     }
   }, [messages.length]);
@@ -856,6 +886,13 @@ export default function DiscussionModulePage() {
   const completedGoals = goals.filter((goal) => goal.covered).length;
   const totalGoals = goals.length;
   const allGoalsCompleted = totalGoals > 0 && completedGoals === totalGoals;
+  const goalProgressPercent =
+    totalGoals > 0 ? Math.round((completedGoals / totalGoals) * 100) : 0;
+  const activeGoalIndex = goals.findIndex((goal) => !goal.covered);
+  const currentGoalNumber =
+    totalGoals === 0 ? 0 : activeGoalIndex >= 0 ? activeGoalIndex + 1 : totalGoals;
+  const currentGoal =
+    activeGoalIndex >= 0 ? goals[activeGoalIndex] : goals[goals.length - 1] ?? null;
   const hasMessages = messages.length > 0;
   const goalPanelId = session?.id ? `discussion-goal-panel-${session.id}` : 'discussion-goal-panel';
   const isCurrentStepMcq =
@@ -897,8 +934,8 @@ export default function DiscussionModulePage() {
         )}
         {isRemediation && !isRetrying && (
           <div className={styles.remediationBanner}>
-            <span className={styles.remediationIcon}>🎯</span>
-            <span>Fase Pendalaman (putaran {remediationRound}/2) — Pertanyaan ini menarget tujuan yang belum tercapai.</span>
+            <span className={styles.remediationIcon}>i</span>
+            <span>Fase Pendalaman (tujuan ke-{remediationRound}) - Pertanyaan ini menarget satu tujuan yang perlu diperkuat.</span>
           </div>
         )}
         {isCurrentStepMcq ? (
@@ -932,11 +969,11 @@ export default function DiscussionModulePage() {
           <div className={styles.responseWrapper}>
             <textarea
               className={styles.textarea}
-              placeholder="Tuliskan pemikiran dan penjelasan Anda (minimal 10 karakter)..."
+              placeholder="Tulis jawabanmu di sini..."
               value={inputValue}
               onChange={(event) => { setInputValue(event.target.value); setEffortWarning(''); }}
               disabled={submitting}
-              rows={3}
+              rows={2}
             />
             {!isCurrentStepMcq && inputValue.trim().length > 0 && (
               <span className={`${styles.charCount} ${openResponseTooShort ? styles.charCountWarn : styles.charCountOk}`}>
@@ -1014,6 +1051,20 @@ export default function DiscussionModulePage() {
       fragments.push(mainText);
     }
 
+    if (obj.proximity || obj.assessmentStatus || obj.assessment_status) {
+      fragments.push(
+        `Kedekatan jawaban: ${getAssessmentStatusLabel(
+          obj.proximity ?? obj.assessmentStatus ?? obj.assessment_status
+        )}`
+      );
+    }
+
+    const score = obj.score ?? obj.proximityScore ?? obj.proximity_score;
+    if (typeof score === 'number') {
+      const normalizedScore = score <= 1 ? Math.round(score * 100) : Math.round(score);
+      fragments.push(`Skor kedekatan: ${normalizedScore}/100`);
+    }
+
     const goalIdentifier =
       obj.goalId ?? obj.goal_id ?? obj.goal ?? null;
 
@@ -1038,6 +1089,14 @@ export default function DiscussionModulePage() {
 
     if (typeof obj.explanation === 'string' && obj.explanation.trim()) {
       fragments.push(obj.explanation.trim());
+    }
+
+    if (typeof obj.mentorNote === 'string' && obj.mentorNote.trim()) {
+      fragments.push(obj.mentorNote.trim());
+    }
+
+    if (typeof obj.modelAnswer === 'string' && obj.modelAnswer.trim()) {
+      fragments.push(`Contoh jawaban yang lebih kuat: ${obj.modelAnswer.trim()}`);
     }
 
     if (!fragments.length) {
@@ -1234,6 +1293,13 @@ export default function DiscussionModulePage() {
           <div className={styles.layout}>
             <section className={styles.threadSection}>
               <div className={styles.discussionTop}>
+                <div className={styles.chatTitleBlock}>
+                  <span className={styles.chatEyebrow}>Ruang diskusi wajib</span>
+                  <h2>{displaySubtopicTitle}</h2>
+                  <p>
+                    Mentor AI akan membimbing pelan-pelan sampai tujuan diskusi ini selesai.
+                  </p>
+                </div>
                 <button
                   type="button"
                   ref={goalToggleRef}
@@ -1244,11 +1310,23 @@ export default function DiscussionModulePage() {
                   disabled={totalGoals === 0}
                   aria-expanded={showGoalPanel}
                   aria-controls={totalGoals > 0 ? goalPanelId : undefined}
-                  aria-haspopup="listbox"
+                  aria-haspopup="dialog"
                 >
-                  <span className={styles.goalToggleLabel}>Goal Diskusi</span>
-                  <span className={styles.goalToggleSummary}>
-                    {totalGoals > 0 ? `${completedGoals}/${totalGoals} tercapai` : 'Belum ada goal'}
+                  <span className={styles.goalToggleMeta}>
+                    <span className={styles.goalToggleLabel}>
+                      {totalGoals > 0
+                        ? `Tujuan ${currentGoalNumber} dari ${totalGoals}`
+                        : 'Tujuan diskusi'}
+                    </span>
+                    <span className={styles.goalToggleSummary}>
+                      {totalGoals > 0 ? `${completedGoals}/${totalGoals} diproses` : 'Belum ada tujuan'}
+                    </span>
+                  </span>
+                  <span className={styles.goalProgressTrack} aria-hidden="true">
+                    <span
+                      className={styles.goalProgressFill}
+                      style={{ width: `${goalProgressPercent}%` }}
+                    />
                   </span>
                   <span className={styles.goalToggleChevron} aria-hidden="true" />
                 </button>
@@ -1257,13 +1335,13 @@ export default function DiscussionModulePage() {
                     id={goalPanelId}
                     className={styles.goalDropdown}
                     ref={goalPanelRef}
-                    role="listbox"
+                    role="dialog"
                     aria-label="Daftar goal diskusi"
                   >
                     <div className={styles.goalDropdownHeader}>
                       <h3>Tujuan Diskusi</h3>
                       <p>
-                        {completedGoals}/{totalGoals} tercapai
+                        {completedGoals}/{totalGoals} diproses
                       </p>
                       <span className={styles.goalDropdownPhase}>
                         Fase aktif: {getPhaseLabel(session?.phase)}
@@ -1273,9 +1351,9 @@ export default function DiscussionModulePage() {
                       {goals.map((goal) => (
                         <li
                           key={goal.id}
-                          className={styles.goalDropdownItem}
-                          role="option"
-                          aria-selected={goal.covered}
+                          className={`${styles.goalDropdownItem} ${
+                            goal.covered ? styles.goalDropdownItemDone : ''
+                          }`}
                         >
                           <span
                             className={`${styles.goalCircle} ${
@@ -1284,14 +1362,24 @@ export default function DiscussionModulePage() {
                             aria-hidden="true"
                           />
                           <p>{goal.description}</p>
+                          <small>{getGoalStatusLabel(goal)}</small>
                         </li>
                       ))}
                     </ul>
                   </div>
                 )}
               </div>
+              {currentGoal && !allGoalsCompleted && (
+                <div className={styles.currentGoalPreview}>
+                  <span>Fokus sekarang</span>
+                  <p>{currentGoal.description}</p>
+                </div>
+              )}
 
-              <div className={`${styles.thread} ${!hasMessages ? styles.threadEmpty : ''}`}>
+              <div
+                ref={threadRef}
+                className={`${styles.thread} ${!hasMessages ? styles.threadEmpty : ''}`}
+              >
                 {!hasMessages && (
                   <div className={styles.introCard}>
                     <h2>Mari kita diskusi untuk memperkuat pemahamanmu. Kau siap?</h2>
@@ -1306,7 +1394,6 @@ export default function DiscussionModulePage() {
                 {messages.map((message, index) => {
                   const isAgent = message.role === 'agent';
                   const meta = message.metadata ?? {};
-                  const metaType = message.metadata?.type;
                   const timestamp = formatTimestamp(message.createdAt);
                   return (
                     <div
@@ -1317,20 +1404,8 @@ export default function DiscussionModulePage() {
             >
               <div className={styles.messageHeader}>
                 <span className={styles.messageAuthor}>
-                  {isAgent ? 'Mentor' : 'Anda'}
+                  {isAgent ? 'Mentor AI' : 'Kamu'}
                 </span>
-                        {metaType === 'retry_prompt' && (
-                          <span className={styles.retryTag}>Coba Lagi</span>
-                        )}
-                        {metaType === 'effort_rejection' && (
-                          <span className={styles.effortTag}>Perlu Perbaikan</span>
-                        )}
-                        {metaType === 'clarification_response' && (
-                          <span className={styles.clarificationTag}>Klarifikasi</span>
-                        )}
-                        {metaType === 'remediation_prompt' && (
-                          <span className={styles.remediationTag}>Pendalaman</span>
-                        )}
                         {timestamp && <span className={styles.messageTime}>{timestamp}</span>}
                       </div>
                       <div className={styles.messageBody}>{message.content}</div>
@@ -1348,12 +1423,17 @@ export default function DiscussionModulePage() {
                   <div className={`${styles.completedPanel} ${allGoalsCompleted ? styles.completedFull : styles.completedPartial}`}>
                     <h3 className={styles.completionTitle}>
                       {allGoalsCompleted
-                        ? 'Semua tujuan pembelajaran telah tercapai!'
-                        : `${completedGoals} dari ${totalGoals} tujuan tercapai`}
+                        ? 'Diskusi selesai. Kamu sudah menuntaskan percakapan ini.'
+                        : `Diskusi selesai dengan ${completedGoals} dari ${totalGoals} tujuan yang sudah diproses.`}
                     </h3>
+                    <p className={styles.completionSubtext}>
+                      Hari ini kamu sudah melatih cara menjelaskan ide, memeriksa alasan,
+                      dan menghubungkan jawaban dengan tujuan belajar modul ini. Teruskan
+                      ritme belajarnya; langkah berikutnya akan terasa lebih ringan.
+                    </p>
                     {!allGoalsCompleted && (
                       <p className={styles.completionSubtext}>
-                        Beberapa tujuan belum sepenuhnya tercapai setelah sesi pendalaman. Tinjau kembali materi untuk memperkuat pemahaman.
+                        Beberapa tujuan masih punya catatan penguatan. Kamu tetap boleh lanjut dan membawa catatan ini ke materi berikutnya.
                       </p>
                     )}
 
@@ -1362,9 +1442,9 @@ export default function DiscussionModulePage() {
                         {goals.map((goal) => (
                           <li key={goal.id} className={goal.covered ? styles.completionGoalCovered : styles.completionGoalMissed}>
                             <span className={goal.covered ? styles.goalIconDone : styles.goalIconPending}>
-                              {goal.covered ? '✓' : '✗'}
+                              {goal.covered ? 'OK' : '-'}
                             </span>
-                            <span>{goal.description}</span>
+                            <span>{goal.description} - {getGoalStatusLabel(goal)}</span>
                           </li>
                         ))}
                       </ul>

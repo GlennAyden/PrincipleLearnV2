@@ -47,6 +47,9 @@ async function getHandler(
         status,
         phase,
         learning_goals,
+        completed_at,
+        completion_reason,
+        completion_summary,
         created_at,
         updated_at,
         user_id,
@@ -72,6 +75,43 @@ async function getHandler(
 
     if (messageError) {
       console.error('[AdminDiscussions] Failed to fetch messages', messageError);
+    }
+
+    const { data: assessments, error: assessmentError } = await adminDb
+      .from('discussion_assessments')
+      .select(
+        `
+        id,
+        session_id,
+        student_message_id,
+        prompt_message_id,
+        step_key,
+        phase,
+        goal_id,
+        goal_description,
+        assessment_status,
+        proximity_score,
+        passed,
+        attempt_number,
+        remediation_round,
+        quality_flag,
+        evaluator,
+        model,
+        evaluation_version,
+        coach_feedback,
+        ideal_answer,
+        scaffold_action,
+        advance_allowed,
+        evidence_excerpt,
+        assessment_raw,
+        created_at
+      `
+      )
+      .eq('session_id', sessionId)
+      .order('created_at', { ascending: true });
+
+    if (assessmentError) {
+      console.error('[AdminDiscussions] Failed to fetch assessments', assessmentError);
     }
 
     let actions: Record<string, unknown>[] = [];
@@ -110,6 +150,8 @@ async function getHandler(
 
     interface SessionQueryRow {
       id: string; status: string; phase: string; learning_goals: unknown;
+      completed_at?: string | null; completion_reason?: string | null;
+      completion_summary?: unknown;
       created_at: string; updated_at: string; user_id: string; course_id: string;
       subtopic_id: string; users?: { email: string } | null;
       courses?: { title: string } | null; subtopics?: { title: string } | null;
@@ -124,6 +166,9 @@ async function getHandler(
         learningGoals: Array.isArray(session.learning_goals)
           ? session.learning_goals
           : [],
+        completedAt: session.completed_at ?? null,
+        completionReason: session.completion_reason ?? null,
+        completionSummary: session.completion_summary ?? null,
         createdAt: session.created_at,
         updatedAt: session.updated_at,
         user: {
@@ -140,6 +185,7 @@ async function getHandler(
         },
       },
       messages: serializeDiscussionMessages(messages ?? []),
+      assessments: assessments ?? [],
       adminActions: serializeDiscussionAdminActions(actions as Array<{
         id: string;
         action: string;

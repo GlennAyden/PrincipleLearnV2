@@ -6,6 +6,15 @@ export interface LearningGoal {
   covered: boolean;
   rubric?: Record<string, unknown>;
   thinkingSkill?: Record<string, unknown>;
+  masteryStatus?: 'met' | 'near' | 'weak' | 'off_topic' | 'unassessable';
+  assessmentScore?: number | null;
+  assessmentNotes?: string | null;
+  mentorNote?: string | null;
+  modelAnswer?: string | null;
+  acceptedBy?: string | null;
+  acceptedAt?: string | null;
+  lastAssessedStepKey?: string | null;
+  lastAttemptNumber?: number | null;
 }
 
 export interface DiscussionSession {
@@ -13,6 +22,9 @@ export interface DiscussionSession {
   status: 'in_progress' | 'completed' | 'failed';
   phase: string;
   learningGoals: LearningGoal[];
+  completedAt?: string | null;
+  completionReason?: string | null;
+  completionSummary?: Record<string, unknown> | null;
   createdAt: string;
   updatedAt: string;
   user: {
@@ -48,6 +60,33 @@ export interface DiscussionStep {
   phase?: string;
 }
 
+export interface DiscussionAssessment {
+  id: string;
+  sessionId: string;
+  studentMessageId: string;
+  promptMessageId?: string | null;
+  stepKey?: string | null;
+  phase?: string | null;
+  goalId: string;
+  goalDescription?: string | null;
+  assessmentStatus: 'met' | 'near' | 'weak' | 'off_topic' | 'unassessable';
+  proximityScore: number;
+  passed: boolean;
+  attemptNumber: number;
+  remediationRound?: number | null;
+  qualityFlag: string;
+  evaluator: string;
+  model?: string | null;
+  evaluationVersion?: string | null;
+  coachFeedback?: string | null;
+  idealAnswer?: string | null;
+  scaffoldAction?: string | null;
+  advanceAllowed: boolean;
+  evidenceExcerpt?: string | null;
+  assessmentRaw?: Record<string, unknown> | null;
+  createdAt: string;
+}
+
 export interface AdminAction {
   id: string;
   action: string;
@@ -60,6 +99,7 @@ export interface AdminAction {
 export interface SessionDetail {
   session: DiscussionSession;
   messages: DiscussionMessage[];
+  assessments: DiscussionAssessment[];
   adminActions: AdminAction[];
 }
 
@@ -164,6 +204,15 @@ function asBoolean(value: unknown): boolean {
   return Boolean(value);
 }
 
+function asNumber(value: unknown, fallback = 0): number {
+  if (typeof value === 'number' && Number.isFinite(value)) return value;
+  if (typeof value === 'string') {
+    const parsed = Number(value);
+    if (Number.isFinite(parsed)) return parsed;
+  }
+  return fallback;
+}
+
 function asDateString(...values: unknown[]): string {
   for (const value of values) {
     const result = asString(value).trim();
@@ -201,6 +250,22 @@ function normalizeGoalsArray(value: unknown): LearningGoal[] {
       covered: asBoolean(raw.covered ?? raw.isCovered ?? raw.completed ?? raw.done),
       rubric,
       thinkingSkill,
+      masteryStatus: pickString(raw.masteryStatus, raw.mastery_status) as LearningGoal['masteryStatus'],
+      assessmentScore:
+        raw.assessmentScore !== undefined || raw.assessment_score !== undefined
+          ? asNumber(raw.assessmentScore ?? raw.assessment_score, 0)
+          : null,
+      assessmentNotes: pickString(raw.assessmentNotes, raw.assessment_notes) || null,
+      mentorNote: pickString(raw.mentorNote, raw.mentor_note) || null,
+      modelAnswer: pickString(raw.modelAnswer, raw.model_answer) || null,
+      acceptedBy: pickString(raw.acceptedBy, raw.accepted_by) || null,
+      acceptedAt: pickString(raw.acceptedAt, raw.accepted_at) || null,
+      lastAssessedStepKey:
+        pickString(raw.lastAssessedStepKey, raw.last_assessed_step_key) || null,
+      lastAttemptNumber:
+        raw.lastAttemptNumber !== undefined || raw.last_attempt_number !== undefined
+          ? asNumber(raw.lastAttemptNumber ?? raw.last_attempt_number, 0)
+          : null,
     };
   });
 }
@@ -223,6 +288,13 @@ export function normalizeDiscussionSession(value: unknown): DiscussionSession {
     status: normalizeSessionStatus(raw.status),
     phase: pickString(raw.phase),
     learningGoals: normalizeGoalsArray(raw.learningGoals ?? raw.learning_goals),
+    completedAt: asDateString(raw.completedAt, raw.completed_at) || null,
+    completionReason: pickString(raw.completionReason, raw.completion_reason) || null,
+    completionSummary: isRecord(raw.completionSummary)
+      ? raw.completionSummary
+      : isRecord(raw.completion_summary)
+      ? raw.completion_summary
+      : null,
     createdAt: asDateString(raw.createdAt, raw.created_at),
     updatedAt: asDateString(raw.updatedAt, raw.updated_at, raw.createdAt, raw.created_at),
     user: {
@@ -262,6 +334,59 @@ export function normalizeDiscussionMessage(value: unknown): DiscussionMessage {
 export function normalizeDiscussionMessages(value: unknown): DiscussionMessage[] {
   if (!Array.isArray(value)) return [];
   return value.map((item) => normalizeDiscussionMessage(item));
+}
+
+function normalizeAssessmentStatus(value: unknown): DiscussionAssessment['assessmentStatus'] {
+  const normalized = asString(value).toLowerCase();
+  if (normalized === 'met') return 'met';
+  if (normalized === 'near') return 'near';
+  if (normalized === 'off_topic') return 'off_topic';
+  if (normalized === 'unassessable') return 'unassessable';
+  return 'weak';
+}
+
+export function normalizeDiscussionAssessment(value: unknown): DiscussionAssessment {
+  const raw = isRecord(value) ? value : {};
+  const assessmentRaw = isRecord(raw.assessmentRaw)
+    ? raw.assessmentRaw
+    : isRecord(raw.assessment_raw)
+    ? raw.assessment_raw
+    : null;
+
+  return {
+    id: pickString(raw.id),
+    sessionId: pickString(raw.sessionId, raw.session_id),
+    studentMessageId: pickString(raw.studentMessageId, raw.student_message_id),
+    promptMessageId: pickString(raw.promptMessageId, raw.prompt_message_id) || null,
+    stepKey: pickString(raw.stepKey, raw.step_key) || null,
+    phase: pickString(raw.phase) || null,
+    goalId: pickString(raw.goalId, raw.goal_id),
+    goalDescription: pickString(raw.goalDescription, raw.goal_description) || null,
+    assessmentStatus: normalizeAssessmentStatus(raw.assessmentStatus ?? raw.assessment_status),
+    proximityScore: asNumber(raw.proximityScore ?? raw.proximity_score, 0),
+    passed: asBoolean(raw.passed),
+    attemptNumber: asNumber(raw.attemptNumber ?? raw.attempt_number, 1),
+    remediationRound:
+      raw.remediationRound !== undefined || raw.remediation_round !== undefined
+        ? asNumber(raw.remediationRound ?? raw.remediation_round, 0)
+        : null,
+    qualityFlag: pickString(raw.qualityFlag, raw.quality_flag) || 'adequate',
+    evaluator: pickString(raw.evaluator),
+    model: pickString(raw.model) || null,
+    evaluationVersion: pickString(raw.evaluationVersion, raw.evaluation_version) || null,
+    coachFeedback: pickString(raw.coachFeedback, raw.coach_feedback) || null,
+    idealAnswer: pickString(raw.idealAnswer, raw.ideal_answer) || null,
+    scaffoldAction: pickString(raw.scaffoldAction, raw.scaffold_action) || null,
+    advanceAllowed: asBoolean(raw.advanceAllowed ?? raw.advance_allowed),
+    evidenceExcerpt: pickString(raw.evidenceExcerpt, raw.evidence_excerpt) || null,
+    assessmentRaw,
+    createdAt: asDateString(raw.createdAt, raw.created_at),
+  };
+}
+
+export function normalizeDiscussionAssessments(value: unknown): DiscussionAssessment[] {
+  if (!Array.isArray(value)) return [];
+  return value.map((item) => normalizeDiscussionAssessment(item));
 }
 
 export function normalizeDiscussionStep(value: unknown): DiscussionStep | null {

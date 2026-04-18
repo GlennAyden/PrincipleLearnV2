@@ -33,6 +33,9 @@ async function getHandler(request: NextRequest) {
         status,
         phase,
         learning_goals,
+        completed_at,
+        completion_reason,
+        completion_summary,
         created_at,
         updated_at,
         user_id,
@@ -71,6 +74,8 @@ async function getHandler(request: NextRequest) {
 
     interface DiscussionQueryRow {
       id: string; status: string; phase: string; learning_goals: unknown;
+      completed_at?: string | null; completion_reason?: string | null;
+      completion_summary?: unknown;
       created_at: string; updated_at: string; user_id: string; course_id: string;
       subtopic_id: string; users?: { email: string } | null;
       courses?: { title: string } | null; subtopics?: { title: string } | null;
@@ -90,6 +95,9 @@ async function getHandler(request: NextRequest) {
         status: item.status,
         phase: item.phase,
         learningGoals: goals,
+        completedAt: item.completed_at ?? null,
+        completionReason: item.completion_reason ?? null,
+        completionSummary: item.completion_summary ?? null,
         createdAt: item.created_at,
         updatedAt: item.updated_at,
         user: {

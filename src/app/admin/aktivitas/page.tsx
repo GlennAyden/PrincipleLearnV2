@@ -17,12 +17,14 @@ import type { ReflectionActivityItem } from '@/lib/admin-reflection-activity'
 import type {
   DiscussionSessionListItem,
   DiscussionMessage,
+  DiscussionAssessment,
   AdminAction,
   ModulePrerequisiteDetails,
 } from '@/types/discussion'
 
 import {
   normalizeAdminActions,
+  normalizeDiscussionAssessments,
   normalizeDiscussionMessages,
   normalizeDiscussionSession,
   normalizeDiscussionSessions,
@@ -195,6 +197,7 @@ type SessionListItem = DiscussionSessionListItem
 type SessionDetail = {
   session: SessionListItem
   messages: DiscussionMessage[]
+  assessments: DiscussionAssessment[]
   adminActions: AdminAction[]
 }
 
@@ -247,6 +250,24 @@ function getSessionStatusLabel(status?: string) {
 
 function getSessionStatusClass(status?: string) {
   return status === 'completed' ? styles.statusBadgeDone : styles.statusBadgeProgress
+}
+
+function getGoalMasteryLabel(goal: { covered?: boolean; masteryStatus?: string; acceptedBy?: string | null }) {
+  if (goal.masteryStatus === 'met') return 'Kuat'
+  if (goal.masteryStatus === 'near') return 'Mendekati'
+  if (goal.masteryStatus === 'off_topic') return 'Tidak relevan'
+  if (goal.masteryStatus === 'unassessable') return 'Belum dapat dinilai'
+  if (goal.acceptedBy === 'remediation_attempt_limit') return 'Lanjut dengan catatan'
+  if (goal.covered) return 'Diproses'
+  return 'Perlu bimbingan'
+}
+
+function getAssessmentStatusLabel(status?: string) {
+  if (status === 'met') return 'Sesuai'
+  if (status === 'near') return 'Mendekati'
+  if (status === 'off_topic') return 'Tidak relevan'
+  if (status === 'unassessable') return 'Tidak dapat dinilai'
+  return 'Masih jauh'
 }
 
 function getMessageTypeLabel(message: DiscussionMessage) {
@@ -573,6 +594,7 @@ export default function AdminAktivitasPage() {
         setDetail({
           session: normalizeDiscussionSession(payload.session ?? {}),
           messages: normalizeDiscussionMessages(payload.messages ?? []),
+          assessments: normalizeDiscussionAssessments(payload.assessments ?? []),
           adminActions: normalizeAdminActions(payload.adminActions ?? []),
         })
       } catch (error: unknown) {
@@ -600,6 +622,15 @@ export default function AdminAktivitasPage() {
     const percentage = total ? Math.round((covered / total) * 100) : 0
     return { total, covered, percentage }
   }, [selectedSessionGoals])
+  const assessmentsByMessage = useMemo(() => {
+    const map = new Map<string, DiscussionAssessment[]>()
+    for (const assessment of detail?.assessments ?? []) {
+      const items = map.get(assessment.studentMessageId) ?? []
+      items.push(assessment)
+      map.set(assessment.studentMessageId, items)
+    }
+    return map
+  }, [detail?.assessments])
 
   // ── Diskusi: load prereq info ──
   useEffect(() => {
@@ -1271,11 +1302,16 @@ export default function AdminAktivitasPage() {
                                 {!!goal.rubric?.success_summary && (
                                   <small>{String(goal.rubric.success_summary)}</small>
                                 )}
+                                {(goal.assessmentNotes || goal.mentorNote || goal.modelAnswer) && (
+                                  <small>
+                                    {goal.assessmentNotes || goal.mentorNote || goal.modelAnswer}
+                                  </small>
+                                )}
                               </div>
                               <span
                                 className={`${styles.goalToggleBtn} ${goal.covered ? styles.goalToggleBtnCovered : styles.goalToggleBtnUncovered}`}
                               >
-                                {goal.covered ? 'Tercapai' : 'Belum tercapai'}
+                                {getGoalMasteryLabel(goal)}
                               </span>
                             </li>
                           ))}
@@ -1293,6 +1329,14 @@ export default function AdminAktivitasPage() {
                           <p>
                             {goalStats.covered}/{goalStats.total || '-'} tujuan
                           </p>
+                        </div>
+                        <div className={styles.feedbackBox}>
+                          <strong>Alasan Penyelesaian:</strong>
+                          <p>{detail.session.completionReason || 'Belum selesai'}</p>
+                        </div>
+                        <div className={styles.feedbackBox}>
+                          <strong>Assessment Terekam:</strong>
+                          <p>{detail.assessments.length} penilaian goal</p>
                         </div>
                         <div className={styles.feedbackBox}>
                           <strong>Pembaruan Terakhir:</strong>
@@ -1341,6 +1385,35 @@ export default function AdminAktivitasPage() {
                               )}
                             </div>
                             <p>{message.content}</p>
+                            {message.role === 'student' && (assessmentsByMessage.get(message.id)?.length ?? 0) > 0 && (
+                              <div className={styles.assessmentPanel}>
+                                <strong>Penilaian Jawaban</strong>
+                                <div className={styles.assessmentGrid}>
+                                  {assessmentsByMessage.get(message.id)?.map((assessment) => (
+                                    <div key={assessment.id} className={styles.assessmentCard}>
+                                      <div className={styles.assessmentCardHeader}>
+                                        <span>{getAssessmentStatusLabel(assessment.assessmentStatus)}</span>
+                                        <small>Skor {assessment.proximityScore}/100</small>
+                                      </div>
+                                      <p>{assessment.goalDescription || assessment.goalId}</p>
+                                      <small>
+                                        Attempt {assessment.attemptNumber}
+                                        {assessment.remediationRound ? ` - Remediation ${assessment.remediationRound}` : ''}
+                                        {assessment.advanceAllowed ? ' - lanjut' : ' - perlu perbaikan'}
+                                      </small>
+                                      {assessment.coachFeedback && (
+                                        <p className={styles.assessmentNote}>{assessment.coachFeedback}</p>
+                                      )}
+                                      {assessment.idealAnswer && (
+                                        <p className={styles.assessmentIdeal}>
+                                          Jawaban ideal: {assessment.idealAnswer}
+                                        </p>
+                                      )}
+                                    </div>
+                                  ))}
+                                </div>
+                              </div>
+                            )}
                           </div>
                         ))}
                       </div>

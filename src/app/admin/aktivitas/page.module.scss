@@ -994,6 +994,69 @@
   margin-bottom: 0.35rem;
 }
 
+.assessmentPanel {
+  margin-top: 0.75rem;
+  border-top: 1px solid rgba($gray-400, 0.35);
+  padding-top: 0.75rem;
+
+  > strong {
+    display: block;
+    margin-bottom: 0.5rem;
+    font-size: 0.82rem;
+    color: $gray-700;
+  }
+}
+
+.assessmentGrid {
+  display: grid;
+  gap: 0.55rem;
+}
+
+.assessmentCard {
+  border: 1px solid $gray-200;
+  border-radius: $radius-sm;
+  background: white;
+  padding: 0.7rem;
+
+  p {
+    margin: 0.25rem 0 0;
+    color: $gray-700;
+  }
+
+  small {
+    display: block;
+    margin-top: 0.25rem;
+    color: $gray-500;
+    font-size: 0.76rem;
+  }
+}
+
+.assessmentCardHeader {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.75rem;
+
+  span {
+    border-radius: $radius-sm;
+    background: $indigo-50;
+    color: $indigo-600;
+    font-size: 0.76rem;
+    font-weight: 700;
+    padding: 0.2rem 0.45rem;
+  }
+}
+
+.assessmentNote {
+  border-left: 3px solid $green-500;
+  padding-left: 0.55rem;
+}
+
+.assessmentIdeal {
+  border-left: 3px solid $amber-500;
+  padding-left: 0.55rem;
+}
+
 /* ── Refresh button (diskusi) ── */
 .refreshBtn {
   @include secondary-button;

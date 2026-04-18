@@ -73,17 +73,33 @@ type TemplateRecord = {
   generated_by?: string | null;
 };
 
+type GoalProximity = 'met' | 'near' | 'weak' | 'off_topic' | 'unassessable';
+type GoalAcceptanceReason =
+  | 'mastery'
+  | 'near_enough'
+  | 'attempt_limit'
+  | 'remediation_attempt_limit'
+  | 'not_accepted';
+
 interface DiscussionGoalState {
   id: string;
   description: string;
   rubric?: GoalRubric | null;
   covered: boolean;
   thinkingSkill?: ThinkingSkillMeta | null;
+  masteryStatus?: GoalProximity;
+  assessmentScore?: number | null;
+  assessmentNotes?: string | null;
+  mentorNote?: string | null;
+  modelAnswer?: string | null;
+  acceptedBy?: GoalAcceptanceReason | null;
+  acceptedAt?: string | null;
+  lastAssessedStepKey?: string | null;
+  lastAttemptNumber?: number | null;
 }
 
 const MAX_ATTEMPTS_PER_STEP = 2; // 1 original + 1 retry
 const MAX_CLARIFICATIONS_PER_STEP = 1;
-const MAX_REMEDIATION_ROUNDS = 2;
 
 // ── Helpers: attempt counting, effort detection, retry prompts ─────
 
@@ -94,8 +110,10 @@ function countStepAttempts(
   return messages.filter((msg) => {
     if (msg.role !== 'student') return false;
     if (msg.step_key !== stepKey) return false;
+    const type = msg.metadata?.type as string | undefined;
+    if (type && type !== 'student_input') return false;
     const qf = msg.metadata?.quality_flag as string | undefined;
-    if (qf === 'low_effort' || qf === 'off_topic') return false;
+    if (qf === 'counter_question' || qf === 'deflection') return false;
     return true;
   }).length;
 }
@@ -146,20 +164,29 @@ function detectMinimumEffort(responseText: string, expectedType: string | undefi
 
 function buildRetryPrompt(step: DiscussionStep, evaluation: StepEvaluationResult): string {
   const isMcq = step.expected_type === 'mcq' || Boolean(step.options?.length);
+  const firstAssessment = evaluation.assessments?.find((item) => !item.accepted);
+  const modelAnswer = firstAssessment?.modelAnswer?.trim();
+  const mentorNote = firstAssessment?.mentorNote?.trim() || firstAssessment?.notes?.trim();
 
   if (isMcq) {
-    return 'Jawaban sebelumnya belum tepat. Coba pikirkan kembali — perhatikan konsep utama yang dibahas sebelumnya, lalu pilih jawaban yang paling sesuai.';
+    return [
+      'Jawabanmu belum pas, tetapi ini bisa kita pakai untuk memperjelas konsepnya.',
+      mentorNote ? `Petunjuk: ${mentorNote}` : '',
+      modelAnswer ? `Arah jawaban yang lebih tepat: ${modelAnswer}` : '',
+      'Coba lihat kembali pilihan yang tersedia, lalu pilih jawaban yang paling sesuai dengan peran MC profesional.',
+    ]
+      .filter(Boolean)
+      .join('\n\n');
   }
 
-  const hint = evaluation.coachFeedback
-    ? `\n\nPetunjuk dari evaluasi sebelumnya: ${evaluation.coachFeedback}`
-    : '';
-
-  return (
-    `Mari coba lagi. Pertanyaannya tetap sama:\n\n"${step.prompt}"` +
-    hint +
-    '\n\nCobalah jawab dengan lebih detail dan pastikan jawabanmu mencakup poin-poin utama yang diminta.'
-  );
+  return [
+    'Aku menangkap usaha berpikirmu, tetapi jawabanmu masih perlu diarahkan sedikit lagi.',
+    mentorNote ? `Bagian yang perlu diperbaiki: ${mentorNote}` : '',
+    modelAnswer ? `Contoh arah jawaban yang lebih kuat: ${modelAnswer}` : '',
+    `Sekarang coba jawab lagi dengan kata-katamu sendiri:\n\n"${step.prompt}"`,
+  ]
+    .filter(Boolean)
+    .join('\n\n');
 }
 
 // ── Counter-question detection ────────────────────────────────────
@@ -289,19 +316,15 @@ function countRemediationRounds(
 }
 
 async function generateRemediationQuestion(
-  uncoveredGoals: DiscussionGoalState[],
+  targetGoal: DiscussionGoalState,
   templateSource: TemplateSource | undefined,
   remediationRound: number,
 ): Promise<string> {
   try {
-    const goalsText = uncoveredGoals
-      .map((g) => `- ${g.description}`)
-      .join('\n');
-
     const contextSummary = templateSource?.summary || '';
     const scaffoldingLevel = remediationRound === 1
-      ? 'Ajukan pertanyaan dari sudut pandang berbeda, tetap menantang tetapi lebih spesifik.'
-      : 'Ajukan pertanyaan yang lebih terbimbing dengan petunjuk/scaffolding yang jelas. Berikan konteks tambahan dalam pertanyaan.';
+      ? 'Ajukan pertanyaan sederhana yang membantu mahasiswa menghubungkan jawabannya dengan konsep utama.'
+      : 'Ajukan pertanyaan yang lebih terbimbing dengan petunjuk/scaffolding yang jelas dan contoh konteks singkat.';
 
     const controller = new AbortController();
     const timeout = setTimeout(() => controller.abort(), 20_000);
@@ -313,18 +336,20 @@ async function generateRemediationQuestion(
         messages: [
           {
             role: 'system',
-            content: `Kamu adalah fasilitator pembelajaran Socratic. Mahasiswa belum berhasil mencapai beberapa tujuan pembelajaran dalam diskusi sebelumnya. Tugasmu adalah membuat SATU pertanyaan baru yang mencakup semua tujuan yang belum tercapai. ${scaffoldingLevel} Pertanyaan harus dalam Bahasa Indonesia dan bersifat open-ended.`,
+            content: `Kamu adalah fasilitator pembelajaran Socratic. Mahasiswa belum cukup kuat pada satu tujuan pembelajaran. Tugasmu adalah membuat SATU pertanyaan baru yang hanya menarget tujuan tersebut. ${scaffoldingLevel} Pertanyaan harus dalam Bahasa Indonesia, open-ended, dan terasa membimbing.`,
           },
           {
             role: 'user',
             content: [
               `Konteks materi: ${contextSummary}`,
               '',
-              `Tujuan yang belum tercapai (remediation round ${remediationRound}):`,
-              goalsText,
+              `Tujuan yang sedang dibimbing (remediation round ${remediationRound}):`,
+              `- ${targetGoal.description}`,
+              targetGoal.assessmentNotes ? `Catatan penilaian terakhir: ${targetGoal.assessmentNotes}` : '',
+              targetGoal.modelAnswer ? `Arah jawaban ideal: ${targetGoal.modelAnswer}` : '',
               '',
-              'Buat SATU pertanyaan yang menguji pemahaman mahasiswa terhadap semua tujuan di atas. Hanya berikan pertanyaannya saja, tanpa pengantar.',
-            ].join('\n'),
+              'Buat SATU pertanyaan scaffolding yang membantu mahasiswa memperbaiki pemahamannya. Hanya berikan pertanyaannya saja, tanpa pengantar.',
+            ].filter(Boolean).join('\n'),
           },
         ],
       },
@@ -335,13 +360,13 @@ async function generateRemediationQuestion(
 
     const question = completion.choices?.[0]?.message?.content?.trim();
     if (!question) {
-      return `Mari kita bahas kembali beberapa poin yang belum tercapai. Jelaskan pemahamanmu tentang: ${uncoveredGoals.map(g => g.description).join('; ')}`;
+      return `Mari kita bahas satu bagian dulu. Dengan kata-katamu sendiri, jelaskan: ${targetGoal.description}`;
     }
 
     return question;
   } catch (err) {
     console.warn('[Discussion] Remediation question generation failed:', err);
-    return `Mari kita bahas kembali beberapa poin yang belum tercapai. Jelaskan pemahamanmu tentang: ${uncoveredGoals.map(g => g.description).join('; ')}`;
+    return `Mari kita bahas satu bagian dulu. Dengan kata-katamu sendiri, jelaskan: ${targetGoal.description}`;
   }
 }
 
@@ -351,6 +376,14 @@ type DiscussionMessagePayload = {
   content: string;
   step_key?: string | null;
   metadata?: Record<string, unknown>;
+};
+
+type InsertedDiscussionMessage = {
+  id: string;
+  role: 'agent' | 'student';
+  step_key: string | null;
+  metadata: Record<string, unknown> | null;
+  created_at: string;
 };
 
 async function insertDiscussionMessage(payload: DiscussionMessagePayload) {
@@ -371,15 +404,90 @@ async function insertDiscussionMessage(payload: DiscussionMessagePayload) {
  * This lets us avoid the "student message saved, agent response orphaned"
  * failure mode when a subsequent step errors out.
  */
-async function insertDiscussionMessagesBatch(messages: DiscussionMessagePayload[]) {
-  if (!messages.length) return;
-  const { error } = await adminDb.from('discussion_messages').insert(messages);
+async function insertDiscussionMessagesBatch(
+  messages: DiscussionMessagePayload[]
+): Promise<InsertedDiscussionMessage[]> {
+  if (!messages.length) return [];
+  const { data, error } = await adminDb
+    .from('discussion_messages')
+    .insert(messages);
   if (error) {
     const msg = typeof error === 'object' && error !== null && 'message' in error
       ? (error as { message: string }).message
       : String(error);
     throw new Error(`Failed to insert discussion messages batch: ${msg}`);
   }
+  return (data ?? []) as InsertedDiscussionMessage[];
+}
+
+async function insertDiscussionAssessments(params: {
+  session: SessionRecord;
+  promptMessageId?: string | null;
+  studentMessageId?: string | null;
+  step: DiscussionStep;
+  phase: string;
+  evaluation: StepEvaluationResult;
+  learningGoals: DiscussionGoalState[];
+  attemptNumber: number;
+  remediationRound?: number | null;
+  scaffoldAction: string;
+  advanceAllowed: boolean;
+  coachFeedback?: string | null;
+}) {
+  if (!params.studentMessageId || !params.evaluation.assessments?.length) return;
+
+  const rows = params.evaluation.assessments.map((assessment) => {
+    const goal = params.learningGoals.find((item) => item.id === assessment.goalId);
+    return {
+    session_id: params.session.id,
+    student_message_id: params.studentMessageId,
+    prompt_message_id: params.promptMessageId ?? null,
+    user_id: params.session.user_id,
+    course_id: params.session.course_id,
+    subtopic_id: params.session.subtopic_id,
+    step_key: params.step.key ?? null,
+    phase: params.phase,
+    goal_id: assessment.goalId,
+    goal_description: goal?.description ?? null,
+    assessment_status: assessment.proximity,
+    proximity_score: Math.round(assessment.score * 100),
+    passed: assessment.accepted,
+    attempt_number: params.attemptNumber,
+    remediation_round: params.remediationRound ?? null,
+    quality_flag: params.evaluation.qualityFlag ?? 'adequate',
+    evaluator: params.evaluation.evaluator,
+    model: defaultOpenAIModel,
+    evaluation_version: 'discussion-proximity-v1',
+    coach_feedback: params.coachFeedback ?? params.evaluation.coachFeedback ?? null,
+    ideal_answer: assessment.modelAnswer ?? null,
+    scaffold_action: params.scaffoldAction,
+    advance_allowed: params.advanceAllowed,
+    evidence_excerpt: assessment.evidence ?? null,
+    assessment_raw: assessment,
+    };
+  });
+
+  try {
+    const { error } = await adminDb.from('discussion_assessments').upsert(rows, {
+      onConflict: 'student_message_id,goal_id',
+    });
+    if (error) {
+      console.warn('[DiscussionRespond] Failed to insert discussion assessments', error);
+    }
+  } catch (error) {
+    console.warn('[DiscussionRespond] discussion_assessments write skipped', error);
+  }
+}
+
+function findInsertedStudentMessage(
+  insertedMessages: InsertedDiscussionMessage[],
+  stepKey?: string | null,
+) {
+  return (
+    insertedMessages.find(
+      (message) => message.role === 'student' && message.step_key === (stepKey ?? null)
+    ) ?? insertedMessages.find((message) => message.role === 'student') ?? null
+  );
 }
 
 async function postHandler(request: NextRequest) {
@@ -449,6 +557,7 @@ async function postHandler(request: NextRequest) {
 
     // Check if we're in remediation mode (past template steps)
     type RawMessage = {
+      id: string;
       role: string;
       content: string;
       step_key?: string | null;
@@ -475,11 +584,14 @@ async function postHandler(request: NextRequest) {
     }
 
     const trimmedAnswer = message.trim();
+    const priorAttempts = countStepAttempts(messages, activeStep?.step?.key ?? '');
+    const currentAttemptNumber = priorAttempts + 1;
+    const hasReachedStepAttemptLimit = currentAttemptNumber >= MAX_ATTEMPTS_PER_STEP;
 
     // ── STEP 1: Pre-check minimum effort (before LLM call) ──
     const effortCheck = detectMinimumEffort(trimmedAnswer, activeStep?.step?.expected_type);
 
-    if (!effortCheck.pass) {
+    if (!effortCheck.pass && !hasReachedStepAttemptLimit) {
       await insertDiscussionMessage({
         session_id: session.id,
         role: 'student',
@@ -509,7 +621,7 @@ async function postHandler(request: NextRequest) {
     const counterCheck = detectCounterQuestion(trimmedAnswer);
 
     if (counterCheck.isCounterQuestion) {
-      if (counterCheck.isDeflection) {
+      if (counterCheck.isDeflection && !hasReachedStepAttemptLimit) {
         // Deflection — ask them to try answering
         await insertDiscussionMessage({
           session_id: session.id,
@@ -582,9 +694,6 @@ async function postHandler(request: NextRequest) {
     }
 
     // ── STEP 2: Count prior real attempts for this step ──
-    const priorAttempts = countStepAttempts(messages, activeStep?.step?.key ?? '');
-    const currentAttemptNumber = priorAttempts + 1;
-
     // ── STEP 3: Normal evaluation ──
     let learningGoals = mergeGoalDetails(
       normalizeGoals(session.learning_goals),
@@ -614,9 +723,11 @@ async function postHandler(request: NextRequest) {
       metadata: {
         type: 'student_input',
         phase: activeStep?.phaseId ?? null,
+        expected_type: activeStep?.step?.expected_type ?? 'open',
         evaluation,
         quality_flag: evaluation.qualityFlag ?? 'adequate',
         attempt_number: currentAttemptNumber,
+        attempt_limit_reached: hasReachedStepAttemptLimit,
       },
     };
 
@@ -626,15 +737,41 @@ async function postHandler(request: NextRequest) {
           role: 'agent',
           content: evaluation.coachFeedback,
           step_key: activeStep?.step?.key ? `${activeStep.step.key}-feedback` : 'feedback',
-          metadata: { type: 'coach_feedback', assessments: evaluation.assessments ?? [] },
+          metadata: {
+            type: 'coach_feedback',
+            phase: activeStep?.phaseId ?? null,
+            evaluator: evaluation.evaluator,
+            quality_flag: evaluation.qualityFlag ?? 'adequate',
+            assessments: evaluation.assessments ?? [],
+          },
         }
       : null;
 
     // ── STEP 4: Handle LLM-detected low quality ──
-    if (evaluation.qualityFlag === 'off_topic' || evaluation.qualityFlag === 'low_effort') {
+    if (
+      (evaluation.qualityFlag === 'off_topic' || evaluation.qualityFlag === 'low_effort') &&
+      !hasReachedStepAttemptLimit
+    ) {
       const batch: DiscussionMessagePayload[] = [studentMessagePayload];
       if (coachFeedbackMessagePayload) batch.push(coachFeedbackMessagePayload);
-      await insertDiscussionMessagesBatch(batch);
+      const insertedMessages = await insertDiscussionMessagesBatch(batch);
+      const insertedStudentMessage = findInsertedStudentMessage(
+        insertedMessages,
+        activeStep.step.key,
+      );
+      await insertDiscussionAssessments({
+        session,
+        promptMessageId: lastAgentMsg?.id ?? null,
+        studentMessageId: insertedStudentMessage?.id ?? null,
+        step: activeStep.step,
+        phase: activeStep.phaseId,
+        evaluation,
+        learningGoals,
+        attemptNumber: currentAttemptNumber,
+        scaffoldAction: 'effort_rejection',
+        advanceAllowed: false,
+        coachFeedback: evaluation.coachFeedback ?? null,
+      });
 
       const updatedMessages = await fetchMessages(session.id);
       return NextResponse.json({
@@ -646,18 +783,36 @@ async function postHandler(request: NextRequest) {
     }
 
     // ── STEP 5: Update goal coverage ──
-    const coveredSet = new Set(evaluation.coveredGoals);
-    learningGoals = learningGoals.map((goal) =>
-      coveredSet.has(goal.id) ? { ...goal, covered: true } : goal
+    learningGoals = applyGoalAssessments(
+      learningGoals,
+      evaluation,
+      activeStep?.step,
+      currentAttemptNumber,
     );
 
-    const allGoalsCovered =
+    let allGoalsCovered =
       learningGoals.length > 0 && learningGoals.every((goal) => goal.covered === true);
 
     // ── STEP 6: Retry vs Advance decision ──
     const stepGoalRefs: string[] = Array.isArray(activeStep?.step?.goal_refs)
       ? activeStep.step.goal_refs.filter(Boolean)
       : [];
+
+    if (isRemediationStep && hasReachedStepAttemptLimit) {
+      const stillUncoveredTargetGoals = stepGoalRefs.filter(
+        (goalId) => !learningGoals.find((goal) => goal.id === goalId)?.covered
+      );
+      learningGoals = acceptGoalsAfterAttemptLimit(
+        learningGoals,
+        stillUncoveredTargetGoals,
+        'remediation_attempt_limit',
+        activeStep?.step,
+        currentAttemptNumber,
+        'Remediation sudah dicoba dua kali. Siswa dilanjutkan dengan catatan bahwa goal ini masih lemah.',
+      );
+      allGoalsCovered =
+        learningGoals.length > 0 && learningGoals.every((goal) => goal.covered === true);
+    }
 
     const stepGoalsSatisfied =
       stepGoalRefs.length === 0 ||
@@ -716,7 +871,25 @@ async function postHandler(request: NextRequest) {
           original_step_key: activeStep.step.key,
         },
       });
-      await insertDiscussionMessagesBatch(retryBatch);
+      const insertedMessages = await insertDiscussionMessagesBatch(retryBatch);
+      const insertedStudentMessage = findInsertedStudentMessage(
+        insertedMessages,
+        activeStep.step.key,
+      );
+      await insertDiscussionAssessments({
+        session,
+        promptMessageId: lastAgentMsg?.id ?? null,
+        studentMessageId: insertedStudentMessage?.id ?? null,
+        step: activeStep.step,
+        phase: activeStep.phaseId,
+        evaluation,
+        learningGoals,
+        attemptNumber: currentAttemptNumber,
+        remediationRound: isRemediationStep ? countRemediationRounds(messages) : null,
+        scaffoldAction: 'retry',
+        advanceAllowed: false,
+        coachFeedback: evaluation.coachFeedback ?? null,
+      });
 
       const { error: retryUpdateError } = await adminDb
         .from('discussion_sessions')
@@ -763,7 +936,24 @@ async function postHandler(request: NextRequest) {
           options: nextStep.step.options ?? [],
         },
       });
-      await insertDiscussionMessagesBatch(advanceBatch);
+      const insertedMessages = await insertDiscussionMessagesBatch(advanceBatch);
+      const insertedStudentMessage = findInsertedStudentMessage(
+        insertedMessages,
+        activeStep.step.key,
+      );
+      await insertDiscussionAssessments({
+        session,
+        promptMessageId: lastAgentMsg?.id ?? null,
+        studentMessageId: insertedStudentMessage?.id ?? null,
+        step: activeStep.step,
+        phase: activeStep.phaseId,
+        evaluation,
+        learningGoals,
+        attemptNumber: currentAttemptNumber,
+        scaffoldAction: hasReachedStepAttemptLimit ? 'advance_after_attempt_limit' : 'advance',
+        advanceAllowed: true,
+        coachFeedback: evaluation.coachFeedback ?? null,
+      });
 
       const { error: phaseUpdateError } = await adminDb
         .from('discussion_sessions')
@@ -787,17 +977,18 @@ async function postHandler(request: NextRequest) {
     if (!allGoalsCovered && (!hasMoreTemplateSteps || isRemediationStep)) {
       // ── REMEDIATION: Template steps exhausted but goals remain ──
       const remediationRound = countRemediationRounds(messages) + 1;
+      const uncoveredGoals = learningGoals.filter((g) => !g.covered);
+      const targetGoal = uncoveredGoals[0];
 
-      if (remediationRound <= MAX_REMEDIATION_ROUNDS) {
-        const uncoveredGoals = learningGoals.filter((g) => !g.covered);
-        const uncoveredGoalIds = uncoveredGoals.map((g) => g.id);
+      if (targetGoal) {
+        const targetGoalIds = [targetGoal.id];
 
         // Call the second AI endpoint (generateRemediationQuestion) BEFORE any
         // DB writes so a failure here leaves no orphaned rows. The function
         // already has its own try/catch + fallback, but we keep the call
         // outside the batch for belt-and-suspenders atomicity.
         const remediationQuestion = await generateRemediationQuestion(
-          uncoveredGoals,
+          targetGoal,
           templateRow.source,
           remediationRound,
         );
@@ -813,7 +1004,7 @@ async function postHandler(request: NextRequest) {
           remediationBatch.push({
             session_id: session.id,
             role: 'agent',
-            content: `Ada ${uncoveredGoals.length} tujuan pembelajaran yang belum sepenuhnya tercapai. Mari kita bahas lebih lanjut agar pemahamanmu lebih lengkap.`,
+            content: `Ada ${uncoveredGoals.length} tujuan pembelajaran yang masih perlu diperkuat. Kita akan membahasnya satu per satu agar lebih mudah.`,
             step_key: `remediation-intro-${remediationRound}`,
             metadata: { type: 'coach_feedback', phase: 'remediation' },
           });
@@ -830,11 +1021,31 @@ async function postHandler(request: NextRequest) {
             expected_type: 'open',
             options: [],
             remediation_round: remediationRound,
-            target_goal_ids: uncoveredGoalIds,
+            target_goal_ids: targetGoalIds,
+            target_goal_id: targetGoal.id,
+            target_goal_description: targetGoal.description,
           },
         });
 
-        await insertDiscussionMessagesBatch(remediationBatch);
+        const insertedMessages = await insertDiscussionMessagesBatch(remediationBatch);
+        const insertedStudentMessage = findInsertedStudentMessage(
+          insertedMessages,
+          activeStep.step.key,
+        );
+        await insertDiscussionAssessments({
+          session,
+          promptMessageId: lastAgentMsg?.id ?? null,
+          studentMessageId: insertedStudentMessage?.id ?? null,
+          step: activeStep.step,
+          phase: activeStep.phaseId,
+          evaluation,
+          learningGoals,
+          attemptNumber: currentAttemptNumber,
+          remediationRound: isRemediationStep ? countRemediationRounds(messages) : null,
+          scaffoldAction: 'remediation_next_goal',
+          advanceAllowed: true,
+          coachFeedback: evaluation.coachFeedback ?? null,
+        });
 
         const { error: remUpdateError } = await adminDb
           .from('discussion_sessions')
@@ -854,12 +1065,13 @@ async function postHandler(request: NextRequest) {
           nextStep: serializeDiscussionStep({ key: remediationStepKey, prompt: remediationQuestion, expected_type: 'open', options: [], phase: 'remediation' }),
           isRemediation: true,
           remediationRound,
-          maxRemediationRounds: MAX_REMEDIATION_ROUNDS,
+          targetGoalId: targetGoal.id,
         });
       }
     }
 
     // ── SESSION COMPLETION (all goals covered OR max remediation exhausted) ──
+    const completionSummary = buildDiscussionCompletionSummary(learningGoals);
     const closingMessage = buildDefaultClosingMessage(learningGoals);
 
     // Atomic batch: student input + optional coach feedback + closing message.
@@ -870,14 +1082,44 @@ async function postHandler(request: NextRequest) {
       role: 'agent',
       content: closingMessage,
       step_key: 'closing',
-      metadata: { type: 'closing', goals: learningGoals },
+      metadata: {
+        type: 'closing',
+        goals: learningGoals,
+        completion_reason: completionSummary.completionReason,
+        completion_summary: completionSummary,
+      },
     });
-    await insertDiscussionMessagesBatch(completionBatch);
+    const insertedMessages = await insertDiscussionMessagesBatch(completionBatch);
+    const insertedStudentMessage = findInsertedStudentMessage(
+      insertedMessages,
+      activeStep.step.key,
+    );
+    await insertDiscussionAssessments({
+      session,
+      promptMessageId: lastAgentMsg?.id ?? null,
+      studentMessageId: insertedStudentMessage?.id ?? null,
+      step: activeStep.step,
+      phase: activeStep.phaseId,
+      evaluation,
+      learningGoals,
+      attemptNumber: currentAttemptNumber,
+      remediationRound: isRemediationStep ? countRemediationRounds(messages) : null,
+      scaffoldAction: 'complete',
+      advanceAllowed: true,
+      coachFeedback: evaluation.coachFeedback ?? null,
+    });
 
     const { error: completionUpdateError } = await adminDb
       .from('discussion_sessions')
       .eq('id', session.id)
-      .update({ phase: 'completed', status: 'completed', learning_goals: learningGoals });
+      .update({
+        phase: 'completed',
+        status: 'completed',
+        learning_goals: learningGoals,
+        completed_at: new Date().toISOString(),
+        completion_reason: completionSummary.completionReason,
+        completion_summary: completionSummary,
+      });
 
     if (completionUpdateError) {
       throw new Error(`Failed to complete discussion session: ${completionUpdateError.message}`);
@@ -1014,6 +1256,25 @@ function normalizeGoals(goals: unknown): DiscussionGoalState[] {
     covered: Boolean(goal?.covered),
     rubric: goal?.rubric ?? null,
     thinkingSkill: normalizeThinkingSkillMeta(goal?.thinkingSkill ?? goal?.thinking_skill),
+    masteryStatus: goal?.masteryStatus ?? goal?.mastery_status,
+    assessmentScore:
+      typeof goal?.assessmentScore === 'number'
+        ? goal.assessmentScore
+        : typeof goal?.assessment_score === 'number'
+        ? goal.assessment_score
+        : null,
+    assessmentNotes: goal?.assessmentNotes ?? goal?.assessment_notes ?? null,
+    mentorNote: goal?.mentorNote ?? goal?.mentor_note ?? null,
+    modelAnswer: goal?.modelAnswer ?? goal?.model_answer ?? null,
+    acceptedBy: goal?.acceptedBy ?? goal?.accepted_by ?? null,
+    acceptedAt: goal?.acceptedAt ?? goal?.accepted_at ?? null,
+    lastAssessedStepKey: goal?.lastAssessedStepKey ?? goal?.last_assessed_step_key ?? null,
+    lastAttemptNumber:
+      typeof goal?.lastAttemptNumber === 'number'
+        ? goal.lastAttemptNumber
+        : typeof goal?.last_attempt_number === 'number'
+        ? goal.last_attempt_number
+        : null,
   }));
 }
 
@@ -1039,6 +1300,15 @@ function mergeGoalDetails(
         normalizeThinkingSkillMeta(goal?.thinking_skill ?? goal?.thinkingSkill) ??
         existing?.thinkingSkill ??
         null,
+      masteryStatus: existing?.masteryStatus,
+      assessmentScore: existing?.assessmentScore ?? null,
+      assessmentNotes: existing?.assessmentNotes ?? null,
+      mentorNote: existing?.mentorNote ?? null,
+      modelAnswer: existing?.modelAnswer ?? null,
+      acceptedBy: existing?.acceptedBy ?? null,
+      acceptedAt: existing?.acceptedAt ?? null,
+      lastAssessedStepKey: existing?.lastAssessedStepKey ?? null,
+      lastAttemptNumber: existing?.lastAttemptNumber ?? null,
     };
   });
 
@@ -1049,9 +1319,111 @@ function mergeGoalDetails(
   return [...merged, ...additional];
 }
 
+function normalizeGoalProximity(value: unknown): GoalProximity {
+  const normalized = String(value ?? '').toLowerCase();
+  if (normalized === 'met' || normalized === 'sesuai') return 'met';
+  if (normalized === 'near' || normalized === 'mendekati') return 'near';
+  if (normalized === 'off_topic' || normalized === 'tidak_relevan') return 'off_topic';
+  if (normalized === 'unassessable' || normalized === 'tidak_bisa_dinilai') {
+    return 'unassessable';
+  }
+  return 'weak';
+}
+
+function clampAssessmentScore(value: unknown, fallback: number): number {
+  const parsed = typeof value === 'number' ? value : Number(value);
+  if (!Number.isFinite(parsed)) return fallback;
+  return Math.max(0, Math.min(1, parsed));
+}
+
+function acceptanceForProximity(proximity: GoalProximity): {
+  accepted: boolean;
+  reason: GoalAcceptanceReason;
+} {
+  if (proximity === 'met') return { accepted: true, reason: 'mastery' };
+  if (proximity === 'near') return { accepted: true, reason: 'near_enough' };
+  return { accepted: false, reason: 'not_accepted' };
+}
+
+function applyGoalAssessments(
+  goals: DiscussionGoalState[],
+  evaluation: StepEvaluationResult,
+  step: DiscussionStep | undefined,
+  attemptNumber: number,
+): DiscussionGoalState[] {
+  const assessmentMap = new Map(
+    (evaluation.assessments ?? []).map((assessment) => [assessment.goalId, assessment])
+  );
+  const now = new Date().toISOString();
+
+  return goals.map((goal) => {
+    const assessment = assessmentMap.get(goal.id);
+    if (!assessment) return goal;
+
+    return {
+      ...goal,
+      covered: goal.covered || assessment.accepted,
+      masteryStatus: assessment.proximity,
+      assessmentScore: assessment.score,
+      assessmentNotes: assessment.notes ?? goal.assessmentNotes ?? null,
+      mentorNote: assessment.mentorNote ?? goal.mentorNote ?? null,
+      modelAnswer: assessment.modelAnswer ?? goal.modelAnswer ?? null,
+      acceptedBy: assessment.accepted ? assessment.acceptedReason : goal.acceptedBy ?? null,
+      acceptedAt: assessment.accepted ? now : goal.acceptedAt ?? null,
+      lastAssessedStepKey: step?.key ?? goal.lastAssessedStepKey ?? null,
+      lastAttemptNumber: attemptNumber,
+    };
+  });
+}
+
+function acceptGoalsAfterAttemptLimit(
+  goals: DiscussionGoalState[],
+  goalIds: string[],
+  reason: Exclude<GoalAcceptanceReason, 'mastery' | 'near_enough' | 'not_accepted'>,
+  step: DiscussionStep | undefined,
+  attemptNumber: number,
+  fallbackNote: string,
+): DiscussionGoalState[] {
+  if (!goalIds.length) return goals;
+  const targetIds = new Set(goalIds);
+  const now = new Date().toISOString();
+
+  return goals.map((goal) => {
+    if (!targetIds.has(goal.id) || goal.covered) return goal;
+
+    return {
+      ...goal,
+      covered: true,
+      masteryStatus: goal.masteryStatus ?? 'weak',
+      assessmentScore: goal.assessmentScore ?? 0.35,
+      assessmentNotes: goal.assessmentNotes ?? fallbackNote,
+      mentorNote:
+        goal.mentorNote ??
+        'Siswa sudah melewati proses bimbingan, tetapi pemahamannya masih perlu diperkuat.',
+      acceptedBy: reason,
+      acceptedAt: now,
+      lastAssessedStepKey: step?.key ?? goal.lastAssessedStepKey ?? null,
+      lastAttemptNumber: attemptNumber,
+    };
+  });
+}
+
+interface GoalAssessment {
+  goalId: string;
+  satisfied: boolean;
+  proximity: GoalProximity;
+  score: number;
+  notes?: string;
+  mentorNote?: string;
+  modelAnswer?: string;
+  evidence?: string;
+  accepted: boolean;
+  acceptedReason: GoalAcceptanceReason;
+}
+
 interface StepEvaluationResult {
   coveredGoals: string[];
-  assessments?: Array<{ goalId: string; satisfied: boolean; notes?: string }>;
+  assessments?: GoalAssessment[];
   coachFeedback?: string;
   evaluator: 'mcq' | 'llm' | 'fallback';
   qualityFlag?: 'adequate' | 'low_effort' | 'off_topic';
@@ -1127,16 +1499,28 @@ async function evaluateStepResponse({
       ? step.feedback?.correct ??
       'Tepat! Jawabanmu menunjukkan pemahaman yang kuat terhadap konsep ini.'
       : step.feedback?.incorrect ??
-      'Belum tepat. Coba telaah kembali poin utama sebelum melanjutkan.';
+      'Jawabanmu belum tepat. Mari gunakan ini untuk memperjelas konsep sebelum lanjut.';
+    const proximity: GoalProximity = isCorrect ? 'met' : 'weak';
+    const acceptance = acceptanceForProximity(proximity);
+    const modelAnswer =
+      typeof step.answer === 'number'
+        ? step.options?.[step.answer] ?? String(step.answer)
+        : String(step.answer ?? '');
 
     return {
       coveredGoals,
       assessments: goalRefs.map((goalId) => ({
         goalId,
-        satisfied: coveredGoals.includes(goalId),
-        notes: coveredGoals.includes(goalId)
-          ? 'Menjawab pilihan ganda dengan benar.'
-          : 'Jawaban pilihan ganda belum tepat.',
+        satisfied: isCorrect,
+        proximity,
+        score: isCorrect ? 1 : 0.25,
+        notes: isCorrect
+          ? 'Pilihan siswa sesuai dengan konsep yang dinilai.'
+          : 'Pilihan siswa belum sesuai dengan konsep yang dinilai.',
+        mentorNote: feedback,
+        modelAnswer,
+        accepted: acceptance.accepted,
+        acceptedReason: acceptance.reason,
       })),
       coachFeedback: feedback,
       evaluator: 'mcq',
@@ -1205,11 +1589,19 @@ async function evaluateStepResponse({
               type: 'array',
               items: {
                 type: 'object',
-                required: ['goalId', 'satisfied'],
+                required: ['goalId', 'proximity', 'score', 'notes', 'mentorNote', 'modelAnswer'],
                 properties: {
                   goalId: { type: 'string' },
+                  proximity: {
+                    type: 'string',
+                    enum: ['met', 'near', 'weak', 'off_topic', 'unassessable'],
+                  },
+                  score: { type: 'number' },
                   satisfied: { type: 'boolean' },
                   notes: { type: 'string' },
+                  mentorNote: { type: 'string' },
+                  modelAnswer: { type: 'string' },
+                  evidence: { type: 'string' },
                 },
               },
             },
@@ -1232,7 +1624,7 @@ async function evaluateStepResponse({
           {
             role: "system",
             content:
-              "You are a learning facilitator evaluating a learner’s response. Use the rubric to judge whether each goal is satisfied. Respond only with JSON that matches the required schema.",
+              "You are a Socratic learning mentor evaluating how close a learner's response is to each learning goal. Be supportive and research-oriented. Respond only with JSON that matches the required schema.",
           },
           {
             role: "user",
@@ -1246,13 +1638,19 @@ async function evaluateStepResponse({
               `Jawaban peserta: ${responseText}`,
               "",
               "INSTRUKSI PENILAIAN:",
-              "1. Nilailah setiap goal dengan menandai satisfied true/false dan cantumkan catatan singkat.",
-              "2. Buat coachFeedback ringkas (2-3 kalimat) dalam bahasa yang sama dengan materi.",
-              "3. Tentukan qualityFlag:",
+              "1. Nilailah kedekatan jawaban terhadap setiap goal dengan proximity: met, near, weak, off_topic, atau unassessable.",
+              "2. Gunakan score 0.0-1.0. met >= 0.80, near 0.60-0.79, weak 0.25-0.59, off_topic/unassessable < 0.25.",
+              "3. satisfied harus true hanya untuk met atau near. Jawaban near boleh dilanjutkan karena siswa sudah mendekati learning goal.",
+              "4. notes menjelaskan alasan penilaian secara singkat untuk data penelitian.",
+              "5. mentorNote memberi arahan membimbing, bukan menghakimi.",
+              "6. modelAnswer berisi contoh jawaban ideal singkat dan mudah dipahami.",
+              "7. evidence kutip ringkas bagian jawaban siswa yang menjadi dasar penilaian jika ada.",
+              "8. Buat coachFeedback suportif (2-4 kalimat): akui usaha siswa, jelaskan koreksi, lalu beri arahan berikutnya.",
+              "9. Tentukan qualityFlag:",
               "   - 'adequate': jawaban menunjukkan usaha nyata dan relevan dengan pertanyaan",
               "   - 'low_effort': jawaban terlalu dangkal, tidak informatif, atau hanya mengulangi pertanyaan",
               "   - 'off_topic': jawaban tidak berkaitan dengan pertanyaan atau materi yang dibahas",
-              "   Jika qualityFlag bukan 'adequate', SEMUA goal harus ditandai satisfied: false.",
+              "   Jika qualityFlag bukan 'adequate', SEMUA goal harus proximity weak/off_topic/unassessable dan satisfied false.",
             ].join("\n"),
           },
         ],
@@ -1270,19 +1668,49 @@ async function evaluateStepResponse({
       : parsed.qualityFlag === 'off_topic' ? 'off_topic'
       : 'adequate';
 
-    const goalAssessments = Array.isArray(parsed.goalAssessments)
+    const goalAssessments: GoalAssessment[] = Array.isArray(parsed.goalAssessments)
       ? parsed.goalAssessments
-        .filter((assessment: { goalId?: string; satisfied?: boolean; notes?: string }) => goalRefs.includes(assessment?.goalId ?? ''))
-        .map((assessment: { goalId: string; satisfied: boolean; notes?: string }) => ({
-          goalId: assessment.goalId,
-          satisfied: qualityFlag === 'adequate' ? Boolean(assessment.satisfied) : false,
-          notes: assessment.notes,
-        }))
+        .filter((assessment: { goalId?: string }) => goalRefs.includes(assessment?.goalId ?? ''))
+        .map((assessment: {
+          goalId: string;
+          proximity?: string;
+          score?: number;
+          satisfied?: boolean;
+          notes?: string;
+          mentorNote?: string;
+          modelAnswer?: string;
+          evidence?: string;
+        }) => {
+          const proximity: GoalProximity =
+            qualityFlag === 'adequate'
+              ? normalizeGoalProximity(assessment.proximity)
+              : qualityFlag === 'off_topic'
+              ? 'off_topic'
+              : 'weak';
+          const acceptance = acceptanceForProximity(proximity);
+          const fallbackScore =
+            proximity === 'met' ? 0.9
+            : proximity === 'near' ? 0.68
+            : proximity === 'weak' ? 0.4
+            : 0.1;
+          return {
+            goalId: assessment.goalId,
+            satisfied: acceptance.accepted,
+            proximity,
+            score: clampAssessmentScore(assessment.score, fallbackScore),
+            notes: assessment.notes,
+            mentorNote: assessment.mentorNote,
+            modelAnswer: assessment.modelAnswer,
+            evidence: assessment.evidence,
+            accepted: acceptance.accepted,
+            acceptedReason: acceptance.reason,
+          };
+        })
       : [];
 
     const coveredGoals = goalAssessments
-      .filter((assessment: { goalId: string; satisfied: boolean; notes?: string }) => assessment.satisfied)
-      .map((assessment: { goalId: string; satisfied: boolean; notes?: string }) => assessment.goalId);
+      .filter((assessment) => assessment.accepted)
+      .map((assessment) => assessment.goalId);
 
     return {
       coveredGoals,
@@ -1298,7 +1726,15 @@ async function evaluateStepResponse({
       assessments: goalRefs.map((goalId) => ({
         goalId,
         satisfied: false,
+        proximity: 'unassessable' as GoalProximity,
+        score: 0,
         notes: "Evaluation fallback: tidak dapat menilai secara otomatis.",
+        mentorNote:
+          "Sistem belum berhasil menilai jawaban ini secara otomatis, jadi mentor meminta siswa meninjau ulang poin pentingnya.",
+        modelAnswer:
+          "Jawaban ideal perlu mengaitkan penjelasan siswa dengan tujuan pembelajaran yang sedang dibahas.",
+        accepted: false,
+        acceptedReason: 'not_accepted' as GoalAcceptanceReason,
       })),
       coachFeedback:
         "Terima kasih atas jawabanmu. Mari kita ulas kembali poin pentingnya dan pastikan sudah sesuai dengan tujuan.",
@@ -1307,33 +1743,74 @@ async function evaluateStepResponse({
   }
 }
 
-function buildDefaultClosingMessage(goals: DiscussionGoalState[]) {
-  const accomplished = goals
-    .filter((goal) => goal.covered)
-    .map((goal) => `- ${goal.description}`)
-    .join('\n');
-  const pending = goals
-    .filter((goal) => !goal.covered)
-    .map((goal) => `- ${goal.description}`)
-    .join('\n');
+function buildDiscussionCompletionSummary(goals: DiscussionGoalState[]) {
+  const totalGoals = goals.length;
+  const metGoals = goals.filter((goal) => goal.masteryStatus === 'met');
+  const nearGoals = goals.filter((goal) => goal.masteryStatus === 'near');
+  const weakGoals = goals.filter((goal) =>
+    goal.covered && goal.masteryStatus !== 'met' && goal.masteryStatus !== 'near'
+  );
+  const pendingGoals = goals.filter((goal) => !goal.covered);
+  const exhaustedGoals = goals.filter((goal) => goal.acceptedBy === 'remediation_attempt_limit');
 
-  if (pending) {
-    return [
-      "Terima kasih untuk tanggapanmu. Ada beberapa poin yang masih bisa kamu perdalam:",
-      pending ? `Fokuskan ulang pada:\n${pending}` : "",
-      "Silakan tinjau kembali materi di atas sebelum melanjutkan, lalu kembali ke sesi diskusi kapan saja untuk menyempurnakan pemahamanmu.",
-    ]
-      .filter(Boolean)
-      .join("\n\n");
-  }
+  const completionReason =
+    pendingGoals.length > 0
+      ? 'completed_with_pending_notes'
+      : exhaustedGoals.length > 0
+      ? 'remediation_exhausted'
+      : weakGoals.length > 0
+      ? 'max_attempts_reached'
+      : nearGoals.length > 0
+      ? 'near_enough_with_notes'
+      : 'all_goals_met';
+
+  return {
+    completionReason,
+    totalGoals,
+    metCount: metGoals.length,
+    nearCount: nearGoals.length,
+    weakCount: weakGoals.length,
+    pendingCount: pendingGoals.length,
+    strengths: [...metGoals, ...nearGoals].map((goal) => goal.description),
+    needsReview: [...weakGoals, ...pendingGoals].map((goal) => ({
+      id: goal.id,
+      description: goal.description,
+      masteryStatus: goal.masteryStatus ?? 'weak',
+      notes: goal.assessmentNotes ?? goal.mentorNote ?? null,
+      acceptedBy: goal.acceptedBy ?? null,
+    })),
+    goals: goals.map((goal) => ({
+      id: goal.id,
+      description: goal.description,
+      covered: goal.covered,
+      masteryStatus: goal.masteryStatus ?? null,
+      assessmentScore: goal.assessmentScore ?? null,
+      assessmentNotes: goal.assessmentNotes ?? null,
+      acceptedBy: goal.acceptedBy ?? null,
+      lastAttemptNumber: goal.lastAttemptNumber ?? null,
+    })),
+  };
+}
+
+function buildDefaultClosingMessage(goals: DiscussionGoalState[]) {
+  const summary = buildDiscussionCompletionSummary(goals);
+  const strengths = summary.strengths.map((item) => `- ${item}`).join('\n');
+  const needsReview = summary.needsReview
+    .map((goal) => `- ${goal.description}${goal.notes ? ` (${goal.notes})` : ''}`)
+    .join('\n');
 
   return [
-    "Hebat! Kamu sudah menuntaskan seluruh tujuan diskusi untuk subtopik ini.",
-    accomplished ? `Poin yang sudah kamu kuasai:\n${accomplished}` : "",
-    "Jika ingin memperdalam lagi, kamu bisa mencoba menerapkan konsep ini pada situasi nyata atau melanjutkan ke materi berikutnya.",
+    'Terima kasih. Kamu sudah menyelesaikan proses diskusi wajib ini.',
+    strengths
+      ? `Bagian yang sudah kuat atau sudah cukup mendekati:\n${strengths}`
+      : '',
+    needsReview
+      ? `Bagian yang masih perlu diperkuat saat belajar berikutnya:\n${needsReview}`
+      : '',
+    'Kamu boleh lanjut, sambil membawa catatan perbaikan ini ke topik berikutnya.',
   ]
     .filter(Boolean)
-    .join("\n\n");
+    .join('\n\n');
 }
 
 async function ensureProgressRecord(userId: string, courseId: string, subtopicId: string) {
