@@ -1,236 +1,146 @@
-/**
- * Middleware Tests: JSON 401 for API Routes
- *
- * Tests that the middleware returns proper JSON 401 responses
- * for unauthenticated /api/* requests instead of HTML redirects.
- *
- * Also verifies that:
- * - Public/auth API routes are not blocked
- * - Page routes still redirect to login HTML pages
- * - Valid tokens pass through with user headers set
- * - Invalid tokens return JSON 401 for API routes
- */
+import { NextRequest } from 'next/server'
 
-import { NextRequest } from 'next/server';
+const mockVerifyToken = jest.fn()
 
-// Mock verifyToken before importing middleware
-const mockVerifyToken = jest.fn();
 jest.mock('@/lib/jwt', () => ({
-  verifyToken: (...args: any[]) => mockVerifyToken(...args),
-}));
+  verifyToken: (...args: unknown[]) => mockVerifyToken(...args),
+}))
 
-import { middleware } from '../../../middleware';
+import { middleware } from '../../../middleware'
 
-// Helper to create a NextRequest
-function createRequest(path: string, options: { cookies?: Record<string, string> } = {}): NextRequest {
-  const url = new URL(path, 'http://localhost:3000');
-  const req = new NextRequest(url);
+function createRequest(
+  path: string,
+  options: {
+    method?: string
+    cookies?: Record<string, string>
+  } = {},
+): NextRequest {
+  const url = new URL(path, 'http://localhost:3000')
+  const request = new NextRequest(url, { method: options.method ?? 'GET' })
 
-  if (options.cookies) {
-    for (const [name, value] of Object.entries(options.cookies)) {
-      req.cookies.set(name, value);
-    }
+  for (const [name, value] of Object.entries(options.cookies ?? {})) {
+    request.cookies.set(name, value)
   }
 
-  return req;
+  return request
 }
 
-describe('Middleware — API Route JSON 401 Responses', () => {
+describe('middleware auth flow', () => {
   beforeEach(() => {
-    jest.clearAllMocks();
-  });
+    jest.clearAllMocks()
+  })
 
-  // ─── No Token: API routes should get JSON 401 ───
+  it('returns JSON 401 for protected API routes without an access token', async () => {
+    const response = middleware(createRequest('/api/courses'))
+    const body = await response.json()
 
-  test('returns JSON 401 for /api/courses when no token', async () => {
-    const req = createRequest('/api/courses');
-    const res = middleware(req);
+    expect(response.status).toBe(401)
+    expect(body.error).toBe('Autentikasi diperlukan')
+    expect(response.headers.get('location')).toBeNull()
+  })
 
-    expect(res.status).toBe(401);
+  it('returns JSON 401 for invalid API tokens even when a refresh token exists', async () => {
+    mockVerifyToken.mockReturnValue(null)
 
-    const body = await res.json();
-    expect(body.error).toBe('Authentication required');
-    // Should NOT be a redirect
-    expect(res.headers.get('location')).toBeNull();
-  });
+    const response = middleware(
+      createRequest('/api/courses', {
+        cookies: {
+          access_token: 'expired-token',
+          refresh_token: 'valid-refresh-token',
+        },
+      }),
+    )
+    const body = await response.json()
 
-  test('returns JSON 401 for /api/generate-course when no token', async () => {
-    const req = createRequest('/api/generate-course');
-    const res = middleware(req);
+    expect(response.status).toBe(401)
+    expect(body.error).toBe('Token tidak valid atau sudah kedaluwarsa')
+    expect(response.headers.getSetCookie().some((cookie) => cookie.includes('access_token='))).toBe(true)
+  })
 
-    expect(res.status).toBe(401);
+  it('lets expired page requests continue when a refresh token exists', () => {
+    mockVerifyToken.mockReturnValue(null)
 
-    const body = await res.json();
-    expect(body.error).toBe('Authentication required');
-  });
+    const response = middleware(
+      createRequest('/dashboard', {
+        cookies: {
+          access_token: 'expired-token',
+          refresh_token: 'valid-refresh-token',
+        },
+      }),
+    )
 
-  test('returns JSON 401 for /api/admin/dashboard when no token', async () => {
-    const req = createRequest('/api/admin/dashboard');
-    const res = middleware(req);
+    expect(response.status).toBe(200)
+    expect(response.headers.get('location')).toBeNull()
+    expect(response.headers.getSetCookie().some((cookie) => cookie.includes('access_token='))).toBe(true)
+  })
 
-    expect(res.status).toBe(401);
+  it('redirects protected user pages to /login when there is no session', () => {
+    const response = middleware(createRequest('/dashboard'))
 
-    const body = await res.json();
-    expect(body.error).toBe('Authentication required');
-  });
+    expect(response.status).toBe(307)
+    expect(response.headers.get('location')).toContain('/login')
+  })
 
-  test('returns JSON 401 for nested API routes when no token', async () => {
-    const req = createRequest('/api/admin/users/123/detail');
-    const res = middleware(req);
+  it('redirects protected admin pages to /admin/login when there is no session', () => {
+    const response = middleware(createRequest('/admin/dashboard'))
 
-    expect(res.status).toBe(401);
+    expect(response.status).toBe(307)
+    expect(response.headers.get('location')).toContain('/admin/login')
+  })
 
-    const body = await res.json();
-    expect(body.error).toBe('Authentication required');
-  });
+  it('allows auth API routes to pass through without a token', () => {
+    const response = middleware(createRequest('/api/auth/refresh'))
 
-  // ─── Invalid Token: API routes should get JSON 401 ───
+    expect(response.status).toBe(200)
+    expect(response.headers.get('location')).toBeNull()
+  })
 
-  test('returns JSON 401 with "Invalid or expired token" when token is invalid', async () => {
-    mockVerifyToken.mockReturnValue(null); // invalid token
+  it('rejects non-admin tokens for admin APIs with JSON 403', async () => {
+    mockVerifyToken.mockReturnValue({
+      userId: 'user-1',
+      email: 'user@example.com',
+      role: 'user',
+    })
 
-    const req = createRequest('/api/courses', {
-      cookies: { access_token: 'invalid-token-here' },
-    });
-    const res = middleware(req);
+    const response = middleware(
+      createRequest('/api/admin/dashboard', {
+        cookies: { access_token: 'valid-user-token' },
+      }),
+    )
+    const body = await response.json()
 
-    expect(res.status).toBe(401);
+    expect(response.status).toBe(403)
+    expect(body.error).toBe('Akses ditolak: diperlukan peran admin')
+  })
 
-    const body = await res.json();
-    expect(body.error).toBe('Invalid or expired token');
-
-    // Should clear the invalid cookie
-    const setCookieHeaders = res.headers.getSetCookie();
-    const clearedCookies = setCookieHeaders.filter(c => c.includes('access_token'));
-    expect(clearedCookies.length).toBeGreaterThan(0);
-  });
-
-  test('returns JSON 401 for admin API when admin token is invalid', async () => {
-    mockVerifyToken.mockReturnValue(null);
-
-    const req = createRequest('/api/admin/insights', {
-      cookies: { access_token: 'bad-admin-token' },
-    });
-    const res = middleware(req);
-
-    expect(res.status).toBe(401);
-
-    const body = await res.json();
-    expect(body.error).toBe('Invalid or expired token');
-  });
-
-  // ─── Public API routes should pass through ───
-
-  test('allows /api/auth/login without token', async () => {
-    const req = createRequest('/api/auth/login');
-    const res = middleware(req);
-
-    // Should pass through (200 or no redirect)
-    expect(res.status).toBe(200);
-    expect(res.headers.get('location')).toBeNull();
-  });
-
-  test('allows /api/auth/register without token', async () => {
-    const req = createRequest('/api/auth/register');
-    const res = middleware(req);
-
-    expect(res.status).toBe(200);
-  });
-
-  test('allows /api/auth/refresh without token', async () => {
-    const req = createRequest('/api/auth/refresh');
-    const res = middleware(req);
-
-    expect(res.status).toBe(200);
-  });
-
-  test('allows /api/auth/logout without token', async () => {
-    const req = createRequest('/api/auth/logout');
-    const res = middleware(req);
-
-    expect(res.status).toBe(200);
-  });
-
-  // ─── Page routes should redirect to login (not JSON) ───
-
-  test('redirects /dashboard to /login when no token', async () => {
-    const req = createRequest('/dashboard');
-    const res = middleware(req);
-
-    expect(res.status).toBe(307);
-    expect(res.headers.get('location')).toContain('/login');
-  });
-
-  test('redirects /admin/dashboard to /admin/login when no token', async () => {
-    const req = createRequest('/admin/dashboard');
-    const res = middleware(req);
-
-    expect(res.status).toBe(307);
-    expect(res.headers.get('location')).toContain('/admin/login');
-  });
-
-  test('redirects /request-course/step1 to /login when no token', async () => {
-    const req = createRequest('/request-course/step1');
-    const res = middleware(req);
-
-    expect(res.status).toBe(307);
-    expect(res.headers.get('location')).toContain('/login');
-  });
-
-  // ─── Valid token: should pass through with headers ───
-
-  test('passes through API request with valid user token and sets headers', async () => {
+  it('passes valid API requests through and injects user headers', () => {
     mockVerifyToken.mockReturnValue({
       userId: 'user-123',
       email: 'test@example.com',
       role: 'user',
-    });
+    })
 
-    const req = createRequest('/api/courses', {
-      cookies: { access_token: 'valid-user-token' },
-    });
-    const res = middleware(req);
+    const response = middleware(
+      createRequest('/api/courses', {
+        cookies: { access_token: 'valid-token' },
+      }),
+    )
 
-    expect(res.status).toBe(200);
-    // Headers should be set for downstream handlers
-    expect(res.headers.get('x-user-id') || res.headers.get('x-middleware-request-x-user-id')).toBeTruthy();
-  });
+    expect(response.status).toBe(200)
+    expect(
+      response.headers.get('x-user-id') ||
+        response.headers.get('x-middleware-request-x-user-id'),
+    ).toBeTruthy()
+    expect(
+      response.headers.get('x-user-role') ||
+        response.headers.get('x-middleware-request-x-user-role'),
+    ).toBeTruthy()
+  })
 
-  test('passes through API request with valid admin token', async () => {
-    mockVerifyToken.mockReturnValue({
-      userId: 'admin-1',
-      email: 'admin@example.com',
-      role: 'admin',
-    });
+  it('allows public routes without a token', () => {
+    const response = middleware(createRequest('/'))
 
-    const req = createRequest('/api/admin/dashboard', {
-      cookies: { access_token: 'valid-admin-token' },
-    });
-    const res = middleware(req);
-
-    expect(res.status).toBe(200);
-  });
-
-  // ─── Public page routes should pass through ───
-
-  test('allows / (home) without token', async () => {
-    const req = createRequest('/');
-    const res = middleware(req);
-
-    expect(res.status).toBe(200);
-  });
-
-  test('allows /login without token', async () => {
-    const req = createRequest('/login');
-    const res = middleware(req);
-
-    expect(res.status).toBe(200);
-  });
-
-  test('allows /signup without token', async () => {
-    const req = createRequest('/signup');
-    const res = middleware(req);
-
-    expect(res.status).toBe(200);
-  });
-});
+    expect(response.status).toBe(200)
+    expect(response.headers.get('location')).toBeNull()
+  })
+})

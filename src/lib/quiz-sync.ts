@@ -11,6 +11,7 @@
 
 import { adminDb as defaultAdminDb } from '@/lib/database';
 import { ensureLeafSubtopic } from '@/lib/leaf-subtopics';
+import { collectBatchedInResults } from '@/lib/supabase-batch';
 
 export interface QuizItem {
   question?: string;
@@ -305,11 +306,15 @@ export async function syncQuizQuestions(params: SyncQuizParams): Promise<SyncQui
 
     if (Array.isArray(oldQuizIds) && oldQuizIds.length > 0) {
       const ids = (oldQuizIds as Array<{ id: string }>).map((q) => q.id);
-      const { data: refSubs } = await adminDb
-        .from('quiz_submissions')
-        .select('id')
-        .in('quiz_id', ids)
-        .limit(1);
+      const { data: refSubs } = await collectBatchedInResults<{ id: string }, string>({
+        values: ids,
+        fetchChunk: async (quizIdChunk) =>
+          adminDb
+            .from('quiz_submissions')
+            .select('id')
+            .in('quiz_id', quizIdChunk)
+            .limit(1),
+      });
       hasExistingSubmissions = Array.isArray(refSubs) && refSubs.length > 0;
     }
   } catch (checkError) {

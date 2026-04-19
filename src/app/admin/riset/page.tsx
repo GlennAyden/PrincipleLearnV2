@@ -8,6 +8,7 @@ import {
     FiGitMerge, FiArchive, FiDownload
 } from 'react-icons/fi'
 import { useAdmin } from '@/hooks/useAdmin'
+import { apiFetch } from '@/lib/api-client'
 import styles from './page.module.scss'
 import dynamic from 'next/dynamic'
 const StageHeatmapChart = dynamic(() => import('@/components/admin/ResearchChart').then(mod => ({ default: mod.StageHeatmapChart })), { ssr: false })
@@ -32,7 +33,7 @@ export default function RisetDashboard() {
             setLoading(true)
             setError(null)
 
-            const res = await fetch('/api/admin/research/analytics', { credentials: 'include' })
+            const res = await apiFetch('/api/admin/research/analytics', { cache: 'no-store' })
             const data = await res.json()
 
             if (!res.ok) {

@@ -6,6 +6,7 @@ import { useRouter } from 'next/navigation';
 import Link from 'next/link';
 import styles from './page.module.scss';
 import { useAuth } from '@/hooks/useAuth';
+import { apiFetch } from '@/lib/api-client';
 
 export default function LoginPage() {
   const router = useRouter();
@@ -45,13 +46,15 @@ export default function LoginPage() {
       }
 
       // Check if learning profile exists
-      const meRes = await fetch('/api/auth/me');
+      const meRes = await apiFetch('/api/auth/me', { cache: 'no-store' });
       const meData = meRes.ok ? await meRes.json() : null;
       const userId = meData?.user?.id;
 
       if (userId) {
         try {
-          const profileRes = await fetch(`/api/learning-profile?userId=${userId}`);
+          const profileRes = await apiFetch(`/api/learning-profile?userId=${userId}`, {
+            cache: 'no-store',
+          });
           const profileData = await profileRes.json();
           if (!profileData.exists) {
             router.replace('/onboarding');
@@ -62,7 +65,9 @@ export default function LoginPage() {
         }
 
         // Use userId (not email) for courses query
-        const coursesResponse = await fetch(`/api/courses?userId=${encodeURIComponent(userId)}`);
+        const coursesResponse = await apiFetch(`/api/courses?userId=${encodeURIComponent(userId)}`, {
+          cache: 'no-store',
+        });
         const coursesResult = await coursesResponse.json();
         
         if (coursesResult.success && coursesResult.courses.length > 0) {

@@ -30,6 +30,7 @@ import {
   normalizeDiscussionSession,
   normalizeDiscussionSessions,
 } from '@/types/discussion'
+import { apiFetch } from '@/lib/api-client'
 
 // ── Shared Types ──
 
@@ -469,7 +470,7 @@ export default function AdminAktivitasPage() {
   // ── Load users & courses for filters ──
   useEffect(() => {
     if (authLoading || !admin) return
-    fetch('/api/admin/users?limit=100', { credentials: 'include' })
+    apiFetch('/api/admin/users?limit=100', { cache: 'no-store' })
       .then((res) => res.json())
       .then(setUsers)
       .catch(() => setUsers([]))
@@ -477,7 +478,7 @@ export default function AdminAktivitasPage() {
 
   useEffect(() => {
     if (authLoading || !admin) return
-    fetch('/api/admin/activity/courses', { credentials: 'include' })
+    apiFetch('/api/admin/activity/courses', { cache: 'no-store' })
       .then((res) => res.json())
       .then((data) => setCourses(Array.isArray(data.courses) ? data.courses : []))
       .catch(() => setCourses([]))
@@ -521,7 +522,7 @@ export default function AdminAktivitasPage() {
 
     setLogsLoading(true)
     const controller = new AbortController()
-    fetch(url, { credentials: 'include', signal: controller.signal })
+    apiFetch(url, { cache: 'no-store', signal: controller.signal })
       .then((res) => {
         if (!res.ok) throw new Error('Gagal memuat data')
         return res.json()
@@ -575,8 +576,8 @@ export default function AdminAktivitasPage() {
       try {
         const params = new URLSearchParams()
         if (diskusiStatusFilter !== 'all') params.append('status', diskusiStatusFilter)
-        const response = await fetch(`/api/admin/discussions?${params.toString()}`, {
-          credentials: 'include',
+        const response = await apiFetch(`/api/admin/discussions?${params.toString()}`, {
+          cache: 'no-store',
           signal: controller.signal,
         })
         if (!response.ok) {
@@ -617,8 +618,8 @@ export default function AdminAktivitasPage() {
       setLoadingDetail(true)
       setDetailError(null)
       try {
-        const response = await fetch(`/api/admin/discussions/${selectedSessionId}`, {
-          credentials: 'include',
+        const response = await apiFetch(`/api/admin/discussions/${selectedSessionId}`, {
+          cache: 'no-store',
           signal: controller.signal,
         })
         if (!response.ok) {
@@ -687,8 +688,8 @@ export default function AdminAktivitasPage() {
     let cancelled = false
     setPrereqLoading(true)
     setPrereqError(null)
-    fetch(`/api/admin/discussions/module-status?courseId=${courseId}&moduleId=${moduleId}`, {
-      credentials: 'include',
+    apiFetch(`/api/admin/discussions/module-status?courseId=${courseId}&moduleId=${moduleId}`, {
+      cache: 'no-store',
     })
       .then(async (res) => {
         if (!res.ok) {

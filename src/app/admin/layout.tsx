@@ -37,8 +37,16 @@ export default function AdminLayout({ children }: AdminLayoutProps) {
   }, [pathname])
 
   const handleLogout = async () => {
-    await apiFetch('/api/admin/logout', { method: 'POST' })
-    router.push('/admin/login')
+    try {
+      const response = await apiFetch('/api/admin/logout', { method: 'POST' })
+      if (!response.ok) {
+        const detail = await response.json().catch(() => ({}))
+        throw new Error(detail.error || 'Gagal keluar dari panel admin')
+      }
+      router.push('/admin/login')
+    } catch (error) {
+      console.error('[AdminLayout] Logout failed:', error)
+    }
   }
 
   if (isAuthPage) {

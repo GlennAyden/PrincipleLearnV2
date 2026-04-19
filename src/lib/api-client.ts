@@ -23,6 +23,18 @@ export function getCsrfToken(): string {
 
 let refreshInFlight: Promise<boolean> | null = null;
 
+function shouldRetryWithRefresh(url: string): boolean {
+  const refreshExemptRoutes = [
+    '/api/auth/login',
+    '/api/auth/register',
+    '/api/auth/refresh',
+    '/api/auth/logout',
+    '/api/admin/login',
+  ];
+
+  return !refreshExemptRoutes.some((route) => url.includes(route));
+}
+
 async function refreshSession(): Promise<boolean> {
   if (!refreshInFlight) {
     refreshInFlight = fetch('/api/auth/refresh', {
@@ -69,8 +81,10 @@ export async function apiFetch(
 
   let res = await fetch(url, buildFetchOptions());
 
-  // Auto-refresh on 401 — skip for auth routes to avoid infinite loops
-  if (res.status === 401 && !url.includes('/api/auth/')) {
+  // Auto-refresh on 401 for protected endpoints. We only skip explicit
+  // login/register/refresh/logout endpoints to avoid loops and duplicate auth
+  // work; routes like /api/auth/me should still benefit from refresh retry.
+  if (res.status === 401 && shouldRetryWithRefresh(url)) {
     const refreshed = await refreshSession();
     if (refreshed) {
       // Retry the original request with the fresh cookie

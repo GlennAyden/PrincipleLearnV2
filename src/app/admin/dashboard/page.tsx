@@ -16,6 +16,7 @@ import {
 } from 'react-icons/fi'
 import { useRouter } from 'next/navigation'
 import { useAdmin } from '@/hooks/useAdmin'
+import { apiFetch } from '@/lib/api-client'
 import type {
   DashboardTab, TimeRange, DashboardKPI, RM2Data, RM3Data,
   ActivityItem, StudentRow, SystemHealth, DashboardAPIResponse,
@@ -80,7 +81,7 @@ export default function AdminDashboardPage() {
   const fetchDashboard = useCallback(async () => {
     setLoading(true); setError(null)
     try {
-      const res = await fetch(`/api/admin/dashboard?range=${timeRange}`, { credentials: 'include', cache: 'no-store' })
+      const res = await apiFetch(`/api/admin/dashboard?range=${timeRange}`, { cache: 'no-store' })
       if (!res.ok) { const e = await res.json().catch(() => ({})); throw new Error(e.message || `HTTP ${res.status}`) }
       const data: DashboardAPIResponse = await res.json()
       setKpi(data.kpi); setRm2(data.rm2); setRm3(data.rm3)
@@ -92,7 +93,7 @@ export default function AdminDashboardPage() {
 
   const fetchSystemHealth = useCallback(async () => {
     try {
-      const res = await fetch('/api/admin/monitoring/logging?days=7', { credentials: 'include' })
+      const res = await apiFetch('/api/admin/monitoring/logging?days=7', { cache: 'no-store' })
       if (!res.ok) return
       const d = await res.json()
       const t = d.totals?.total || 0, f = d.totals?.failed || 0

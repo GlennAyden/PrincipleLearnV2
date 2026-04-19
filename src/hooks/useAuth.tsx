@@ -2,7 +2,7 @@
 
 import { useState, useEffect, createContext, useContext } from 'react';
 import { useRouter } from 'next/navigation';
-import { getCsrfToken } from '@/lib/api-client';
+import { apiFetch } from '@/lib/api-client';
 
 interface User {
   id: string;
@@ -36,7 +36,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     const checkAuth = async () => {
       setNetworkError(false);
       try {
-        const res = await fetch('/api/auth/me');
+        const res = await apiFetch('/api/auth/me', { cache: 'no-store' });
         if (res.ok) {
           const data = await res.json();
           setUser({
@@ -45,6 +45,8 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
             role: data.user.role,
             name: data.user.name || null,
           });
+        } else {
+          setUser(null);
         }
       } catch (error) {
         console.error('Auth check error:', error);
@@ -66,9 +68,8 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   // Login function
   const login = async (email: string, password: string, rememberMe = false) => {
     try {
-      const res = await fetch('/api/auth/login', {
+      const res = await apiFetch('/api/auth/login', {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ email, password, rememberMe }),
       });
 
@@ -97,13 +98,14 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   // Logout function
   const logout = async () => {
     try {
-      await fetch('/api/auth/logout', {
+      const res = await apiFetch('/api/auth/logout', {
         method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          'x-csrf-token': getCsrfToken(),
-        },
       });
+
+      if (!res.ok) {
+        const data = await res.json().catch(() => ({}));
+        throw new Error(data.error || 'Gagal keluar');
+      }
 
       // Reset state
       setUser(null);
@@ -112,15 +114,15 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       router.push('/login');
     } catch (error) {
       console.error('Logout error:', error);
+      throw error;
     }
   };
 
   // Refresh token function
   const refreshToken = async () => {
     try {
-      const res = await fetch('/api/auth/refresh', {
+      const res = await apiFetch('/api/auth/refresh', {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
       });
 
       if (!res.ok) {

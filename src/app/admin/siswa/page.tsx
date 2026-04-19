@@ -51,7 +51,7 @@ export default function AdminSiswaPage() {
     if (!admin) { router.push('/admin/login'); return }
     setIsLoading(true)
     setError(null)
-    fetch('/api/admin/users', { credentials: 'include' })
+    apiFetch('/api/admin/users', { cache: 'no-store' })
       .then(async (res) => {
         if (!res.ok) { const d = await res.json().catch(() => ({})); throw new Error(d.error || 'Gagal memuat data pengguna') }
         return res.json()
@@ -66,7 +66,7 @@ export default function AdminSiswaPage() {
     if (!selectedUserId) { setActivitySummary(null); return }
     setActivityLoading(true)
     setActivityError(null)
-    fetch(`/api/admin/users/${selectedUserId}/activity-summary`, { credentials: 'include' })
+    apiFetch(`/api/admin/users/${selectedUserId}/activity-summary`, { cache: 'no-store' })
       .then(async (res) => {
         if (!res.ok) { const d = await res.json().catch(() => ({})); throw new Error(d.message || 'Gagal memuat aktivitas') }
         return res.json()

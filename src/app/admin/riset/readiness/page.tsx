@@ -191,8 +191,7 @@ export default function ResearchReadinessPage() {
             setLoading(true)
             setError(null)
 
-            const res = await fetch('/api/admin/research/readiness', {
-                credentials: 'include',
+            const res = await apiFetch('/api/admin/research/readiness', {
                 cache: 'no-store',
             })
             const data: ReadinessResponse = await res.json().catch(() => ({}))

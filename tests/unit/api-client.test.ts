@@ -84,4 +84,88 @@ describe('apiFetch', () => {
     await expect(second).resolves.toHaveProperty('status', 200);
     expect(fetchMock.mock.calls.filter(([url]) => String(url) === '/api/auth/refresh')).toHaveLength(1);
   });
+
+  it('retries /api/auth/me after a successful session refresh', async () => {
+    Object.defineProperty(globalThis, 'document', {
+      value: { cookie: 'csrf_token=current-token' },
+      configurable: true,
+    });
+
+    const fetchMock = jest
+      .fn()
+      .mockResolvedValueOnce(new Response(null, { status: 401 }))
+      .mockResolvedValueOnce(new Response(null, { status: 200 }))
+      .mockResolvedValueOnce(
+        new Response(JSON.stringify({ user: { id: 'user-1' } }), { status: 200 }),
+      );
+    global.fetch = fetchMock;
+
+    const { apiFetch } = await import('@/lib/api-client');
+    const response = await apiFetch('/api/auth/me', { cache: 'no-store' });
+
+    expect(response.status).toBe(200);
+    expect(fetchMock.mock.calls.map(([url]) => String(url))).toEqual([
+      '/api/auth/me',
+      '/api/auth/refresh',
+      '/api/auth/me',
+    ]);
+  });
+
+  it('does not retry exempt auth endpoints such as logout', async () => {
+    Object.defineProperty(globalThis, 'document', {
+      value: { cookie: 'csrf_token=current-token' },
+      configurable: true,
+    });
+
+    const fetchMock = jest.fn().mockResolvedValue(new Response(null, { status: 401 }));
+    global.fetch = fetchMock;
+
+    const { apiFetch } = await import('@/lib/api-client');
+    const response = await apiFetch('/api/auth/logout', { method: 'POST' });
+
+    expect(response.status).toBe(401);
+    expect(fetchMock).toHaveBeenCalledTimes(1);
+    expect(fetchMock.mock.calls[0][0]).toBe('/api/auth/logout');
+  });
+
+  it('does not recurse when the refresh endpoint itself returns 401', async () => {
+    Object.defineProperty(globalThis, 'document', {
+      value: { cookie: 'csrf_token=current-token' },
+      configurable: true,
+    });
+
+    const fetchMock = jest.fn().mockResolvedValue(new Response(null, { status: 401 }));
+    global.fetch = fetchMock;
+
+    const { apiFetch } = await import('@/lib/api-client');
+    const response = await apiFetch('/api/auth/refresh', { method: 'POST' });
+
+    expect(response.status).toBe(401);
+    expect(fetchMock).toHaveBeenCalledTimes(1);
+    expect(fetchMock.mock.calls[0][0]).toBe('/api/auth/refresh');
+  });
+
+  it('retries admin logout once after a successful refresh', async () => {
+    Object.defineProperty(globalThis, 'document', {
+      value: { cookie: 'csrf_token=current-token' },
+      configurable: true,
+    });
+
+    const fetchMock = jest
+      .fn()
+      .mockResolvedValueOnce(new Response(null, { status: 401 }))
+      .mockResolvedValueOnce(new Response(null, { status: 200 }))
+      .mockResolvedValueOnce(new Response(JSON.stringify({ ok: true }), { status: 200 }));
+    global.fetch = fetchMock;
+
+    const { apiFetch } = await import('@/lib/api-client');
+    const response = await apiFetch('/api/admin/logout', { method: 'POST' });
+
+    expect(response.status).toBe(200);
+    expect(fetchMock.mock.calls.map(([url]) => String(url))).toEqual([
+      '/api/admin/logout',
+      '/api/auth/refresh',
+      '/api/admin/logout',
+    ]);
+  });
 });

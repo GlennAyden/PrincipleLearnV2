@@ -7,6 +7,7 @@ import Link from 'next/link';
 import { useRouter, useParams, usePathname, useSearchParams } from 'next/navigation';
 import styles from './layout.module.scss';
 import { Level } from '@/context/RequestCourseContext';
+import { useAuth } from '@/hooks/useAuth';
 import { useLearningProgress } from '@/hooks/useLearningProgress';
 import { apiFetch } from '@/lib/api-client';
 
@@ -37,6 +38,7 @@ export default function CourseLayout({ children }: { children: ReactNode }) {
   const pathname = usePathname();
   const searchParams = useSearchParams();
   const isDiscussionPage = pathname?.includes('/discussion/');
+  const { logout } = useAuth();
 
   // Ambil module index dari query param "?module=..."
   const moduleParam = searchParams.get('module');
@@ -118,8 +120,12 @@ export default function CourseLayout({ children }: { children: ReactNode }) {
     setShowMobileMenu(false);
   };
 
-  const handleLogout = () => {
-    router.push('/login');
+  const handleLogout = async () => {
+    try {
+      await logout();
+    } catch (error) {
+      console.error('[CourseLayout] Logout failed:', error);
+    }
   };
 
   if (loading || !course?.outline) {

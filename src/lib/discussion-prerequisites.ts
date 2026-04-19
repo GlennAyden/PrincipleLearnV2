@@ -4,6 +4,7 @@ import {
   isStructuredReflectionComplete,
   parseStructuredReflectionFields,
 } from '@/lib/reflection-submission';
+import { collectBatchedInResults } from '@/lib/supabase-batch';
 import type { ModulePrerequisiteDetails, ModulePrerequisiteItem } from '@/types/discussion';
 
 interface SubtopicNode {
@@ -115,18 +116,20 @@ export async function evaluateModuleDiscussionPrerequisites(params: {
     buildSubtopicCacheKey(courseId, moduleTitle, item.title),
   );
 
-  let cacheEntries: Array<{ cache_key: string; content: CacheContent | null }> = [];
-  if (cacheKeys.length > 0) {
-    const { data: cacheData, error: cacheError } = await adminDb
-      .from('subtopic_cache')
-      .select('cache_key, content')
-      .in('cache_key', cacheKeys);
+  const { data: cacheEntries, error: cacheError } = await collectBatchedInResults<{
+    cache_key: string;
+    content: CacheContent | null;
+  }, string>({
+    values: cacheKeys,
+    fetchChunk: async (cacheKeyChunk) =>
+      adminDb
+        .from('subtopic_cache')
+        .select('cache_key, content')
+        .in('cache_key', cacheKeyChunk),
+  });
 
-    if (cacheError) {
-      console.warn('[DiscussionPrerequisites] Failed to fetch cache entries', cacheError);
-    } else {
-      cacheEntries = cacheData ?? [];
-    }
+  if (cacheError) {
+    console.warn('[DiscussionPrerequisites] Failed to fetch cache entries', cacheError);
   }
 
   const cacheMap = new Map<string, CacheContent | null>();
@@ -186,20 +189,23 @@ export async function evaluateModuleDiscussionPrerequisites(params: {
     }
   });
 
-  const quizIds = (quizRows ?? []).map((row: Record<string, unknown>) => row.id as string);
-  let submissionRows: Array<{ quiz_id: string }> = [];
-  if (quizIds.length > 0) {
-    const { data: submissions, error: submissionsError } = await adminDb
-      .from('quiz_submissions')
-      .select('quiz_id')
-      .eq('user_id', userId)
-      .in('quiz_id', quizIds);
+  const quizIds: string[] = (quizRows ?? []).flatMap((row: Record<string, unknown>) =>
+    typeof row.id === 'string' ? [row.id] : [],
+  );
+  const { data: submissionRows, error: submissionsError } = await collectBatchedInResults<{
+    quiz_id: string;
+  }, string>({
+    values: quizIds,
+    fetchChunk: async (quizIdChunk) =>
+      adminDb
+        .from('quiz_submissions')
+        .select('quiz_id')
+        .eq('user_id', userId)
+        .in('quiz_id', quizIdChunk),
+  });
 
-    if (submissionsError) {
-      console.warn('[DiscussionPrerequisites] Failed to fetch quiz submissions', submissionsError);
-    } else {
-      submissionRows = submissions ?? [];
-    }
+  if (submissionsError) {
+    console.warn('[DiscussionPrerequisites] Failed to fetch quiz submissions', submissionsError);
   }
 
   const submissionSet = new Set(submissionRows.map((row) => row.quiz_id));

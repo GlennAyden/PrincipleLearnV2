@@ -45,7 +45,7 @@ export default function OnboardingPage() {
   // Check if profile already exists
   useEffect(() => {
     if (!user?.id) return;
-    fetch(`/api/learning-profile?userId=${user.id}`)
+    apiFetch(`/api/learning-profile?userId=${user.id}`, { cache: 'no-store' })
       .then(r => r.json())
       .then(data => {
         if (data.exists) {
@@ -126,7 +126,9 @@ export default function OnboardingPage() {
       }
 
       // Check if user has courses
-      const coursesRes = await fetch(`/api/courses?userId=${encodeURIComponent(user.id)}`);
+      const coursesRes = await apiFetch(`/api/courses?userId=${encodeURIComponent(user.id)}`, {
+        cache: 'no-store',
+      });
       const coursesData = await coursesRes.json();
 
       if (coursesData.success && coursesData.courses?.length > 0) {

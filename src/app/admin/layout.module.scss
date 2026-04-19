@@ -118,8 +118,8 @@ $shadow-xl: 0 20px 40px -5px rgba(0, 0, 0, 0.1);
   position: sticky;
   top: 0;
   height: 100vh;
-  overflow: hidden;
-  /* Changed from overflow-y: auto to prevent unnecessary scrollbar */
+  overflow-x: hidden;
+  overflow-y: auto;
   z-index: 100;
   box-shadow: 4px 0 24px rgba(0, 0, 0, 0.15);
 
@@ -344,8 +344,10 @@ $shadow-xl: 0 20px 40px -5px rgba(0, 0, 0, 0.1);
 .mainContent {
   flex: 1;
   min-width: 0;
-  overflow-y: auto;
-  max-height: 100vh;
+  min-height: 100vh;
+  overflow-x: hidden;
+  overflow-y: visible;
+  max-height: none;
   position: relative;
 
   /* Subtle background pattern */

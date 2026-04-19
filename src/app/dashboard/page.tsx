@@ -70,7 +70,11 @@ export default function DashboardPage() {
   if (!isAuthenticated) return null;
 
   const handleLogout = async () => {
-    await logout();
+    try {
+      await logout();
+    } catch (error) {
+      alert('Gagal keluar: ' + (error instanceof Error ? error.message : 'Kesalahan tidak diketahui'));
+    }
   };
 
   const handleDelete = async (id: string) => {

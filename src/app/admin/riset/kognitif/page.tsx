@@ -174,7 +174,7 @@ export default function KognitifPage() {
         const rows: T[] = []
 
         for (let page = 0; page < 50; page++) {
-            const res = await fetch(buildUrl(offset, limit), { credentials: 'include' })
+            const res = await apiFetch(buildUrl(offset, limit), { cache: 'no-store' })
             const data = await res.json()
 
             if (!res.ok) {
@@ -237,7 +237,7 @@ export default function KognitifPage() {
             setMatrixLoading(true)
             setMatrixError(null)
 
-            const res = await fetch('/api/admin/research/analytics', { credentials: 'include' })
+            const res = await apiFetch('/api/admin/research/analytics', { cache: 'no-store' })
             const data = await res.json()
 
             if (!res.ok) {
@@ -263,7 +263,7 @@ export default function KognitifPage() {
 
             // Fetch auto-scored cognitive data
             setAutoLoading(true)
-            fetch('/api/admin/research/auto-scores?limit=20', { credentials: 'include' })
+            apiFetch('/api/admin/research/auto-scores?limit=20', { cache: 'no-store' })
                 .then(r => r.json())
                 .then(data => { if (data.data) setAutoScores(data.data) })
                 .catch(() => {})

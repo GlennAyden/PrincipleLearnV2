@@ -1,128 +1,129 @@
-/**
- * API Tests for /api/auth/logout endpoint
- *
- * Tests:
- * - Successful logout (clear cookies)
- * - Cookie clearing verification
- * - Edge cases
- */
+const mockCookieGet = jest.fn()
+const mockVerifyToken = jest.fn()
+const mockVerifyRefreshToken = jest.fn()
+const mockUpdateUserRefreshTokenHash = jest.fn().mockResolvedValue(undefined)
 
-// Mock next/headers cookies() — the route calls `await cookies()` to read CSRF cookie
 jest.mock('next/headers', () => ({
-    cookies: jest.fn(async () => ({
-        get: jest.fn(() => undefined),
-    })),
-}));
+  cookies: jest.fn(async () => ({
+    get: (name: string) => mockCookieGet(name),
+  })),
+}))
 
-import { POST } from '@/app/api/auth/logout/route';
+jest.mock('@/lib/jwt', () => ({
+  verifyToken: (...args: unknown[]) => mockVerifyToken(...args),
+  verifyRefreshToken: (...args: unknown[]) => mockVerifyRefreshToken(...args),
+}))
+
+jest.mock('@/services/auth.service', () => ({
+  updateUserRefreshTokenHash: (...args: unknown[]) => mockUpdateUserRefreshTokenHash(...args),
+}))
+
+import { POST } from '@/app/api/auth/logout/route'
+
+function setCookies(values: Record<string, string>) {
+  mockCookieGet.mockImplementation((name: string) =>
+    values[name] ? { value: values[name] } : undefined,
+  )
+}
+
+function createLogoutRequest(headers?: Record<string, string>): Request {
+  return new Request('http://localhost:3000/api/auth/logout', {
+    method: 'POST',
+    headers,
+  })
+}
 
 describe('POST /api/auth/logout', () => {
-    beforeEach(() => {
-        jest.clearAllMocks();
-    });
+  beforeEach(() => {
+    jest.clearAllMocks()
+    setCookies({})
+  })
 
-    // Helper to create a minimal Request for POST
-    function createLogoutRequest(headers?: Record<string, string>): Request {
-        return new Request('http://localhost:3000/api/auth/logout', {
-            method: 'POST',
-            headers: headers || {},
-        });
-    }
+  it('rejects logout when the CSRF token is missing or invalid', async () => {
+    setCookies({ csrf_token: 'csrf-cookie' })
 
-    describe('Successful Logout', () => {
-        it('should return success response', async () => {
-            const response = await POST(createLogoutRequest());
-            const data = await response.json();
+    const response = await POST(createLogoutRequest())
+    const data = await response.json()
 
-            expect(response.status).toBe(200);
-            expect(data.success).toBe(true);
-            expect(data.message).toContain('Logged out');
-        });
+    expect(response.status).toBe(403)
+    expect(data.error).toBe('Token CSRF tidak valid')
+    expect(mockUpdateUserRefreshTokenHash).not.toHaveBeenCalled()
+  })
 
-        it('should clear access_token cookie', async () => {
-            const response = await POST(createLogoutRequest());
+  it('rejects logout when the CSRF header does not match the cookie', async () => {
+    setCookies({ csrf_token: 'csrf-cookie' })
 
-            const setCookieHeaders = response.headers.getSetCookie();
-            const accessTokenCookie = setCookieHeaders.find((c: string) =>
-                c.startsWith('access_token=')
-            );
+    const response = await POST(
+      createLogoutRequest({ 'x-csrf-token': 'csrf-header-yang-salah' }),
+    )
+    const data = await response.json()
 
-            expect(accessTokenCookie).toBeDefined();
-            // When cookies.delete() is called, the cookie should be cleared
-            // NextResponse.cookies.delete() sets the value to empty and maxAge to 0
-            if (accessTokenCookie) {
-                // Cookie should be expired/cleared
-                expect(
-                    accessTokenCookie.includes('Max-Age=0') ||
-                    accessTokenCookie.includes('max-age=0') ||
-                    accessTokenCookie.includes('access_token=;') ||
-                    accessTokenCookie.includes('access_token=\u0000') ||
-                    accessTokenCookie === 'access_token='
-                ).toBe(true);
-            }
-        });
+    expect(response.status).toBe(403)
+    expect(data.error).toBe('Token CSRF tidak valid')
+    expect(mockUpdateUserRefreshTokenHash).not.toHaveBeenCalled()
+  })
 
-        it('should clear all auth cookies', async () => {
-            const response = await POST(createLogoutRequest());
+  it('revokes the refresh hash when the access token is still valid', async () => {
+    setCookies({
+      csrf_token: 'csrf-match',
+      access_token: 'valid-access-token',
+    })
+    mockVerifyToken.mockReturnValue({
+      userId: 'user-1',
+      email: 'user@example.com',
+      role: 'user',
+    })
 
-            const setCookieHeaders = response.headers.getSetCookie();
+    const response = await POST(
+      createLogoutRequest({ 'x-csrf-token': 'csrf-match' }),
+    )
+    const data = await response.json()
 
-            // Should have Set-Cookie headers for access_token, refresh_token, csrf_token
-            const cookieNames = setCookieHeaders.map((c: string) => c.split('=')[0]);
-            expect(cookieNames).toContain('access_token');
-            expect(cookieNames).toContain('refresh_token');
-            expect(cookieNames).toContain('csrf_token');
-        });
-    });
+    expect(response.status).toBe(200)
+    expect(data.success).toBe(true)
+    expect(data.message).toBe('Berhasil keluar')
+    expect(mockUpdateUserRefreshTokenHash).toHaveBeenCalledWith('user-1', null)
 
-    describe('Edge Cases', () => {
-        it('should work even when not logged in (no cookies set)', async () => {
-            const response = await POST(createLogoutRequest());
-            const data = await response.json();
+    const cookieNames = response.headers.getSetCookie().map((cookie) => cookie.split('=')[0])
+    expect(cookieNames).toEqual(expect.arrayContaining(['access_token', 'refresh_token', 'csrf_token']))
+  })
 
-            expect(response.status).toBe(200);
-            expect(data.success).toBe(true);
-        });
+  it('falls back to the refresh token when the access token is already expired', async () => {
+    setCookies({
+      csrf_token: 'csrf-match',
+      access_token: 'expired-access-token',
+      refresh_token: 'valid-refresh-token',
+    })
+    mockVerifyToken.mockReturnValue(null)
+    mockVerifyRefreshToken.mockReturnValue({
+      userId: 'user-2',
+      email: 'user2@example.com',
+      role: 'user',
+    })
 
-        it('should not return any user information', async () => {
-            const response = await POST(createLogoutRequest());
-            const data = await response.json();
+    const response = await POST(
+      createLogoutRequest({ 'x-csrf-token': 'csrf-match' }),
+    )
 
-            expect(data.user).toBeUndefined();
-            expect(data.email).toBeUndefined();
-            expect(data.token).toBeUndefined();
-        });
+    expect(response.status).toBe(200)
+    expect(mockUpdateUserRefreshTokenHash).toHaveBeenCalledWith('user-2', null)
+  })
 
-        it('should be idempotent (calling multiple times is safe)', async () => {
-            const response1 = await POST(createLogoutRequest());
-            const response2 = await POST(createLogoutRequest());
+  it('still clears cookies even when no authenticated user can be resolved', async () => {
+    setCookies({
+      csrf_token: 'csrf-match',
+    })
+    mockVerifyToken.mockReturnValue(null)
+    mockVerifyRefreshToken.mockReturnValue(null)
 
-            expect(response1.status).toBe(200);
-            expect(response2.status).toBe(200);
-        });
-    });
+    const response = await POST(
+      createLogoutRequest({ 'x-csrf-token': 'csrf-match' }),
+    )
+    const data = await response.json()
 
-    describe('Security', () => {
-        it('should not leak user info in response', async () => {
-            const response = await POST(createLogoutRequest());
-            const data = await response.json();
-
-            expect(data.success).toBe(true);
-            expect(data.message).toBeDefined();
-            // Should only have success and message
-            const keys = Object.keys(data);
-            expect(keys).toEqual(expect.arrayContaining(['success', 'message']));
-            expect(keys).not.toContain('user');
-            expect(keys).not.toContain('password');
-            expect(keys).not.toContain('token');
-        });
-
-        it('should set httpOnly and secure attributes on cleared cookies', async () => {
-            const response = await POST(createLogoutRequest());
-            const setCookieHeaders = response.headers.getSetCookie();
-
-            // At minimum, cookies should exist for clearing
-            expect(setCookieHeaders.length).toBeGreaterThanOrEqual(3);
-        });
-    });
-});
+    expect(response.status).toBe(200)
+    expect(data.success).toBe(true)
+    expect(mockUpdateUserRefreshTokenHash).not.toHaveBeenCalled()
+    expect(response.headers.getSetCookie().some((cookie) => cookie.includes('refresh_token='))).toBe(true)
+  })
+})

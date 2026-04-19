@@ -177,7 +177,7 @@ export default function PromptEvolutionPage() {
 
     const fetchUsers = useCallback(async () => {
         try {
-            const res = await fetch('/api/admin/users?limit=100', { credentials: 'include' })
+            const res = await apiFetch('/api/admin/users?limit=100', { cache: 'no-store' })
             const data = await res.json()
             if (res.ok && Array.isArray(data)) {
                 setUsers(data)
@@ -191,7 +191,7 @@ export default function PromptEvolutionPage() {
         try {
             // Use admin endpoint so adminDb bypasses RLS (courses_read_own only
             // returns courses created by the admin's own user id).
-            const res = await fetch('/api/admin/activity/courses', { credentials: 'include' })
+            const res = await apiFetch('/api/admin/activity/courses', { cache: 'no-store' })
             const data = await res.json()
             if (res.ok && Array.isArray(data?.courses)) {
                 setCourses(data.courses)
@@ -212,7 +212,7 @@ export default function PromptEvolutionPage() {
                 url += `&status=${filterSessionStatus}`
             }
 
-            const res = await fetch(url, { credentials: 'include' })
+            const res = await apiFetch(url, { cache: 'no-store' })
             const data = await res.json()
 
             if (!res.ok) {
@@ -235,7 +235,7 @@ export default function PromptEvolutionPage() {
 
     const fetchClassificationSessions = useCallback(async () => {
         try {
-            const res = await fetch('/api/admin/research/sessions?limit=100', { credentials: 'include' })
+            const res = await apiFetch('/api/admin/research/sessions?limit=100', { cache: 'no-store' })
             const data = await res.json()
             if (res.ok && data.data) {
                 setClassificationSessions(data.data)
@@ -256,7 +256,7 @@ export default function PromptEvolutionPage() {
                 url += `&stage=${filterStage}`
             }
 
-            const res = await fetch(url, { credentials: 'include' })
+            const res = await apiFetch(url, { cache: 'no-store' })
             const data = await res.json()
 
             if (!res.ok) {

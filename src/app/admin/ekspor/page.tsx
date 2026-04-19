@@ -8,6 +8,7 @@ import {
     FiUsers, FiActivity, FiFileText
 } from 'react-icons/fi'
 import { useAdmin } from '@/hooks/useAdmin'
+import { apiFetch } from '@/lib/api-client'
 import styles from './page.module.scss'
 
 type ExportFormat = 'json' | 'csv'
@@ -211,7 +212,7 @@ export default function EksporPage() {
 
         try {
             const url = card.buildUrl(format, filters)
-            const res = await fetch(url, { credentials: 'include' })
+            const res = await apiFetch(url)
 
             if (!res.ok) {
                 const data = await res.json()

@@ -76,10 +76,13 @@ export function middleware(req: NextRequest) {
     }
 
     if (refreshToken) {
-      // Page navigation with an expired access but valid refresh token —
-      // safe to bounce through /api/auth/refresh because the user hasn't
-      // submitted a form body here.
-      return NextResponse.redirect(new URL('/api/auth/refresh', req.url))
+      // Let the page navigation continue and allow the client-side `apiFetch`
+      // wrapper to refresh the session on the first 401. Redirecting a page
+      // request to /api/auth/refresh is brittle because the refresh route is a
+      // POST endpoint and a browser redirect will arrive as GET.
+      const response = NextResponse.next()
+      response.cookies.delete('access_token')
+      return response
     }
 
     // For page routes, redirect to login

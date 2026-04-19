@@ -5,6 +5,7 @@
 import React, { useState } from 'react'
 import { useRouter } from 'next/navigation'
 import styles from './page.module.scss'
+import { apiFetch } from '@/lib/api-client'
 
 export default function AdminLoginPage() {
   const [email, setEmail] = useState('')
@@ -28,11 +29,8 @@ export default function AdminLoginPage() {
       console.log('[Admin Login] Attempting login...')
       
       // Login via custom admin API
-      const response = await fetch('/api/admin/login', {
+      const response = await apiFetch('/api/admin/login', {
         method: 'POST',
-        headers: { 
-          'Content-Type': 'application/json' 
-        },
         body: JSON.stringify({ email, password }),
       });
 

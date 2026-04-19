@@ -78,7 +78,7 @@ $radius-full: 9999px;
   min-height: 100vh;
   padding: 2rem 1rem;
   background: linear-gradient(160deg, $gray-50 0%, #ffffff 40%, $primary-100 80%, $gray-50 100%);
-  overflow: hidden;
+  overflow-x: hidden;
 }
 
 .bgOrb1, .bgOrb2, .bgOrb3 {

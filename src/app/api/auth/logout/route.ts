@@ -1,6 +1,6 @@
 import { NextResponse } from 'next/server';
 import { cookies } from 'next/headers';
-import { verifyToken } from '@/lib/jwt';
+import { verifyRefreshToken, verifyToken } from '@/lib/jwt';
 import { updateUserRefreshTokenHash } from '@/services/auth.service';
 
 export async function POST(req: Request) {
@@ -22,11 +22,17 @@ export async function POST(req: Request) {
     // If we can still identify the user, wipe their stored refresh token
     // hash so any outstanding refresh cookie becomes useless.
     const accessToken = cookieStore.get('access_token')?.value;
-    if (accessToken) {
-      const payload = verifyToken(accessToken);
-      if (payload?.userId) {
-        await updateUserRefreshTokenHash(payload.userId, null);
-      }
+    const refreshToken = cookieStore.get('refresh_token')?.value;
+    const payload = accessToken ? verifyToken(accessToken) : null;
+    const refreshPayload = payload?.userId
+      ? null
+      : refreshToken
+        ? verifyRefreshToken(refreshToken)
+        : null;
+    const userId = payload?.userId ?? refreshPayload?.userId ?? null;
+
+    if (userId) {
+      await updateUserRefreshTokenHash(userId, null);
     }
 
     const response = NextResponse.json({

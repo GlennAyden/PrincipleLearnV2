@@ -1,5 +1,6 @@
 import { adminDb } from '@/lib/database'
 import { evaluateModuleDiscussionPrerequisites } from '@/lib/discussion-prerequisites'
+import { collectBatchedInResults } from '@/lib/supabase-batch'
 import { getCourseWithSubtopics, type SubtopicRecord } from '@/services/course.service'
 import type { ModulePrerequisiteDetails, ModulePrerequisiteItem } from '@/types/discussion'
 
@@ -180,13 +181,20 @@ async function fetchDiscussionCompletion(userId: string, courseId: string, modul
     return { sessionMap, progressMap }
   }
 
-  const { data: sessions, error: sessionError } = await adminDb
-    .from('discussion_sessions')
-    .select('subtopic_id, status, phase, created_at')
-    .eq('user_id', userId)
-    .eq('course_id', courseId)
-    .in('subtopic_id', moduleIds)
-    .order('created_at', { ascending: false })
+  const { data: sessions, error: sessionError } = await collectBatchedInResults<
+    DiscussionSessionRow,
+    string
+  >({
+    values: moduleIds,
+    fetchChunk: async (moduleIdChunk) =>
+      adminDb
+        .from('discussion_sessions')
+        .select('subtopic_id, status, phase, created_at')
+        .eq('user_id', userId)
+        .eq('course_id', courseId)
+        .in('subtopic_id', moduleIdChunk)
+        .order('created_at', { ascending: false }),
+  })
 
   if (sessionError) {
     console.warn('[LearningProgress] Failed to load discussion sessions', sessionError)
@@ -198,13 +206,20 @@ async function fetchDiscussionCompletion(userId: string, courseId: string, modul
     })
   }
 
-  const { data: progressRows, error: progressError } = await adminDb
-    .from('user_progress')
-    .select('subtopic_id, leaf_subtopic_id, is_completed, completed_at')
-    .eq('user_id', userId)
-    .eq('course_id', courseId)
-    .in('subtopic_id', moduleIds)
-    .is('leaf_subtopic_id', null)
+  const { data: progressRows, error: progressError } = await collectBatchedInResults<
+    UserProgressRow,
+    string
+  >({
+    values: moduleIds,
+    fetchChunk: async (moduleIdChunk) =>
+      adminDb
+        .from('user_progress')
+        .select('subtopic_id, leaf_subtopic_id, is_completed, completed_at')
+        .eq('user_id', userId)
+        .eq('course_id', courseId)
+        .in('subtopic_id', moduleIdChunk)
+        .is('leaf_subtopic_id', null),
+  })
 
   if (progressError) {
     console.warn('[LearningProgress] Failed to load user progress', progressError)
