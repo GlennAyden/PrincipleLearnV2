@@ -52,7 +52,7 @@
 .starsRow {
   display: flex;
   align-items: center;
-  gap: 0.25rem;
+  gap: 0.5rem;
   margin-bottom: 0.65rem;
 }
 
@@ -63,11 +63,22 @@
   color: #d4d4d8;
   cursor: pointer;
   transition: color 0.15s, transform 0.15s;
-  padding: 0.1rem;
+  // WCAG AA: interactive controls must be at least 44×44px to be reliably
+  // tappable. Without this, mobile users frequently mistap neighbouring
+  // stars when rating structured reflections.
+  min-width: 44px;
+  min-height: 44px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
   line-height: 1;
 
   &:hover {
     transform: scale(1.15);
+  }
+
+  &:active {
+    transform: scale(0.92);
   }
 
   &.starActive {

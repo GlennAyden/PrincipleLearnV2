@@ -45,14 +45,16 @@
 
 .skipBtn {
   position: absolute;
-  top: 1.25rem;
-  right: 1.25rem;
+  top: max(1.25rem, env(safe-area-inset-top));
+  right: max(1.25rem, env(safe-area-inset-right));
   background: transparent;
   border: none;
   color: #64748b;
   font-size: 0.9rem;
   font-weight: 500;
   padding: 0.5rem 0.9rem;
+  min-height: 44px;
+  min-width: 44px;
   border-radius: 8px;
   cursor: pointer;
   z-index: 2;

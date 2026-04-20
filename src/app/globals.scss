@@ -43,7 +43,38 @@ button {
   padding-right: 1rem;
 }
 
-/* 6. Font weight utilities */
+/* 5a. Mobile background orbs
+ *
+ * Several auth/onboarding pages render large radial-gradient blobs
+ * (`.bgOrb1`, `.bgOrb2`) as purely decorative background elements. On
+ * phones they add nothing but GPU cost — shrink them so they fit the
+ * smaller viewport and stop triggering repaints during scroll.
+ */
+@media (max-width: 520px) {
+  :where(.bgOrb1, .bgOrb2) {
+    width: 180px !important;
+    height: 180px !important;
+    filter: blur(0);
+  }
+}
+
+/* 6. Mobile form-input zoom guard (≤640px)
+ *
+ * iOS Safari auto-zooms the viewport when a form control receives focus if
+ * the control's computed font-size is < 16px. That jars the layout and makes
+ * onboarding feel broken on iPhone. Force 16px on the control elements in
+ * the mobile range — per-screen designs can still use smaller font-size at
+ * desktop breakpoints; this rule only kicks in under the iOS zoom threshold.
+ */
+@media (max-width: 640px) {
+  input:not([type="checkbox"]):not([type="radio"]):not([type="range"]):not([type="color"]),
+  textarea,
+  select {
+    font-size: 16px !important;
+  }
+}
+
+/* 7. Font weight utilities */
 .font-light {
   font-weight: 300;
 }

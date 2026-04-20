@@ -91,6 +91,9 @@ export default function Step1() {
               <input
                 className={styles.input}
                 type="text"
+                inputMode="text"
+                autoComplete="off"
+                autoCapitalize="words"
                 placeholder="contoh: Machine Learning, Pengembangan Web, Data Science..."
                 value={topic}
                 onChange={e => setTopic(e.target.value)}

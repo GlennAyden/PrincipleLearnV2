@@ -2,6 +2,7 @@
 'use client';
 import React, { useState, useEffect } from 'react';
 import styles from './PromptTimeline.module.scss';
+import { apiFetch } from '@/lib/api-client';
 
 type PromptStage = 'SCP' | 'SRP' | 'MQP' | 'Reflective';
 
@@ -44,7 +45,9 @@ export default function PromptTimeline({ userId, courseId }: PromptTimelineProps
     async function fetchTimeline() {
       try {
         setLoading(true);
-        const res = await fetch(`/api/prompt-journey?userId=${userId}&courseId=${courseId}`);
+        const res = await apiFetch(
+          `/api/prompt-journey?userId=${encodeURIComponent(userId)}&courseId=${encodeURIComponent(courseId)}`,
+        );
         if (!res.ok) throw new Error('Failed to fetch prompt journey');
         const data = await res.json();
         setEntries(data.entries || []);

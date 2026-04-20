@@ -312,6 +312,7 @@ $shadow-xl: 0 25px 50px -12px rgba(0, 0, 0, 0.1);
   width: 100%;
   padding: 0.85rem;
   margin-top: 0.25rem;
+  min-height: 48px;
   background: linear-gradient(135deg, $primary-500, $primary-700);
   color: #fff;
   border: none;
@@ -328,6 +329,18 @@ $shadow-xl: 0 25px 50px -12px rgba(0, 0, 0, 0.1);
   }
 
   &:active {
-    transform: translateY(0);
+    transform: translateY(0) scale(0.98);
+  }
+}
+
+/* Mobile: float the submit CTA just above the viewport bottom so users on a
+ * long form never need to hunt for it. `position: sticky` keeps it inside
+ * the form flow so we don't need extra padding, and the safe-area inset
+ * covers the iPhone home indicator. */
+@media (max-width: 640px) {
+  .submitBtn {
+    position: sticky;
+    bottom: max(0.75rem, env(safe-area-inset-bottom));
+    z-index: 5;
   }
 }

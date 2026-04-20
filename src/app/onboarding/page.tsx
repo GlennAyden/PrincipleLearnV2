@@ -197,6 +197,9 @@ export default function OnboardingPage() {
               <input
                 className={styles.textInput}
                 type="text"
+                inputMode="text"
+                autoComplete="given-name"
+                autoCapitalize="words"
                 value={displayName}
                 onChange={e => setDisplayName(e.target.value)}
                 placeholder="Contoh: Budi, Sarah, dll."

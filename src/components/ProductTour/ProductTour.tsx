@@ -91,6 +91,18 @@ export default function ProductTour({ steps, open, onClose, onFinish }: ProductT
     return () => window.removeEventListener('keydown', onKey);
   }, [open, stepIdx]);
 
+  // Lock body scroll while the tour is visible so users don't accidentally
+  // scroll the course layout behind the overlay on mobile.
+  useEffect(() => {
+    if (!open) return;
+    const body = document.body;
+    const previous = body.style.overflow;
+    body.style.overflow = 'hidden';
+    return () => {
+      body.style.overflow = previous;
+    };
+  }, [open]);
+
   if (!open || !mounted || !currentStep) return null;
 
   const isLast = stepIdx === steps.length - 1;

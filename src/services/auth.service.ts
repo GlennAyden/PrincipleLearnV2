@@ -1,7 +1,7 @@
 import bcrypt from 'bcryptjs';
 import { createHash, randomBytes } from 'crypto';
 import { cookies } from 'next/headers';
-import { DatabaseService, adminDb } from '@/lib/database';
+import { adminDb } from '@/lib/database';
 import {
   verifyToken,
   generateAccessToken,
@@ -30,6 +30,12 @@ async function getDummyBcryptHash(): Promise<string> {
   return dummyBcryptHash;
 }
 
+// All user lookups below go through adminDb with an explicit
+// `.is('deleted_at', null)` filter so soft-deleted users can no longer
+// authenticate, spawn courses, or submit quiz/jurnal entries. The generic
+// DatabaseService.getRecords helper only supports `.eq()` filters and has
+// no way to express `IS NULL`, so we drop down to the query-builder here.
+
 /**
  * Extract the authenticated user from the access_token cookie.
  * Shared by any route that needs cookie-based auth without middleware.
@@ -43,12 +49,14 @@ export async function getCurrentUser(): Promise<UserRecord | null> {
     const payload = verifyToken(token);
     if (!payload?.userId) return null;
 
-    const users = await DatabaseService.getRecords<UserRecord>('users', {
-      filter: { id: payload.userId as string },
-      limit: 1,
-    });
+    const { data } = await adminDb
+      .from('users')
+      .eq('id', payload.userId as string)
+      .is('deleted_at', null)
+      .limit(1)
+      .maybeSingle() as { data: UserRecord | null; error: { message: string } | null };
 
-    return users.length > 0 ? users[0] : null;
+    return data ?? null;
   } catch {
     return null;
   }
@@ -64,34 +72,42 @@ export async function resolveUserByIdentifier(
   const trimmed = identifier.trim();
   if (!trimmed) return null;
 
-  const byId = await DatabaseService.getRecords<{ id: string; email: string }>('users', {
-    filter: { id: trimmed },
-    limit: 1,
-  });
-  if (byId.length > 0) return byId[0];
+  const byId = await adminDb
+    .from('users')
+    .eq('id', trimmed)
+    .is('deleted_at', null)
+    .limit(1)
+    .maybeSingle() as { data: { id: string; email: string } | null; error: { message: string } | null };
+  if (byId.data) return byId.data;
 
-  const byEmail = await DatabaseService.getRecords<{ id: string; email: string }>('users', {
-    filter: { email: trimmed },
-    limit: 1,
-  });
-  return byEmail[0] ?? null;
+  const byEmail = await adminDb
+    .from('users')
+    .eq('email', trimmed)
+    .is('deleted_at', null)
+    .limit(1)
+    .maybeSingle() as { data: { id: string; email: string } | null; error: { message: string } | null };
+  return byEmail.data ?? null;
 }
 
 export async function findUserByEmail(email: string): Promise<UserRecord | null> {
   const normalizedEmail = email.toLowerCase().trim();
-  const users = await DatabaseService.getRecords<UserRecord>('users', {
-    filter: { email: normalizedEmail },
-    limit: 1,
-  });
-  return users.length > 0 ? users[0] : null;
+  const { data } = await adminDb
+    .from('users')
+    .eq('email', normalizedEmail)
+    .is('deleted_at', null)
+    .limit(1)
+    .maybeSingle() as { data: UserRecord | null; error: { message: string } | null };
+  return data ?? null;
 }
 
 export async function findUserById(id: string): Promise<UserRecord | null> {
-  const users = await DatabaseService.getRecords<UserRecord>('users', {
-    filter: { id },
-    limit: 1,
-  });
-  return users.length > 0 ? users[0] : null;
+  const { data } = await adminDb
+    .from('users')
+    .eq('id', id)
+    .is('deleted_at', null)
+    .limit(1)
+    .maybeSingle() as { data: UserRecord | null; error: { message: string } | null };
+  return data ?? null;
 }
 
 export async function verifyPassword(plaintext: string, hash: string): Promise<boolean> {

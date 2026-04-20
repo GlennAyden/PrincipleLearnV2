@@ -1037,18 +1037,29 @@ async function resolveModuleContext({
   }
 
   try {
-    const modules = await DatabaseService.getRecords<{ id: string; title: string; content: string }>('subtopics', {
+    const modules = await DatabaseService.getRecords<{ id: string; title: string; content: unknown }>('subtopics', {
       filter: { course_id: courseId },
       useServiceRole: true,
     });
 
     for (const row of modules) {
       const parsedTitle = typeof row?.title === 'string' ? row.title : '';
-      let parsedContent: { module?: string; subtopics?: Array<string | { title?: string }> } | null = null;
-      try {
-        parsedContent = row?.content ? JSON.parse(row.content) : null;
-      } catch {
-        parsedContent = null;
+      // `subtopics.content` is a JSONB column — Supabase returns it as an
+      // already-parsed object. Previously we called `JSON.parse()` on it which
+      // threw a TypeError (caught silently), so this lookup always returned
+      // null and resolveModuleContext silently fell through. Accept both an
+      // object (the JSONB common case) and a string (legacy rows) just in
+      // case a writer persisted a stringified blob.
+      type ModuleContent = { module?: string; subtopics?: Array<string | { title?: string }> };
+      let parsedContent: ModuleContent | null = null;
+      if (row?.content && typeof row.content === 'object') {
+        parsedContent = row.content as ModuleContent;
+      } else if (typeof row?.content === 'string' && row.content.trim()) {
+        try {
+          parsedContent = JSON.parse(row.content) as ModuleContent;
+        } catch {
+          parsedContent = null;
+        }
       }
 
       const moduleName = parsedContent?.module || parsedTitle || '';

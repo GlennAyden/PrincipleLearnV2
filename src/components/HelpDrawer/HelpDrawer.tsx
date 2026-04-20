@@ -30,6 +30,20 @@ export default function HelpDrawer({
     return () => window.removeEventListener('keydown', onKey);
   }, [open, onClose]);
 
+  // Lock body scroll while the drawer is open so mobile users don't
+  // accidentally scroll the page behind it when swiping on the backdrop.
+  // We preserve whatever inline `overflow` was set before (rare, but could
+  // be set by another modal in the component tree) and restore it on close.
+  useEffect(() => {
+    if (!open) return;
+    const body = document.body;
+    const previous = body.style.overflow;
+    body.style.overflow = 'hidden';
+    return () => {
+      body.style.overflow = previous;
+    };
+  }, [open]);
+
   if (!mounted) return null;
 
   function handleShowTarget(selector?: string) {
