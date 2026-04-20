@@ -107,10 +107,10 @@ export default function CourseLayout({ children }: { children: ReactNode }) {
     loadCourse();
   }, [courseId]);
 
-  // Close mobile menu when the route changes
+  // Close mobile menu when the route changes (pathname or query)
   useEffect(() => {
     setShowMobileMenu(false);
-  }, [pathname]);
+  }, [pathname, searchParams]);
 
   const toggleSidebar = () => {
     setIsSidebarCollapsed((prev) => !prev);

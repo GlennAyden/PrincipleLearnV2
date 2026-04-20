@@ -199,9 +199,12 @@ $transition: 0.25s cubic-bezier(0.4, 0, 0.2, 1);
   -webkit-overflow-scrolling: touch;
   overscroll-behavior: contain;
   padding: 1rem 0.75rem;
+  position: sticky;
+  top: $header-height;
   height: calc(100vh - $header-height);
   height: calc(100svh - $header-height);
   height: calc(100dvh - $header-height);
+  align-self: start;
   transition: transform $transition, padding $transition, width $transition;
   scrollbar-width: thin;
   scrollbar-color: $gray-300 transparent;
@@ -425,23 +428,11 @@ $transition: 0.25s cubic-bezier(0.4, 0, 0.2, 1);
 /* ── Main Content ── */
 .content {
   padding: 2rem 2.5rem;
-  overflow-y: auto;
   min-height: calc(100vh - $header-height);
   min-height: calc(100svh - $header-height);
   min-height: calc(100dvh - $header-height);
   background: $gray-50;
   min-width: 0;
-  -webkit-overflow-scrolling: touch;
-  overscroll-behavior: contain;
-  scrollbar-width: thin;
-  scrollbar-color: $gray-300 transparent;
-
-  &::-webkit-scrollbar { width: 6px; }
-  &::-webkit-scrollbar-track { background: transparent; }
-  &::-webkit-scrollbar-thumb {
-    background-color: $gray-300;
-    border-radius: 10px;
-  }
 }
 
 /* ── Discussion Route Containment ── */
