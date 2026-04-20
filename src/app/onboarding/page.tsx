@@ -47,19 +47,31 @@ export default function OnboardingPage() {
     if (!user?.id) return;
     apiFetch(`/api/learning-profile?userId=${user.id}`, { cache: 'no-store' })
       .then(r => r.json())
-      .then(data => {
-        if (data.exists) {
-          // Backfill the middleware onboarding cookie for users who already
-          // completed onboarding before this gate existed, so they are not
-          // bounced back to /onboarding on the next navigation.
-          if (typeof document !== 'undefined') {
-            const maxAgeSeconds = 60 * 60 * 24 * 365; // 1 year
-            const secureFlag =
-              typeof window !== 'undefined' && window.location.protocol === 'https:'
-                ? '; Secure'
-                : '';
-            document.cookie = `onboarding_done=true; Path=/; Max-Age=${maxAgeSeconds}; SameSite=Lax${secureFlag}`;
+      .then(async data => {
+        if (!data.exists) return;
+        // Backfill the middleware onboarding cookie for users who already
+        // completed onboarding before this gate existed, so they are not
+        // bounced back to /onboarding on the next navigation.
+        if (typeof document !== 'undefined') {
+          const maxAgeSeconds = 60 * 60 * 24 * 365; // 1 year
+          const secureFlag =
+            typeof window !== 'undefined' && window.location.protocol === 'https:'
+              ? '; Secure'
+              : '';
+          document.cookie = `onboarding_done=true; Path=/; Max-Age=${maxAgeSeconds}; SameSite=Lax${secureFlag}`;
+        }
+
+        // If the user has already seen the intro slides, send them to the
+        // dashboard; otherwise route through /onboarding/intro first.
+        try {
+          const stateRes = await apiFetch('/api/onboarding-state', { cache: 'no-store' });
+          const stateData = await stateRes.json();
+          if (stateData?.success && stateData.state?.introSlidesCompleted) {
+            router.replace('/dashboard');
+          } else {
+            router.replace('/onboarding/intro');
           }
+        } catch {
           router.replace('/dashboard');
         }
       })
@@ -125,17 +137,10 @@ export default function OnboardingPage() {
         document.cookie = `onboarding_done=true; Path=/; Max-Age=${maxAgeSeconds}; SameSite=Lax${secureFlag}`;
       }
 
-      // Check if user has courses
-      const coursesRes = await apiFetch(`/api/courses?userId=${encodeURIComponent(user.id)}`, {
-        cache: 'no-store',
-      });
-      const coursesData = await coursesRes.json();
-
-      if (coursesData.success && coursesData.courses?.length > 0) {
-        router.replace('/dashboard');
-      } else {
-        router.replace('/request-course/step1');
-      }
+      // Profile saved — always route through the intro slide deck next. The
+      // intro page itself decides whether to continue to the dashboard or to
+      // /request-course/step1 based on whether the user already has courses.
+      router.replace('/onboarding/intro');
     } catch (err: unknown) {
       setError(err instanceof Error ? err.message : 'Unknown error');
     } finally {

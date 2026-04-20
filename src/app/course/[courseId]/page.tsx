@@ -3,7 +3,7 @@
 'use client';
 
 import { useRouter, useParams, useSearchParams } from 'next/navigation';
-import { useEffect, useState, type ReactNode } from 'react';
+import { useEffect, useState, useRef, type ReactNode } from 'react';
 import { useLocalStorage } from '@/hooks/useLocalStorage';
 import { useLearningProgress } from '@/hooks/useLearningProgress';
 import { apiFetch } from '@/lib/api-client';
@@ -128,6 +128,8 @@ function DiscussionCard({
   const [loading, setLoading] = useState(false);
   const [session, setSession] = useState<DiscussionSession | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const [lockedAlert, setLockedAlert] = useState(false);
+  const dismissTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   useEffect(() => {
     let cancelled = false;
@@ -207,7 +209,9 @@ function DiscussionCard({
 
   const handleNavigate = () => {
     if (locked) {
-      window.alert(lockedReason || 'Selesaikan prasyarat modul terlebih dahulu.');
+      setLockedAlert(true);
+      if (dismissTimerRef.current) clearTimeout(dismissTimerRef.current);
+      dismissTimerRef.current = setTimeout(() => setLockedAlert(false), 4500);
       return;
     }
 
@@ -282,6 +286,18 @@ function DiscussionCard({
           ? 'Lihat Ringkasan Diskusi Wajib'
           : 'Lanjutkan Diskusi Wajib'}
       </button>
+      {locked && lockedAlert && (
+        <div className={styles.warningBanner} role="alert" aria-live="polite">
+          <span className={styles.warningBannerIcon} aria-hidden="true">⚠️</span>
+          <span>{lockedReason || 'Selesaikan prasyarat modul terlebih dahulu.'}</span>
+          <button
+            type="button"
+            className={styles.warningBannerClose}
+            aria-label="Tutup pesan"
+            onClick={() => setLockedAlert(false)}
+          >✕</button>
+        </div>
+      )}
     </div>
   );
 }
@@ -562,7 +578,6 @@ export default function CourseOverviewPage() {
                 aria-disabled={locked}
                 onClick={() => {
                   if (locked) {
-                    window.alert(lockedReason);
                     return;
                   }
                   router.push(

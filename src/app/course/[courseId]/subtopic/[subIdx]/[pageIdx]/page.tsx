@@ -17,6 +17,7 @@ import KeyTakeaways from '@/components/KeyTakeaways/KeyTakeaways';
 import WhatNext from '@/components/WhatNext/WhatNext';
 import NextSubtopics from '@/components/NextSubtopics/NextSubtopics';
 import AILoadingIndicator from '@/components/AILoadingIndicator/AILoadingIndicator';
+import HelpDrawer, { HelpButton } from '@/components/HelpDrawer/HelpDrawer';
 import styles from './page.module.scss';
 
 // Dynamic imports for heavy interactive components
@@ -276,6 +277,8 @@ export default function SubtopicPage() {
   const [challengeSaveError, setChallengeSaveError] = useState<string | null>(null);
   const [loadingExamples, setLoadingExamples] = useState(false);
 
+  const [helpDrawerOpen, setHelpDrawerOpen] = useState<boolean>(false);
+
   const [course, setCourse] = useState<CourseState | null>(null);
   const [courseLoading, setCourseLoading] = useState(true);
   const [data, setData] = useState<SubtopicResponse | null>(() =>
@@ -290,6 +293,7 @@ export default function SubtopicPage() {
   // navigate away and back.
   const [loadAttempt, setLoadAttempt] = useState(0);
   const [navWarning, setNavWarning] = useState<string | null>(null);
+  const [navSuccess, setNavSuccess] = useState<string | null>(null);
   const [reflectionSaved, setReflectionSaved] = useState(false);
   const {
     progress,
@@ -356,8 +360,14 @@ export default function SubtopicPage() {
   }, [subtopicDetailCacheKey]);
 
   useEffect(() => {
-    refreshProgress();
-  }, [pageNumber, refreshProgress]);
+    const totalPages = data?.pages?.length;
+    if (!totalPages) return;
+    const quizStep = totalPages + 1;
+    const feedbackStep = totalPages + 2;
+    if (pageNumber === quizStep || pageNumber === feedbackStep) {
+      refreshProgress();
+    }
+  }, [pageNumber, refreshProgress, data?.pages?.length]);
 
   // Load course data — check sessionStorage first to avoid sequential fetch
   useEffect(() => {
@@ -766,13 +776,25 @@ export default function SubtopicPage() {
     setQuizStatusVersion((current) => current + 1);
     refreshProgress();
     setNavWarning(null);
+    setNavSuccess('Kuis berhasil tersimpan. Kamu bisa melanjutkan.');
   }, [refreshProgress]);
 
   const handleReflectionSaved = useCallback(() => {
     setReflectionSaved(true);
     refreshProgress();
     setNavWarning(null);
+    setNavSuccess('Refleksi tersimpan. Klik Selesai untuk menutup subtopik.');
   }, [refreshProgress]);
+
+  useEffect(() => {
+    if (!navSuccess) return;
+    const timer = window.setTimeout(() => setNavSuccess(null), 4000);
+    return () => window.clearTimeout(timer);
+  }, [navSuccess]);
+
+  useEffect(() => {
+    setNavSuccess(null);
+  }, [courseId, moduleIndex, subtopicIndex]);
 
   if (courseLoading) return <div className={styles.loading}>Memuat kursus…</div>;
   if (!course) return <div className={styles.error}>Kursus tidak ditemukan</div>;
@@ -795,24 +817,22 @@ export default function SubtopicPage() {
     );
   }
   if (error) {
+    const isBlocked = contentLoadState === 'blocked';
     return (
-      <div className={styles.error}>
-        <div style={{ marginBottom: '1rem' }}>Error: {error}</div>
-        <button
-          type="button"
-          onClick={handleRetryLoadSubtopic}
-          style={{
-            padding: '0.6rem 1.2rem',
-            borderRadius: '0.5rem',
-            border: '1px solid currentColor',
-            background: 'transparent',
-            color: 'inherit',
-            cursor: 'pointer',
-            fontWeight: 600,
-          }}
-        >
-          Coba lagi
-        </button>
+      <div className={isBlocked ? styles.blocked : styles.error}>
+        <div className={styles.statusIcon} aria-hidden="true">
+          {isBlocked ? '🔒' : '⚠️'}
+        </div>
+        <div className={styles.statusMessage}>{error}</div>
+        {!isBlocked && (
+          <button
+            type="button"
+            onClick={handleRetryLoadSubtopic}
+            className={styles.retryButton}
+          >
+            Coba lagi
+          </button>
+        )}
       </div>
     );
   }
@@ -830,23 +850,17 @@ export default function SubtopicPage() {
 
   const goNext = () => {
     if (pageNumber === contentCount + 1 && !quizCompleteForGate) {
-      const message = 'Selesaikan kuis terlebih dahulu. Hasil kuis harus berhasil tersimpan sebelum lanjut.';
-      setNavWarning(message);
-      window.alert(message);
+      setNavWarning('Selesaikan kuis terlebih dahulu. Hasil kuis harus berhasil tersimpan sebelum lanjut.');
       return;
     }
 
     if (pageNumber === feedbackStep && !quizCompleteForGate) {
-      const message = 'Selesaikan kuis terlebih dahulu sebelum menutup subtopik ini.';
-      setNavWarning(message);
-      window.alert(message);
+      setNavWarning('Selesaikan kuis terlebih dahulu sebelum menutup subtopik ini.');
       return;
     }
 
     if (pageNumber === feedbackStep && !reflectionCompleteForGate) {
-      const message = 'Harap mengisi feedback dulu. Refleksi harus berhasil tersimpan sebelum lanjut.';
-      setNavWarning(message);
-      window.alert(message);
+      setNavWarning('Harap mengisi feedback dulu. Refleksi harus berhasil tersimpan sebelum lanjut.');
       return;
     }
 
@@ -1156,10 +1170,19 @@ export default function SubtopicPage() {
                         <h3 className={styles.historyTitle}>Tantangan Sebelumnya:</h3>
                         <div className={styles.historyList}>
                           {challengeData.map((item, idx) => (
-                            <div 
+                            <div
                               key={idx}
+                              role="button"
+                              tabIndex={0}
                               onClick={() => selectChallengeItem(idx)}
+                              onKeyDown={(e) => {
+                                if (e.key === 'Enter' || e.key === ' ') {
+                                  e.preventDefault();
+                                  selectChallengeItem(idx);
+                                }
+                              }}
                               className={`${styles.historyItem} ${activeChallengeIndex === idx ? styles.activeHistoryItem : ''}`}
+                              aria-pressed={activeChallengeIndex === idx}
                             >
                               <div className={styles.historyQuestion}>
                                 <span className={styles.historyNumber}>{idx + 1}</span>
@@ -1262,21 +1285,21 @@ export default function SubtopicPage() {
                                 )}
                               </button>
                               <div className={styles.answerInputContainer}>
-                                <input
-                                  type="text"
+                                <textarea
                                   value={challengeAnswer}
                                   onChange={(e) => setChallengeAnswer(e.target.value)}
                                   placeholder="Ketik jawabanmu di sini..."
                                   className={styles.answerInput}
                                   disabled={loadingChallenge}
+                                  rows={3}
                                 />
-                                <input
-                                  type="text"
+                                <textarea
                                   value={challengeReasoning}
                                   onChange={(e) => setChallengeReasoning(e.target.value)}
                                   placeholder="Mengapa kamu memilih jawaban ini? (opsional)"
                                   className={styles.answerInput}
                                   disabled={loadingChallenge}
+                                  rows={2}
                                 />
                                 <button 
                                   onClick={handleChallengeSubmit} 
@@ -1422,9 +1445,22 @@ export default function SubtopicPage() {
       )}
 
       {/* Navigation */}
-      {(navWarning || progressLoading) && (
-        <div className={styles.navWarning} role={navWarning ? 'alert' : 'status'}>
-          {navWarning ?? 'Memeriksa status progres...'}
+      {navWarning && (
+        <div className={styles.navWarning} role="alert">
+          <span className={styles.navWarningIcon} aria-hidden="true">⚠️</span>
+          <span>{navWarning}</span>
+        </div>
+      )}
+      {navSuccess && !navWarning && (
+        <div className={styles.navSuccess} role="status" aria-live="polite">
+          <span className={styles.navSuccessIcon} aria-hidden="true">✓</span>
+          <span>{navSuccess}</span>
+        </div>
+      )}
+      {progressLoading && !navWarning && !navSuccess && currentProgress && (
+        <div className={styles.navStatus} role="status" aria-live="polite">
+          <span className={styles.navStatusSpinner} aria-hidden="true" />
+          <span>Menyinkronkan progres…</span>
         </div>
       )}
       <div className={styles.navigationButtons}>
@@ -1437,6 +1473,9 @@ export default function SubtopicPage() {
           {pageNumber === feedbackStep ? 'Selesai' : 'Selanjutnya'}
         </button>
       </div>
+
+      <HelpButton onClick={() => setHelpDrawerOpen(true)} />
+      <HelpDrawer open={helpDrawerOpen} onClose={() => setHelpDrawerOpen(false)} />
     </>
   );
 }

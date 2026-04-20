@@ -83,6 +83,54 @@ $transition: 0.25s cubic-bezier(0.4, 0, 0.2, 1);
   line-height: 1.35;
 }
 
+$amber-500: #f59e0b;
+
+.lockedWarning {
+  display: flex;
+  align-items: flex-start;
+  gap: 0.5rem;
+  margin-top: 0.5rem;
+  padding: 0.6rem 0.75rem;
+  background: #fffbeb;
+  border: 1px solid #fde68a;
+  border-left: 3px solid $amber-500;
+  border-radius: 6px;
+  color: #92400e;
+  font-size: 0.8rem;
+  line-height: 1.45;
+  animation: lockedWarnIn 0.18s ease-out;
+}
+
+.lockedWarningIcon {
+  flex-shrink: 0;
+  font-size: 0.9rem;
+  line-height: 1.5;
+}
+
+.lockedWarningClose {
+  flex-shrink: 0;
+  margin-left: auto;
+  padding: 0 0.15rem;
+  background: none;
+  border: none;
+  color: #92400e;
+  font-size: 0.8rem;
+  cursor: pointer;
+  opacity: 0.6;
+  line-height: 1;
+
+  &:hover { opacity: 1; }
+}
+
+@keyframes lockedWarnIn {
+  from { opacity: 0; transform: translateY(-3px); }
+  to   { opacity: 1; transform: translateY(0); }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .lockedWarning { animation: none; }
+}
+
 .moduleLabel {
   display: inline-block;
   font-size: 0.75rem;

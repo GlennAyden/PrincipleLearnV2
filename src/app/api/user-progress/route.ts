@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { DatabaseService } from '@/lib/database';
 import { resolveAuthContext } from '@/lib/auth-helper';
 import { assertCourseOwnership, toOwnershipError } from '@/lib/ownership';
+import { parseBody, UserProgressUpsertSchema } from '@/lib/schemas';
 
 export async function POST(req: NextRequest) {
   try {
@@ -14,17 +15,12 @@ export async function POST(req: NextRequest) {
     }
 
     const { userId, role: userRole } = auth;
-    const body = await req.json();
+    const rawBody = await req.json();
     // Accept legacy fields (moduleIndex, subtopicIndex, status, timeSpent) for backward compat,
     // but only use the unified model fields for DB writes.
-    const { courseId, subtopicId, isCompleted } = body;
-
-    if (!courseId || !subtopicId) {
-      return NextResponse.json(
-        { error: 'Missing required fields: courseId, subtopicId' },
-        { status: 400 }
-      );
-    }
+    const parsed = parseBody(UserProgressUpsertSchema, rawBody);
+    if (!parsed.success) return parsed.response;
+    const { courseId, subtopicId, isCompleted } = parsed.data;
 
     try {
       await assertCourseOwnership(userId, courseId, userRole);

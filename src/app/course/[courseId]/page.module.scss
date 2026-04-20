@@ -377,3 +377,49 @@ $transition: 0.25s cubic-bezier(0.4, 0, 0.2, 1);
   font-size: 0.82rem;
   line-height: 1.45;
 }
+
+.warningBanner {
+  display: flex;
+  align-items: flex-start;
+  gap: 0.6rem;
+  margin-top: 0.75rem;
+  padding: 0.7rem 0.9rem;
+  background: #fffbeb;
+  border: 1px solid #fde68a;
+  border-left: 3px solid #f59e0b;
+  border-radius: 6px;
+  color: #92400e;
+  font-size: 0.84rem;
+  line-height: 1.5;
+  animation: warnBannerIn 0.18s ease-out;
+}
+
+.warningBannerIcon {
+  flex-shrink: 0;
+  font-size: 0.95rem;
+  line-height: 1.4;
+}
+
+.warningBannerClose {
+  flex-shrink: 0;
+  margin-left: auto;
+  padding: 0 0.15rem;
+  background: none;
+  border: none;
+  color: #92400e;
+  font-size: 0.84rem;
+  cursor: pointer;
+  opacity: 0.6;
+  line-height: 1;
+
+  &:hover { opacity: 1; }
+}
+
+@keyframes warnBannerIn {
+  from { opacity: 0; transform: translateY(-4px); }
+  to   { opacity: 1; transform: translateY(0); }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .warningBanner { animation: none; }
+}

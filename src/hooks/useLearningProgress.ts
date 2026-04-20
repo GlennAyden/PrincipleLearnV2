@@ -2,6 +2,7 @@
 
 import { useCallback, useEffect, useState } from 'react'
 import { apiFetch } from '@/lib/api-client'
+import type { ModulePrerequisiteDetails } from '@/types/discussion'
 
 export interface LearningProgressSubtopic {
   moduleIndex: number
@@ -38,6 +39,7 @@ export interface LearningProgressModule {
   unlocked: boolean
   ready: boolean
   completed: boolean
+  summary: ModulePrerequisiteDetails['summary']
   subtopics: LearningProgressSubtopic[]
   discussion: LearningProgressDiscussion
 }

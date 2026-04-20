@@ -270,6 +270,17 @@ export const JurnalSchema = z.object({
   });
 });
 
+// ── User progress schema ───────────────────────────────────────────
+
+export const UserProgressUpsertSchema = z.object({
+  courseId: z.string().uuid('courseId must be a valid UUID'),
+  subtopicId: z.string().uuid('subtopicId must be a valid UUID'),
+  // Optional — route converts to boolean via Boolean(), so absence === false
+  isCompleted: z.boolean().optional(),
+});
+
+export type UserProgressUpsertInput = z.infer<typeof UserProgressUpsertSchema>;
+
 // ── Learning profile schema ────────────────────────────────────────
 // Note: `userId` is intentionally NOT part of this schema — the API route
 // MUST derive it from the JWT payload to prevent IDOR-style overrides.
@@ -279,6 +290,17 @@ export const LearningProfileSchema = z.object({
   learningStyle: z.string().trim().min(1, 'learningStyle diperlukan'),
   learningGoals: z.string().trim().optional().default(''),
   challenges: z.string().trim().optional().default(''),
+});
+
+// ── Onboarding state schema ────────────────────────────────────────
+// Server-authoritative flags backing the post-signup slide deck and the
+// post-course-creation product tour. The API route resolves the target
+// user from the JWT, so no `userId` belongs here.
+export const OnboardingStateSchema = z.object({
+  flag: z.enum(['intro_slides', 'course_tour'], {
+    message: 'flag harus "intro_slides" atau "course_tour"',
+  }),
+  value: z.boolean().optional().default(true),
 });
 
 // ── Helper ──────────────────────────────────────────────────────────

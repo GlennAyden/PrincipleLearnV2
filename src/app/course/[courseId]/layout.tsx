@@ -2,14 +2,47 @@
 
 'use client';
 
-import { ReactNode, useEffect, useState } from 'react';
+import { ReactNode, useEffect, useMemo, useRef, useState } from 'react';
 import Link from 'next/link';
 import { useRouter, useParams, usePathname, useSearchParams } from 'next/navigation';
 import styles from './layout.module.scss';
 import { Level } from '@/context/RequestCourseContext';
 import { useAuth } from '@/hooks/useAuth';
 import { useLearningProgress } from '@/hooks/useLearningProgress';
+import { useOnboardingState } from '@/hooks/useOnboardingState';
 import { apiFetch } from '@/lib/api-client';
+import ProductTour, { type TourStep } from '@/components/ProductTour/ProductTour';
+
+const COURSE_TOUR_STEPS: TourStep[] = [
+  {
+    targetSelector: '[data-tour="sidebar"]',
+    title: 'Daftar modul & subtopic',
+    body:
+      'Di sini tersusun seluruh perjalanan belajarmu. Modul dan subtopic terbuka bertahap — mulai dari paling atas.',
+    placement: 'right',
+  },
+  {
+    targetSelector: '[data-tour="first-module"]',
+    title: 'Modul pertamamu',
+    body:
+      'Setiap modul punya beberapa subtopic. Klik modul untuk membuka daftar subtopic-nya.',
+    placement: 'right',
+  },
+  {
+    targetSelector: '[data-tour="first-subtopic"]',
+    title: 'Mulai belajar',
+    body:
+      'Setiap subtopic berisi materi + alat bantu (quiz, tanya AI, challenge, refleksi). Di dalam subtopic ada tombol "?" untuk panduan fitur kapan saja.',
+    placement: 'right',
+  },
+  {
+    targetSelector: '[data-tour="discussion-item"]',
+    title: 'Diskusi modul',
+    body:
+      'Di akhir tiap modul ada Diskusi Penutup. Terbuka setelah semua subtopic modul itu selesai (quiz + refleksi).',
+    placement: 'right',
+  },
+];
 
 interface Subtopic {
   title: string;
@@ -58,7 +91,23 @@ export default function CourseLayout({ children }: { children: ReactNode }) {
   const [loading, setLoading] = useState(true);
   const [showMobileMenu, setShowMobileMenu] = useState<boolean>(false);
   const [isSidebarCollapsed, setIsSidebarCollapsed] = useState<boolean>(false);
+  const [navAlert, setNavAlert] = useState<string | null>(null);
+  const navAlertTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const { progress } = useLearningProgress(courseId);
+
+  // Product tour state. Only surfaces on the course root page the first time
+  // the user opens a course — the `course_tour_completed` flag guards replays.
+  const isCourseRoot = pathname === `/course/${courseId}`;
+  const { state: onboardingState, markCompleted: markOnboardingCompleted } =
+    useOnboardingState(!!courseId);
+  const [tourOpen, setTourOpen] = useState(false);
+  const tourTriggeredRef = useRef(false);
+
+  const showNavAlert = (message: string) => {
+    setNavAlert(message);
+    if (navAlertTimerRef.current) clearTimeout(navAlertTimerRef.current);
+    navAlertTimerRef.current = setTimeout(() => setNavAlert(null), 4500);
+  };
 
   useEffect(() => {
     async function loadCourse() {
@@ -111,6 +160,40 @@ export default function CourseLayout({ children }: { children: ReactNode }) {
   useEffect(() => {
     setShowMobileMenu(false);
   }, [pathname, searchParams]);
+
+  // Auto-start the product tour once all prerequisites are met:
+  //  - user is on the course root page (sidebar + first module are visible)
+  //  - the course outline has loaded (tour selectors have something to target)
+  //  - the user hasn't completed the tour yet (server-authoritative flag)
+  //  - we haven't already triggered the tour in this session
+  // We wait a short beat so React commits the sidebar markup first — without
+  // this the first `getBoundingClientRect()` sometimes misses the target.
+  useEffect(() => {
+    if (tourTriggeredRef.current) return;
+    if (!isCourseRoot) return;
+    if (loading || !course?.outline?.length) return;
+    if (!onboardingState) return;
+    if (onboardingState.courseTourCompleted) return;
+
+    tourTriggeredRef.current = true;
+    const id = window.setTimeout(() => setTourOpen(true), 700);
+    return () => window.clearTimeout(id);
+  }, [isCourseRoot, loading, course, onboardingState]);
+
+  const handleTourClose = () => {
+    setTourOpen(false);
+    void markOnboardingCompleted('course_tour');
+  };
+
+  const handleTourFinish = () => {
+    setTourOpen(false);
+    void markOnboardingCompleted('course_tour');
+  };
+
+  // `useMemo` guards against needless recomputation of the tour steps array on
+  // every render — they're static, but React would otherwise compare new refs
+  // in ProductTour's effect deps. Not a perf problem, just a hygiene win.
+  const tourSteps = useMemo(() => COURSE_TOUR_STEPS, []);
 
   const toggleSidebar = () => {
     setIsSidebarCollapsed((prev) => !prev);
@@ -198,6 +281,7 @@ export default function CourseLayout({ children }: { children: ReactNode }) {
       >
         {/* SIDEBAR */}
         <aside
+          data-tour="sidebar"
           className={`${styles.sidebar} ${
             showMobileMenu ? styles.sidebarVisible : ''
           } ${isSidebarCollapsed ? styles.sidebarCollapsed : ''}`}
@@ -231,6 +315,19 @@ export default function CourseLayout({ children }: { children: ReactNode }) {
             </button>
           </div>
 
+          {navAlert && (
+            <div className={styles.navAlert} role="alert" aria-live="polite">
+              <span className={styles.navAlertIcon} aria-hidden="true">⚠️</span>
+              <span>{navAlert}</span>
+              <button
+                type="button"
+                className={styles.navAlertClose}
+                aria-label="Tutup pesan"
+                onClick={() => setNavAlert(null)}
+              >✕</button>
+            </div>
+          )}
+
           {course.outline.map((mod, idx) => {
             const moduleStatus = progress?.modules.find((item) => item.moduleIndex === idx);
             const moduleLocked = moduleStatus ? !moduleStatus.unlocked : false;
@@ -243,6 +340,7 @@ export default function CourseLayout({ children }: { children: ReactNode }) {
               <div key={idx} className={styles.navModule}>
                 <Link
                   href={`/course/${courseId}?module=${idx}`}
+                  data-tour={idx === 0 ? 'first-module' : undefined}
                   className={`${styles.navModuleTitle} ${
                     activeModule === idx ? styles.activeModule : ''
                   } ${moduleLocked ? styles.lockedNavItem : ''}`}
@@ -251,7 +349,7 @@ export default function CourseLayout({ children }: { children: ReactNode }) {
                   onClick={(event) => {
                     if (moduleLocked) {
                       event.preventDefault();
-                      window.alert(moduleLockedReason);
+                      showNavAlert(moduleLockedReason);
                       return;
                     }
 
@@ -300,10 +398,18 @@ export default function CourseLayout({ children }: { children: ReactNode }) {
                           })()
                         : `/course/${courseId}/subtopic/${idx}/0?module=${idx}&subIdx=${j}`;
 
+                      const tourTag =
+                        idx === 0 && isDiscussion
+                          ? 'discussion-item'
+                          : idx === 0 && j === 0 && !isDiscussion
+                          ? 'first-subtopic'
+                          : undefined;
+
                       return (
                         <li key={j}>
                           <Link
                             href={href}
+                            data-tour={tourTag}
                             className={`${styles.subListItem} ${
                               j === activeSubIdx ? styles.activeSub : ''
                             } ${itemLocked ? styles.lockedNavItem : ''}`}
@@ -312,7 +418,7 @@ export default function CourseLayout({ children }: { children: ReactNode }) {
                             onClick={(event) => {
                               if (itemLocked) {
                                 event.preventDefault();
-                                window.alert(itemLockedReason);
+                                showNavAlert(itemLockedReason);
                                 return;
                               }
 
@@ -350,6 +456,13 @@ export default function CourseLayout({ children }: { children: ReactNode }) {
           {children}
         </main>
       </div>
+
+      <ProductTour
+        steps={tourSteps}
+        open={tourOpen}
+        onClose={handleTourClose}
+        onFinish={handleTourFinish}
+      />
     </div>
   );
 }

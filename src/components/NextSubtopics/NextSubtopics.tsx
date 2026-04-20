@@ -1,7 +1,7 @@
 // src/components/NextSubtopics/NextSubtopics.tsx
 'use client';
 
-import React from 'react';
+import React, { useState, useRef } from 'react';
 import { useParams, useRouter, useSearchParams } from 'next/navigation';
 import styles from './NextSubtopics.module.scss';
 import type { LearningProgressModule } from '@/hooks/useLearningProgress';
@@ -29,6 +29,8 @@ export default function NextSubtopics({
   const router = useRouter();
   const { courseId } = useParams<{ courseId: string }>();
   const searchParams = useSearchParams();
+  const [activeLockedKey, setActiveLockedKey] = useState<string | null>(null);
+  const dismissTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   // Ambil subtopicIndex dari query param "subIdx"
   const raw = searchParams.get('subIdx');
   const currentSubIdx = raw !== null && !isNaN(Number(raw)) ? Number(raw) : 0;
@@ -90,7 +92,10 @@ export default function NextSubtopics({
                 aria-disabled={locked}
                 onClick={() => {
                   if (locked) {
-                    window.alert(reason);
+                    const key = `${moduleIdx}-${idx}`;
+                    setActiveLockedKey(key);
+                    if (dismissTimerRef.current) clearTimeout(dismissTimerRef.current);
+                    dismissTimerRef.current = setTimeout(() => setActiveLockedKey(null), 4500);
                     return;
                   }
 
@@ -126,8 +131,23 @@ export default function NextSubtopics({
                   </span>
                 )}
                 {title}
-                {locked && <span className={styles.lockedReason}>{reason}</span>}
               </button>
+              {locked && activeLockedKey === `${moduleIdx}-${idx}` && (
+                <div
+                  className={styles.lockedWarning}
+                  role="alert"
+                  aria-live="polite"
+                >
+                  <span className={styles.lockedWarningIcon} aria-hidden="true">⚠️</span>
+                  <span>{reason}</span>
+                  <button
+                    type="button"
+                    className={styles.lockedWarningClose}
+                    aria-label="Tutup pesan"
+                    onClick={(e) => { e.stopPropagation(); setActiveLockedKey(null); }}
+                  >✕</button>
+                </div>
+              )}
             </li>
           );
         })}
