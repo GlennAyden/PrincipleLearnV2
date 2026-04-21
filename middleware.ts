@@ -118,14 +118,20 @@ export function middleware(req: NextRequest) {
   }
 
   // Onboarding enforcement for regular users (not admins).
-  // We cannot put the flag in the JWT without editing the auth service, so we
-  // use a cookie-based signal: the onboarding page sets `onboarding_done=true`
-  // (non-HttpOnly so the client can set it) once /api/learning-profile POST
-  // succeeds. Absence of the cookie for a non-admin, non-exempt route forces
-  // a redirect to /onboarding. This is a best-effort UX guard, NOT a security
-  // boundary — the real source of truth remains the `learning_profiles` row
-  // (and, once migrated, `users.onboarding_completed`). A malicious user
-  // deleting the cookie only re-triggers the onboarding flow.
+  // Two-stage cookie gate:
+  //   1. `onboarding_done=true`      → profile wizard finished (v1 + v2)
+  //   2. `intro_slides_done=true`    → educational intro slides finished (v2)
+  //
+  // Stage 1 still redirects to /onboarding (profile wizard). Stage 2 redirects
+  // to /onboarding/intro for users who already completed the profile wizard
+  // under onboarding v1 but never saw the new slide deck — without this
+  // second gate they silently skip the intro forever because they already
+  // have `onboarding_done=true` from before the new deck shipped.
+  //
+  // Both cookies are non-HttpOnly so the client can set them from the
+  // onboarding pages. This is a UX guard, NOT a security boundary — the
+  // server-side source of truth is `learning_profiles.intro_slides_completed`.
+  // Deleting the cookie just re-triggers the flow, which is the desired UX.
   const isRegularUser = payload.role?.toLowerCase() !== 'admin'
   if (isRegularUser) {
     const onboardingExempt =
@@ -134,15 +140,18 @@ export function middleware(req: NextRequest) {
       pathname === '/logout' ||
       pathname.startsWith('/api/auth/') ||
       pathname.startsWith('/api/learning-profile') ||
+      pathname.startsWith('/api/onboarding-state') ||
       pathname === '/favicon.ico' ||
       pathname.startsWith('/_next/')
     const onboardingDone = req.cookies.get('onboarding_done')?.value === 'true'
-    if (!onboardingExempt && !onboardingDone) {
-      // Only redirect HTML navigations; leave API calls alone so client code
-      // can continue to function (e.g. GET /api/learning-profile?userId=...)
-      // while the user is on /onboarding.
-      if (!pathname.startsWith('/api/')) {
+    const introSlidesDone = req.cookies.get('intro_slides_done')?.value === 'true'
+
+    if (!onboardingExempt && !pathname.startsWith('/api/')) {
+      if (!onboardingDone) {
         return NextResponse.redirect(new URL('/onboarding', req.url))
+      }
+      if (!introSlidesDone) {
+        return NextResponse.redirect(new URL('/onboarding/intro', req.url))
       }
     }
   }

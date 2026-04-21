@@ -67,14 +67,27 @@ export default function OnboardingIntroPage() {
     }
   }, [authLoading, isAuthenticated, router]);
 
-  // If the user already finished the intro in a previous session, skip straight
-  // through. We still rely on server state (learning_profiles flag) as the
-  // source of truth; cookies elsewhere are only UX hints.
+  // If the user already finished the intro in a previous session (server flag
+  // says so), skip straight through — but also BACKFILL the `intro_slides_done`
+  // cookie so the middleware stops redirecting them back here on every
+  // navigation. This is the path that recovers users whose DB flag is true but
+  // who cleared cookies / switched browsers.
   useEffect(() => {
     if (!stateLoading && state?.introSlidesCompleted) {
+      setIntroSlidesCookie();
       routeAfterIntro();
     }
   }, [stateLoading, state?.introSlidesCompleted]);
+
+  function setIntroSlidesCookie() {
+    if (typeof document === 'undefined') return;
+    const maxAgeSeconds = 60 * 60 * 24 * 365; // 1 year
+    const secureFlag =
+      typeof window !== 'undefined' && window.location.protocol === 'https:'
+        ? '; Secure'
+        : '';
+    document.cookie = `intro_slides_done=true; Path=/; Max-Age=${maxAgeSeconds}; SameSite=Lax${secureFlag}`;
+  }
 
   async function routeAfterIntro() {
     if (!user?.id) {
@@ -99,6 +112,10 @@ export default function OnboardingIntroPage() {
   async function finish() {
     if (finishing) return;
     setFinishing(true);
+    // Set the cookie up-front so the middleware gate stops firing even if the
+    // POST below is slow or fails. The DB flag remains the authoritative
+    // value; the cookie is only a UX short-circuit for the next navigation.
+    setIntroSlidesCookie();
     await markCompleted('intro_slides');
     await routeAfterIntro();
   }

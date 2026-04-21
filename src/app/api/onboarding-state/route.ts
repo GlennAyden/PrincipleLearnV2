@@ -91,6 +91,29 @@ async function postHandler(request: NextRequest) {
     }
 
     const row = Array.isArray(data) ? data[0] ?? null : data;
+
+    // Silent-miss detection: if the user hit /onboarding/intro before the
+    // profile wizard created their `learning_profiles` row, the UPDATE above
+    // matches nothing and returns an empty array. Previously we 200'd anyway
+    // and the flag stayed false forever. Surface it as a 409 so the client
+    // can route the user back through the profile wizard instead of looping.
+    if (!row) {
+      console.warn(
+        '[OnboardingState] No learning_profiles row for user',
+        payload.userId,
+        '- flag',
+        flag,
+        'was not persisted.',
+      );
+      return NextResponse.json(
+        {
+          error: 'Profil belajar belum ada — selesaikan profile wizard dulu',
+          code: 'PROFILE_MISSING',
+        },
+        { status: 409 },
+      );
+    }
+
     return NextResponse.json({ success: true, state: serialize(row) });
   } catch (err: unknown) {
     console.error('[OnboardingState] POST error:', err);
