@@ -2,6 +2,13 @@
 
 Dokumentasi desain instruksional yang mendasari perancangan fitur dan alur pembelajaran di PrincipleLearn V3.
 
+> Catatan implementasi 2026-04-26: bagian "Socratic Discussion" di bawah dipertahankan
+> sebagai justifikasi pedagogis, namun modul Discussion **tidak dijalankan** untuk
+> pengumpulan data tesis. Strategi Sokratik dialihkan ke `ChallengeThinking` dan
+> `AskQuestion` (yang juga menggunakan teknik pertanyaan terbimbing). Lihat
+> [`APPLICATION_OVERVIEW.md`](./APPLICATION_OVERVIEW.md) bagian 4 untuk daftar
+> modul aktif/non-aktif.
+
 ---
 
 ## 📋 Daftar Isi

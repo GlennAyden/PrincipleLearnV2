@@ -185,9 +185,10 @@ graph LR
 
 ### Implementasi dalam Fitur
 
-- **Discussion Engine**: AI menggunakan prompt Sokratik untuk memandu diskusi, bukan memberikan jawaban langsung
-- **Challenge My Thinking**: AI menantang asumsi mahasiswa melalui pertanyaan kontra
-- **Ask Question**: Respons AI dirancang untuk memandu pemahaman, bukan sekadar menjawab
+- **Challenge My Thinking** (aktif untuk tesis): AI menantang asumsi mahasiswa melalui pertanyaan kontra dan streaming feedback
+- **Ask Question** (aktif untuk tesis): Respons AI dirancang untuk memandu pemahaman secara reflektif, bukan sekadar menjawab
+- **Reasoning Note + Prompt Builder** (aktif untuk tesis): membantu siswa membangun prompt Sokratik secara mandiri
+- **Discussion Engine** (TIDAK dipakai untuk tesis 2026): tetap ada di kode tetapi tidak menjadi sumber data analisis. Lihat [`APPLICATION_OVERVIEW.md`](./APPLICATION_OVERVIEW.md) bagian 4.
 
 ---
 

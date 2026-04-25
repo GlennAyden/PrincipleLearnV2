@@ -1,2003 +1,960 @@
-# PrincipleLearn V3 -- API Reference
+# PrincipleLearn V3 — API Reference
 
-Complete endpoint reference for the PrincipleLearn V3 platform.
+Canonical reference for every HTTP endpoint exposed under `src/app/api/**/route.ts`.
+This file is the single source of truth. The companion file
+[`docs/api-reference.md`](api-reference.md) is a redirect stub kept in place to
+avoid breaking external links.
 
-> **Source of truth**: Each endpoint maps to a `route.ts` file under `src/app/api/`.
-> All protected endpoints use `withProtection()` (JWT + CSRF validation).
-> Request bodies are validated with Zod schemas via `parseBody()` -- see `src/lib/schemas.ts`.
+> Source files: [`src/app/api/`](../src/app/api). Schemas: [`src/lib/schemas.ts`](../src/lib/schemas.ts).
+> Edge middleware: [`middleware.ts`](../middleware.ts). Per-route helpers:
+> [`src/lib/api-middleware.ts`](../src/lib/api-middleware.ts),
+> [`src/lib/api-logger.ts`](../src/lib/api-logger.ts),
+> [`src/lib/rate-limit.ts`](../src/lib/rate-limit.ts).
 
 ---
 
 ## Table of Contents
 
-- [1. Overview](#1-overview)
-  - [Base URL](#base-url)
-  - [Authentication Requirements](#authentication-requirements)
-  - [Response Format](#response-format)
-  - [Rate Limits](#rate-limits)
-  - [Error Codes](#error-codes)
-  - [Authentication Flow](#authentication-flow)
-- [2. Authentication Endpoints](#2-authentication-endpoints)
-  - [POST /api/auth/login](#post-apiauthlogin)
-  - [POST /api/auth/register](#post-apiauthregister)
-  - [POST /api/auth/logout](#post-apiauthlogout)
-  - [POST /api/auth/refresh](#post-apiauthrefresh)
-  - [GET /api/auth/me](#get-apiauthme)
-- [3. Course Endpoints](#3-course-endpoints)
-  - [GET /api/courses](#get-apicourses)
-  - [GET /api/courses/:id](#get-apicoursesid)
-  - [DELETE /api/courses/:id](#delete-apicoursesid)
-  - [POST /api/generate-course](#post-apigenerate-course)
-  - [POST /api/generate-subtopic](#post-apigenerate-subtopic)
-- [4. AI / Generation Endpoints](#4-ai--generation-endpoints)
-  - [POST /api/ask-question (Streaming)](#post-apiask-question-streaming)
-  - [POST /api/challenge-thinking (Streaming)](#post-apichallenge-thinking-streaming)
-  - [POST /api/challenge-feedback](#post-apichallenge-feedback)
-  - [POST /api/challenge-response](#post-apichallenge-response)
-  - [GET /api/challenge-response](#get-apichallenge-response)
-  - [POST /api/generate-examples](#post-apigenerate-examples)
-- [5. Learning Endpoints](#5-learning-endpoints)
-  - [POST /api/quiz/submit](#post-apiquizsubmit)
-  - [POST /api/jurnal/save](#post-apijurnalsave)
-  - [POST /api/transcript/save](#post-apitranscriptsave)
-  - [POST /api/feedback](#post-apifeedback)
-  - [GET /api/user-progress](#get-apiuser-progress)
-  - [POST /api/user-progress](#post-apiuser-progress)
-  - [GET /api/learning-profile](#get-apilearning-profile)
-  - [POST /api/learning-profile](#post-apilearning-profile)
-  - [GET /api/prompt-journey](#get-apiprompt-journey)
-- [6. Discussion Endpoints](#6-discussion-endpoints)
-  - [POST /api/discussion/start](#post-apidiscussionstart)
-  - [POST /api/discussion/respond](#post-apidiscussionrespond)
-  - [GET /api/discussion/history](#get-apidiscussionhistory)
-  - [GET /api/discussion/module-status](#get-apidiscussionmodule-status)
-- [7. Admin Endpoints](#7-admin-endpoints)
-  - [Admin Authentication](#admin-authentication)
-  - [Dashboard and Users](#dashboard-and-users)
-  - [Activity Tracking](#activity-tracking)
-  - [Insights and Analytics](#insights-and-analytics)
-  - [Discussion Monitoring](#discussion-monitoring)
-  - [Research Endpoints](#research-endpoints)
-  - [Monitoring](#monitoring)
+1. [Global Conventions](#1-global-conventions)
+   - [1.1 Authentication and identity](#11-authentication-and-identity)
+   - [1.2 CSRF double-submit](#12-csrf-double-submit)
+   - [1.3 Rate limiting](#13-rate-limiting)
+   - [1.4 Request logging (`api_logs`)](#14-request-logging-api_logs)
+   - [1.5 Validation](#15-validation)
+   - [1.6 Response shape and error codes](#16-response-shape-and-error-codes)
+   - [1.7 Streaming responses](#17-streaming-responses)
+2. [Authentication — `/api/auth/*`](#2-authentication--apiauth)
+3. [Admin Authentication — `/api/admin/{login,logout,register,me}`](#3-admin-authentication--apiadminloginlogoutregisterme)
+4. [User Domain — Courses, Progress, Profile](#4-user-domain--courses-progress-profile)
+5. [AI Generation Endpoints](#5-ai-generation-endpoints)
+6. [Quiz Endpoints](#6-quiz-endpoints)
+7. [Journal & Reflection](#7-journal--reflection)
+8. [Discussion Endpoints (Student)](#8-discussion-endpoints-student)
+9. [Onboarding & Prompt Journey](#9-onboarding--prompt-journey)
+10. [Admin Dashboard, Users, Insights, Monitoring](#10-admin-dashboard-users-insights-monitoring)
+11. [Admin Activity Tracking](#11-admin-activity-tracking)
+12. [Admin Discussion Monitoring](#12-admin-discussion-monitoring)
+13. [Admin Research Pipeline](#13-admin-research-pipeline)
+14. [Admin — Per-Student Evolution](#14-admin--per-student-evolution)
+15. [Debug Endpoints](#15-debug-endpoints)
+16. [Schema Index](#16-schema-index)
 
 ---
 
-## 1. Overview
+## 1. Global Conventions
 
-### Base URL
+### 1.1 Authentication and identity
 
-| Environment  | URL                                    |
-|-------------|----------------------------------------|
-| Development | `http://localhost:3000/api`             |
-| Production  | `https://your-domain.vercel.app/api`   |
+Authentication is cookie-based. There is no Bearer-token flow.
 
-### Authentication Requirements
+| Cookie          | HttpOnly | SameSite | Lifetime                                                         | Set by                               |
+|-----------------|----------|----------|------------------------------------------------------------------|--------------------------------------|
+| `access_token`  | yes      | lax      | 15 min (user) / 30 min (admin)                                  | `/api/auth/login`, `/api/admin/login`, `/api/auth/refresh` |
+| `refresh_token` | yes      | lax      | 3 days (issued only when `rememberMe=true` for users; always for admins) | `/api/auth/login`, `/api/admin/login`, `/api/auth/refresh` |
+| `csrf_token`    | no       | lax      | tracks the active session lifetime                              | every login + refresh route           |
 
-PrincipleLearn uses a **cookie-based JWT authentication** system with **CSRF double-submit cookie** protection.
+The middleware ([`middleware.ts`](../middleware.ts)) verifies the access token,
+enforces admin-role on `/admin/*` and `/api/admin/*`, and injects three trusted
+headers into the request seen by route handlers:
 
-| Mechanism           | Description                                                                                  |
-|---------------------|----------------------------------------------------------------------------------------------|
-| **Access Token**    | JWT stored in `access_token` HttpOnly cookie. Lifetime: 15 minutes (user) / 30 minutes (admin). |
-| **Refresh Token**   | JWT stored in `refresh_token` HttpOnly cookie. Lifetime: 3 days (when `rememberMe` is set).   |
-| **CSRF Token**      | Stored in `csrf_token` cookie (readable by JS). Must be sent as `x-csrf-token` header.       |
-| **Middleware Headers** | After validation, middleware injects `x-user-id`, `x-user-email`, `x-user-role` into request headers. |
+- `x-user-id`
+- `x-user-email`
+- `x-user-role`
 
-**Rules:**
-- All **GET** endpoints require only a valid `access_token` cookie.
-- All **state-changing** requests (POST, PUT, DELETE, PATCH) also require the `x-csrf-token` header matching the `csrf_token` cookie.
-- All **admin** routes require `role === 'ADMIN'` in the JWT payload.
+Route handlers MAY trust those headers because they are set after JWT
+verification. When a handler does not see them (the request did not traverse
+middleware — for example certain edge-cache hits) the canonical recovery is
+`verifyToken(req.cookies.get('access_token')?.value)`. Several routes implement
+that fallback explicitly; new routes should follow the same pattern instead of
+returning 401.
 
-### Response Format
+The exempt routes that handle their own auth (no JWT required at the
+middleware layer) are: `/api/auth/login`, `/api/auth/register`,
+`/api/auth/refresh`, `/api/auth/logout`, `/api/admin/login`. Page-level public
+routes are `/`, `/login`, `/signup`, `/admin/login`.
 
-All endpoints return JSON with a consistent structure:
+### 1.2 CSRF double-submit
 
-**Success response:**
-```json
-{
-  "success": true,
-  "data": { ... }
-}
-```
+Every mutation method (`POST`, `PUT`, `DELETE`, `PATCH`) under `/api/*` must
+include both a `csrf_token` cookie and an `x-csrf-token` request header that
+match exactly. Enforcement happens in two places:
 
-**Error response:**
-```json
-{
-  "error": "Human-readable error message",
-  "details": "Optional additional context"
-}
-```
+- Middleware ([`middleware.ts:160-179`](../middleware.ts)) — global gate for all
+  `/api/*` mutations.
+- [`withProtection()`](../src/lib/api-middleware.ts) — handler-level wrapper
+  that re-runs the same check (defence in depth).
 
-**Streaming responses** (ask-question, challenge-thinking) use `Content-Type: text/event-stream` or `text/plain` with `Cache-Control: no-cache`.
+The frontend helper `apiFetch()` in [`src/lib/api-client.ts`](../src/lib/api-client.ts)
+reads the `csrf_token` cookie and attaches the header automatically for all
+mutating fetches.
 
-### Rate Limits
+### 1.3 Rate limiting
 
-Rate limiting is enforced in-memory per IP or per user ID, depending on the endpoint.
+Defined in [`src/lib/rate-limit.ts`](../src/lib/rate-limit.ts). Backed by the
+`rate_limits` table, with an in-memory fallback if the table is unavailable.
 
-| Endpoint Category    | Limit                        | Window      | Key     |
-|---------------------|------------------------------|-------------|---------|
-| Login               | 5 attempts                   | 15 minutes  | IP      |
-| Registration        | 3 attempts                   | 60 minutes  | IP      |
-| AI / Generation     | 30 requests                  | 60 minutes  | User ID |
+| Limiter                | Limit                       | Window      | Key      | Used by                                            |
+|------------------------|-----------------------------|-------------|----------|----------------------------------------------------|
+| `loginRateLimiter`     | 5 attempts                  | 15 minutes  | IP       | `/api/auth/login`                                  |
+| `registerRateLimiter`  | 3 attempts                  | 60 minutes  | IP       | `/api/auth/register`                               |
+| `aiRateLimiter`        | 30 requests                 | 60 minutes  | userId   | All AI endpoints (`ask-question`, `challenge-*`, `generate-*`, `quiz/regenerate`) |
+| `apiRateLimiter`       | 300 requests                | 60 seconds  | userId   | Polling probes (`/api/quiz/status`)                |
 
-When a rate limit is exceeded, the API returns:
-```json
-HTTP 429 Too Many Requests
+Exceeding a limit returns HTTP 429 with `{ "error": "..." }`.
 
-{
-  "error": "Rate limit exceeded. Please try again later."
-}
-```
+### 1.4 Request logging (`api_logs`)
 
-### Error Codes
+Routes wrapped with [`withApiLogging()`](../src/lib/api-logger.ts) write one row
+per request to the `api_logs` table. Captured columns include `method`, `path`,
+`query`, `status_code`, `duration_ms`, `ip_address`, `user_agent`, `user_id`,
+`user_email_hash` (SHA-256 truncated, prefixed `h_`), `user_role`, `label`,
+`metadata`, and `error_message`. The admin Monitoring view reads this table.
 
-| HTTP Status | Meaning                                                        |
-|-------------|----------------------------------------------------------------|
-| `200`       | Success                                                        |
-| `201`       | Created successfully                                           |
-| `400`       | Invalid request body or validation failure (Zod schema error)  |
-| `401`       | Unauthenticated -- missing or invalid token                    |
-| `403`       | Unauthorized -- CSRF mismatch, insufficient role, or forbidden |
-| `404`       | Resource not found                                             |
-| `405`       | Method not allowed                                             |
-| `429`       | Rate limit exceeded                                            |
-| `500`       | Internal server error                                          |
+### 1.5 Validation
 
-### Authentication Flow
+Mutation routes parse their JSON body via `parseBody(Schema, body)` from
+[`src/lib/schemas.ts`](../src/lib/schemas.ts). On failure the helper returns a
+ready-to-return 400 `NextResponse` with `{ error: <first issue message> }`.
+GET routes that need structured query validation use the same helper after
+mapping `URLSearchParams` to a plain object (see `/api/quiz/status`).
 
-The following diagram illustrates the complete authentication lifecycle, including login, token refresh, and CSRF validation:
+Identity fields (`userId`, `userEmail`) are deliberately omitted from most
+schemas — the route derives them from the JWT to prevent IDOR. This applies in
+particular to `GenerateCourseSchema`, `LearningProfileSchema`,
+`OnboardingStateSchema`, and `JurnalSchema`.
 
-```mermaid
-sequenceDiagram
-    participant Client
-    participant Middleware
-    participant API
-    participant Database
+### 1.6 Response shape and error codes
 
-    Note over Client,Database: Login Flow
-    Client->>API: POST /api/auth/login {email, password}
-    API->>Database: Verify credentials
-    Database-->>API: User record
-    API-->>Client: Set-Cookie: access_token (15min)<br/>Set-Cookie: refresh_token (3d)<br/>Set-Cookie: csrf_token<br/>{success, csrfToken, user}
+Successful JSON responses generally use `{ success: true, ... }` plus the
+domain payload. Error responses use `{ error: "...", details?: ... }`.
 
-    Note over Client,Database: Authenticated Request Flow
-    Client->>Middleware: GET /api/courses<br/>Cookie: access_token
-    Middleware->>Middleware: Verify JWT
-    Middleware->>API: Forward + inject x-user-id, x-user-email, x-user-role
-    API->>Database: Query with user context
-    Database-->>API: Data
-    API-->>Client: {success, courses}
+| Status | Meaning                                                                   |
+|--------|---------------------------------------------------------------------------|
+| 200    | OK                                                                        |
+| 201    | Created                                                                   |
+| 400    | Validation failure or missing required field                              |
+| 401    | Missing or invalid `access_token` (also: missing `x-user-id`)             |
+| 403    | CSRF mismatch, missing role, ownership violation, or admin-only route     |
+| 404    | Resource not found (also returned by debug routes when guard fails)       |
+| 405    | Method not allowed — admin discussion mutations are intentionally 405     |
+| 409    | Conflict — duplicate registration, missing learning_profiles row          |
+| 429    | Rate limited                                                              |
+| 500    | Unhandled server error                                                    |
+| 502    | Upstream AI parse/validation failure                                      |
+| 503    | Discussion template still preparing in background                         |
 
-    Note over Client,Database: State-Changing Request (CSRF Required)
-    Client->>Middleware: POST /api/quiz/submit<br/>Cookie: access_token, csrf_token<br/>Header: x-csrf-token
-    Middleware->>Middleware: Verify JWT + CSRF match
-    Middleware->>API: Forward request
-    API-->>Client: {success, submissionIds}
+### 1.7 Streaming responses
 
-    Note over Client,Database: Token Refresh Flow
-    Client->>API: POST /api/auth/refresh<br/>Cookie: refresh_token
-    API->>Database: Validate + rotate refresh token
-    Database-->>API: New tokens
-    API-->>Client: Set-Cookie: access_token (new)<br/>Set-Cookie: refresh_token (rotated)<br/>Set-Cookie: csrf_token (new)<br/>{success, csrfToken}
-
-    Note over Client,Database: Logout Flow
-    Client->>API: POST /api/auth/logout<br/>Header: x-csrf-token
-    API-->>Client: Clear all auth cookies<br/>{success, message}
-```
+`/api/ask-question` and `/api/challenge-thinking` return a `ReadableStream`
+forwarded from OpenAI via `chatCompletionStream()` in
+[`src/services/ai.service.ts`](../src/services/ai.service.ts). Use the headers
+exposed by `STREAM_HEADERS` (text/plain, `Cache-Control: no-cache`).
 
 ---
 
-## 2. Authentication Endpoints
+## 2. Authentication — `/api/auth/*`
 
-### POST /api/auth/login
+### `POST /api/auth/login`
+Source: [`src/app/api/auth/login/route.ts`](../src/app/api/auth/login/route.ts)
 
-Authenticates a user and issues JWT tokens.
+| Property      | Value |
+|---------------|-------|
+| Auth          | Public (no token required) |
+| CSRF          | Not required — login is the bootstrap event |
+| Schema        | [`LoginSchema`](../src/lib/schemas.ts#L31) |
+| Rate limit    | `loginRateLimiter` — 5 / 15 min per IP |
+| Logged        | No |
+| Service       | `findUserByEmail`, `verifyPassword`, `generateAuthTokens`, `generateCsrfToken` ([`auth.service.ts`](../src/services/auth.service.ts)) |
 
-| Property        | Value                               |
-|----------------|--------------------------------------|
-| **Auth**       | Public (no token required)           |
-| **Rate Limit** | 5 attempts / 15 minutes per IP       |
-| **Schema**     | `LoginSchema`                        |
-
-**Request Body:**
-
-| Field        | Type    | Required | Description                                      |
-|-------------|---------|----------|--------------------------------------------------|
-| `email`     | string  | Yes      | User email address                               |
-| `password`  | string  | Yes      | User password                                    |
-| `rememberMe`| boolean | No       | If `true`, sets refresh token with 3-day expiry  |
-
-**Example Request:**
-```bash
-curl -X POST http://localhost:3000/api/auth/login \
-  -H "Content-Type: application/json" \
-  -d '{
-    "email": "student@example.com",
-    "password": "securepassword123",
-    "rememberMe": true
-  }'
-```
-
-**Example Response (200):**
-```json
-{
-  "success": true,
-  "csrfToken": "a1b2c3d4-e5f6-7890-abcd-ef1234567890",
-  "user": {
-    "id": "uuid-here",
-    "email": "student@example.com",
-    "role": "USER"
-  }
-}
-```
-
-**Cookies Set:**
-
-| Cookie          | HttpOnly | Secure | SameSite | Max-Age                    |
-|----------------|----------|--------|----------|----------------------------|
-| `access_token` | Yes      | Yes    | Strict   | 900 (15 minutes)           |
-| `refresh_token`| Yes      | Yes    | Strict   | 259200 (3 days) if rememberMe |
-| `csrf_token`   | No       | Yes    | Strict   | 900 (15 minutes), or 259200 when rememberMe |
-
-**Error Responses:**
-
-| Status | Condition               | Body                                         |
-|--------|------------------------|----------------------------------------------|
-| 400    | Validation error       | `{"error": "Invalid request", "details": ...}` |
-| 401    | Invalid credentials    | `{"error": "Invalid email or password"}`      |
-| 429    | Rate limited           | `{"error": "Rate limit exceeded..."}`         |
+Sets `access_token`, `csrf_token`, and (when `rememberMe=true`) `refresh_token`
+cookies. Response body: `{ success, csrfToken, user: { id, email, role } }`.
+Returns 401 with a generic message and burns dummy bcrypt cycles on missing
+user to defeat enumeration via response timing.
 
 ---
 
-### POST /api/auth/register
+### `POST /api/auth/register`
+Source: [`src/app/api/auth/register/route.ts`](../src/app/api/auth/register/route.ts)
 
-Creates a new user account.
+| Property      | Value |
+|---------------|-------|
+| Auth          | Public |
+| CSRF          | Not required |
+| Schema        | [`RegisterSchema`](../src/lib/schemas.ts#L37) — enforces password strength |
+| Rate limit    | `registerRateLimiter` — 3 / 60 min per IP |
+| Logged        | No |
+| Service       | `findUserByEmail`, `hashPassword`, `DatabaseService.insertRecord` |
 
-| Property        | Value                               |
-|----------------|--------------------------------------|
-| **Auth**       | Public (no token required)           |
-| **Rate Limit** | 3 attempts / 60 minutes per IP       |
-| **Schema**     | `RegisterSchema`                     |
-
-**Request Body:**
-
-| Field      | Type   | Required | Description               |
-|-----------|--------|----------|---------------------------|
-| `email`   | string | Yes      | Valid email address        |
-| `password`| string | Yes      | Minimum 8 characters       |
-| `name`    | string | Yes      | User display name          |
-
-**Example Request:**
-```bash
-curl -X POST http://localhost:3000/api/auth/register \
-  -H "Content-Type: application/json" \
-  -d '{
-    "email": "newuser@example.com",
-    "password": "securepassword123",
-    "name": "John Doe"
-  }'
-```
-
-**Example Response (201):**
-```json
-{
-  "success": true,
-  "user": {
-    "id": "uuid-here",
-    "email": "newuser@example.com",
-    "role": "USER"
-  },
-  "message": "Registration successful"
-}
-```
-
-**Error Responses:**
-
-| Status | Condition               | Body                                           |
-|--------|------------------------|-------------------------------------------------|
-| 400    | Validation error       | `{"error": "Invalid request", "details": ...}`  |
-| 400    | Duplicate email        | `{"error": "Email already registered"}`          |
-| 429    | Rate limited           | `{"error": "Rate limit exceeded..."}`            |
+Returns 200 `{ success, user, message }` on creation, 409 with the same generic
+message on either pre-check duplicate or `unique_violation` race.
 
 ---
 
-### POST /api/auth/logout
+### `POST /api/auth/refresh`
+Source: [`src/app/api/auth/refresh/route.ts`](../src/app/api/auth/refresh/route.ts)
 
-Terminates the current session by clearing all authentication cookies.
+| Property      | Value |
+|---------------|-------|
+| Auth          | Requires valid `refresh_token` cookie |
+| CSRF          | Exempt — middleware whitelists this path; the refresh cookie itself is the auth factor |
+| Schema        | None |
+| Logged        | No |
 
-| Property        | Value                                |
-|----------------|---------------------------------------|
-| **Auth**       | CSRF validation required              |
-
-**Request Headers:**
-
-| Header          | Required | Description                       |
-|----------------|----------|-----------------------------------|
-| `x-csrf-token` | Yes      | Must match `csrf_token` cookie    |
-
-**Example Request:**
-```bash
-curl -X POST http://localhost:3000/api/auth/logout \
-  -H "x-csrf-token: a1b2c3d4-e5f6-7890-abcd-ef1234567890" \
-  -b "access_token=...; csrf_token=a1b2c3d4-e5f6-7890-abcd-ef1234567890"
-```
-
-**Example Response (200):**
-```json
-{
-  "success": true,
-  "message": "Logged out successfully"
-}
-```
-
-**Side Effects:** Clears `access_token`, `refresh_token`, and `csrf_token` cookies.
+Rotates `access_token`, `refresh_token`, and `csrf_token`. Validates the
+presented refresh token against the SHA-256 hash stored on the `users` row
+(rotation-race defence). Cleared cookies + 401 on revoked or mismatched
+tokens. Response body: `{ success, csrfToken }`.
 
 ---
 
-### POST /api/auth/refresh
+### `POST /api/auth/logout`
+Source: [`src/app/api/auth/logout/route.ts`](../src/app/api/auth/logout/route.ts)
 
-Rotates tokens using the refresh token. The old refresh token is invalidated upon use (token rotation).
+| Property | Value |
+|----------|-------|
+| Auth     | Best-effort — wipes `refresh_token_hash` only when caller is identifiable |
+| CSRF     | Required — explicit double-submit check inside the handler (not relying on middleware whitelist) |
+| Schema   | None |
+| Logged   | No |
 
-| Property        | Value                                |
-|----------------|---------------------------------------|
-| **Auth**       | Valid `refresh_token` cookie required |
-
-**Example Request:**
-```bash
-curl -X POST http://localhost:3000/api/auth/refresh \
-  -b "refresh_token=eyJhbGciOiJIUzI1NiIs..."
-```
-
-**Example Response (200):**
-```json
-{
-  "success": true,
-  "csrfToken": "new-csrf-token-value"
-}
-```
-
-**Side Effects:** Sets new `access_token`, `refresh_token`, and `csrf_token` cookies. The previous refresh token is invalidated (one-time use).
-
-**Error Responses:**
-
-| Status | Condition                | Body                                   |
-|--------|-------------------------|----------------------------------------|
-| 401    | Missing/invalid refresh  | `{"error": "Invalid refresh token"}`   |
-| 401    | Token already used       | `{"error": "Refresh token reused"}`    |
+Clears all three auth cookies, returns `{ success, message }`.
 
 ---
 
-### GET /api/auth/me
+### `GET /api/auth/me`
+Source: [`src/app/api/auth/me/route.ts`](../src/app/api/auth/me/route.ts)
 
-Returns the profile of the currently authenticated user.
+| Property | Value |
+|----------|-------|
+| Auth     | Requires valid `access_token` cookie |
+| CSRF     | N/A (GET) |
+| Service  | `getCurrentUser()` |
 
-| Property        | Value                                |
-|----------------|---------------------------------------|
-| **Auth**       | Valid `access_token` cookie required  |
-
-**Example Request:**
-```bash
-curl http://localhost:3000/api/auth/me \
-  -b "access_token=eyJhbGciOiJIUzI1NiIs..."
-```
-
-**Example Response (200):**
-```json
-{
-  "user": {
-    "id": "uuid-here",
-    "email": "student@example.com",
-    "role": "USER",
-    "name": "John Doe"
-  }
-}
-```
+Returns `{ user: { id, email, role, name } }`. 401 when not authenticated.
 
 ---
 
-## 3. Course Endpoints
+## 3. Admin Authentication — `/api/admin/{login,logout,register,me}`
 
-### GET /api/courses
+### `POST /api/admin/login`
+Source: [`src/app/api/admin/login/route.ts`](../src/app/api/admin/login/route.ts)
 
-Retrieves all courses accessible to the authenticated user.
+| Property | Value |
+|----------|-------|
+| Auth     | Public; rejects with 403 if found user is not `role === 'admin'` |
+| CSRF     | Not required (bootstrap) |
+| Schema   | [`AdminLoginSchema`](../src/lib/schemas.ts#L43) |
+| Logged   | No |
 
-| Property        | Value                                               |
-|----------------|------------------------------------------------------|
-| **Auth**       | Cookie, header, or query parameter authentication    |
-
-**Example Request:**
-```bash
-curl http://localhost:3000/api/courses \
-  -b "access_token=..."
-```
-
-**Example Response (200):**
-```json
-{
-  "success": true,
-  "courses": [
-    {
-      "id": "course-uuid",
-      "topic": "Introduction to Machine Learning",
-      "goal": "Understand fundamental ML concepts",
-      "level": "beginner",
-      "created_at": "2026-01-15T10:30:00Z",
-      "user_id": "user-uuid"
-    }
-  ]
-}
-```
+Sets `access_token` (30 min admin lifetime), `refresh_token` (3 days),
+`csrf_token`. Persists refresh token hash. Response body: `{ csrfToken, user }`.
 
 ---
 
-### GET /api/courses/:id
+### `POST /api/admin/logout`
+Source: [`src/app/api/admin/logout/route.ts`](../src/app/api/admin/logout/route.ts)
 
-Retrieves a single course with its subtopics. Enforces access control via `canAccessCourse()`.
+| Property | Value |
+|----------|-------|
+| Auth     | Admin role required |
+| CSRF     | Required (`verifyCsrfToken` from `lib/admin-auth`) |
 
-| Property        | Value                                |
-|----------------|---------------------------------------|
-| **Auth**       | Valid token required                  |
-| **Permission** | `canAccessCourse()` check            |
-
-**Path Parameters:**
-
-| Parameter | Type   | Description          |
-|-----------|--------|----------------------|
-| `id`      | string | Course UUID          |
-
-**Example Request:**
-```bash
-curl http://localhost:3000/api/courses/abc-123-def \
-  -b "access_token=..."
-```
-
-**Example Response (200):**
-```json
-{
-  "success": true,
-  "course": {
-    "id": "abc-123-def",
-    "topic": "Introduction to Machine Learning",
-    "goal": "Understand fundamental ML concepts",
-    "level": "beginner",
-    "outline": [...],
-    "subtopics": [
-      {
-        "id": "subtopic-uuid",
-        "title": "What is Machine Learning?",
-        "module_index": 0,
-        "subtopic_index": 0,
-        "content": { ... }
-      }
-    ]
-  }
-}
-```
-
-**Error Responses:**
-
-| Status | Condition           | Body                                     |
-|--------|--------------------|--------------------------------------------|
-| 403    | No access          | `{"error": "Access denied"}`               |
-| 404    | Course not found   | `{"error": "Course not found"}`            |
+Clears all three auth cookies and nulls `refresh_token_hash`. Returns
+`{ ok: true }`.
 
 ---
 
-### DELETE /api/courses/:id
+### `POST /api/admin/register`
+Source: [`src/app/api/admin/register/route.ts`](../src/app/api/admin/register/route.ts)
 
-Deletes a course and its associated data. Only the course owner or an admin can delete.
+| Property | Value |
+|----------|-------|
+| Auth     | Existing admin token required (only admins can mint admins) |
+| CSRF     | Required |
+| Schema   | [`AdminRegisterSchema`](../src/lib/schemas.ts#L49) — same password policy as user register |
 
-| Property        | Value                                |
-|----------------|---------------------------------------|
-| **Auth**       | Token + CSRF required                |
-| **Permission** | Owner or admin                       |
-
-**Path Parameters:**
-
-| Parameter | Type   | Description          |
-|-----------|--------|----------------------|
-| `id`      | string | Course UUID          |
-
-**Example Request:**
-```bash
-curl -X DELETE http://localhost:3000/api/courses/abc-123-def \
-  -H "x-csrf-token: csrf-token-value" \
-  -b "access_token=...; csrf_token=..."
-```
-
-**Example Response (200):**
-```json
-{
-  "success": true,
-  "message": "Course deleted successfully"
-}
-```
+Response: 201 `{ message, data: { id, email, role, created_at } }`.
 
 ---
 
-### POST /api/generate-course
+### `GET /api/admin/me`
+Source: [`src/app/api/admin/me/route.ts`](../src/app/api/admin/me/route.ts)
 
-Generates a new course outline using OpenAI. This is the entry point for the multi-step course creation flow.
+| Property | Value |
+|----------|-------|
+| Auth     | Admin role required |
 
-| Property        | Value                                                 |
-|----------------|--------------------------------------------------------|
-| **Auth**       | `x-user-id` header (injected by middleware)            |
-| **Rate Limit** | 30 requests / 60 minutes per user                      |
-| **Schema**     | `GenerateCourseSchema`                                 |
-| **CORS**       | Restricted origins                                     |
-| **Retry**      | Up to 3 attempts with 90-second timeout                |
-| **Logging**    | Logged via `withApiLogging()` to `api_logs` table      |
-
-**Request Body:**
-
-| Field          | Type     | Required | Description                                      |
-|---------------|----------|----------|--------------------------------------------------|
-| `topic`       | string   | Yes      | Main topic for the course                        |
-| `goal`        | string   | Yes      | Learning objective                               |
-| `level`       | string   | Yes      | Difficulty level (e.g., "beginner", "intermediate", "advanced") |
-| `extraTopics` | string[] | No       | Additional topics to include                     |
-| `problem`     | string   | No       | Specific problem the learner wants to solve      |
-| `assumption`  | string   | No       | Prior knowledge assumptions                      |
-
-**Example Request:**
-```bash
-curl -X POST http://localhost:3000/api/generate-course \
-  -H "Content-Type: application/json" \
-  -H "x-csrf-token: csrf-token-value" \
-  -b "access_token=...; csrf_token=..." \
-  -d '{
-    "topic": "Introduction to Machine Learning",
-    "goal": "Build a foundation in ML concepts and algorithms",
-    "level": "beginner",
-    "extraTopics": ["neural networks", "data preprocessing"],
-    "problem": "I want to understand how recommendation systems work",
-    "assumption": "Basic Python and statistics knowledge"
-  }'
-```
-
-**Example Response (200):**
-```json
-{
-  "outline": [
-    {
-      "module": "Module 1: Foundations of Machine Learning",
-      "subtopics": [
-        "What is Machine Learning?",
-        "Types of Machine Learning",
-        "The ML Pipeline"
-      ]
-    },
-    {
-      "module": "Module 2: Supervised Learning",
-      "subtopics": [
-        "Linear Regression",
-        "Classification Algorithms",
-        "Model Evaluation"
-      ]
-    }
-  ],
-  "courseId": "generated-course-uuid"
-}
-```
+Returns `{ user: { id, email, name, role } }`. 404 when the admin row has been
+soft-deleted.
 
 ---
 
-### POST /api/generate-subtopic
+## 4. User Domain — Courses, Progress, Profile
 
-Generates detailed content for a specific subtopic, including learning objectives, pages, key takeaways, and quiz questions. Results are cached in the `subtopic_cache` table. The route enforces the strict learning gate server-side, so locked subtopics cannot be generated by direct API calls. Also triggers background generation of discussion templates.
+### `GET /api/courses`
+Source: [`src/app/api/courses/route.ts`](../src/app/api/courses/route.ts)
 
-| Property        | Value                                            |
-|----------------|---------------------------------------------------|
-| **Auth**       | `x-user-id` header (injected by middleware)       |
-| **Rate Limit** | 30 requests / 60 minutes per user                 |
-| **Schema**     | `GenerateSubtopicSchema`                          |
-| **Caching**    | Cached in `subtopic_cache` database table         |
+| Property | Value |
+|----------|-------|
+| Auth     | Cookie-based primary; falls back to `x-user-id` header or legacy `userId`/`userEmail` query params |
+| Service  | `listUserCourses()` ([`course.service.ts`](../src/services/course.service.ts)) |
 
-**Request Body:**
-
-| Field       | Type   | Required | Description                               |
-|------------|--------|----------|-------------------------------------------|
-| `module`   | string | Yes      | Parent module title                       |
-| `subtopic` | string | Yes      | Subtopic title to generate content for    |
-| `courseId`  | string | Yes      | Parent course UUID                        |
-| `moduleId` | string | No       | Parent module row UUID; recommended for title-safe lookup |
-| `moduleIndex` | number/string | No | Parent module index; recommended for strict progression |
-| `subtopicIndex` | number/string | No | Leaf subtopic index; recommended for strict progression |
-
-**Example Request:**
-```bash
-curl -X POST http://localhost:3000/api/generate-subtopic \
-  -H "Content-Type: application/json" \
-  -H "x-csrf-token: csrf-token-value" \
-  -b "access_token=...; csrf_token=..." \
-  -d '{
-    "module": "Module 1: Foundations of Machine Learning",
-    "subtopic": "What is Machine Learning?",
-    "courseId": "course-uuid",
-    "moduleIndex": 0,
-    "subtopicIndex": 0
-  }'
-```
-
-**Example Response (200):**
-```json
-{
-  "objectives": [
-    "Define machine learning and its core principles",
-    "Distinguish between ML and traditional programming",
-    "Identify real-world ML applications"
-  ],
-  "pages": [
-    {
-      "title": "Understanding Machine Learning",
-      "content": "Machine learning is a subset of artificial intelligence..."
-    }
-  ],
-  "keyTakeaways": [
-    "ML enables computers to learn from data without explicit programming",
-    "Three main types: supervised, unsupervised, and reinforcement learning"
-  ],
-  "quiz": [
-    {
-      "question": "What distinguishes ML from traditional programming?",
-      "options": ["A) Speed", "B) Learning from data", "C) Cost", "D) Language"],
-      "correctAnswer": 1
-    }
-  ],
-  "whatNext": "In the next section, we will explore the different types of ML..."
-}
-```
+Returns `{ success, courses: Course[] }`.
 
 ---
 
-## 4. AI / Generation Endpoints
+### `GET /api/courses/[id]`
+Source: [`src/app/api/courses/[id]/route.ts`](../src/app/api/courses/[id]/route.ts)
 
-### POST /api/ask-question (Streaming)
+| Property   | Value |
+|------------|-------|
+| Auth       | `access_token` required |
+| Permission | `canAccessCourse()` — owner or admin |
+| Caching    | `Cache-Control: private, max-age=300, stale-while-revalidate=600` + `Vary: Cookie, Authorization` |
 
-Submits a question about the current learning content and receives a streamed AI response. The question and response are saved to `ask_question_history` for research tracking. Includes IDOR (Insecure Direct Object Reference) prevention.
-
-| Property        | Value                                           |
-|----------------|--------------------------------------------------|
-| **Auth**       | JWT cookie required                              |
-| **Rate Limit** | 30 requests / 60 minutes per user                |
-| **Schema**     | `AskQuestionSchema`                              |
-| **Response**   | `text/event-stream` (streaming)                  |
-
-**Request Body:**
-
-| Field              | Type   | Required | Description                                   |
-|-------------------|--------|----------|-----------------------------------------------|
-| `question`        | string | Yes      | The user's question                           |
-| `context`         | string | Yes      | Current page/subtopic context                 |
-| `userId`          | string | Yes      | User UUID (validated against JWT)             |
-| `courseId`        | string | Yes      | Current course UUID                           |
-| `subtopic`        | string | Yes      | Current subtopic title                        |
-| `moduleIndex`    | number | Yes      | Index of the current module                   |
-| `subtopicIndex`  | number | Yes      | Index of the current subtopic                 |
-| `pageNumber`     | number | Yes      | Current page number                           |
-| `promptComponents`| object | No       | Structured prompt components for research     |
-| `reasoningNote`  | string | No       | User's reasoning/reflection note              |
-| `promptVersion`  | string | No       | Version identifier for prompt tracking        |
-| `sessionNumber`  | number | No       | Learning session number                       |
-
-**Example Request:**
-```bash
-curl -X POST http://localhost:3000/api/ask-question \
-  -H "Content-Type: application/json" \
-  -H "x-csrf-token: csrf-token-value" \
-  -b "access_token=...; csrf_token=..." \
-  -d '{
-    "question": "Can you explain gradient descent in simpler terms?",
-    "context": "This page covers optimization algorithms used in ML training...",
-    "userId": "user-uuid",
-    "courseId": "course-uuid",
-    "subtopic": "Optimization in ML",
-    "moduleIndex": 2,
-    "subtopicIndex": 1,
-    "pageNumber": 3
-  }'
-```
-
-**Response:** Streamed text via `text/event-stream`. The client receives chunks of the AI response in real time.
-
-```
-data: Gradient descent is like walking downhill in fog...
-data: You can't see the bottom, but you can feel which
-data: direction goes down, so you take small steps...
-data: [DONE]
-```
+Returns `{ success, course }` with `created_by` stripped to avoid leaking
+ownership. 404 / 403 on missing or unauthorized.
 
 ---
 
-### POST /api/challenge-thinking (Streaming)
+### `DELETE /api/courses/[id]`
 
-Generates a critical thinking challenge based on the current learning context. The challenge difficulty adapts based on the specified level.
+| Property   | Value |
+|------------|-------|
+| Auth       | Token + CSRF |
+| Permission | Owner or admin |
+| Service    | `deleteCourse()` |
 
-| Property        | Value                                           |
-|----------------|--------------------------------------------------|
-| **Auth**       | `withProtection()` (JWT + CSRF)                  |
-| **Rate Limit** | 30 requests / 60 minutes per user                |
-| **Schema**     | `ChallengeThinkingSchema`                        |
-| **Response**   | `text/event-stream` (streaming)                  |
-
-**Request Body:**
-
-| Field     | Type   | Required | Description                                         |
-|----------|--------|----------|-----------------------------------------------------|
-| `context`| string | Yes      | Current learning context                            |
-| `level`  | string | Yes      | Challenge difficulty (adapts prompt complexity)      |
-
-**Example Request:**
-```bash
-curl -X POST http://localhost:3000/api/challenge-thinking \
-  -H "Content-Type: application/json" \
-  -H "x-csrf-token: csrf-token-value" \
-  -b "access_token=...; csrf_token=..." \
-  -d '{
-    "context": "The student just learned about supervised vs unsupervised learning...",
-    "level": "intermediate"
-  }'
-```
-
-**Response:** Streamed critical thinking challenge question.
+Returns `{ success, message }`.
 
 ---
 
-### POST /api/challenge-feedback
+### `GET /api/user-progress`
+Source: [`src/app/api/user-progress/route.ts`](../src/app/api/user-progress/route.ts)
 
-Evaluates the user's answer to a challenge question and returns structured feedback in Markdown format.
+| Property | Value |
+|----------|-------|
+| Auth     | `access_token`; `assertCourseOwnership()` when `courseId` query param present |
+| Query    | `courseId?: string` |
 
-| Property        | Value                                           |
-|----------------|--------------------------------------------------|
-| **Auth**       | `withProtection()` (JWT + CSRF)                  |
-| **Rate Limit** | 30 requests / 60 minutes per user                |
-| **Schema**     | `ChallengeFeedbackSchema`                        |
+Returns `{ success, progress, statistics: { total_subtopics, completed_subtopics, in_progress_subtopics, completion_percentage } }`.
 
-**Request Body:**
+### `POST /api/user-progress`
 
-| Field     | Type   | Required | Description                                |
-|----------|--------|----------|--------------------------------------------|
-| `question`| string | Yes      | The challenge question that was asked      |
-| `answer` | string | Yes      | The user's answer to evaluate              |
-| `context`| string | Yes      | Learning context for evaluation            |
-| `level`  | string | Yes      | Challenge difficulty level                 |
+| Property | Value |
+|----------|-------|
+| Auth     | Token + CSRF |
+| Schema   | [`UserProgressUpsertSchema`](../src/lib/schemas.ts#L275) |
 
-**Example Request:**
-```bash
-curl -X POST http://localhost:3000/api/challenge-feedback \
-  -H "Content-Type: application/json" \
-  -H "x-csrf-token: csrf-token-value" \
-  -b "access_token=...; csrf_token=..." \
-  -d '{
-    "question": "How would you design a system to classify emails as spam?",
-    "answer": "I would use supervised learning with labeled email data...",
-    "context": "Classification algorithms in supervised learning",
-    "level": "intermediate"
-  }'
-```
-
-**Example Response (200):**
-```json
-{
-  "feedback": "## Evaluation\n\n**Strengths:**\n- Correctly identified supervised learning as the approach...\n\n**Areas for Improvement:**\n- Consider discussing feature engineering...\n\n**Score: 7/10**"
-}
-```
+Upserts the `(user_id, course_id, subtopic_id)` row in `user_progress`.
 
 ---
 
-### POST /api/challenge-response
+### `GET /api/learning-progress`
+Source: [`src/app/api/learning-progress/route.ts`](../src/app/api/learning-progress/route.ts)
 
-Saves a user's challenge response (question, answer, and feedback) to the database for tracking.
+| Property | Value |
+|----------|-------|
+| Auth     | `resolveAuthContext` (header or cookie) + `assertCourseOwnership` |
+| Logged   | Yes — `learning-progress` |
+| Query    | `courseId: string` (required) |
 
-| Property        | Value                                           |
-|----------------|--------------------------------------------------|
-| **Auth**       | JWT cookie required                              |
-| **Schema**     | `ChallengeResponseSchema`                        |
-
-**Request Body:**
-
-| Field            | Type   | Required | Description                          |
-|-----------------|--------|----------|--------------------------------------|
-| `userId`        | string | Yes      | User UUID                            |
-| `courseId`       | string | Yes      | Course UUID                          |
-| `moduleIndex`   | number | Yes      | Module index                         |
-| `subtopicIndex` | number | Yes      | Subtopic index                       |
-| `pageNumber`    | number | Yes      | Page number                          |
-| `question`      | string | Yes      | The challenge question               |
-| `answer`        | string | Yes      | User's answer                        |
-| `feedback`      | string | Yes      | AI-generated feedback                |
-| `reasoningNote` | string | No       | User's reasoning note                |
-
-**Example Response (200):**
-```json
-{
-  "success": true,
-  "challengeId": "8c5a2b22-9f27-4f12-b49f-4f07d9f6ef34",
-  "message": "Respons tantangan berhasil disimpan"
-}
-```
+Aggregated learning progress built by `buildLearningProgressStatus()`. 404 on
+missing course.
 
 ---
 
-### GET /api/challenge-response
+### `GET /api/learning-profile`
+Source: [`src/app/api/learning-profile/route.ts`](../src/app/api/learning-profile/route.ts)
 
-Retrieves saved challenge responses for a specific user and location in the course.
+| Property | Value |
+|----------|-------|
+| Auth     | Cookie JWT; admins may pass `?userId=` to read another user |
 
-| Property        | Value                                           |
-|----------------|--------------------------------------------------|
-| **Auth**       | Token required                                   |
+Returns `{ exists, profile }`.
 
-**Query Parameters:**
+### `POST /api/learning-profile`
 
-| Parameter        | Type   | Required | Description               |
-|-----------------|--------|----------|---------------------------|
-| `userId`        | string | Yes      | User UUID                 |
-| `courseId`       | string | Yes      | Course UUID               |
-| `moduleIndex`   | number | Yes      | Module index              |
-| `subtopicIndex` | number | Yes      | Subtopic index            |
-| `pageNumber`    | number | Yes      | Page number               |
+| Property | Value |
+|----------|-------|
+| Auth     | `withProtection()` (cookie + CSRF) |
+| Schema   | [`LearningProfileSchema`](../src/lib/schemas.ts#L287) — `userId` is NOT in body, derived from JWT |
+| Logged   | Yes — `learning-profile-save` |
 
-**Example Request:**
-```bash
-curl "http://localhost:3000/api/challenge-response?userId=...&courseId=...&moduleIndex=0&subtopicIndex=1&pageNumber=2" \
-  -b "access_token=..."
-```
-
-**Example Response (200):**
-```json
-{
-  "success": true,
-  "responses": [
-    {
-      "id": "response-uuid",
-      "question": "How would you design...",
-      "answer": "I would use...",
-      "feedback": "## Evaluation...",
-      "created_at": "2026-03-10T14:30:00Z"
-    }
-  ]
-}
-```
+Upserts the `learning_profiles` row by `user_id`.
 
 ---
 
-### POST /api/generate-examples
+## 5. AI Generation Endpoints
 
-Generates contextual examples for the current learning material.
+All AI endpoints rate-limit per user via `aiRateLimiter` (30 req / 60 min).
+Prompt input is sanitized through `sanitizePromptInput()` and wrapped in XML
+boundary markers (`<user_content>...</user_content>`) to mitigate prompt
+injection.
 
-| Property        | Value                                           |
-|----------------|--------------------------------------------------|
-| **Auth**       | `withProtection()` (JWT + CSRF)                  |
-| **Rate Limit** | 30 requests / 60 minutes per user                |
-| **Schema**     | `GenerateExamplesSchema`                         |
+### `POST /api/generate-course`
+Source: [`src/app/api/generate-course/route.ts`](../src/app/api/generate-course/route.ts)
 
-**Request Body:**
+| Property   | Value |
+|------------|-------|
+| Auth       | `withProtection()` (cookie + CSRF) |
+| Schema     | [`GenerateCourseSchema`](../src/lib/schemas.ts#L61) — `.strict()`, identity NOT accepted from body |
+| Rate limit | `aiRateLimiter` |
+| Logged     | Yes — `generate-course` |
+| Other      | Custom `OPTIONS` handler for restricted CORS origins; up to 3 retry attempts with 90s timeout |
+| Service    | `chatCompletion()` ([`ai.service.ts`](../src/services/ai.service.ts)) |
 
-| Field     | Type   | Required | Description                                |
-|----------|--------|----------|--------------------------------------------|
-| `context`| string | Yes      | Learning context to generate examples for  |
-
-**Example Request:**
-```bash
-curl -X POST http://localhost:3000/api/generate-examples \
-  -H "Content-Type: application/json" \
-  -H "x-csrf-token: csrf-token-value" \
-  -b "access_token=...; csrf_token=..." \
-  -d '{
-    "context": "Binary search algorithm: how it works and when to use it"
-  }'
-```
-
-**Example Response (200):**
-```json
-{
-  "examples": [
-    {
-      "title": "Finding a Word in a Dictionary",
-      "description": "Imagine looking up 'Python' in a physical dictionary...",
-      "code": "def binary_search(arr, target):\n    low, high = 0, len(arr) - 1\n    ..."
-    }
-  ]
-}
-```
+Returns `{ outline: Module[], courseId }`. Generated modules include
+"discussion" leaf nodes appended via `appendDiscussionNodes()`.
 
 ---
 
-## 5. Learning Endpoints
+### `POST /api/generate-subtopic`
+Source: [`src/app/api/generate-subtopic/route.ts`](../src/app/api/generate-subtopic/route.ts)
 
-### POST /api/quiz/submit
+| Property   | Value |
+|------------|-------|
+| Auth       | `x-user-id` header (with cookie fallback); enforces strict learning gate |
+| CSRF       | Yes (handled by middleware for the POST) |
+| Schema     | [`GenerateSubtopicSchema`](../src/lib/schemas.ts#L76) |
+| Rate limit | `aiRateLimiter` |
+| Logged     | Yes — `generate-subtopic` |
+| Caching    | Persists generated content to `subtopic_cache` keyed by canonical `buildSubtopicCacheKey()` |
+| Side-effect| Queues background discussion-template preparation for the leaf subtopic |
 
-Submits quiz answers for a subtopic. Uses 4 matching strategies to find or create the quiz record: exact match, fuzzy match, title match, or insert.
-
-| Property        | Value                                           |
-|----------------|--------------------------------------------------|
-| **Auth**       | `x-user-id` header (injected by middleware)      |
-| **Schema**     | `QuizSubmitSchema`                               |
-
-**Request Body:**
-
-| Field            | Type     | Required | Description                              |
-|-----------------|----------|----------|------------------------------------------|
-| `courseId`       | string   | Yes      | Course UUID                              |
-| `subtopicTitle` | string   | Yes      | Subtopic title for matching              |
-| `answers`       | object[] | Yes      | Array of answer objects                  |
-| `moduleTitle`   | string   | Yes      | Parent module title                      |
-| `moduleIndex`   | number   | Yes      | Module index                             |
-| `subtopicIndex` | number   | Yes      | Subtopic index                           |
-| `score`         | number   | Yes      | Calculated score                         |
-
-**Example Request:**
-```bash
-curl -X POST http://localhost:3000/api/quiz/submit \
-  -H "Content-Type: application/json" \
-  -H "x-csrf-token: csrf-token-value" \
-  -b "access_token=...; csrf_token=..." \
-  -d '{
-    "courseId": "course-uuid",
-    "subtopicTitle": "What is Machine Learning?",
-    "answers": [
-      {"questionIndex": 0, "selectedAnswer": 1, "isCorrect": true},
-      {"questionIndex": 1, "selectedAnswer": 2, "isCorrect": false}
-    ],
-    "moduleTitle": "Module 1: Foundations",
-    "moduleIndex": 0,
-    "subtopicIndex": 0,
-    "score": 50
-  }'
-```
-
-**Example Response (200):**
-```json
-{
-  "success": true,
-  "submissionIds": ["submission-uuid-1"],
-  "matchingResults": [
-    {
-      "strategy": "exact",
-      "quizId": "quiz-uuid"
-    }
-  ],
-  "message": "Quiz submitted successfully"
-}
-```
+Returns the subtopic content shape (`{ objectives, pages, keyTakeaways, quiz, whatNext, ... }`).
 
 ---
 
-### POST /api/jurnal/save
+### `POST /api/generate-examples`
+Source: [`src/app/api/generate-examples/route.ts`](../src/app/api/generate-examples/route.ts)
 
-Saves a learning journal entry. Supports structured reflection with optional fields for understanding, confusion, strategy, and content feedback.
+| Property   | Value |
+|------------|-------|
+| Auth       | `withProtection()` |
+| Schema     | [`GenerateExamplesSchema`](../src/lib/schemas.ts#L173) — `.strict()` |
+| Rate limit | `aiRateLimiter` |
+| Logged     | No (uses `withProtection` only) |
+| Side-effect| `after()` hook records an `example_usage_events` row with SHA-256 context hash |
 
-| Property        | Value                                           |
-|----------------|--------------------------------------------------|
-| **Auth**       | `x-user-id` header (injected by middleware)      |
-| **Schema**     | `JurnalSchema`                                   |
-
-**Request Body:**
-
-| Field              | Type   | Required | Description                                |
-|-------------------|--------|----------|--------------------------------------------|
-| `userId`          | string | Yes      | User UUID                                  |
-| `courseId`         | string | Yes      | Course UUID                                |
-| `content`         | string | Yes      | Journal entry content                      |
-| `type`            | string | Yes      | Entry type (e.g., "reflection")            |
-| `subtopic`        | string | Yes      | Current subtopic title                     |
-| `moduleIndex`    | number | Yes      | Module index                               |
-| `subtopicIndex`  | number | Yes      | Subtopic index                             |
-| `understood`      | string | No       | What the user understood                   |
-| `confused`        | string | No       | What the user found confusing              |
-| `strategy`        | string | No       | User's learning strategy                   |
-| `promptEvolution` | string | No       | How user's prompting has evolved           |
-| `contentRating`   | number | No       | Rating of the content                      |
-| `contentFeedback` | string | No       | Feedback about the content                 |
-
-**Example Request:**
-```bash
-curl -X POST http://localhost:3000/api/jurnal/save \
-  -H "Content-Type: application/json" \
-  -H "x-csrf-token: csrf-token-value" \
-  -b "access_token=...; csrf_token=..." \
-  -d '{
-    "userId": "user-uuid",
-    "courseId": "course-uuid",
-    "content": "Today I learned about gradient descent...",
-    "type": "reflection",
-    "subtopic": "Optimization in ML",
-    "moduleIndex": 2,
-    "subtopicIndex": 1,
-    "understood": "How the learning rate affects convergence",
-    "confused": "The difference between batch and stochastic GD"
-  }'
-```
-
-**Example Response (200):**
-```json
-{
-  "success": true,
-  "id": "journal-entry-uuid"
-}
-```
+Returns `{ examples: string[] }` (capped at 3).
 
 ---
 
-### POST /api/transcript/save
+### `POST /api/ask-question` (streaming)
+Source: [`src/app/api/ask-question/route.ts`](../src/app/api/ask-question/route.ts)
 
-Saves a Q&A transcript (question and answer pair) from the learning session.
+| Property   | Value |
+|------------|-------|
+| Auth       | `withProtection()` |
+| Schema     | [`AskQuestionSchema`](../src/lib/schemas.ts#L146) |
+| Rate limit | `aiRateLimiter` |
+| Logged     | Yes — `ask-question` |
+| Streaming  | text/plain stream via `chatCompletionStream()` |
+| Side-effect| Persists Q+A to `ask_question_history`, scores prompt stage in background |
 
-| Property        | Value                                           |
-|----------------|--------------------------------------------------|
-| **Auth**       | `x-user-id` header (injected by middleware)      |
+IDOR check: rejects when JWT `userId` does not match `body.userId`.
 
-**Request Body:**
+### `GET /api/ask-question`
 
-| Field      | Type   | Required | Description                  |
-|-----------|--------|----------|------------------------------|
-| `userId`  | string | Yes      | User UUID                    |
-| `courseId` | string | Yes      | Course UUID                  |
-| `subtopic`| string | Yes      | Current subtopic title       |
-| `question`| string | Yes      | The question asked           |
-| `answer`  | string | Yes      | The AI's response            |
+| Property | Value |
+|----------|-------|
+| Auth     | Cookie JWT; rejects when JWT userId does not match `?userId=` |
+| Query    | `userId` (required), `courseId`, `moduleIndex`, `subtopicIndex`, `pageNumber` |
+| Logged   | Yes — `ask-question-history` |
 
-**Example Response (200):**
-```json
-{
-  "success": true,
-  "id": "transcript-uuid"
-}
-```
+Returns `{ success, responses: AskQuestionRow[] }` for the page restoration UI.
 
 ---
 
-### POST /api/feedback
+### `POST /api/challenge-thinking` (streaming)
+Source: [`src/app/api/challenge-thinking/route.ts`](../src/app/api/challenge-thinking/route.ts)
 
-Submits user feedback (rating and comment) for a subtopic.
+| Property   | Value |
+|------------|-------|
+| Auth       | `withProtection()` |
+| Schema     | [`ChallengeThinkingSchema`](../src/lib/schemas.ts#L161) |
+| Rate limit | `aiRateLimiter` |
+| Streaming  | Yes |
+| Logged     | No |
 
-| Property        | Value                                           |
-|----------------|--------------------------------------------------|
-| **Auth**       | `x-user-id` header (injected by middleware)      |
-| **Schema**     | `FeedbackSchema`                                 |
-
-**Request Body:**
-
-| Field            | Type   | Required | Description                         |
-|-----------------|--------|----------|-------------------------------------|
-| `courseId`       | string | Yes      | Course UUID                         |
-| `subtopicId`    | string | Yes      | Subtopic UUID                       |
-| `feedback`      | string | Yes      | Feedback text / comment             |
-| `comment`       | string | No       | Additional comment                  |
-| `rating`        | number | Yes      | Rating from 1 to 5                  |
-| `moduleIndex`   | number | Yes      | Module index                        |
-| `subtopicIndex` | number | Yes      | Subtopic index                      |
-| `subtopic`      | string | Yes      | Subtopic title                      |
-
-**Example Response (200):**
-```json
-{
-  "success": true
-}
-```
+Difficulty adapts to `level` (`beginner` / `intermediate` / `advanced`).
 
 ---
 
-### GET /api/user-progress
+### `POST /api/challenge-feedback`
+Source: [`src/app/api/challenge-feedback/route.ts`](../src/app/api/challenge-feedback/route.ts)
 
-Retrieves the user's progress for a specific course.
+| Property   | Value |
+|------------|-------|
+| Auth       | `withProtection()` |
+| Schema     | [`ChallengeFeedbackSchema`](../src/lib/schemas.ts#L166) |
+| Rate limit | `aiRateLimiter` |
+| Logged     | Yes — `challenge-feedback` |
 
-| Property        | Value                                           |
-|----------------|--------------------------------------------------|
-| **Auth**       | Token required                                   |
-
-**Query Parameters:**
-
-| Parameter  | Type   | Required | Description    |
-|-----------|--------|----------|----------------|
-| `courseId` | string | Yes      | Course UUID    |
-
-**Example Request:**
-```bash
-curl "http://localhost:3000/api/user-progress?courseId=course-uuid" \
-  -b "access_token=..."
-```
-
-**Example Response (200):**
-```json
-{
-  "success": true,
-  "progress": [
-    {
-      "subtopic_id": "subtopic-uuid",
-      "is_completed": true,
-      "completed_at": "2026-03-10T14:30:00Z"
-    }
-  ],
-  "statistics": {
-    "total": 12,
-    "completed": 5,
-    "percentage": 41.67
-  }
-}
-```
+Returns `{ feedback: string }` (Markdown). Output normalized through
+`normalizeChallengeFeedback()`.
 
 ---
 
-### POST /api/user-progress
+### `POST /api/challenge-response`
+Source: [`src/app/api/challenge-response/route.ts`](../src/app/api/challenge-response/route.ts)
 
-Marks a subtopic as completed or not completed.
+| Property | Value |
+|----------|-------|
+| Auth     | `withProtection()` |
+| Schema   | [`ChallengeResponseSchema`](../src/lib/schemas.ts#L186) |
+| Logged   | Yes — `challenge-response` |
 
-| Property        | Value                                           |
-|----------------|--------------------------------------------------|
-| **Auth**       | Token + CSRF required                            |
+Persists answer + AI feedback to `challenge_responses`. Returns
+`{ success, challengeId, message }`.
 
-**Request Body:**
+### `GET /api/challenge-response`
 
-| Field          | Type    | Required | Description                    |
-|---------------|---------|----------|--------------------------------|
-| `courseId`     | string  | Yes      | Course UUID                    |
-| `subtopicId`  | string  | Yes      | Subtopic UUID                  |
-| `isCompleted` | boolean | Yes      | Whether the subtopic is done   |
+| Property | Value |
+|----------|-------|
+| Auth     | Cookie JWT; rejects when JWT userId does not match `?userId=` |
+| Query    | `userId` (required), `courseId`, `moduleIndex`, `subtopicIndex`, `pageNumber` |
 
-**Example Response (200):**
-```json
-{
-  "success": true
-}
-```
+Returns `{ success, responses: ChallengeResponseRow[] }`.
 
 ---
 
-### GET /api/learning-profile
+## 6. Quiz Endpoints
 
-Retrieves the user's learning profile if it exists.
+### `POST /api/quiz/submit`
+Source: [`src/app/api/quiz/submit/route.ts`](../src/app/api/quiz/submit/route.ts)
 
-| Property        | Value                                           |
-|----------------|--------------------------------------------------|
-| **Auth**       | Token required                                   |
+| Property | Value |
+|----------|-------|
+| Auth     | `withProtection()` |
+| Schema   | [`QuizSubmitSchema`](../src/lib/schemas.ts#L116) — requires exactly 5 answers, `moduleTitle` and `subtopicTitle` required for cache-key recovery |
+| Logged   | Yes — `quiz-submit` |
 
-**Example Response (200):**
-```json
-{
-  "exists": true,
-  "profile": {
-    "user_id": "user-uuid",
-    "display_name": "John Doe",
-    "programming_experience": "intermediate",
-    "learning_style": "visual",
-    "learning_goals": "Master ML fundamentals",
-    "challenges": "Math-heavy concepts"
-  }
-}
-```
+Uses 4 matching strategies (exact / fuzzy / title / lazy-seed insert) to find
+the quiz row. Returns `{ success, submissionIds, matchingResults, message }`.
 
 ---
 
-### POST /api/learning-profile
+### `GET /api/quiz/status`
+Source: [`src/app/api/quiz/status/route.ts`](../src/app/api/quiz/status/route.ts)
 
-Creates or updates the user's learning profile.
+| Property   | Value |
+|------------|-------|
+| Auth       | Cookie JWT (with header fallback) + `assertCourseOwnership` |
+| Schema     | [`QuizStatusSchema`](../src/lib/schemas.ts#L92) — at least one of `subtopicTitle` / `moduleTitle` required |
+| Rate limit | `apiRateLimiter` (300 / minute) — tuned for polling |
+| Logged     | Yes — `quiz-status` |
 
-| Property        | Value                                           |
-|----------------|--------------------------------------------------|
-| **Auth**       | Token + CSRF required                            |
-
-**Request Body:**
-
-| Field                    | Type   | Required | Description                                 |
-|-------------------------|--------|----------|---------------------------------------------|
-| `userId`                | string | Yes      | User UUID                                   |
-| `displayName`           | string | No       | Preferred display name                      |
-| `programmingExperience` | string | No       | Experience level (e.g., "beginner")         |
-| `learningStyle`         | string | No       | Preferred learning style                    |
-| `learningGoals`         | string | No       | Learning objectives                         |
-| `challenges`            | string | No       | Known challenges or difficulties            |
-
-**Example Response (200):**
-```json
-{
-  "success": true
-}
-```
+Returns `{ completed, attemptCount, latest: AttemptSummary | null }`.
 
 ---
 
-### GET /api/prompt-journey
+### `POST /api/quiz/regenerate`
+Source: [`src/app/api/quiz/regenerate/route.ts`](../src/app/api/quiz/regenerate/route.ts)
 
-Retrieves the user's prompt evolution journey for a specific course, tracking how their question quality has changed over time.
+| Property   | Value |
+|------------|-------|
+| Auth       | Header or cookie JWT + `assertCourseOwnership` |
+| Schema     | Inline Zod (`courseId`, `moduleTitle`, `subtopicTitle`) |
+| Rate limit | `aiRateLimiter` |
+| Logged     | Yes — `quiz-regenerate` |
 
-| Property        | Value                                           |
-|----------------|--------------------------------------------------|
-| **Auth**       | Token required                                   |
-
-**Query Parameters:**
-
-| Parameter  | Type   | Required | Description    |
-|-----------|--------|----------|----------------|
-| `userId`  | string | Yes      | User UUID      |
-| `courseId` | string | Yes      | Course UUID    |
-
-**Example Response (200):**
-```json
-{
-  "success": true,
-  "entries": [
-    {
-      "question": "What is ML?",
-      "prompt_version": "v1",
-      "session_number": 1,
-      "created_at": "2026-03-01T10:00:00Z"
-    },
-    {
-      "question": "How does the learning rate affect convergence in gradient descent specifically for non-convex loss surfaces?",
-      "prompt_version": "v3",
-      "session_number": 5,
-      "created_at": "2026-03-15T14:00:00Z"
-    }
-  ],
-  "count": 2
-}
-```
+Generates 5 new questions via OpenAI, appends them via `appendNewQuizQuestions`
+(old rows preserved for audit), and refreshes `subtopic_cache`. Returns
+`{ success, quiz }` or 500 with `code: 'QUIZ_CACHE_UPDATE_FAILED'`.
 
 ---
 
-## 6. Discussion Endpoints
+## 7. Journal & Reflection
 
-The discussion system provides structured, AI-guided discussions for each subtopic. Sessions follow a multi-step template with goal tracking and automatic completion. The intended admin experience is read-only monitoring: admins can review transcripts, readiness, and analytics, but they do not intervene in the live dialogue.
+### `POST /api/jurnal/save`
+Source: [`src/app/api/jurnal/save/route.ts`](../src/app/api/jurnal/save/route.ts)
 
-### POST /api/discussion/start
+| Property | Value |
+|----------|-------|
+| Auth     | `resolveAuthUserId()` (header or cookie). Body MUST NOT carry `userId` for non-admins |
+| CSRF     | Middleware-enforced |
+| Schema   | [`JurnalSchema`](../src/lib/schemas.ts#L232) — `superRefine` enforces all-or-nothing for `structured_reflection` |
+| Logged   | Yes — `jurnal-save` |
+| Side-effect | Mirrors a corresponding row into `feedback` table with `origin_jurnal_id`; refreshes research evidence asynchronously |
 
-Starts a new discussion session for a subtopic, or resumes an existing one.
+Returns `{ success, id, feedbackSaved, feedbackMirrorAction }`.
 
-| Property        | Value                                           |
-|----------------|--------------------------------------------------|
-| **Auth**       | JWT cookie required                              |
-
-**Request Body:**
-
-| Field            | Type   | Required | Description                        |
-|-----------------|--------|----------|------------------------------------|
-| `courseId`       | string | Yes      | Course UUID                        |
-| `subtopicId`    | string | Yes*     | Subtopic UUID (one of these required) |
-| `subtopicTitle` | string | Yes*     | Subtopic title (one of these required) |
-| `moduleTitle`   | string | Yes      | Parent module title                |
-
-**Example Request:**
-```bash
-curl -X POST http://localhost:3000/api/discussion/start \
-  -H "Content-Type: application/json" \
-  -H "x-csrf-token: csrf-token-value" \
-  -b "access_token=...; csrf_token=..." \
-  -d '{
-    "courseId": "course-uuid",
-    "subtopicTitle": "What is Machine Learning?",
-    "moduleTitle": "Module 1: Foundations"
-  }'
-```
-
-**Example Response (200):**
-```json
-{
-  "session": {
-    "id": "session-uuid",
-    "status": "in_progress",
-    "phase": "diagnosis",
-    "learningGoals": [
-      { "id": "goal-1", "description": "Identify the core concept", "covered": false }
-    ],
-    "createdAt": "2026-04-16T03:47:00Z",
-    "updatedAt": "2026-04-16T03:47:00Z",
-    "user": { "id": "user-uuid", "email": "student@example.com" },
-    "course": { "id": "course-uuid", "title": "Algorithms 101" },
-    "subtopic": { "id": "subtopic-uuid", "title": "Sorting Basics" }
-  },
-  "messages": [
-    {
-      "id": "message-uuid",
-      "role": "agent",
-      "content": "Welcome to the discussion.",
-      "step_key": "diagnosis_1",
-      "created_at": "2026-04-16T03:47:00Z"
-    }
-  ],
-  "currentStep": {
-    "key": "diagnosis_1",
-    "prompt": "What do you already know about sorting?",
-    "expected_type": "open"
-  }
-}
-```
+There is intentionally no separate `/api/feedback` write endpoint anymore —
+direct feedback is written through the jurnal mirror path. The admin
+read-side still exposes `/api/admin/activity/feedback`.
 
 ---
 
-### POST /api/discussion/respond
+### `GET /api/jurnal/status`
+Source: [`src/app/api/jurnal/status/route.ts`](../src/app/api/jurnal/status/route.ts)
 
-Submits a student's message in an active discussion session. The backend evaluates the response, tracks goal completion, and may auto-complete the session.
+| Property | Value |
+|----------|-------|
+| Auth     | Cookie JWT + `assertCourseOwnership` |
+| Logged   | Yes — `jurnal-status` |
+| Query    | `courseId` (required), `subtopicId`, `subtopicLabel`, `subtopic`, `moduleIndex`, `subtopicIndex` |
 
-| Property        | Value                                           |
-|----------------|--------------------------------------------------|
-| **Auth**       | JWT cookie required                              |
+Returns reflection submission status (submitted / completed flags, revision
+count, latest submission timestamp, `sourceKinds`, `hasFeedbackMirror`,
+`latest`).
 
-**Request Body:**
-
-| Field       | Type   | Required | Description               |
-|------------|--------|----------|---------------------------|
-| `sessionId`| string | Yes      | Discussion session UUID   |
-| `message`  | string | Yes      | User's response message   |
-
-**Example Request:**
-```bash
-curl -X POST http://localhost:3000/api/discussion/respond \
-  -H "Content-Type: application/json" \
-  -H "x-csrf-token: csrf-token-value" \
-  -b "access_token=...; csrf_token=..." \
-  -d '{
-    "sessionId": "session-uuid",
-    "message": "I think machine learning is when computers learn patterns from data..."
-  }'
-```
-
-**Example Response (200):**
-```json
-{
-  "session": {
-    "id": "session-uuid",
-    "status": "in_progress",
-    "phase": "exploration",
-    "learningGoals": [
-      { "id": "goal-1", "description": "Identify the core concept", "covered": true }
-    ],
-    "updatedAt": "2026-04-16T03:50:00Z"
-  },
-  "messages": [
-    {
-      "id": "message-uuid",
-      "role": "student",
-      "content": "Sorting helps arrange data in order.",
-      "step_key": "diagnosis_1",
-      "created_at": "2026-04-16T03:49:30Z"
-    }
-  ],
-  "currentStep": {
-    "key": "exploration_1",
-    "prompt": "Can you compare two sorting approaches?",
-    "expected_type": "open"
-  },
-  "nextStep": {
-    "key": "exploration_1",
-    "prompt": "Can you compare two sorting approaches?",
-    "expected_type": "open"
-  }
-}
-```
-
-Depending on the branch taken by the evaluator, the response may also include flags such as `effortRejection`, `isRetry`, `clarificationGiven`, `isRemediation`, and `remediationRound`.
+There is intentionally no separate `/api/transcript/save` endpoint — Q&A
+transcripts are persisted as part of `/api/ask-question` writing to
+`ask_question_history`. Admin transcripts read out of the same backing data.
 
 ---
 
-### GET /api/discussion/history
+## 8. Discussion Endpoints (Student)
 
-Retrieves the persisted history for a discussion session.
+### `POST /api/discussion/prepare`
+Source: [`src/app/api/discussion/prepare/route.ts`](../src/app/api/discussion/prepare/route.ts)
 
-| Property        | Value                                           |
-|----------------|--------------------------------------------------|
-| **Auth**       | JWT cookie required                              |
+| Property | Value |
+|----------|-------|
+| Auth     | Cookie JWT |
+| Logged   | Yes — `discussion.prepare` |
 
-**Query Parameters:**
-
-| Field | Type | Description |
-|-------|------|-------------|
-| `sessionId` | string | Direct session lookup |
-| `courseId` | string | Course context for lookup |
-| `subtopicId` | string | Subtopic context for lookup |
-| `subtopicTitle` | string | Subtopic title fallback |
-
-**Example Response (200):**
-```json
-{
-  "session": {
-    "id": "session-uuid",
-    "status": "completed",
-    "phase": "synthesis",
-    "learningGoals": [
-      { "id": "goal-1", "description": "Identify the core concept", "covered": true }
-    ],
-    "createdAt": "2026-04-16T03:47:00Z",
-    "updatedAt": "2026-04-16T03:55:00Z"
-  },
-  "messages": [
-    {"id": "1", "role": "agent", "content": "...", "step_key": "diagnosis_1", "created_at": "2026-04-16T03:47:00Z"},
-    {"id": "2", "role": "student", "content": "...", "step_key": "diagnosis_1", "created_at": "2026-04-16T03:48:10Z"}
-  ],
-  "currentStep": {
-    "key": "synthesis_1",
-    "prompt": "Summarize what you have learned.",
-    "expected_type": "reflection"
-  }
-}
-```
+Triggers (or polls) background generation of a discussion template. Returns
+503 with `Retry-After` while preparing, or 200 once ready.
 
 ---
 
-### GET /api/discussion/module-status
+### `POST /api/discussion/start`
+Source: [`src/app/api/discussion/start/route.ts`](../src/app/api/discussion/start/route.ts)
 
-Checks the discussion readiness and completion status for all subtopics in a module.
+| Property | Value |
+|----------|-------|
+| Auth     | Cookie JWT + `assertCourseOwnership` |
+| Schema   | None (handler validates inline) |
+| Logged   | Yes — `discussion.start` |
 
-| Property        | Value                                           |
-|----------------|--------------------------------------------------|
-| **Auth**       | JWT cookie required                              |
-
-**Query Parameters:**
-
-| Field | Type | Required | Description |
-|-------|------|----------|-------------|
-| `courseId` | string | Yes | Course UUID |
-| `moduleId` | string | Yes | Module identifier |
-
-**Example Response (200):**
-```json
-{
-  "ready": true,
-  "summary": {
-    "total": 3,
-    "completed": 1,
-    "generated": 3,
-    "quizCompleted": 2
-  },
-  "subtopics": [
-    {
-      "title": "What is Machine Learning?",
-      "generated": true,
-      "quizQuestionCount": 5,
-      "answeredCount": 5,
-      "quizCompleted": true,
-      "missingQuestions": [],
-      "userHasCompletion": true
-    }
-  ]
-}
-```
+Starts (or resumes) a discussion session for a `(courseId, subtopic)` pair.
+Returns `{ session, messages, currentStep }`. Returns 503 when the template is
+still preparing (`DISCUSSION_TEMPLATE_PREPARING_CODE`).
 
 ---
 
-## 7. Admin Endpoints
+### `POST /api/discussion/respond`
+Source: [`src/app/api/discussion/respond/route.ts`](../src/app/api/discussion/respond/route.ts)
 
-All admin endpoints require `role === 'ADMIN'` in the JWT payload. Admin routes are protected by middleware that checks the role claim before forwarding the request.
+| Property | Value |
+|----------|-------|
+| Auth     | Cookie JWT |
+| Logged   | Yes — `discussion.respond` |
 
-### Admin Authentication
+Body: `{ sessionId, message }`. Evaluates the student response, updates goal
+coverage, may auto-complete the session, and refreshes research evidence in
+the background via `after()`.
 
-#### POST /api/admin/login
-
-Authenticates an admin user. Uses a separate login flow from regular users with a longer token lifetime.
-
-| Property        | Value                                |
-|----------------|---------------------------------------|
-| **Auth**       | Public                               |
-| **Schema**     | `AdminLoginSchema`                   |
-
-**Request Body:**
-
-| Field      | Type   | Required | Description          |
-|-----------|--------|----------|----------------------|
-| `email`   | string | Yes      | Admin email address  |
-| `password`| string | Yes      | Admin password       |
-
-**Example Response (200):**
-```json
-{
-  "user": {
-    "id": "admin-uuid",
-    "email": "admin@example.com",
-    "name": "Admin User",
-    "role": "ADMIN"
-  }
-}
-```
-
-**Cookies Set:** `access_token` with 2-hour expiry.
+Response includes optional flags depending on branch taken:
+`effortRejection`, `isRetry`, `clarificationGiven`, `isRemediation`,
+`remediationRound`.
 
 ---
 
-#### POST /api/admin/logout
+### `GET /api/discussion/history`
+Source: [`src/app/api/discussion/history/route.ts`](../src/app/api/discussion/history/route.ts)
 
-Logs out the admin user.
+| Property | Value |
+|----------|-------|
+| Auth     | Cookie JWT |
+| Logged   | Yes — `discussion.history` |
+| Query    | `sessionId`, `courseId`, `subtopicId`, `subtopicTitle` (any combination that uniquely identifies a session) |
 
-| Property        | Value                                |
-|----------------|---------------------------------------|
-| **Auth**       | Admin token                          |
-
-**Example Response (200):**
-```json
-{
-  "ok": true
-}
-```
-
-**Side Effects:** Clears `access_token` cookie.
+Returns `{ session, messages, currentStep }`.
 
 ---
 
-#### POST /api/admin/register
+### `GET /api/discussion/status`
+Source: [`src/app/api/discussion/status/route.ts`](../src/app/api/discussion/status/route.ts)
 
-Creates a new admin account. Only existing admins can register new admins.
+| Property | Value |
+|----------|-------|
+| Auth     | Cookie JWT + `assertCourseOwnership` |
+| Logged   | Yes — `discussion.status` |
+| Query    | `courseId`, `subtopicId` or `subtopicTitle` |
 
-| Property        | Value                                |
-|----------------|---------------------------------------|
-| **Auth**       | Admin role required                  |
-| **Schema**     | `AdminRegisterSchema`                |
-
-**Request Body:**
-
-| Field      | Type   | Required | Description          |
-|-----------|--------|----------|----------------------|
-| `email`   | string | Yes      | New admin email      |
-| `password`| string | Yes      | New admin password   |
-
-**Example Response (201):**
-```json
-{
-  "message": "Admin registered successfully",
-  "data": {
-    "id": "new-admin-uuid",
-    "email": "newadmin@example.com",
-    "role": "ADMIN",
-    "created_at": "2026-04-01T10:00:00Z"
-  }
-}
-```
+Returns the latest session's `{ session: { id, status, phase, learningGoals, ... } }`.
+404 with `code: 'SESSION_NOT_FOUND'` or `'DISCUSSION_CONTEXT_NOT_FOUND'`.
 
 ---
 
-#### GET /api/admin/me
+### `GET /api/discussion/module-status`
+Source: [`src/app/api/discussion/module-status/route.ts`](../src/app/api/discussion/module-status/route.ts)
 
-Returns the current admin's profile.
+| Property | Value |
+|----------|-------|
+| Auth     | Cookie JWT + `assertCourseOwnership` |
+| Logged   | Yes — `discussion.module-status` |
+| Query    | `courseId`, `moduleId` (both required) |
 
-| Property        | Value                                |
-|----------------|---------------------------------------|
-| **Auth**       | Admin role required                  |
-
-**Example Response (200):**
-```json
-{
-  "user": {
-    "id": "admin-uuid",
-    "email": "admin@example.com",
-    "name": "Admin User",
-    "role": "ADMIN"
-  }
-}
-```
+Returns the prerequisites payload: `{ ready, summary: { total, completed, generated, quizCompleted }, subtopics: [...] }`.
 
 ---
 
-### Dashboard and Users
+## 9. Onboarding & Prompt Journey
 
-#### GET /api/admin/dashboard
+### `GET /api/onboarding-state`
+Source: [`src/app/api/onboarding-state/route.ts`](../src/app/api/onboarding-state/route.ts)
 
-Returns a comprehensive dashboard with KPIs, research metrics, student summaries, and recent activity. Executes 12 parallel database queries and caches results for 30 seconds.
+| Property | Value |
+|----------|-------|
+| Auth     | Cookie JWT |
+| Schema   | None |
 
-| Property        | Value                                |
-|----------------|---------------------------------------|
-| **Auth**       | Admin role required                  |
-| **Cache**      | 30-second in-memory cache            |
+Returns `{ success, state: { introSlidesCompleted, courseTourCompleted } }`.
 
-**Query Parameters:**
+### `POST /api/onboarding-state`
 
-| Parameter | Type   | Required | Default | Description                          |
-|----------|--------|----------|---------|--------------------------------------|
-| `range`  | string | No       | `all`   | Time range: `all`, `7d`, `30d`, `90d` |
+| Property | Value |
+|----------|-------|
+| Auth     | `withProtection()` (cookie + CSRF) |
+| Schema   | [`OnboardingStateSchema`](../src/lib/schemas.ts#L299) — `userId` derived from JWT |
+| Logged   | Yes — `onboarding-state-update` |
 
-**Example Request:**
-```bash
-curl "http://localhost:3000/api/admin/dashboard?range=30d" \
-  -b "access_token=..."
-```
-
-**Example Response (200):**
-```json
-{
-  "kpi": {
-    "totalUsers": 45,
-    "totalCourses": 120,
-    "totalQuizSubmissions": 890,
-    "totalJournalEntries": 340,
-    "averageQuizScore": 78.5,
-    "activeUsersToday": 12
-  },
-  "rm2": {
-    "promptEvolutionData": [...],
-    "questionQualityTrend": [...]
-  },
-  "rm3": {
-    "discussionEngagement": [...],
-    "challengeCompletionRate": 0.65
-  },
-  "studentSummary": [
-    {
-      "id": "user-uuid",
-      "name": "John Doe",
-      "email": "john@example.com",
-      "coursesCreated": 3,
-      "quizzesTaken": 15,
-      "lastActive": "2026-04-07T18:00:00Z"
-    }
-  ],
-  "recentActivity": [...],
-  "meta": {
-    "range": "30d",
-    "cachedAt": "2026-04-08T10:00:00Z",
-    "queryTimeMs": 245
-  }
-}
-```
+Sets a single onboarding flag (`intro_slides` or `course_tour`). Returns 409
+`code: 'PROFILE_MISSING'` when the `learning_profiles` row does not yet exist.
 
 ---
 
-#### GET /api/admin/users
+### `GET /api/prompt-journey`
+Source: [`src/app/api/prompt-journey/route.ts`](../src/app/api/prompt-journey/route.ts)
 
-Returns a list of all students with engagement scores and prompt evolution stages.
+| Property | Value |
+|----------|-------|
+| Auth     | Cookie JWT; non-admin cannot pass another user's `?userId=` |
+| Query    | `userId?` (admin only), `courseId?` |
 
-| Property        | Value                                |
-|----------------|---------------------------------------|
-| **Auth**       | Admin role required                  |
-
-**Example Response (200):**
-```json
-[
-  {
-    "id": "user-uuid",
-    "email": "student@example.com",
-    "name": "John Doe",
-    "created_at": "2026-01-10T08:00:00Z",
-    "engagement_score": 85,
-    "prompt_stage": "advanced",
-    "courses_count": 3,
-    "last_active": "2026-04-07T18:00:00Z"
-  }
-]
-```
+Returns `{ success, entries, count }` from `ask_question_history` for prompt
+evolution analytics. Capped at 200 rows.
 
 ---
 
-#### DELETE /api/admin/users/:id
+## 10. Admin Dashboard, Users, Insights, Monitoring
 
-Deletes a user and cascades the deletion across 17 related tables.
+All admin routes require `payload.role.toLowerCase() === 'admin'`. Middleware
+enforces this for the entire `/api/admin/*` namespace.
 
-| Property        | Value                                |
-|----------------|---------------------------------------|
-| **Auth**       | Admin role required                  |
+### `GET /api/admin/dashboard`
+Source: [`src/app/api/admin/dashboard/route.ts`](../src/app/api/admin/dashboard/route.ts)
 
-**Path Parameters:**
-
-| Parameter | Type   | Description    |
-|-----------|--------|----------------|
-| `id`      | string | User UUID      |
-
-**Example Response (200):**
-```json
-{
-  "success": true,
-  "message": "User and all associated data deleted successfully",
-  "warnings": ["Some transcript records could not be deleted"]
-}
-```
-
-> **Note:** The `warnings` field is optional and only present if some cascade operations encountered non-critical errors.
+Auth: `verifyAdminFromCookie`. Query: `range = all | 7d | 30d | 90d`.
+Returns `{ kpi, rm2, rm3, studentSummary, recentActivity, meta: { range, cachedAt, queryTimeMs } }`. Uses an in-process 30-second cache.
 
 ---
 
-#### GET /api/admin/users/:id/detail
+### `GET /api/admin/users`
+Source: [`src/app/api/admin/users/route.ts`](../src/app/api/admin/users/route.ts)
 
-Returns detailed information about a specific user.
+Returns the student list with engagement scores and prompt-stage hints.
+Backed by the `get_admin_user_stats` Postgres function.
 
-| Property        | Value                                |
-|----------------|---------------------------------------|
-| **Auth**       | Admin role required                  |
+### `DELETE /api/admin/users/[id]`
+Source: [`src/app/api/admin/users/[id]/route.ts`](../src/app/api/admin/users/[id]/route.ts)
 
----
+| Property | Value |
+|----------|-------|
+| Auth     | Admin role required |
+| CSRF     | Required (`verifyCsrfToken`) |
 
-#### GET /api/admin/users/:id/activity-summary
+Cascades user deletion across related tables. Self-deletion blocked with 403.
+Returns `{ success, message, warnings? }`.
 
-Returns an activity summary for a specific user.
+### `GET /api/admin/users/[id]/detail`
+Source: [`src/app/api/admin/users/[id]/detail/route.ts`](../src/app/api/admin/users/[id]/detail/route.ts)
 
-| Property        | Value                                |
-|----------------|---------------------------------------|
-| **Auth**       | Admin role required                  |
+Returns aggregated profile data for a single user.
 
----
+### `GET /api/admin/users/[id]/activity-summary`
+Source: [`src/app/api/admin/users/[id]/activity-summary/route.ts`](../src/app/api/admin/users/[id]/activity-summary/route.ts)
 
-#### GET /api/admin/users/:id/subtopics
+Activity rollup (counts of quizzes, journals, transcripts, etc.).
 
-Returns all subtopics accessed by a specific user.
+### `GET /api/admin/users/[id]/subtopics`
+### `POST /api/admin/users/[id]/subtopics`
+Source: [`src/app/api/admin/users/[id]/subtopics/route.ts`](../src/app/api/admin/users/[id]/subtopics/route.ts)
 
-| Property        | Value                                |
-|----------------|---------------------------------------|
-| **Auth**       | Admin role required                  |
+GET returns the user's courses with subtopic listings. POST (CSRF) accepts
+`{ courseId, subtopicId, note }` for legacy admin notes (the
+`admin_subtopic_delete_logs` table is not currently populated).
 
----
+### `GET /api/admin/users/export`
+Source: [`src/app/api/admin/users/export/route.ts`](../src/app/api/admin/users/export/route.ts)
 
-#### GET /api/admin/users/export
-
-Exports user data in CSV or JSON format.
-
-| Property        | Value                                |
-|----------------|---------------------------------------|
-| **Auth**       | Admin role required                  |
-
-**Query Parameters:**
-
-| Parameter | Type   | Required | Default | Description               |
-|----------|--------|----------|---------|---------------------------|
-| `format` | string | No       | `json`  | Export format: `csv`, `json` |
+Query: `format = csv | json`, `user_id?`, `start_date?`, `end_date?`,
+`anonymize?`. Streams a per-student export.
 
 ---
 
-### Activity Tracking
+### `GET /api/admin/insights`
+Source: [`src/app/api/admin/insights/route.ts`](../src/app/api/admin/insights/route.ts)
 
-All activity endpoints require admin role authentication. These endpoints provide read access to student learning activities.
+Query: `userId?`, `courseId?`, `range`. Cached for 60 s.
 
-| Endpoint                                    | Method | Description                                    |
-|---------------------------------------------|--------|------------------------------------------------|
-| `/api/admin/activity/courses`               | GET    | View all generated courses                     |
-| `/api/admin/activity/topics`                | GET    | View course topics                             |
-| `/api/admin/activity/feedback`              | GET    | View student feedback submissions              |
-| `/api/admin/activity/actions`               | GET    | View user actions/events                       |
-| `/api/admin/activity/analytics`             | GET    | View activity analytics                        |
-| `/api/admin/activity/ask-question`          | GET    | View ask-question history                      |
-| `/api/admin/activity/challenge`             | GET    | View challenge responses                       |
-| `/api/admin/activity/discussion`            | GET    | View discussion sessions                       |
-| `/api/admin/activity/export`                | GET    | Export activity data                           |
-| `/api/admin/activity/generate-course`       | GET    | View course generation logs                    |
-| `/api/admin/activity/jurnal`                | GET    | View all journal entries                       |
-| `/api/admin/activity/jurnal/:id`            | GET    | View a specific journal entry                  |
-| `/api/admin/activity/learning-profile`      | GET    | View learning profiles                         |
-| `/api/admin/activity/quiz`                  | GET    | View all quiz submissions                      |
-| `/api/admin/activity/quiz/:id`              | GET    | View a specific quiz submission                |
-| `/api/admin/activity/search`                | GET    | Search across activity types                   |
-| `/api/admin/activity/transcript`            | GET    | View all transcripts                           |
-| `/api/admin/activity/transcript/:id`        | GET    | View a specific transcript                     |
+### `GET /api/admin/insights/export`
+Source: [`src/app/api/admin/insights/export/route.ts`](../src/app/api/admin/insights/export/route.ts)
+
+Query: `format = csv | json`. Exports insights for research.
 
 ---
 
-### Insights and Analytics
+### `GET /api/admin/monitoring/logging`
+Source: [`src/app/api/admin/monitoring/logging/route.ts`](../src/app/api/admin/monitoring/logging/route.ts)
 
-#### GET /api/admin/insights
-
-Returns analytical insights including prompt evolution charts, student summaries, and learning patterns. Results are cached for 60 seconds.
-
-| Property        | Value                                |
-|----------------|---------------------------------------|
-| **Auth**       | Admin role required                  |
-| **Cache**      | 60-second in-memory cache            |
-
-**Query Parameters:**
-
-| Parameter | Type   | Required | Description                           |
-|----------|--------|----------|---------------------------------------|
-| `userId` | string | No       | Filter by specific user               |
-| `courseId`| string | No       | Filter by specific course             |
-| `range`  | string | No       | Time range: `all`, `7d`, `30d`, `90d` |
-
-**Example Response (200):**
-```json
-{
-  "summary": {
-    "totalStudents": 45,
-    "activeStudents": 30,
-    "averageEngagement": 72.5
-  },
-  "promptEvolutionChart": {
-    "labels": ["Week 1", "Week 2", "Week 3", "Week 4"],
-    "datasets": [
-      {
-        "label": "Average Prompt Quality",
-        "data": [3.2, 4.1, 5.5, 6.8]
-      }
-    ]
-  },
-  "studentSummary": [...]
-}
-```
+Returns `api_logs` rows for a configurable time window (`?days=N`, capped at
+30, default 7).
 
 ---
 
-#### GET /api/admin/insights/export
+## 11. Admin Activity Tracking
 
-Exports insights data for research purposes.
+All `/api/admin/activity/*` routes are GET-only (with one exception listed
+below) and use `withProtection({ adminOnly: true, csrfProtection: false })`.
+They are read-only inspection endpoints powering the admin UI.
 
-| Property        | Value                                |
-|----------------|---------------------------------------|
-| **Auth**       | Admin role required                  |
+| Endpoint                                                                                                                  | Method | Notes |
+|---------------------------------------------------------------------------------------------------------------------------|--------|-------|
+| `/api/admin/activity/actions`                                                                                             | POST   | `csrfProtection: true` — admin write surface for action logs |
+| `/api/admin/activity/analytics`                                                                                           | GET    |       |
+| `/api/admin/activity/ask-question`                                                                                        | GET    |       |
+| `/api/admin/activity/challenge`                                                                                           | GET    |       |
+| `/api/admin/activity/courses`                                                                                             | GET    |       |
+| `/api/admin/activity/discussion`                                                                                          | GET    | Custom handler (no `withProtection` wrapper) |
+| `/api/admin/activity/examples`                                                                                            | GET    |       |
+| `/api/admin/activity/export`                                                                                              | GET    | Bulk export across activity types |
+| `/api/admin/activity/feedback`                                                                                            | GET    |       |
+| `/api/admin/activity/generate-course`                                                                                     | GET    |       |
+| `/api/admin/activity/jurnal`                                                                                              | GET    |       |
+| `/api/admin/activity/jurnal/[id]`                                                                                         | GET    |       |
+| `/api/admin/activity/learning-profile`                                                                                    | GET    | Custom handler |
+| `/api/admin/activity/quiz`                                                                                                | GET    |       |
+| `/api/admin/activity/quiz/[id]`                                                                                           | GET    |       |
+| `/api/admin/activity/search`                                                                                              | GET    | Cross-activity search |
+| `/api/admin/activity/topics`                                                                                              | GET    |       |
+| `/api/admin/activity/transcript`                                                                                          | GET    |       |
+| `/api/admin/activity/transcript/[id]`                                                                                     | GET    |       |
 
----
-
-### Discussion Monitoring
-
-#### GET /api/admin/discussions
-
-Lists all discussion sessions with filtering, sorting, and health score calculation.
-
-| Property        | Value                                |
-|----------------|---------------------------------------|
-| **Auth**       | Admin role required                  |
-
-**Query Parameters:**
-
-| Parameter    | Type   | Required | Description                                     |
-|-------------|--------|----------|-------------------------------------------------|
-| `status`    | string | No       | Filter: `in_progress`, `completed`, `failed`    |
-| `courseId`   | string | No       | Filter by course                                |
-| `subtopicId`| string | No       | Filter by subtopic                              |
-| `userId`    | string | No       | Filter by user                                  |
-| `sortBy`    | string | No       | Sort field (e.g., `created_at`, `health_score`) |
-| `limit`     | number | No       | Maximum results to return                       |
-
-> The intended admin UX is read-only monitoring. Legacy mutation endpoints may still exist in the codebase, but they are not part of the supported discussion workflow.
-
-#### GET /api/admin/discussions/:sessionId
-
-Returns detailed information about a specific discussion session, including the full transcript and any admin audit entries.
-
-| Property        | Value                                |
-|----------------|---------------------------------------|
-| **Auth**       | Admin role required                  |
-
-#### GET /api/admin/discussions/analytics
-
-Returns analytics across all discussion sessions.
-
-| Property        | Value                                |
-|----------------|---------------------------------------|
-| **Auth**       | Admin role required                  |
-
-#### GET /api/admin/discussions/module-status
-
-Returns discussion readiness status for modules (admin monitoring view with cross-user visibility).
-
-| Property        | Value                                |
-|----------------|---------------------------------------|
-| **Auth**       | Admin role required                  |
+Source files live under [`src/app/api/admin/activity/`](../src/app/api/admin/activity).
 
 ---
 
-### Research Endpoints
+## 12. Admin Discussion Monitoring
 
-These endpoints support educational research data collection and analysis.
+The admin discussion surface is **read-only by design** — mutation routes are
+intentionally wired to return 405 with the message
+`"Admin discussion interventions are disabled. Monitoring is read-only."`
 
-| Endpoint                                    | Method | Description                                         |
-|---------------------------------------------|--------|-----------------------------------------------------|
-| `/api/admin/research/analytics`             | GET    | Research-oriented analytics data                    |
-| `/api/admin/research/bulk`                  | GET    | Bulk data retrieval for research                    |
-| `/api/admin/research/classifications`       | GET    | View prompt/response classifications                |
-| `/api/admin/research/classify`              | POST   | Classify a prompt or response                       |
-| `/api/admin/research/export`                | GET    | Export research data (CSV/JSON)                     |
-| `/api/admin/research/indicators`            | GET    | View learning indicators and metrics                |
-| `/api/admin/research/sessions`              | GET    | View research session data                          |
-
----
-
-### Monitoring
-
-#### GET /api/admin/monitoring/logging
-
-Retrieves API access logs from the `api_logs` table. Useful for monitoring API usage patterns, debugging, and auditing.
-
-| Property        | Value                                |
-|----------------|---------------------------------------|
-| **Auth**       | Admin role required                  |
-
-**Example Response (200):**
-```json
-{
-  "logs": [
-    {
-      "id": "log-uuid",
-      "endpoint": "/api/generate-course",
-      "method": "POST",
-      "user_id": "user-uuid",
-      "status_code": 200,
-      "response_time_ms": 3420,
-      "created_at": "2026-04-08T09:30:00Z"
-    }
-  ]
-}
-```
+| Endpoint                                                          | Method | Notes |
+|-------------------------------------------------------------------|--------|-------|
+| [`/api/admin/discussions`](../src/app/api/admin/discussions/route.ts)                                | GET    | Listing with filters: `status`, `courseId`, `subtopicId`, `userId`, `sortBy`, `limit`. Logged as `admin.discussions.list`. |
+| [`/api/admin/discussions/[sessionId]`](../src/app/api/admin/discussions/[sessionId]/route.ts)        | GET    | Session detail with messages and audit entries. Logged as `admin.discussions.detail`. |
+| [`/api/admin/discussions/[sessionId]`](../src/app/api/admin/discussions/[sessionId]/route.ts)        | POST   | Returns 405 (intervention disabled). Logged as `admin.discussions.intervention`. |
+| [`/api/admin/discussions/[sessionId]/feedback`](../src/app/api/admin/discussions/[sessionId]/feedback/route.ts) | POST   | Returns 405. |
+| [`/api/admin/discussions/analytics`](../src/app/api/admin/discussions/analytics/route.ts)            | GET    | Session-level analytics. |
+| [`/api/admin/discussions/module-status`](../src/app/api/admin/discussions/module-status/route.ts)    | GET    | Cross-user module readiness. |
+| [`/api/admin/discussions/bulk`](../src/app/api/admin/discussions/bulk/route.ts)                      | POST   | Body: `{ sessionIds, action }`. Only `action === 'export_csv'` is accepted; everything else returns 405. |
 
 ---
 
-## Appendix
+## 13. Admin Research Pipeline
 
-### CSRF Token Usage
+These endpoints back the RM2/RM3 research data flow. All require admin role.
+Each schema is documented in code; query/body shapes vary by endpoint.
 
-For all state-changing requests, the CSRF token must be included:
+| Endpoint                                                                                                          | Methods | Notes |
+|-------------------------------------------------------------------------------------------------------------------|---------|-------|
+| [`/api/admin/research/analytics`](../src/app/api/admin/research/analytics/route.ts)                                | GET     | Research analytics aggregates. |
+| [`/api/admin/research/artifacts`](../src/app/api/admin/research/artifacts/route.ts)                                | GET, POST | Artifact catalog. |
+| [`/api/admin/research/auto-code`](../src/app/api/admin/research/auto-code/route.ts)                                | GET, POST | `awaitLog: false` on POST. |
+| [`/api/admin/research/auto-scores`](../src/app/api/admin/research/auto-scores/route.ts)                            | GET     | Logged as `admin.auto-scores`. |
+| [`/api/admin/research/auto-scores/summary`](../src/app/api/admin/research/auto-scores/summary/route.ts)            | GET     | Logged as `admin.auto-scores-summary`. |
+| [`/api/admin/research/bulk`](../src/app/api/admin/research/bulk/route.ts)                                          | POST    | Bulk operations on research evidence. |
+| [`/api/admin/research/classifications`](../src/app/api/admin/research/classifications/route.ts)                    | GET, POST, PUT, DELETE | CRUD for prompt classifications. Filters: `user_id`, `course_id`, `learning_session_id`, `prompt_stage`, `prompt_source`, `offset`, `limit`. |
+| [`/api/admin/research/classify`](../src/app/api/admin/research/classify/route.ts)                                  | POST    | Run a single classification job. |
+| [`/api/admin/research/evidence`](../src/app/api/admin/research/evidence/route.ts)                                  | GET, POST, PUT | Evidence record management. |
+| [`/api/admin/research/export`](../src/app/api/admin/research/export/route.ts)                                      | GET     | Query: `format`, `data_type` (or `type`), `spss`. CSV/JSON export. |
+| [`/api/admin/research/indicators`](../src/app/api/admin/research/indicators/route.ts)                              | GET, POST, PUT, DELETE | CRUD for cognitive indicators. |
+| [`/api/admin/research/readiness`](../src/app/api/admin/research/readiness/route.ts)                                | GET     | Per-student readiness snapshot. Query: `user_id`, `course_id`, `start_date`, `end_date`. |
+| [`/api/admin/research/reconcile`](../src/app/api/admin/research/reconcile/route.ts)                                | POST    | `dry_run`, `limit`, `user_id`, `course_id`. `maxDuration = 55` s. |
+| [`/api/admin/research/sessions`](../src/app/api/admin/research/sessions/route.ts)                                  | GET, POST, PUT, DELETE | Manage research learning sessions. |
+| [`/api/admin/research/triangulation`](../src/app/api/admin/research/triangulation/route.ts)                        | GET, POST, PUT, DELETE | Triangulation records. |
 
-```javascript
-// Example using the built-in apiFetch() client
-import { apiFetch } from '@/lib/api-client';
-
-// apiFetch automatically reads csrf_token cookie and attaches it
-const response = await apiFetch('/api/quiz/submit', {
-  method: 'POST',
-  body: JSON.stringify({
-    courseId: 'course-uuid',
-    subtopicTitle: 'Topic Name',
-    answers: [...],
-    score: 80
-  })
-});
-```
-
-Manual CSRF handling:
-
-```javascript
-// Read CSRF token from cookie
-const csrfToken = document.cookie
-  .split('; ')
-  .find(row => row.startsWith('csrf_token='))
-  ?.split('=')[1];
-
-// Include in request header
-fetch('/api/quiz/submit', {
-  method: 'POST',
-  headers: {
-    'Content-Type': 'application/json',
-    'x-csrf-token': csrfToken
-  },
-  credentials: 'include',
-  body: JSON.stringify({ ... })
-});
-```
-
-### Streaming Response Handling
-
-For streaming endpoints (`ask-question`, `challenge-thinking`):
-
-```javascript
-const response = await fetch('/api/ask-question', {
-  method: 'POST',
-  headers: {
-    'Content-Type': 'application/json',
-    'x-csrf-token': csrfToken
-  },
-  credentials: 'include',
-  body: JSON.stringify({
-    question: 'How does gradient descent work?',
-    context: '...',
-    userId: '...',
-    courseId: '...',
-    subtopic: '...',
-    moduleIndex: 0,
-    subtopicIndex: 0,
-    pageNumber: 1
-  })
-});
-
-const reader = response.body.getReader();
-const decoder = new TextDecoder();
-
-while (true) {
-  const { done, value } = await reader.read();
-  if (done) break;
-  const chunk = decoder.decode(value, { stream: true });
-  // Append chunk to UI
-  console.log(chunk);
-}
-```
-
-### Zod Schema Reference
-
-All request validation schemas are defined in `src/lib/schemas.ts`. The `parseBody()` helper function validates and parses the request body against the specified schema, returning a typed result or throwing a 400 error with validation details.
-
-| Schema Name                | Used By                          |
-|---------------------------|----------------------------------|
-| `LoginSchema`             | POST /api/auth/login             |
-| `RegisterSchema`          | POST /api/auth/register          |
-| `AdminLoginSchema`        | POST /api/admin/login            |
-| `AdminRegisterSchema`     | POST /api/admin/register         |
-| `GenerateCourseSchema`    | POST /api/generate-course        |
-| `GenerateSubtopicSchema`  | POST /api/generate-subtopic      |
-| `GenerateExamplesSchema`  | POST /api/generate-examples      |
-| `AskQuestionSchema`       | POST /api/ask-question           |
-| `ChallengeThinkingSchema` | POST /api/challenge-thinking     |
-| `ChallengeFeedbackSchema` | POST /api/challenge-feedback     |
-| `QuizSubmitSchema`        | POST /api/quiz/submit            |
-| `JurnalSchema`            | POST /api/jurnal/save            |
-| `FeedbackSchema`          | POST /api/feedback               |
+> Per [`MEMORY.md`](../../.claude/agent-memory) (project context), the
+> classifier pipeline that populates the 9 research tables is not yet built —
+> these endpoints are wired but largely return empty result sets in production.
 
 ---
 
-*This documentation was generated for PrincipleLearn V3. For the most up-to-date schema definitions, refer to `src/lib/schemas.ts`. For route implementations, see the corresponding `route.ts` files under `src/app/api/`.*
+## 14. Admin — Per-Student Evolution
+
+### `GET /api/admin/siswa/[id]/evolusi`
+Source: [`src/app/api/admin/siswa/[id]/evolusi/route.ts`](../src/app/api/admin/siswa/[id]/evolusi/route.ts)
+
+| Property | Value |
+|----------|-------|
+| Auth     | Admin role |
+| Path     | `id` must be a UUID |
+
+Returns `{ sessions, stageProgression, promptHistory }` for the student's
+prompt evolution view. Tolerant of missing research tables (returns empty
+arrays instead of erroring).
+
+---
+
+## 15. Debug Endpoints
+
+All `/api/debug/*` routes are dual-gated:
+
+1. `process.env.NODE_ENV !== 'production'` OR `ENABLE_DEBUG_ROUTES=1`
+2. Caller has admin role (`x-user-role`)
+
+Either condition failing returns **404 (not 403)** so the routes do not leak
+their existence to unauthorized callers.
+
+| Endpoint                                                                                  | Methods | Purpose |
+|-------------------------------------------------------------------------------------------|---------|---------|
+| [`/api/debug/users`](../src/app/api/debug/users/route.ts)                                  | GET, POST | GET probes the `users` table. POST inserts a throwaway test user. |
+| [`/api/debug/generate-courses`](../src/app/api/debug/generate-courses/route.ts)            | GET     | Returns mock generate-course records for UI testing. |
+| [`/api/debug/course-test/[id]`](../src/app/api/debug/course-test/[id]/route.ts)            | GET     | Walks course → subtopics → outline parsing for the given course id. |
+
+---
+
+## 16. Schema Index
+
+All schemas in [`src/lib/schemas.ts`](../src/lib/schemas.ts), used by the
+indicated routes.
+
+| Schema                                                                  | Used by                                                       |
+|-------------------------------------------------------------------------|---------------------------------------------------------------|
+| [`LoginSchema`](../src/lib/schemas.ts#L31)                              | `POST /api/auth/login`                                        |
+| [`RegisterSchema`](../src/lib/schemas.ts#L37)                           | `POST /api/auth/register`                                     |
+| [`AdminLoginSchema`](../src/lib/schemas.ts#L43)                         | `POST /api/admin/login`                                       |
+| [`AdminRegisterSchema`](../src/lib/schemas.ts#L49)                      | `POST /api/admin/register`                                    |
+| [`GenerateCourseSchema`](../src/lib/schemas.ts#L61)                     | `POST /api/generate-course`                                   |
+| [`GenerateSubtopicSchema`](../src/lib/schemas.ts#L76)                   | `POST /api/generate-subtopic`                                 |
+| [`QuizStatusSchema`](../src/lib/schemas.ts#L92)                         | `GET /api/quiz/status`                                        |
+| [`QuizSubmitSchema`](../src/lib/schemas.ts#L116)                        | `POST /api/quiz/submit`                                       |
+| [`PromptComponentsSchema`](../src/lib/schemas.ts#L137)                  | nested in `AskQuestionSchema`                                 |
+| [`AskQuestionSchema`](../src/lib/schemas.ts#L146)                       | `POST /api/ask-question`                                      |
+| [`ChallengeThinkingSchema`](../src/lib/schemas.ts#L161)                 | `POST /api/challenge-thinking`                                |
+| [`ChallengeFeedbackSchema`](../src/lib/schemas.ts#L166)                 | `POST /api/challenge-feedback`                                |
+| [`GenerateExamplesSchema`](../src/lib/schemas.ts#L173)                  | `POST /api/generate-examples`                                 |
+| [`ChallengeResponseSchema`](../src/lib/schemas.ts#L186)                 | `POST /api/challenge-response`                                |
+| [`FeedbackSchema`](../src/lib/schemas.ts#L216)                          | (legacy mirror — direct writes go through `/api/jurnal/save`) |
+| [`JurnalSchema`](../src/lib/schemas.ts#L232)                            | `POST /api/jurnal/save`                                       |
+| [`UserProgressUpsertSchema`](../src/lib/schemas.ts#L275)                | `POST /api/user-progress`                                     |
+| [`LearningProfileSchema`](../src/lib/schemas.ts#L287)                   | `POST /api/learning-profile`                                  |
+| [`OnboardingStateSchema`](../src/lib/schemas.ts#L299)                   | `POST /api/onboarding-state`                                  |
+
+`parseBody()` (the helper at [`src/lib/schemas.ts:312`](../src/lib/schemas.ts#L312))
+returns a tagged union — handlers use `if (!parsed.success) return parsed.response`
+to short-circuit on validation failure.
+
+---
+
+*Generated by walking `src/app/api/**/route.ts`. When adding a new endpoint:
+update this file in the same PR, link the relevant schema with a line-anchored
+markdown link, and note any non-default behaviour (rate limit, logging label,
+streaming, custom auth pattern).*

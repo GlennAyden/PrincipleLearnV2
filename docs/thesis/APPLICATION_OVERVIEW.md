@@ -1,460 +1,197 @@
-# PrincipleLearn V3 - Application Overview
+# PrincipleLearn V3 — Application Overview untuk Konteks Tesis
 
-## 📋 Daftar Isi
-1. [Konsep Utama Aplikasi](#konsep-utama-aplikasi)
-2. [Fitur-Fitur Utama](#fitur-fitur-utama)
-3. [Alur Pembelajaran](#alur-pembelajaran)
-4. [Target Pengguna](#target-pengguna)
-5. [Keunggulan Aplikasi](#keunggulan-aplikasi)
-6. [Use Case Examples](#use-case-examples)
-7. [Tujuan dan Visi](#tujuan-dan-visi)
+Dokumen ini memberikan gambaran aplikasi PrincipleLearn V3 dari sudut pandang riset Magister.
+Tujuannya bukan untuk dokumentasi produk, melainkan untuk menjelaskan kepada pembaca tesis
+(dosen pembimbing, penguji, peneliti lain) modul-modul apa saja yang digunakan sebagai
+instrumen pengumpulan data RM1, RM2, dan RM3.
 
----
+> Tanggal pembaruan: 2026-04-26
+> Status aplikasi: aktif digunakan untuk pengumpulan data tesis (n = 29 partisipan,
+> 33 course, 157 subtopic, 685 quiz, 255 quiz submissions, 143 prompt classification).
 
-## 🎯 Konsep Utama Aplikasi
+Referensi teknis pelengkap:
 
-**PrincipleLearn V3** adalah sebuah **Learning Management System (LMS)** atau **platform pembelajaran online** yang mengintegrasikan teknologi AI untuk memberikan pengalaman belajar yang dipersonalisasi dan adaptif.
-
-### 🔑 Definisi Singkat
-> "Netflix untuk Pembelajaran" - Platform yang menggunakan AI untuk memberikan rekomendasi dan konten pembelajaran yang disesuaikan dengan kebutuhan individual setiap pengguna.
-
-### 🧠 Core Philosophy
-- **Adaptive Learning**: Pembelajaran yang menyesuaikan dengan kemampuan dan kebutuhan individu
-- **AI-Powered Education**: Memanfaatkan kekuatan AI untuk membuat konten berkualitas
-- **Personalized Experience**: Setiap user mendapat pengalaman belajar yang unik
-- **Democratic Learning**: Akses pendidikan yang mudah dan fleksibel untuk semua
+- [`docs/ARCHITECTURE.md`](../ARCHITECTURE.md) — arsitektur teknis Next.js 15 + Supabase
+- [`docs/DATABASE_SCHEMA.md`](../DATABASE_SCHEMA.md) — definisi seluruh tabel
+- [`docs/admin-and-research-ops.md`](../admin-and-research-ops.md) — alur operasi admin/riset
+- [`docs/feature-flows.md`](../feature-flows.md) — peta alur fitur per halaman
 
 ---
 
-## 📚 Fitur-Fitur Utama
+## 1. Konsep Aplikasi dalam Konteks Riset
 
-### 1. 🤖 **AI Course Generation**
-- **Dynamic Course Creation**: Membuat kursus secara otomatis berdasarkan input pengguna
-- **Topic Flexibility**: User dapat meminta kursus tentang topik apapun
-- **Level Adaptation**: Konten disesuaikan dengan level keahlian (beginner, intermediate, advanced)
-- **Goal-Oriented Learning**: Pembelajaran dirancang berdasarkan tujuan spesifik user
+PrincipleLearn V3 adalah platform pembelajaran berbantuan AI yang dirancang sebagai
+**media intervensi sekaligus instrumen pengukuran** untuk tesis Magister tentang
+perkembangan struktur prompt dan manifestasi Computational Thinking (CT) serta
+Critical Thinking (CTh) pada siswa SMA dalam pembelajaran algoritma Informatika Fase E.
 
-**Contoh Input User:**
-```
-Topic: "Machine Learning"
-Goal: "Understand basic ML concepts for business analysis"
-Level: "Beginner" 
-Problem: "Want to analyze customer data"
-```
+Setiap interaksi mahasiswa dengan modul aplikasi merekam jejak data pada tabel-tabel
+yang dirancang khusus untuk analisis longitudinal (RM2) dan analisis manifestasi
+indikator berpikir (RM3). Lihat
+[`ADMIN_RM2_RM3_DATA_COMPLETENESS.md`](./ADMIN_RM2_RM3_DATA_COMPLETENESS.md) untuk
+status kelengkapan data per tabel.
 
-**Output AI:**
-- 5 modul pembelajaran terstruktur
-- 20+ subtopics yang saling berkaitan
-- Quiz dan assessment untuk setiap section
+### Posisi Aplikasi terhadap RM
 
-### 2. 🎓 **Interactive Learning Experience**
-
-#### **Structured Content Delivery**
-- **Modular Learning**: Materi dibagi dalam modul-modul kecil yang mudah dicerna
-- **Progressive Difficulty**: Tingkat kesulitan meningkat secara bertahap
-- **Rich Content Format**: Kombinasi teks, contoh, dan interactive elements
-
-#### **Assessment System**
-- **Real-time Quizzes**: Kuis interaktif di setiap subtopic
-- **Immediate Feedback**: Hasil dan penjelasan langsung setelah quiz
-- **Adaptive Scoring**: Sistem penilaian yang mempertimbangkan konteks pembelajaran
-
-#### **Progress Tracking**
-- **Visual Progress Bar**: Indikator kemajuan yang jelas
-- **Learning Analytics**: Statistik pembelajaran yang detail
-- **Completion Certificates**: Sertifikat untuk course yang diselesaikan
-
-### 3. 📝 **Personal Learning Tools**
-
-#### **Learning Journal System**
-- **Reflection Space**: Area untuk menulis refleksi pembelajaran
-- **Note Taking**: Catatan personal untuk setiap course
-- **Progress Documentation**: Dokumentasi perjalanan belajar
-
-#### **Transcript & Documentation**
-- **Session Transcripts**: Rekaman sesi pembelajaran
-- **Key Takeaways**: Poin-poin penting dari setiap materi
-- **Searchable Notes**: Catatan yang dapat dicari dan diorganisir
-
-#### **Interactive Q&A**
-- **Ask Question Feature**: Bertanya tentang materi yang tidak dipahami
-- **AI-Powered Answers**: Jawaban otomatis menggunakan AI
-- **Community Support**: Dukungan dari fellow learners
-
-### 4. 👥 **User Management & Administration**
-
-#### **Multi-Role System**
-- **Learners**: Akses penuh ke learning features
-- **Educators**: Tools untuk membuat dan mengelola content
-- **Administrators**: Dashboard untuk manajemen platform
-
-#### **Admin Dashboard**
-- **User Analytics**: Statistik penggunaan dan engagement
-- **Content Management**: Moderasi dan quality control
-- **System Monitoring**: Health check dan performance metrics
+| RM | Pertanyaan Riset | Modul Aplikasi yang Menjadi Instrumen |
+| --- | --- | --- |
+| **RM1** | Bagaimana proses dan hasil pengembangan media? | Seluruh aplikasi sebagai produk; instrumen ekspor LORI/SUS dilakukan terpisah. |
+| **RM2** | Bagaimana tahapan perkembangan struktur prompt siswa? | Ask Question, Challenge Thinking, Prompt Builder, Prompt Timeline, Reasoning Note. |
+| **RM3** | Bagaimana CT dan CTh termanifestasi pada tiap tahap prompt? | Quiz, Structured Reflection (jurnal), Examples, Key Takeaways, Challenge Feedback. |
 
 ---
 
-## 🔄 Alur Pembelajaran (Learning Flow)
+## 2. Stack Teknis Singkat
 
-### **Phase 1: Course Request & Generation**
-```mermaid
-User Input → AI Processing → Course Generation → Content Structuring
-```
+| Lapisan | Teknologi |
+| --- | --- |
+| Framework | Next.js 15 (App Router), React 19, TypeScript |
+| Styling | Sass modules per komponen |
+| Database | Supabase PostgreSQL dengan Row Level Security |
+| Otentikasi | JWT custom (access + refresh) dengan CSRF double-submit cookie |
+| AI | OpenAI Responses API (`gpt-5-mini` default), streaming via `chatCompletionStream()` |
+| Observabilitas | Tabel `api_logs` (3.801 baris per 2026-04-26) dan `rate_limits` |
+| Deployment | Vercel |
 
-1. **User Specification**:
-   - Menentukan topik pembelajaran
-   - Menetapkan tujuan dan goals
-   - Memilih level kesulitan
-   - Menjelaskan konteks dan masalah spesifik
-
-2. **AI Processing**:
-   - Analisis kebutuhan pembelajaran
-   - Pembuatan outline yang terstruktur
-   - Generation konten berkualitas tinggi
-   - Penyesuaian dengan level dan goals
-
-### **Phase 2: Interactive Learning**
-```mermaid
-Content Consumption → Quiz Assessment → Progress Tracking → Personalized Feedback
-```
-
-1. **Content Engagement**:
-   - Membaca materi yang telah disesuaikan
-   - Interaksi dengan examples dan case studies
-   - Eksplorasi concepts melalui various formats
-
-2. **Knowledge Assessment**:
-   - Quiz interaktif dengan multiple choice
-   - Immediate feedback dan explanations
-   - Score tracking dan performance analytics
-
-### **Phase 3: Reflection & Documentation**
-```mermaid
-Learning Reflection → Journal Writing → Note Organization → Progress Review
-```
-
-1. **Personal Documentation**:
-   - Menulis jurnal pembelajaran
-   - Organizing key insights
-   - Building personal knowledge base
-
-2. **Continuous Improvement**:
-   - Review progress dan achievements
-   - Identification areas for improvement
-   - Planning next learning steps
+Detail jalur kode dapat ditelusuri pada [`CLAUDE.md`](../../CLAUDE.md) di root repo.
 
 ---
 
-## 🎯 Target Pengguna
+## 3. Modul Utama yang Relevan untuk Tesis
 
-### 👨‍🎓 **Primary Users: Learners**
+Aplikasi terdiri atas tiga area besar: onboarding, ruang belajar siswa per subtopic,
+dan admin riset. Bagian ini hanya membahas modul yang menghasilkan data riset.
 
-#### **Professional Learners**
-- **Karakteristik**: Working professionals yang ingin upskill/reskill
-- **Kebutuhan**: Pembelajaran fleksibel yang sesuai jadwal kerja
-- **Goals**: Career advancement dan skill development
-- **Examples**: Marketing manager belajar data science, Developer belajar AI
+### 3.1 Onboarding Dua Tahap
 
-#### **Academic Learners**  
-- **Charakteristik**: Students dan academic researchers
-- **Kebutuhan**: Supplementary learning resources
-- **Goals**: Academic excellence dan research skills
-- **Examples**: Mahasiswa S2 memperdalam thesis topic
+Sebelum siswa dapat meminta course, sistem mewajibkan dua tahap onboarding.
 
-#### **Lifelong Learners**
-- **Karakteristik**: Individu dengan curiosity tinggi
-- **Kebutuhan**: Pembelajaran kontinyu tentang berbagai topik
-- **Goals**: Personal growth dan intellectual satisfaction
-- **Examples**: Retirees belajar technology, Hobbyists exploring new fields
+| Tahap | Halaman | Tujuan Pedagogis | Data yang Direkam |
+| --- | --- | --- | --- |
+| Profile wizard | [`/onboarding`](../../src/app/onboarding/page.tsx) | Identifikasi prior knowledge, learning goal, gaya belajar | tabel `learning_profiles` (6 baris aktif) |
+| Intro slides | [`/onboarding/intro`](../../src/app/onboarding/intro/page.tsx) | Orientasi cara berinteraksi dengan AI secara reflektif | flag `intro_slides_completed` pada profil + cookie gate |
 
-### 👨‍🏫 **Secondary Users: Educators**
+Onboarding dibatasi oleh middleware sehingga siswa tidak bisa melompati tahap ini —
+penting untuk memastikan baseline data tersedia sebelum sesi belajar pertama.
 
-#### **Content Creators**
-- **Role**: Membuat dan curate learning content
-- **Tools**: Course creation tools, content management
-- **Responsibilities**: Quality assurance, learner support
+### 3.2 Request Course (3 Langkah)
 
-#### **Academic Instructors**
-- **Role**: Supplement traditional teaching
-- **Tools**: Progress monitoring, assessment tools
-- **Responsibilities**: Student guidance, curriculum integration
+Halaman [`/request-course/step1` … `step3`](../../src/app/request-course/) memandu
+siswa merumuskan kebutuhan belajar:
 
-### 👨‍💼 **Tertiary Users: Administrators**
+- **Step 1**: topik dan tujuan
+- **Step 2**: level, masalah konkret, asumsi pengetahuan, topik terkait
+- **Step 3**: review dan konfirmasi generate
 
-#### **Platform Managers**
-- **Role**: Overall platform management
-- **Tools**: Admin dashboard, user analytics
-- **Responsibilities**: Platform optimization, user experience
+State antar-langkah dipegang oleh `RequestCourseContext`. Hasilnya memicu
+`/api/generate-course` yang menulis ke tabel `courses` (33 baris), `subtopics`
+(157 baris), `leaf_subtopics` (106 baris), dan `quiz` (685 baris). Aktivitas
+generasi disimpan ke `course_generation_activity` (38 baris) untuk audit.
 
-#### **Content Moderators**
-- **Role**: Quality control dan content curation
-- **Tools**: Content review tools, moderation dashboard
-- **Responsibilities**: Content quality, policy enforcement
+### 3.3 Ruang Belajar per Subtopic
 
----
+Halaman [`/course/[courseId]/subtopic`](../../src/app/course/[courseId]/subtopic/)
+menampilkan satu subtopic sekaligus dengan komponen-komponen berikut:
 
-## 💡 Keunggulan Aplikasi
+| Komponen | Fungsi Pedagogis | Endpoint AI Terkait | Tabel Riset |
+| --- | --- | --- | --- |
+| `AILoadingIndicator` | Indikator status streaming | — | — |
+| `Examples` | Contoh kontekstual yang di-generate AI | `/api/generate-examples` | `example_usage_events` (18) |
+| `AskQuestion` | Tanya jawab streaming | `/api/ask-question` | `ask_question_history` (17) |
+| `ChallengeThinking` | Tantangan kognitif streaming | `/api/challenge-thinking`, `/api/challenge-feedback` | `challenge_responses` (15) |
+| `Quiz` | Asesmen formatif per subtopic | — (soal di-cache) | `quiz`, `quiz_submissions` (255) |
+| `StructuredReflection` | Jurnal refleksi terstruktur | — | `jurnal` (43), `feedback` (40) |
+| `KeyTakeaways` | Ringkasan otomatis | — | termuat dalam `subtopic_cache` (109) |
+| `PromptBuilder` | Alat membantu siswa menyusun prompt yang lebih baik | — | dipakai oleh classifier |
+| `PromptTimeline` | Visualisasi evolusi prompt siswa di subtopic | — | turunan dari `prompt_classifications` (143) |
+| `ReasoningNote` | Catatan alur penalaran sebelum bertanya | — | metadata pada `ask_question_history` |
+| `NextSubtopics` | Rekomendasi subtopic lanjutan | — | `user_progress` (13) |
+| `WhatNext` | Penutup subtopic dan call-to-action | — | — |
+| `HelpDrawer`, `ProductTour` | Onboarding kontekstual | — | telemetri ringan |
 
-### 🚀 **Technological Advantages**
+Modul-modul di atas dipakai sebagai sumber bukti utama RM2 (struktur prompt) dan
+RM3 (manifestasi indikator berpikir). Lihat
+[`THINKING_SKILL.md`](./THINKING_SKILL.md) untuk pemetaan komponen ke indikator.
 
-#### **AI-Powered Intelligence**
-- **Smart Content Generation**: Konten berkualitas tinggi dibuat otomatis
-- **Adaptive Learning Paths**: Pembelajaran yang menyesuaikan dengan progress user
-- **Intelligent Recommendations**: Saran pembelajaran berdasarkan behavior dan preferences
+### 3.4 Admin Riset
 
-#### **Modern Tech Stack**
-- **Next.js 15**: Performance optimal dengan server-side rendering
-- **Real-time Database**: Supabase untuk data synchronization
-- **Responsive Design**: Seamless experience di semua devices
-- **Scalable Architecture**: Dapat menangani traffic tinggi
+Area [`/admin`](../../src/app/admin/) menyediakan tujuh sub-area: dashboard,
+siswa, aktivitas, riset (prompt, kognitif, readiness, bukti, triangulasi),
+ekspor, dan management user. Untuk tesis, area yang relevan adalah:
 
-### 🎨 **User Experience Excellence**
-
-#### **Intuitive Interface**
-- **Clean Design**: Interface yang mudah dipahami dan digunakan
-- **Smooth Navigation**: Transisi antar halaman yang fluid
-- **Accessibility**: Desain yang inclusive untuk semua users
-
-#### **Personalization Features**
-- **Custom Learning Paths**: Jalur pembelajaran yang disesuaikan individu
-- **Personal Dashboard**: Overview yang komprehensif tentang progress
-- **Flexible Pacing**: User dapat belajar sesuai kecepatan masing-masing
-
-### 🔐 **Security & Reliability**
-
-#### **Data Protection**
-- **Secure Authentication**: JWT-based dengan encryption
-- **Privacy Protection**: User data dijaga dengan Row Level Security
-- **GDPR Compliance**: Sesuai dengan standar privacy international
-
-#### **Platform Reliability**
-- **99.9% Uptime**: Hosting yang reliable dengan Vercel
-- **Automatic Backups**: Data protection dengan backup system
-- **Performance Monitoring**: Real-time system health monitoring
+- [`/admin/riset/prompt`](../../src/app/admin/riset/prompt/) — coding RM2.
+- [`/admin/riset/kognitif`](../../src/app/admin/riset/kognitif/) — coding RM3.
+- [`/admin/riset/readiness`](../../src/app/admin/riset/readiness/) — kelengkapan data.
+- [`/admin/riset/bukti`](../../src/app/admin/riset/bukti/) — evidence ledger
+  (terhubung ke `research_evidence_items` — 261 baris per 2026-04-26).
+- [`/admin/riset/triangulasi`](../../src/app/admin/riset/triangulasi/) — triangulasi
+  lintas sumber (`triangulation_records` — 64 baris).
+- [`/admin/siswa/[id]`](../../src/app/admin/siswa/) — profil longitudinal per siswa.
 
 ---
 
-## 📖 Use Case Examples
+## 4. Modul yang TIDAK Aktif Dipakai untuk Tesis
 
-### **Scenario 1: Professional Development**
+Beberapa modul ada di kode tetapi tidak digunakan sebagai sumber data analisis
+tesis. Pembaca tesis tidak perlu mempertimbangkannya.
 
-#### **Background**
-Sarah, seorang Marketing Manager di perusahaan teknologi, ingin belajar Data Science untuk menganalisis customer behavior dan campaign effectiveness.
+| Modul | Status | Alasan |
+| --- | --- | --- |
+| Discussion (Socratic engine) | Non-aktif | Hanya 5 sesi historis pada `discussion_sessions` dan 157 pesan di `discussion_messages`; modul tidak dijalankan pada periode pengumpulan data tesis. |
+| Ekspor admin (`/admin/ekspor`) | Non-aktif | Skip karena ekstraksi dataset dilakukan langsung via SQL ad-hoc dari Supabase. |
+| Kesehatan Sistem / health monitor | Non-aktif | Tidak menjadi instrumen riset. |
+| Transcript module | Kosong | Tabel `transcript` 0 baris; modul tidak digunakan. |
 
-#### **Journey di PrincipleLearn V3**
-
-1. **Course Request**:
-   ```
-   Topic: "Data Science for Marketing"
-   Goal: "Analyze customer data and improve campaign ROI"
-   Level: "Beginner"
-   Problem: "Need to make data-driven marketing decisions"
-   Assumption: "Basic Excel knowledge, no programming experience"
-   ```
-
-2. **AI-Generated Course**:
-   - **Module 1**: Introduction to Data Science in Marketing
-   - **Module 2**: Excel to Python Transition
-   - **Module 3**: Customer Data Analysis Fundamentals
-   - **Module 4**: Campaign Performance Metrics
-   - **Module 5**: Practical Marketing Analytics Projects
-
-3. **Learning Experience**:
-   - Belajar 30 menit setiap hari setelah kerja
-   - Quiz completion rate: 95%
-   - Jurnal refleksi setiap weekend
-   - Progress: 80% completed dalam 6 minggu
-
-4. **Results**:
-   - Successfully implemented data-driven campaign strategies
-   - Improved campaign ROI by 25%
-   - Received promotion to Senior Marketing Manager
-
-### **Scenario 2: Academic Enhancement**
-
-#### **Background**
-Alex, mahasiswa S2 Computer Science, sedang penelitian tentang Machine Learning dan butuh pemahaman mendalam tentang Neural Networks.
-
-#### **Journey di PrincipleLearn V3**
-
-1. **Course Request**:
-   ```
-   Topic: "Advanced Neural Networks"
-   Goal: "Deep understanding for thesis research"
-   Level: "Advanced"
-   Problem: "Complex mathematical concepts in NN architectures"
-   Assumption: "Strong programming background, basic ML knowledge"
-   ```
-
-2. **AI-Generated Course**:
-   - **Module 1**: Mathematical Foundations of Neural Networks
-   - **Module 2**: Architecture Design Principles
-   - **Module 3**: Advanced Optimization Techniques
-   - **Module 4**: Cutting-edge NN Variants
-   - **Module 5**: Research Methodology in NN
-
-3. **Learning Experience**:
-   - Intensive study sessions 2-3 jam per hari
-   - Active note-taking dalam jurnal sistem
-   - Regular quiz untuk self-assessment
-   - Progress tracking untuk thesis timeline
-
-4. **Results**:
-   - Successfully defended thesis proposal
-   - Published research paper dalam conference
-   - Offered PhD position dengan scholarship
-
-### **Scenario 3: Career Transition**
-
-#### **Background**  
-Maria, seorang Graphic Designer, ingin transition ke UX/UI Design untuk career growth dan challenge baru.
-
-#### **Journey di PrincipleLearn V3**
-
-1. **Course Request**:
-   ```
-   Topic: "UX/UI Design Fundamentals"
-   Goal: "Career transition from Graphic to UX/UI Design"
-   Level: "Intermediate" 
-   Problem: "Understanding user-centered design process"
-   Assumption: "Strong design background, familiar with design tools"
-   ```
-
-2. **AI-Generated Course**:
-   - **Module 1**: From Graphics to User Experience
-   - **Module 2**: User Research and Psychology
-   - **Module 3**: Information Architecture
-   - **Module 4**: Interaction Design Principles
-   - **Module 5**: Portfolio Building for UX/UI
-
-3. **Learning Experience**:
-   - Weekend intensive learning sessions
-   - Practical projects documented dalam transcript
-   - Portfolio development alongside learning
-   - Community interaction dengan fellow learners
-
-4. **Results**:
-   - Built compelling UX/UI portfolio
-   - Landed UX Designer position dalam 4 bulan
-   - 40% salary increase dari previous role
+Kebijakan ini sudah dicatat dalam memori proyek (`project_scope.md`).
 
 ---
 
-## 🏆 Tujuan dan Visi
+## 5. Pemetaan Fitur Aplikasi ke Konstruk Riset
 
-### 🎯 **Mission Statement**
-"Demokratisasi pendidikan berkualitas tinggi melalui teknologi AI, memungkinkan setiap individu untuk mencapai potensi pembelajaran maksimal mereka."
+Tabel ringkas yang menjawab "fitur apa menghasilkan bukti apa untuk konstruk apa".
+Detail rubrik terdapat pada [`ASSESSMENT_RUBRIC.md`](./ASSESSMENT_RUBRIC.md) dan
+detail pemetaan indikator pada [`THINKING_SKILL.md`](./THINKING_SKILL.md).
 
-### 🌟 **Core Values**
-
-#### **Accessibility**
-- Pembelajaran berkualitas harus accessible untuk semua
-- No barriers based on location, background, atau economic status
-- Flexible learning yang accommodates different lifestyles
-
-#### **Personalization**
-- Every learner is unique dan deserves customized experience
-- AI-powered adaptation untuk optimal learning outcomes
-- Respect untuk different learning styles dan preferences
-
-#### **Quality**
-- High-quality content yang scientifically sound
-- Evidence-based learning methodologies
-- Continuous improvement based pada user feedback
-
-#### **Innovation**
-- Pioneering dalam educational technology
-- Integration cutting-edge AI untuk learning enhancement
-- Constant evolution untuk meet changing educational needs
-
-### 🚀 **Long-term Vision**
-
-#### **2024-2025: Foundation & Growth**
-- **User Base**: 10,000+ active learners
-- **Course Library**: 1,000+ AI-generated courses
-- **Features**: Advanced personalization algorithms
-- **Partnerships**: Collaboration dengan educational institutions
-
-#### **2025-2026: Scale & Enhancement**
-- **Global Reach**: Multi-language support
-- **Advanced AI**: More sophisticated content generation
-- **Corporate Programs**: Enterprise learning solutions
-- **Certification**: Recognized certificates dari industry partners
-
-#### **2026+: Industry Leadership**
-- **Market Position**: Leading AI-powered learning platform
-- **Research Impact**: Contributing to educational research
-- **Social Impact**: Significant contribution to global education
-- **Technology Innovation**: Setting standards untuk AI in education
-
-### 🌍 **Social Impact Goals**
-
-#### **Educational Equity**
-- Bridge knowledge gaps across different demographics
-- Provide quality education untuk underserved communities
-- Support career transitions dan economic mobility
-
-#### **Skill Development**
-- Address global skills shortage dalam emerging technologies
-- Enable workforce adaptation untuk changing job markets
-- Support lifelong learning culture
-
-#### **Innovation in Education**
-- Advance field of personalized learning
-- Contribute research dalam AI-powered education
-- Inspire next generation educational platforms
+| Fitur | Konstruk Utama RM2 (Prompt) | Konstruk Utama RM3 (CT/CTh) |
+| --- | --- | --- |
+| Request Course (Step 1–3) | Baseline rumusan kebutuhan (proxy SCP) | Self-Regulation, Decomposition, Abstraction |
+| Ask Question | Klasifikasi SCP / SRP / MQP / Reflective | Analysis, Explanation, Self-Regulation, Abstraction |
+| Challenge Thinking | Reformulasi prompt setelah cognitive conflict | Evaluation, Inference, Algorithmic Thinking |
+| Prompt Builder + Timeline | Visualisasi tahap & transisi prompt | — (instrumen scaffolding) |
+| Reasoning Note | Marker Reflective / metakognitif | Self-Regulation, Explanation |
+| Quiz | — | Pattern Recognition, Algorithmic Thinking, Debugging |
+| Structured Reflection (jurnal) | — | Self-Regulation, Explanation |
+| Examples + Key Takeaways | — | Abstraction, Pattern Recognition |
+| Feedback per subtopic | — | Evaluation, Self-Regulation |
 
 ---
 
-## 📊 Success Metrics
+## 6. Pipeline Klasifikasi RM2/RM3 (Status Pendek)
 
-### **User Engagement**
-- **Course Completion Rate**: Target 85%
-- **Daily Active Users**: Consistent growth trajectory
-- **Learning Time**: Average 45 minutes per session
-- **User Retention**: 70% monthly retention rate
-
-### **Learning Outcomes**
-- **Skill Acquisition**: Measurable improvement dalam assessments
-- **Career Impact**: Job promotions, career transitions
-- **Satisfaction Score**: 4.5/5 average user rating
-- **Knowledge Retention**: Long-term learning retention tests
-
-### **Platform Performance**
-- **System Uptime**: 99.9% availability
-- **Response Time**: < 2 seconds average load time
-- **Content Quality**: 95% user satisfaction dengan AI-generated content
-- **Support Response**: < 24 hours average support response time
+- **Auto-classifier prompt**: berjalan di `src/services/prompt-classifier.ts`
+  dengan output ditulis ke `prompt_classifications` (143 baris, aktif).
+- **Auto-cognitive scoring**: `cognitive-scoring.service.ts` menulis ke
+  `auto_cognitive_scores` (12 baris, aktif).
+- **Manual coding researcher**: melalui `/admin/riset/prompt` dan
+  `/admin/riset/kognitif`; tabel `cognitive_indicators` baru terisi seed (12 baris).
+- **Evidence ledger**: `research_evidence_items` (261 baris) menyimpan cuplikan
+  bukti per kode.
+- **Auto-coder run log**: `research_auto_coding_runs` (41 baris) sebagai audit
+  trail batch klasifikasi.
+- **Triangulasi**: `triangulation_records` (64 baris) sebagai keputusan
+  konvergensi antar sumber.
+- **Inter-rater reliability**: tabel `inter_rater_reliability` masih kosong;
+  workflow double-coding belum dijalankan untuk siklus pengumpulan saat ini.
 
 ---
 
-## 🔮 Future Roadmap
+## 7. Catatan Penting untuk Pembaca Tesis
 
-### **Phase 1: Enhanced Personalization (Q1-Q2 2025)**
-- Advanced learning style detection
-- Improved content recommendation algorithms
-- Integration dengan external learning resources
-- Mobile app development
-
-### **Phase 2: Community Features (Q3-Q4 2025)**
-- Peer-to-peer learning networks
-- Study groups dan collaborative learning
-- Mentorship matching system
-- Social learning features
-
-### **Phase 3: Enterprise Solutions (2026)**
-- Corporate training modules
-- Team learning analytics
-- Integration dengan HR systems
-- Custom enterprise features
-
-### **Phase 4: Global Expansion (2026+)**
-- Multi-language content generation
-- Cultural adaptation algorithms
-- Regional partnerships
-- Localized learning pathways
-
----
-
-**PrincipleLearn V3** represents the future of education - intelligent, adaptive, dan accessible learning untuk semua. Dengan kombinasi cutting-edge AI technology dan user-centered design, platform ini siap untuk transform cara orang belajar dan berkembang dalam era digital.
+1. Semua data partisipan disimpan di Supabase dengan RLS aktif. Hanya admin
+   (akun peneliti tunggal) yang dapat membaca data lintas siswa.
+2. Anonimisasi dilakukan ringan pada tahap ekspor; akun admin dan akun
+   `sal@expandly.id` adalah akun cadangan peneliti, bukan partisipan.
+3. Modul Discussion ada di kode tetapi tidak dianalisis untuk RM2/RM3.
+4. Transkrip otomatis tidak digunakan; pengumpulan kualitatif (wawancara dan
+   observasi) dilakukan di luar aplikasi dan dimasukkan secara manual ke
+   `research_evidence_items` ketika relevan.

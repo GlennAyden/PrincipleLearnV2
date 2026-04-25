@@ -1,420 +1,299 @@
-# User Journey — Alur Pengalaman Belajar
+# User Journey — Alur Pengalaman Belajar Siswa SMA
 
-Dokumentasi perjalanan lengkap pengguna dalam proses pembelajaran di PrincipleLearn V3, dari perspektif pedagogis.
+Dokumentasi perjalanan lengkap mahasiswa peserta riset di PrincipleLearn V3, dari
+sudut pandang pedagogis dan pengumpulan data tesis. Dokumen ini menggantikan versi
+lama yang belum mencakup onboarding dua tahap dan komponen subtopic terbaru.
+
+> Tanggal pembaruan: 2026-04-26
+> Cakupan: jalur produksi yang aktif untuk pengumpulan data tesis (RM2 dan RM3).
+> Modul Discussion tidak diuraikan karena tidak dipakai pada periode pengumpulan.
+> Lihat [`APPLICATION_OVERVIEW.md`](./APPLICATION_OVERVIEW.md) untuk konteks modul.
+
+Referensi pelengkap:
+
+- [`docs/feature-flows.md`](../feature-flows.md) — flow per fitur pada level UI
+- [`docs/DATABASE_SCHEMA.md`](../DATABASE_SCHEMA.md) — definisi tabel data riset
+- [`ADMIN_RM2_RM3_DATA_COMPLETENESS.md`](./ADMIN_RM2_RM3_DATA_COMPLETENESS.md) —
+  status kelengkapan data per tabel
 
 ---
 
-## 📋 Daftar Isi
+## Daftar Isi
+
 1. [Overview Journey](#overview-journey)
-2. [Fase 1: Onboarding & Needs Analysis](#fase-1-onboarding--needs-analysis)
-3. [Fase 2: Course Generation & Orientation](#fase-2-course-generation--orientation)
-4. [Fase 3: Active Learning](#fase-3-active-learning)
-5. [Fase 4: Deep Engagement](#fase-4-deep-engagement)
-6. [Fase 5: Reflection & Evaluation](#fase-5-reflection--evaluation)
-7. [Touchpoint Evaluasi per Fase](#touchpoint-evaluasi-per-fase)
+2. [Fase 1: Sign Up dan Onboarding Dua Tahap](#fase-1-sign-up-dan-onboarding-dua-tahap)
+3. [Fase 2: Request Course dan Generation](#fase-2-request-course-dan-generation)
+4. [Fase 3: Active Learning per Subtopic](#fase-3-active-learning-per-subtopic)
+5. [Fase 4: Refleksi dan Lanjut Subtopic](#fase-4-refleksi-dan-lanjut-subtopic)
+6. [Touchpoint Data Riset per Fase](#touchpoint-data-riset-per-fase)
+7. [Persona Singkat](#persona-singkat)
 8. [Skenario Journey Lengkap](#skenario-journey-lengkap)
 
 ---
 
-## 🗺️ Overview Journey
+## Overview Journey
 
-### Peta Perjalanan Belajar
+### Lima Fase Aktual
 
-```mermaid
-journey
-    title Perjalanan Belajar Mahasiswa di PrincipleLearn V3
-    section Fase 1: Onboarding
-      Mendaftar akun: 4: Learner
-      Login pertama kali: 5: Learner
-      Eksplor dashboard: 4: Learner
-    section Fase 2: Course Setup
-      Request course baru: 4: Learner
-      Isi detail kebutuhan: 3: Learner
-      Terima course dari AI: 5: AI
-    section Fase 3: Active Learning
-      Baca materi subtopik: 4: Learner
-      Kerjakan quiz: 4: Learner
-      Ajukan pertanyaan: 3: Learner
-    section Fase 4: Deep Engagement
-      Challenge My Thinking: 5: Learner, AI
-      Socratic Discussion: 5: Learner, AI
-    section Fase 5: Reflection
-      Tulis jurnal: 3: Learner
-      Beri feedback course: 4: Learner
-      Review progress: 5: Learner
-```
+| Fase | Nama | Tujuan Pedagogis | Estimasi Waktu | Tabel Riset Utama |
+| --- | --- | --- | --- | --- |
+| 1 | Sign Up + Onboarding Dua Tahap | Baseline profil dan orientasi cara belajar | 8–12 menit | `users`, `learning_profiles` |
+| 2 | Request Course + Generation | Personalisasi dan rumusan kebutuhan | 5–8 menit | `courses`, `subtopics`, `course_generation_activity` |
+| 3 | Active Learning per Subtopic | Konstruksi pemahaman + jejak prompt | 30–60 menit / sesi | `ask_question_history`, `challenge_responses`, `quiz_submissions`, `prompt_classifications` |
+| 4 | Refleksi + Lanjut Subtopic | Konsolidasi metakognitif | 5–15 menit | `jurnal`, `feedback`, `user_progress` |
+| 5 | Sesi Lanjutan (longitudinal) | Perkembangan multi-sesi | berulang | `learning_sessions`, `auto_cognitive_scores` |
 
-### 5 Fase Perjalanan Belajar
-
-| Fase | Nama | Tujuan Pedagogis | Durasi Estimasi |
-|------|------|-------------------|-----------------|
-| 1 | **Onboarding & Needs Analysis** | Identifikasi kebutuhan belajar | 5–10 menit |
-| 2 | **Course Generation & Orientation** | Menerima materi yang dipersonalisasi | 1–3 menit |
-| 3 | **Active Learning** | Membangun pemahaman dasar | 30–60 menit/sesi |
-| 4 | **Deep Engagement** | Memperdalam pemikiran kritis | 15–30 menit/sesi |
-| 5 | **Reflection & Evaluation** | Konsolidasi & refleksi pemahaman | 10–20 menit |
-
----
-
-## 1️⃣ Fase 1: Onboarding & Needs Analysis
-
-### Alur Detail
-
-```mermaid
-flowchart TD
-    A["🌐 Landing Page"] --> B{"Sudah punya akun?"}
-    B -->|Belum| C["📝 Sign Up"]
-    B -->|Sudah| D["🔑 Login"]
-    C --> E["Isi nama, email, password"]
-    E --> F["Auto-login"]
-    D --> F
-    F --> G["📊 Dashboard"]
-    G --> H["Lihat overview (course aktif, progress)"]
-    H --> I["➕ Request Course Baru"]
-```
-
-### Aktivitas Learner
-
-| Langkah | Aktivitas | Keterampilan yang Dilatih | Waktu |
-|---------|-----------|--------------------------|-------|
-| Sign Up | Membuat akun baru | - | 2 menit |
-| Dashboard | Memahami layout & navigasi | - | 3 menit |
-| Request Course | Merumuskan kebutuhan belajar | CT: Self-Regulation, Analysis | 5 menit |
-
-### Detail Request Course (Needs Analysis)
-
-```mermaid
-graph TD
-    subgraph Step1["📝 Langkah 1: Topik & Tujuan"]
-        S1A["Tentukan topik yang ingin dipelajari"]
-        S1B["Tulis tujuan belajar spesifik"]
-        S1A --> S1B
-    end
-
-    subgraph Step2["⚙️ Langkah 2: Level & Detail"]
-        S2A["Pilih level kesulitan"]
-        S2B["Deskripsikan masalah yang dihadapi"]
-        S2C["Jelaskan pengetahuan yang sudah dimiliki"]
-        S2D["Tambah topik terkait (opsional)"]
-        S2A --> S2B --> S2C --> S2D
-    end
-
-    subgraph Step3["✅ Langkah 3: Review & Konfirmasi"]
-        S3A["Tinjau semua input"]
-        S3B["Edit jika perlu"]
-        S3C["Konfirmasi generate"]
-        S3A --> S3B --> S3C
-    end
-
-    Step1 --> Step2 --> Step3
-```
-
-**Mengapa fase ini penting secara pedagogis?**
-> Proses merumuskan kebutuhan belajar sendiri melatih **self-regulation** (CT) dan **decomposition** (CPT). Learner menjadi sadar akan apa yang sudah ia ketahui dan apa yang belum, membentuk dasar untuk pembelajaran bermakna.
-
----
-
-## 2️⃣ Fase 2: Course Generation & Orientation
-
-### Alur Detail
+### Diagram Tinggi
 
 ```mermaid
 flowchart LR
-    A["📤 Input Dikirim"] --> B["🤖 AI Processing"]
-    B --> C["📚 Course Di-generate"]
-    C --> D["📋 Preview Outline"]
-    D --> E["▶️ Mulai Belajar"]
+    A[Sign Up] --> B[Onboarding Profile]
+    B --> C[Onboarding Intro Slides]
+    C --> D[Dashboard]
+    D --> E[Request Course Step 1-3]
+    E --> F[AI Generate Course]
+    F --> G[Subtopic Page]
+    G --> H[Refleksi + Next Subtopic]
+    H --> G
+    H --> D
 ```
-
-### Apa yang Terjadi di Balik Layar
-
-| Proses | Deskripsi | Output |
-|--------|-----------|--------|
-| **AI Analysis** | AI menganalisis topik, goal, level, problem | Learning objectives |
-| **Outline Generation** | AI merancang struktur modul & subtopik | 5 modul, 20+ subtopik |
-| **Content Generation** | AI menghasilkan konten per subtopik | Materi, contoh, analogi |
-| **Quiz Generation** | AI membuat soal per subtopik | 3–5 soal per subtopik |
-
-### Orientasi Learner
-
-Setelah course di-generate, learner melihat:
-- **Judul course** yang dipersonalisasi
-- **Daftar modul** dan subtopik
-- **Progress bar** (mulai dari 0%)
-- **Navigasi sidebar** untuk akses cepat
 
 ---
 
-## 3️⃣ Fase 3: Active Learning
+## Fase 1: Sign Up dan Onboarding Dua Tahap
 
-### Alur per Subtopik
+Setelah sign up, siswa wajib menyelesaikan dua tahap onboarding sebelum boleh
+mengakses dashboard. Middleware enforces urutan ini supaya baseline data tersedia
+bagi analisis longitudinal.
+
+### Tahap 1A — Profile Wizard
+
+- Halaman: [`/onboarding`](../../src/app/onboarding/page.tsx)
+- Tujuan: menggali prior knowledge, learning goal, dan preferensi gaya belajar.
+- Output data: satu baris di `learning_profiles` (saat ini 6 baris aktif).
+- Indikator yang distimulasi:
+  - CTh Self-Regulation (mahasiswa menyadari apa yang sudah dan belum diketahui).
+  - CT Decomposition (memecah kebutuhan belajar menjadi item terstruktur).
+
+### Tahap 1B — Intro Slides Edukatif
+
+- Halaman: [`/onboarding/intro`](../../src/app/onboarding/intro/page.tsx)
+- Tujuan: orientasi cara berinteraksi reflektif dengan AI; penjelasan bahwa AI
+  bukan oracle, melainkan partner berpikir.
+- Output data: flag `intro_slides_completed` di `learning_profiles` plus cookie
+  gate (lihat commit `9d772a8`).
+- Tidak menghasilkan data berpikir, tetapi menjadi syarat metodologis agar
+  semua partisipan menerima pengantar yang sama.
+
+### Mengapa wajib dua tahap?
+
+> Profile wizard menetapkan baseline kognitif yang menjadi pembanding untuk
+> analisis longitudinal RM2. Intro slides memastikan kontaminasi instruksi
+> awal terkendali — jadi variasi gaya prompt antar siswa berasal dari
+> perbedaan individual, bukan perbedaan paparan tutorial.
+
+---
+
+## Fase 2: Request Course dan Generation
+
+### Alur Tiga Langkah
 
 ```mermaid
 flowchart TD
-    A["📖 Buka Subtopik"] --> B["📝 Baca Materi"]
-    B --> C["💡 Pahami Contoh & Analogi"]
-    C --> D{"Aktivitas Tersedia"}
-
-    D --> E["📝 Quiz Time"]
-    D --> F["❓ Ask Question"]
-    D --> G["🧠 Challenge My Thinking"]
-    D --> H["💬 Socratic Discussion"]
-
-    E --> I["Jawab soal → Feedback instan"]
-    F --> J["Tulis pertanyaan → AI menjawab"]
-    G --> K["Terima tantangan → Jawab → Feedback"]
-    H --> L["Dialog multi-turn dengan AI"]
-
-    I --> M["✅ Mark Progress"]
-    J --> M
-    K --> M
-    L --> M
-
-    M --> N{"Subtopik lain?"}
-    N -->|Ya| A
-    N -->|Tidak| O["🏆 Course Complete"]
+    S1[Step 1: Topic dan Goal] --> S2[Step 2: Level, Problem, Assumption, Extra Topics]
+    S2 --> S3[Step 3: Review dan Konfirmasi]
+    S3 --> GEN[/api/generate-course/]
+    GEN --> COURSE[Course tersimpan di tabel courses, subtopics, leaf_subtopics, quiz]
 ```
 
-### Interaksi per Aktivitas
+State antar-langkah dipegang oleh `RequestCourseContext`. Hasil generasi:
 
-#### 📝 Membaca Materi (Content Consumption)
-```
-Waktu      : 5–10 menit per subtopik
-Level Bloom: Remember, Understand
-Scaffolding: Konten terstruktur, contoh bertahap, visualisasi
-Output     : Pemahaman konseptual dasar
-```
+| Tabel | Yang ditulis |
+| --- | --- |
+| `courses` | satu baris per course (33 baris total per 2026-04-26) |
+| `subtopics` | umumnya 4–6 modul per course (157 baris total) |
+| `leaf_subtopics` | unit terkecil yang dipakai siswa (106 baris total) |
+| `quiz` | 3–6 soal per leaf subtopic (685 baris total) |
+| `course_generation_activity` | satu baris audit per generasi (38 baris total) |
 
-#### 📝 Quiz Time (Formative Assessment)
-```
-Waktu      : 3–5 menit per quiz
-Level Bloom: Apply, Analyze
-CT         : Evaluation
-CPT        : Pattern Recognition, Algorithmic Thinking, Debugging
-Output     : Skor + penjelasan per soal
-```
+### Indikator yang Distimulasi pada Fase 2
 
-#### ❓ Ask Question (Inquiry)
-```
-Waktu      : 2–5 menit per pertanyaan
-Level Bloom: Understand, Analyze
-CT         : Analysis, Explanation, Self-Regulation
-CPT        : Abstraction
-Output     : Jawaban kontekstual dari AI
-```
+- CT: Self-Regulation, Analysis (form Step 1–2).
+- CTh: Decomposition, Abstraction, Pattern Recognition (problem statement dan
+  extra topics).
 
 ---
 
-## 4️⃣ Fase 4: Deep Engagement
+## Fase 3: Active Learning per Subtopic
 
-### Challenge My Thinking
+Halaman [`/course/[courseId]/subtopic`](../../src/app/course/[courseId]/subtopic/)
+menampilkan satu leaf subtopic sekaligus dengan komponen-komponen berikut. Setiap
+komponen mencatat data ke tabel riset yang berbeda.
 
-```mermaid
-sequenceDiagram
-    participant L as 👤 Learner
-    participant AI as 🤖 AI
+### Komponen Subtopic dan Touchpoint Data
 
-    AI->>L: Mengajukan challenge/pertanyaan provokatif
-    L->>AI: Menjawab berdasarkan pemahaman
-    AI->>L: Evaluasi + feedback + pertanyaan lanjutan
-    L->>AI: Memperbaiki/memperdalam jawaban
-    AI->>L: Kesimpulan & penguatan
-```
+| Urutan tampilan | Komponen | Aksi siswa | Data yang direkam |
+| --- | --- | --- | --- |
+| 1 | Konten subtopic | Membaca materi, scroll | (telemetri ringan, `subtopic_cache`) |
+| 2 | `Examples` | Memilih atau request contoh tambahan | `example_usage_events` (18 baris) |
+| 3 | `AskQuestion` | Menulis pertanyaan, AI streaming jawaban | `ask_question_history` (17 baris) + `prompt_classifications` (143 baris) |
+| 4 | `ChallengeThinking` | Menerima tantangan, menjawab, mendapat feedback | `challenge_responses` (15 baris) |
+| 5 | `Quiz` | Menjawab 3–6 soal, lihat skor instan | `quiz_submissions` (255 baris) |
+| 6 | `StructuredReflection` | Menulis refleksi terstruktur | `jurnal` (43 baris), `feedback` (40 baris) |
+| 7 | `KeyTakeaways` | Membaca/menyalin ringkasan | dari `subtopic_cache` (109 baris) |
+| 8 | `PromptBuilder` + `PromptTimeline` | Membangun prompt yang lebih baik, melihat evolusi tahap | input ke classifier; visualisasi dari `prompt_classifications` |
+| 9 | `ReasoningNote` | Catatan alur penalaran sebelum bertanya | metadata pada `ask_question_history` |
+| 10 | `WhatNext` | Menyimpulkan dan call-to-action | — |
+| 11 | `NextSubtopics` | Memilih subtopic lanjutan | `user_progress` (13 baris) |
 
-**Tujuan**: Menciptakan **cognitive conflict** → mendorong learner mengevaluasi ulang pemahaman → memperkuat konsep yang benar.
+Komponen `AILoadingIndicator`, `HelpDrawer`, dan `ProductTour` mendukung UX dan
+tidak menghasilkan data analitis.
 
-| Fase Challenge | Aktivitas Learner | CT/CPT |
-|---------------|-------------------|--------|
-| Menerima tantangan | Membaca & memahami konteks | CT: Analysis |
-| Merespons | Menyusun argumen/jawaban | CPT: Algorithmic Thinking |
-| Menerima feedback | Mengevaluasi respons sendiri | CT: Evaluation, Self-Regulation |
-| Memperbaiki | Merevisi pemahaman | CT: Inference |
+### Endpoint AI yang Aktif
 
-### Socratic Discussion
+| Endpoint | Stream? | Tabel Tujuan |
+| --- | --- | --- |
+| `/api/generate-course` | tidak | `courses`, `subtopics`, `leaf_subtopics`, `quiz` |
+| `/api/generate-subtopic` | tidak | `subtopic_cache` |
+| `/api/generate-examples` | tidak | `example_usage_events` |
+| `/api/ask-question` | ya | `ask_question_history` (+ classifier) |
+| `/api/challenge-thinking` | ya | `challenge_responses` |
+| `/api/challenge-feedback` | tidak | metadata pada `challenge_responses` |
+| `/api/discussion/start`, `/api/discussion/respond` | ya | tidak dipakai untuk tesis |
 
-```mermaid
-sequenceDiagram
-    participant L as 👤 Learner
-    participant AI as 🤖 AI Sokratik
+### Indikator yang Distimulasi pada Fase 3
 
-    AI->>L: "Menurut Anda, mengapa X terjadi?"
-    L->>AI: Memberikan pendapat awal
-    AI->>L: "Menarik! Tapi bagaimana dengan kasus Y?"
-    L->>AI: Memperluas analisis
-    AI->>L: "Jadi apa yang bisa kita simpulkan?"
-    L->>AI: Menyintesis pemahaman
-    AI->>L: "Refleksikan: apa yang berubah dari pemahaman awal Anda?"
-    L->>AI: Refleksi metakognitif
-```
+- CTh Analysis, Explanation, Self-Regulation: `AskQuestion`, `ReasoningNote`.
+- CTh Evaluation, Inference: `ChallengeThinking`, `Quiz` (item evaluasi pasca-skor).
+- CT Pattern Recognition, Algorithmic Thinking, Debugging: `Quiz`, `Examples`.
+- CT Abstraction, Decomposition: `PromptBuilder`, `PromptTimeline`,
+  `KeyTakeaways`.
 
-**Tujuan**: Memandu learner **menemukan pemahaman sendiri** melalui dialog terbimbing — bukan diberitahu jawaban.
-
-| Fase Diskusi | Fungsi Pedagogis | CT/CPT |
-|-------------|-----------------|--------|
-| Opening | Activating curiosity | CT: Analysis |
-| Exploration | Menggali prior knowledge | CT: Explanation |
-| Deepening | Memperdalam analisis | CT: Inference |
-| Challenging | Menguji asumsi | CT: Evaluation |
-| Synthesis | Menyatukan pemahaman | CPT: Decomposition |
-| Reflection | Metakognisi | CT: Self-Regulation |
+Lihat [`THINKING_SKILL.md`](./THINKING_SKILL.md) dan
+[`ASSESSMENT_RUBRIC.md`](./ASSESSMENT_RUBRIC.md) untuk detail rubrik per
+indikator.
 
 ---
 
-## 5️⃣ Fase 5: Reflection & Evaluation
-
-### Alur Refleksi
+## Fase 4: Refleksi dan Lanjut Subtopic
 
 ```mermaid
 flowchart TD
-    A["📝 Tulis Journal"] --> B["Refleksikan apa yang dipelajari"]
-    B --> C["Identifikasi yang masih membingungkan"]
-    C --> D["📊 Review Progress"]
-    D --> E["Lihat statistik quiz, challenge, diskusi"]
-    E --> F["💬 Berikan Feedback"]
-    F --> G["Evaluasi kualitas materi & pengalaman"]
-    G --> H["🏆 Closure / Lanjut ke Course Baru"]
+    A[Selesaikan komponen subtopic] --> B[Tulis Structured Reflection]
+    B --> C[Beri rating dan feedback]
+    C --> D[Update user_progress]
+    D --> E[Pilih NextSubtopic]
+    E --> F[Subtopic baru atau dashboard]
 ```
 
-### Aktivitas Refleksi
-
-| Aktivitas | Deskripsi | CT/CPT |
-|-----------|-----------|--------|
-| **Writing Journal** | Menulis refleksi pembelajaran dalam bahasa sendiri | CT: Self-Regulation, Explanation |
-| **Reviewing Progress** | Memeriksa pencapaian, skor, dan area yang perlu diperbaiki | CT: Evaluation |
-| **Giving Feedback** | Menilai efektivitas materi dan pengalaman belajar | CT: Evaluation, Self-Regulation |
-| **Planning Next Steps** | Merencanakan langkah belajar berikutnya | CPT: Algorithmic Thinking |
+Refleksi diarahkan oleh prompt terstruktur (`StructuredReflection`) yang memandu
+siswa pada pertanyaan What — So What — Now What. Ini menghasilkan teks refleksi
+yang dapat dianalisis untuk indikator Self-Regulation dan Explanation.
 
 ---
 
-## 📍 Touchpoint Evaluasi per Fase
+## Touchpoint Data Riset per Fase
 
-### Matriks Evaluasi
+Tabel ini meringkas dari titik mana di journey peneliti dapat menarik bukti
+untuk setiap RM. Status data ringkasan per 2026-04-26 ditampilkan di
+[`ADMIN_RM2_RM3_DATA_COMPLETENESS.md`](./ADMIN_RM2_RM3_DATA_COMPLETENESS.md).
 
-Setiap fase memiliki **touchpoint** di mana data interaksi learner dapat dianalisis untuk mengukur keterampilan berpikir:
-
-| Fase | Touchpoint Evaluasi | Data yang Dikumpulkan | Indikator CT/CPT |
-|------|---------------------|----------------------|-------------------|
-| **1. Onboarding** | Request Course form | Topic, goal, level, problem, assumption | Self-Regulation, Decomposition |
-| **2. Generation** | Course preview | (Tidak ada interaksi evaluatif) | - |
-| **3. Active Learning** | Quiz submission | Jawaban, skor, waktu pengerjaan | Evaluation, Pattern Recognition |
-| | Ask Question | Isi pertanyaan, frekuensi | Analysis, Abstraction |
-| **4. Deep Engagement** | Challenge response | Jawaban challenge, perubahan setelah feedback | Evaluation, Inference, Algorithmic Thinking |
-| | Discussion messages | Isi pesan, jumlah turn, kedalaman dialog | Analysis, Explanation, Decomposition |
-| **5. Reflection** | Journal entries | Isi refleksi, panjang, kedalaman | Self-Regulation, Explanation |
-| | Course feedback | Rating, komentar | Evaluation |
-
-### Visualisasi Touchpoint
-
-```mermaid
-graph LR
-    subgraph "Fase 1"
-        TP1["📋 Request Form"]
-    end
-    subgraph "Fase 3"
-        TP2["📝 Quiz Scores"]
-        TP3["❓ Question History"]
-    end
-    subgraph "Fase 4"
-        TP4["🧠 Challenge Responses"]
-        TP5["💬 Discussion Transcripts"]
-    end
-    subgraph "Fase 5"
-        TP6["📓 Journal Entries"]
-        TP7["⭐ Feedback"]
-    end
-
-    TP1 --> TP2 --> TP3 --> TP4 --> TP5 --> TP6 --> TP7
-```
+| Fase | Touchpoint | Tabel | Untuk RM | Status |
+| --- | --- | --- | --- | --- |
+| 1 | Profile wizard submit | `learning_profiles` | RM1 (baseline), RM2 | aktif (6 baris) |
+| 2 | Request Course form | `course_generation_activity` | RM2 (baseline rumusan) | aktif (38) |
+| 3 | Ask Question | `ask_question_history` + `prompt_classifications` | RM2, RM3 | aktif (17 / 143) |
+| 3 | Challenge Response | `challenge_responses` | RM3 | aktif (15) |
+| 3 | Quiz Submit | `quiz_submissions` | RM3 | aktif (255) |
+| 3 | Examples used | `example_usage_events` | RM3 | aktif (18) |
+| 4 | Refleksi disimpan | `jurnal` | RM3 | aktif (43) |
+| 4 | Feedback subtopic | `feedback` | RM3 | aktif (40) |
+| 4 | Progress update | `user_progress` | RM2 longitudinal | aktif (13) |
+| 5 | Sesi belajar terbentuk | `learning_sessions` | RM2 longitudinal | aktif (22) |
+| 5 | Auto-coded indicator | `auto_cognitive_scores` | RM3 | aktif (12) |
+| 5 | Bukti kode terkurasi | `research_evidence_items` | RM2, RM3 | aktif (261) |
+| 5 | Triangulasi | `triangulation_records` | RM2, RM3 | aktif (64) |
+| — | Inter-rater reliability | `inter_rater_reliability` | kualitas coding | kosong (perlu dijalankan) |
+| — | Transcript | `transcript` | tidak dipakai | kosong |
 
 ---
 
-## 📖 Skenario Journey Lengkap
+## Persona Singkat
 
-### Skenario: Mahasiswa S2 Belajar Neural Networks
+Persona dirumuskan dari karakteristik partisipan riset yang sebenarnya
+(siswa SMA Fase E, n = 29 per 2026-04-26).
 
-**Profil**: Rina, mahasiswa S2 Informatika, ingin memahami konsep Neural Network untuk thesis-nya.
+### Persona A: Pemula Eksploratif
+
+- Latar: belum pernah ngoding, baru kenal konsep algoritma.
+- Pola prompt awal: SCP (single concept prompt), pertanyaan ya/tidak.
+- Kebutuhan scaffolding: tinggi pada `Examples` dan `KeyTakeaways`.
+- Hipotesis lintasan RM2: SCP → SRP setelah 2–3 sesi jika diberi `PromptBuilder`.
+
+### Persona B: Pengulang Reflektif
+
+- Latar: sudah pernah belajar dasar Informatika; ingin memperdalam algoritma.
+- Pola prompt awal: SRP (re-formulated prompt), kadang langsung MQP.
+- Kebutuhan scaffolding: sedang; intensif pada `ChallengeThinking`.
+- Hipotesis lintasan RM2: SRP → MQP → Reflective dalam 4–5 sesi.
+
+### Persona C: Cepat Stagnan
+
+- Latar: rajin bertanya tetapi prompt tidak berkembang strukturnya.
+- Pola prompt awal dan akhir: tetap SCP.
+- Kebutuhan scaffolding: pendampingan eksplisit + intervensi `ReasoningNote`.
+- Hipotesis lintasan RM2: kandidat key case untuk wawancara pendalaman.
 
 ---
 
-#### Fase 1: Onboarding (5 menit)
+## Skenario Journey Lengkap
+
+### Skenario: Siswa SMA Belajar Algoritma Sederhana
+
+**Profil**: Rina, kelas X SMA, mengikuti riset selama empat sesi.
+
+#### Sesi 1 (Hari ke-1, 70 menit)
 
 | Waktu | Aktivitas | Detail |
-|-------|-----------|--------|
-| 0:00 | Sign up | Membuat akun dengan email kampus |
-| 1:00 | Login | Masuk ke dashboard |
-| 2:00 | Request Course | Mengisi form: |
+| --- | --- | --- |
+| 0:00 | Sign up | Email kampus |
+| 1:00 | Onboarding Profile | Mengisi prior knowledge: "tahu konsep loop dasar" |
+| 5:00 | Onboarding Intro | Membaca 4 slide tentang cara berdialog dengan AI |
+| 8:00 | Request Course | Topic "Algoritma Pencarian", Goal "paham linear search", Level Beginner |
+| 12:00 | Course di-generate | 5 modul, 22 leaf subtopic |
+| 13:00 | Subtopic 1.1 | Membaca konten, lihat 2 contoh |
+| 20:00 | AskQuestion | "Apa beda linear dan binary search?" → tercatat sebagai SCP |
+| 25:00 | ChallengeThinking | "Linear search selalu lebih lambat?" → menjawab → revisi pemahaman |
+| 35:00 | Quiz | 4 soal → skor 3/4 |
+| 45:00 | StructuredReflection | "Saya baru sadar binary search butuh data terurut" |
+| 55:00 | Feedback | Rating 4/5, "contoh sangat membantu" |
+| 60:00 | NextSubtopic | Pilih 1.2 |
 
-```
-Topic     : "Package nnet di R"
-Goal      : "Memahami konsep dan implementasi neural network sederhana"
-Level     : "Beginner"
-Problem   : "Belum paham cara kerja neural network"
-Assumption: "Tahu dasar R programming dan konsep regression"
-```
-
-**CT/CPT yang terstimulasi**: Self-Regulation (menyadari apa yang belum dipahami), Decomposition (memecah kebutuhan belajar)
-
----
-
-#### Fase 2: Course Generation (2 menit)
+#### Sesi 4 (Hari ke-7, 50 menit)
 
 | Waktu | Aktivitas | Detail |
-|-------|-----------|--------|
-| 5:00 | AI generates | 5 modul, 22 subtopik |
-| 6:00 | Preview | Melihat outline course |
-| 7:00 | Start | Mulai dari Modul 1, Subtopik 1 |
+| --- | --- | --- |
+| 0:00 | Resume di subtopic 2.3 | |
+| 5:00 | AskQuestion | Tiga pertanyaan berlapis tentang sorting → tercatat sebagai MQP |
+| 15:00 | PromptBuilder | Memakai builder, hasilnya prompt reflektif tentang trade-off |
+| 20:00 | ChallengeThinking | Menjawab dengan analogi original |
+| 30:00 | Quiz | 5 soal → skor 5/5 |
+| 35:00 | StructuredReflection | Refleksi 4 paragraf tentang strategi belajar pribadi |
+| 45:00 | Feedback | Rating 5/5 |
+
+**Lintasan RM2 yang teramati**: SCP (sesi 1) → SRP (sesi 2) → MQP (sesi 3) →
+Reflective (sesi 4). Pola ini menjadi salah satu data input bagi
+`prompt_classifications` dan `triangulation_records`.
 
 ---
 
-#### Fase 3: Active Learning (45 menit)
+## Metrik Keberhasilan Journey untuk Tesis
 
-| Waktu | Aktivitas | Detail |
-|-------|-----------|--------|
-| 7:00 | Baca materi | Subtopik 1.1: "Apa itu Neural Network?" |
-| 15:00 | Quiz | 3 soal → skor 2/3 → baca penjelasan |
-| 20:00 | Ask Question | "Apa bedanya hidden layer dan output layer?" |
-| 22:00 | AI menjawab | Penjelasan dengan analogi dan diagram |
-| 25:00 | Baca materi | Subtopik 1.2: "Struktur Feed-Forward NN" |
-| 35:00 | Quiz | 5 soal → skor 4/5 |
-| 40:00 | Next subtopic | Lanjut ke Subtopik 1.3 |
-
----
-
-#### Fase 4: Deep Engagement (20 menit)
-
-| Waktu | Aktivitas | Detail |
-|-------|-----------|--------|
-| 50:00 | Challenge | AI: "Menurut Anda, apakah menambah neuron selalu meningkatkan akurasi? Jelaskan." |
-| 52:00 | Rina menjawab | "Ya, karena lebih banyak neuron = lebih banyak pola yang bisa dipelajari" |
-| 53:00 | AI feedback | "Tidak selalu benar. Pertimbangkan konsep overfitting..." |
-| 55:00 | Rina memperbaiki | Merevisi jawaban dengan pemahaman baru |
-| 57:00 | Discussion | Dialog Sokratik tentang trade-off bias vs variance |
-| 70:00 | End discussion | 8 turn dialog, pemahaman mendalam tercapai |
-
----
-
-#### Fase 5: Reflection (10 menit)
-
-| Waktu | Aktivitas | Detail |
-|-------|-----------|--------|
-| 70:00 | Journal | "Hari ini saya belajar bahwa neural network tidak sekadar 'otak buatan', tapi lebih ke sistem matematika yang menyesuaikan bobot..." |
-| 75:00 | Review progress | 3/22 subtopik selesai, rata-rata quiz 80% |
-| 78:00 | Feedback | Rating 4/5, komentar: "Penjelasan sangat membantu, contoh analogi bagus" |
-| 80:00 | Plan next | Lanjutkan ke Modul 2 besok |
-
----
-
-## 📊 Metrik Keberhasilan Journey
-
-| Metrik | Target | Cara Pengukuran |
-|--------|--------|-----------------|
-| **Completion Rate** | > 80% | Jumlah subtopik selesai / total |
-| **Quiz Average** | > 70% | Rata-rata skor quiz |
-| **Engagement Depth** | > 3 fitur/sesi | Jumlah fitur berbeda yang digunakan per sesi |
-| **Reflection Quality** | Minimal 3 kalimat | Panjang dan kedalaman journal |
-| **Discussion Turns** | > 4 turns | Jumlah interaksi dalam sesi diskusi |
-| **Return Rate** | > 60% | Persentase user yang kembali dalam 7 hari |
-
----
-
-*Dokumentasi ini terakhir diperbarui: Februari 2026*
+| Metrik | Cara Pengukuran | Sumber Data |
+| --- | --- | --- |
+| Kelengkapan onboarding | Persen siswa dengan `intro_slides_completed = true` | `learning_profiles` |
+| Kelengkapan sesi belajar | Jumlah `learning_sessions` per siswa per minggu | `learning_sessions` |
+| Kekayaan prompt | Distribusi `prompt_stage` lintas sesi per siswa | `prompt_classifications` |
+| Manifestasi CT/CTh | Skor 0/1/2 per indikator | `cognitive_indicators`, `auto_cognitive_scores` |
+| Kualitas refleksi | Panjang dan kedalaman jurnal | `jurnal` |
+| Konsistensi triangulasi | Rasio finding dengan bukti dari ≥2 sumber | `triangulation_records`, `research_evidence_items` |

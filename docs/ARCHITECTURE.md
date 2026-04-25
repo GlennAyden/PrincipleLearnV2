@@ -1,112 +1,109 @@
-# PrincipleLearn V3 -- Architecture Documentation
+# PrincipleLearn V3 — Architecture Documentation
 
-Comprehensive technical architecture reference for PrincipleLearn V3, an AI-powered adaptive learning platform built for thesis research on Computational Thinking (CT) and Critical Thinking (CTh).
+Comprehensive technical architecture reference for **PrincipleLearn V3**, an AI-powered adaptive learning platform built as the primary research instrument for a Master's thesis on Computational Thinking (CT) and Critical Thinking (CTh) development.
+
+> **Last revised:** 2026-04 against branch `principle-learn-3.0`. All claims in this document are verified against the live source tree referenced in the link annotations below.
 
 ---
 
 ## Table of Contents
 
 1. [System Overview](#1-system-overview)
-2. [High-Level Architecture Diagram](#2-high-level-architecture-diagram)
-3. [Architecture Layers](#3-architecture-layers)
-4. [Data Flow Diagrams](#4-data-flow-diagrams)
-5. [Component Architecture](#5-component-architecture)
-6. [State Management](#6-state-management)
-7. [Security Architecture](#7-security-architecture)
-8. [AI Integration](#8-ai-integration)
-9. [Research Data Integration](#9-research-data-integration)
-10. [Key Design Decisions](#10-key-design-decisions)
-11. [Technology Stack and Dependencies](#11-technology-stack-and-dependencies)
+2. [High-Level Architecture](#2-high-level-architecture)
+3. [Directory Layout](#3-directory-layout)
+4. [Auth and Middleware Flow](#4-auth-and-middleware-flow)
+5. [API Layer](#5-api-layer)
+6. [Service Layer](#6-service-layer)
+7. [Lib Infrastructure](#7-lib-infrastructure)
+8. [Data Layer](#8-data-layer)
+9. [AI Integration](#9-ai-integration)
+10. [Frontend Architecture](#10-frontend-architecture)
+11. [Research Pipeline (RM2 / RM3 / RM4)](#11-research-pipeline-rm2--rm3--rm4)
+12. [Testing Architecture](#12-testing-architecture)
+13. [Build and Deployment](#13-build-and-deployment)
+14. [Cross-References](#14-cross-references)
 
 ---
 
 ## 1. System Overview
 
-PrincipleLearn V3 is an AI-powered adaptive learning platform designed as the primary research instrument for a Master's thesis investigating how AI-driven instructional design affects Computational Thinking (CT) and Critical Thinking (CTh) development in learners.
+PrincipleLearn V3 is a Next.js 15 single-app monolith that combines an AI-driven learning experience for students with an admin/research console for the thesis researcher (the only admin in the production deployment).
 
-### Core Capabilities
+### Tech Stack
 
-- **AI-Generated Courses**: Multi-module course outlines generated via OpenAI, with per-subtopic content, quizzes, and examples
-- **Interactive Learning**: Streamed Q&A, challenge thinking prompts, contextual example generation, and structured reflection journals
-- **Socratic Discussions**: Multi-turn AI-guided dialogues using a 4-phase model (diagnosis, exploration, practice, synthesis) with learning goal tracking
-- **Research Analytics**: Prompt classification (SCP/SRP/MQP/REFLECTIVE), cognitive indicator assessment (6 CT + 6 CTh dimensions), inter-rater reliability (Cohen's Kappa), and triangulation records
-- **Admin Dashboard**: KPI monitoring, user management, activity tracking, discussion monitoring, and research data export
+| Layer | Technology | Notes |
+|-------|------------|-------|
+| Framework | Next.js 15.5 (App Router) | `package.json` declares `next ^15.5.12`, Node 22.x |
+| UI | React 19, TypeScript (strict) | Sass modules co-located with components |
+| Database | Supabase PostgreSQL 17 | 35 tables, RLS enabled but mostly bypassed (see Section 8) |
+| Auth | Custom JWT (HS256) | **NOT** Supabase Auth — fully bespoke (see Section 4) |
+| AI | OpenAI Chat Completions | Default model `gpt-5-mini` (`OPENAI_MODEL` env override) |
+| Validation | Zod 4 | 21 schemas in `src/lib/schemas.ts` |
+| Styling | Sass modules (`.module.scss`) | No CSS framework |
+| Deployment | Vercel | Region `sin1`, `maxDuration: 60s` for all `/api/**` routes |
+| Testing | Jest 30 + Playwright 1.58 | MSW 2 for HTTP mocks |
 
-### Technology Stack Summary
+### Capabilities
 
-| Layer | Technology |
-|-------|-----------|
-| Framework | Next.js 15 with App Router |
-| Frontend | React 19, TypeScript, Sass modules |
-| Database | Supabase PostgreSQL with RLS policies |
-| Authentication | Custom JWT-based auth with CSRF double-submit cookie pattern |
-| AI | OpenAI API (default model: gpt-5-mini) |
-| Deployment | Vercel (serverless) |
-| Validation | Zod schemas |
-| Testing | Jest (unit), Playwright (E2E), MSW (mocking) |
+- **AI-generated courses** with multi-module outlines, AI-generated subtopic content, and contextual examples.
+- **Interactive learning units**: streaming Q&A, Socratic discussions, challenge-thinking prompts with AI feedback, structured reflection journals, and quizzes with reasoning notes.
+- **Multi-step course request wizard** (steps 1-3 plus generating page) backed by `RequestCourseContext`.
+- **Research instrumentation** for RM2 (prompt classification) and RM3 (cognitive indicators) with a partial RM4 (triangulation + inter-rater reliability) layer.
+- **Admin console** under `/admin/**` covering siswa (students), aktivitas (activity), riset (research), dashboard, ekspor (export), and login/register flows.
 
 ---
 
-## 2. High-Level Architecture Diagram
+## 2. High-Level Architecture
 
-```mermaid
-graph TB
-    subgraph Client["Browser (React 19)"]
-        UI["Pages & Components"]
-        AuthCtx["AuthProvider<br/>(useAuth)"]
-        CourseCtx["RequestCourseProvider<br/>(sessionStorage)"]
-        ApiFetch["apiFetch()<br/>auto CSRF + 401 retry"]
-    end
-
-    subgraph Middleware["middleware.ts"]
-        JWTCheck["JWT Verification<br/>(verifyToken)"]
-        RoleCheck["Role-Based Access<br/>(user vs admin)"]
-        CSRFCheck["CSRF Validation<br/>(POST/PUT/DELETE/PATCH)"]
-        HeaderInject["Header Injection<br/>(x-user-id, x-user-email, x-user-role)"]
-    end
-
-    subgraph APILayer["API Routes (73 routes)"]
-        AuthRoutes["Auth Routes<br/>/api/auth/*"]
-        AdminRoutes["Admin Routes<br/>/api/admin/*"]
-        UserRoutes["User Routes<br/>/api/courses/*, /api/quiz/*, etc."]
-        AIRoutes["AI Routes<br/>/api/ask-question, /api/generate-*,<br/>/api/challenge-*, /api/discussion/*"]
-    end
-
-    subgraph Services["Services Layer"]
-        AuthSvc["auth.service.ts<br/>User lookup, bcrypt, JWT, CSRF"]
-        CourseSvc["course.service.ts<br/>Course CRUD, access control"]
-        AISvc["ai.service.ts<br/>OpenAI calls, streaming,<br/>retry, sanitization"]
-        DiscSvc["discussion/<br/>generateDiscussionTemplate.ts"]
-    end
-
-    subgraph Infrastructure["Infrastructure (src/lib/)"]
-        DB["database.ts<br/>DatabaseService, adminDb, publicDb"]
-        Schemas["schemas.ts<br/>14 Zod schemas + parseBody()"]
-        RateLimit["rate-limit.ts<br/>DB-backed + memory fallback"]
-        Logger["api-logger.ts<br/>withApiLogging()"]
-        ApiMW["api-middleware.ts<br/>withProtection()"]
-    end
-
-    subgraph External["External Services"]
-        Supabase["Supabase PostgreSQL<br/>26 tables, RLS, 4 PL/pgSQL functions"]
-        OpenAI["OpenAI API<br/>(gpt-5-mini)"]
-    end
-
-    Client -->|"JWT cookies +<br/>CSRF header"| Middleware
-    Middleware --> APILayer
-    APILayer --> Services
-    Services --> Infrastructure
-    Infrastructure --> External
-
-    AIRoutes -->|"Streaming responses<br/>(text/plain)"| Client
-    AuthRoutes -->|"Set httpOnly cookies<br/>(access + refresh + CSRF)"| Client
-
-    style Client fill:#e1f5fe
-    style Middleware fill:#fff3e0
-    style APILayer fill:#f3e5f5
-    style Services fill:#e8f5e9
-    style Infrastructure fill:#fce4ec
-    style External fill:#f5f5f5
+```
++-----------------------------------------------------------------+
+|                          Browser (React 19)                     |
+|  Pages + apiFetch() + AuthProvider + RequestCourseProvider      |
++-------------------------------+---------------------------------+
+                                |
+                                | cookies (access_token, refresh_token,
+                                |          csrf_token, onboarding_done,
+                                |          intro_slides_done)
+                                | + x-csrf-token header on mutations
+                                v
++-----------------------------------------------------------------+
+|                  middleware.ts (Edge runtime)                   |
+|  - Public-route bypass                                          |
+|  - verifyToken(access_token)                                    |
+|  - Admin role check (lowercase 'admin')                         |
+|  - Onboarding gate (2-stage cookies for regular users)          |
+|  - CSRF double-submit on POST/PUT/DELETE/PATCH                  |
+|  - Inject x-user-id / x-user-email / x-user-role headers        |
++-------------------------------+---------------------------------+
+                                |
+                                v
++-----------------------------------------------------------------+
+|         Next.js App Router — API Routes (88 route.ts)           |
+|  Wrapped by withApiLogging() and (optionally) withProtection()  |
+|  parseBody(ZodSchema) for input validation                      |
++-------+--------------+-------------+---------------------+------+
+        |              |             |                     |
+        v              v             v                     v
++--------------+ +-------------+ +---------------+ +------------------+
+| auth.service | |course.serv. | | ai.service +  | | research-* svcs  |
+|              | |             | | openai.ts     | | (RM2/RM3/RM4)    |
++------+-------+ +------+------+ +-------+-------+ +---------+--------+
+       |                |                |                   |
+       +----------------+----------------+-------------------+
+                                |
+                                v
++-----------------------------------------------------------------+
+|                  src/lib/database.ts                            |
+|  adminDb (service role, bypass RLS) | publicDb (anon, RLS on)   |
+|  DatabaseService static CRUD + chainable SupabaseQueryBuilder   |
++-------------------------------+---------------------------------+
+                                |
+              +-----------------+-----------------+
+              v                                   v
++----------------------------+      +----------------------------+
+| Supabase PostgreSQL 17     |      | OpenAI Chat Completions    |
+| 35 tables, JSONB autodet.  |      | gpt-5-mini (default)       |
++----------------------------+      +----------------------------+
 ```
 
 ### Request Lifecycle
@@ -114,1048 +111,649 @@ graph TB
 ```
 Browser
   |
-  |-- apiFetch() attaches x-csrf-token header + credentials: 'include'
+  |-- apiFetch() attaches x-csrf-token from csrf_token cookie + credentials: 'include'
   v
 middleware.ts
-  |-- 1. Check if route is public (skip auth)
-  |-- 2. Read access_token cookie
-  |-- 3. verifyToken() -- reject refresh tokens
-  |-- 4. If expired + refresh_token exists --> redirect to /api/auth/refresh
-  |-- 5. Admin routes: verify role === 'ADMIN'
-  |-- 6. CSRF: compare csrf_token cookie vs x-csrf-token header (mutations only)
-  |-- 7. Inject x-user-id, x-user-email, x-user-role headers
+  |-- 1. Public/auth route bypass
+  |-- 2. Read access_token cookie (single cookie shared by user + admin)
+  |-- 3. verifyToken() — rejects refresh tokens by `type` claim
+  |-- 4. If invalid + refresh_token exists, page routes proceed (client refreshes
+  |        on first 401); API routes always get a 401 JSON to preserve POST bodies
+  |-- 5. /admin/** + /api/admin/**: enforce role.toLowerCase() === 'admin'
+  |-- 6. Regular users: redirect to /onboarding then /onboarding/intro until both
+  |        cookie gates (`onboarding_done`, `intro_slides_done`) are set
+  |-- 7. CSRF compare csrf_token cookie vs x-csrf-token header for mutations
+  |-- 8. Inject x-user-id / x-user-email / x-user-role and forward
   v
-API Route Handler
-  |-- withApiLogging() wraps handler (logs to api_logs table)
-  |-- withProtection() re-validates auth + CSRF (defense in depth)
-  |-- parseBody(ZodSchema, body) validates request
-  |-- Business logic via service layer
+API Route Handler (88 route.ts files)
+  |-- withApiLogging(handler, { label, metadata }) — async write to api_logs
+  |-- withProtection(handler, { adminOnly? }) — defense in depth (see notes)
+  |-- parseBody(ZodSchema, await req.json())
+  |-- (optional) aiRateLimiter.isAllowed(userId)
+  |-- service-layer call(s)
   v
-Response (JSON or streaming text/plain)
+Response (NextResponse.json or streaming Response with text/plain)
 ```
 
 ---
 
-## 3. Architecture Layers
-
-### Layer 1: Frontend (React 19 + Next.js 15 App Router)
-
-The frontend uses the Next.js 15 App Router with React 19 and TypeScript. All pages reside under `src/app/` and components are organized by feature under `src/components/`.
-
-#### Pages
-
-| Route | Purpose |
-|-------|---------|
-| `/` | Landing page / onboarding |
-| `/login` | User authentication |
-| `/signup` | User registration |
-| `/onboarding` | First-time user onboarding |
-| `/dashboard` | Course library and progress overview |
-| `/course/[courseId]` | Course overview with module navigation |
-| `/course/[courseId]/subtopic/[subIdx]/[pageIdx]` | Learning interface (content, takeaways, quiz, feedback) |
-| `/course/[courseId]/discussion/[moduleIdx]` | Socratic discussion (4-phase dialogue) |
-| `/request-course/step1` | Course creation wizard -- topic and goal |
-| `/request-course/step2` | Course creation wizard -- level and extras |
-| `/request-course/step3` | Course creation wizard -- review and confirm |
-| `/request-course/generating` | Course generation progress |
-| `/admin/login` | Admin authentication |
-| `/admin/register` | Admin registration |
-| `/admin/dashboard` | Admin KPIs, RM2/RM3 research charts |
-| `/admin/users` | User management and detail views |
-| `/admin/activity` | Activity monitoring (quiz, journal, transcript, Q&A, challenges) |
-| `/admin/discussions` | Discussion monitoring and analytics |
-| `/admin/insights` | Learning insights and data export |
-| `/admin/research` | Research analytics (prompt classification, cognitive indicators) |
-
-#### Component Organization
-
-Components are grouped by feature, each with a co-located `.module.scss` file:
+## 3. Directory Layout
 
 ```
-src/components/
-  admin/                   # Admin-specific components (modals, charts, tables)
-  AILoadingIndicator/      # Shared loading state for AI operations
-  AskQuestion/             # Q&A interface (QuestionBox + PromptBuilder integration)
-  ChallengeThinking/       # Critical thinking challenge system (ChallengeBox)
-  Examples/                # AI-generated contextual examples (ExampleList)
-  KeyTakeaways/            # Module key takeaway summaries
-  NextSubtopics/           # Navigation to next subtopic
-  PromptBuilder/           # Guided prompt construction for Q&A
-  PromptTimeline/          # Visual prompt evolution timeline
-  Quiz/                    # Multiple-choice quiz with reasoning notes
-  ReasoningNote/           # Free-text reasoning annotation
-  StructuredReflection/    # Journal-style guided reflection
-  WhatNext/                # Post-lesson navigation guidance
+src/
+├── app/                             # Next.js 15 App Router (pages + API)
+│   ├── admin/                       # Admin pages
+│   │   ├── aktivitas/               # Activity console
+│   │   ├── dashboard/               # KPI dashboard
+│   │   ├── ekspor/                  # Export console (NOT used in current scope)
+│   │   ├── login/, register/
+│   │   ├── riset/                   # bukti/, kognitif/, prompt/, readiness/, triangulasi/
+│   │   └── siswa/[id]/              # Student detail
+│   ├── api/                         # 19 top-level groups, 88 route.ts files total
+│   │   ├── admin/                   # activity/ (16 sub), dashboard, discussions/,
+│   │   │                            # insights/, monitoring/, research/ (14 sub),
+│   │   │                            # siswa/, users/, login/, logout/, me/, register/
+│   │   ├── ask-question/            # streaming AI Q&A
+│   │   ├── auth/                    # login, logout, me, refresh, register
+│   │   ├── challenge-feedback/, challenge-response/, challenge-thinking/
+│   │   ├── courses/, courses/[id]/
+│   │   ├── debug/                   # development utilities
+│   │   ├── discussion/              # history, module-status, prepare, respond, start, status
+│   │   ├── generate-course/, generate-subtopic/, generate-examples/
+│   │   ├── jurnal/                  # save
+│   │   ├── learning-profile/, learning-progress/
+│   │   ├── onboarding-state/
+│   │   ├── prompt-journey/
+│   │   ├── quiz/                    # status, submit
+│   │   └── user-progress/
+│   ├── course/[courseId]/           # subtopic/[subIdx]/[pageIdx], discussion/[moduleIdx]
+│   ├── dashboard/                   # User dashboard
+│   ├── login/, signup/
+│   ├── onboarding/                  # Profile wizard + intro slides
+│   ├── request-course/              # step1, step2, step3, generating, result
+│   ├── error.tsx, global-error.tsx, layout.tsx, page.tsx
+│   ├── globals.scss, font-styles.scss, page.module.scss
+│   └── favicon.ico
+├── components/                      # 15 feature folders
+│   ├── admin/                       # JournalModal, ResearchChart, TranscriptModal
+│   ├── AILoadingIndicator/
+│   ├── AskQuestion/                 # QuestionBox, integrates with PromptBuilder
+│   ├── ChallengeThinking/
+│   ├── Examples/
+│   ├── HelpDrawer/                  # Contextual help panel
+│   ├── KeyTakeaways/
+│   ├── NextSubtopics/
+│   ├── ProductTour/                 # Onboarding tour overlay
+│   ├── PromptBuilder/               # Guided prompt construction
+│   ├── PromptTimeline/              # Visual prompt evolution
+│   ├── Quiz/
+│   ├── ReasoningNote/
+│   ├── StructuredReflection/
+│   └── WhatNext/
+├── context/
+│   └── RequestCourseContext.tsx     # Multi-step course wizard state
+├── hooks/
+│   ├── useAdmin.ts                  # /api/admin/me wrapper
+│   ├── useAuth.tsx                  # AuthProvider + useAuth hook
+│   ├── useDebouncedValue.ts
+│   ├── useLearningProgress.ts
+│   ├── useLocalStorage.ts
+│   ├── useOnboardingState.ts
+│   └── useSessionStorage.ts
+├── lib/                             # 30 modules + 2 sub-folders
+│   ├── activitySeed.ts
+│   ├── admin-auth.ts
+│   ├── admin-prompt-stage.ts
+│   ├── admin-queries.ts
+│   ├── admin-quiz-attempts.ts
+│   ├── admin-reflection-activity.ts
+│   ├── admin-reflection-summary.ts
+│   ├── analytics/reflection-model.ts
+│   ├── api-client.ts                # Frontend apiFetch + readStream
+│   ├── api-logger.ts                # withApiLogging
+│   ├── api-middleware.ts            # withProtection, withCacheHeaders
+│   ├── auth-helper.ts
+│   ├── challenge-feedback.ts
+│   ├── database.ts                  # adminDb, publicDb, DatabaseService, DatabaseError
+│   ├── discussion/
+│   │   ├── resolveSubtopic.ts
+│   │   ├── serializers.ts
+│   │   └── thinkingSkills.ts
+│   ├── discussion-prerequisites.ts
+│   ├── engagement.ts
+│   ├── jwt.ts                       # generate/verify access + refresh + admin tokens
+│   ├── leaf-subtopics.ts
+│   ├── learning-progress.ts
+│   ├── openai.ts                    # Lazy OpenAI singleton + defaultOpenAIModel
+│   ├── ownership.ts
+│   ├── quiz-content.ts
+│   ├── quiz-sync.ts
+│   ├── rate-limit.ts                # DB-backed RateLimiter w/ memory fallback
+│   ├── reflection-status.ts
+│   ├── reflection-submission.ts
+│   ├── research-normalizers.ts
+│   ├── schemas.ts                   # 21 Zod schemas + parseBody helper
+│   └── supabase-batch.ts
+├── services/                        # 8 top-level + discussion/ sub-folder
+│   ├── ai.service.ts
+│   ├── auth.service.ts
+│   ├── cognitive-scoring.service.ts
+│   ├── course.service.ts
+│   ├── discussion/
+│   │   ├── generateDiscussionTemplate.ts
+│   │   └── templatePreparation.ts
+│   ├── prompt-classifier.ts
+│   ├── research-auto-coder.service.ts
+│   ├── research-data-reconciliation.service.ts
+│   ├── research-field-readiness.service.ts
+│   └── research-session.service.ts
+├── styles/                          # global styles
+└── types/                           # activity, cognitive, dashboard, discussion,
+                                     # insights, research, student
 ```
 
-#### Styling
+Project root files used elsewhere in this doc: [middleware.ts](../middleware.ts), [next.config.ts](../next.config.ts), [vercel.json](../vercel.json), [package.json](../package.json).
 
-- All styles use CSS/Sass Modules (`.module.scss`) for scoped, collision-free class names
-- No global CSS framework; all styling is custom
-- Responsive design across all components
+---
 
-### Layer 2: Middleware (`middleware.ts`)
+## 4. Auth and Middleware Flow
 
-The central request interceptor runs on every request matching `/((?!_next/static|_next/image|favicon.ico|public/).*)`.
+### Identity Model
 
-**Responsibilities:**
+PrincipleLearn V3 uses a **custom JWT** scheme rather than Supabase Auth. This is the most consequential architectural decision in the codebase — it touches data access, RLS policy, cookies, and refresh flow.
 
-1. **Public Route Bypass**: Requests to `/`, `/login`, `/signup`, `/admin/login`, and auth API routes (`/api/auth/login`, `/api/auth/register`, `/api/auth/refresh`, `/api/auth/logout`, `/api/admin/login`, `/api/admin/register`) pass through without authentication
-2. **JWT Token Verification**: Reads `access_token` from cookies, verifies via `verifyToken()` from `src/lib/jwt.ts`
-3. **Token Refresh Redirect**: If access token is invalid but `refresh_token` cookie exists, redirects to `/api/auth/refresh`
-4. **Role-Based Access Control**: Admin pages (`/admin/*`) and admin API routes (`/api/admin/*`) require `role === 'ADMIN'` in the JWT payload (case-insensitive comparison)
-5. **CSRF Validation**: For mutation requests (POST, PUT, DELETE, PATCH) on `/api/*` routes, compares `csrf_token` cookie against `x-csrf-token` header
-6. **User Context Injection**: Sets `x-user-id`, `x-user-email`, `x-user-role` headers on the request for downstream API route handlers
-7. **Error Response Differentiation**: API routes receive JSON 401/403 responses; page routes receive redirects to login
+- **Single shared cookie**: both regular users and admins authenticate via the same `access_token` cookie. The middleware no longer reads a separate `admin_token`. Admin sessions are distinguished only by the `role` claim inside the signed JWT (see [middleware.ts:33-34](../middleware.ts)).
+- **Token expiry** ([src/lib/jwt.ts](../src/lib/jwt.ts)):
+  - Regular users: access 15m, refresh 3d.
+  - Admins: access 30m via `generateAdminAccessToken()`, refresh 3d.
+- **Token type claim**: `verifyToken()` rejects payloads with `type === 'refresh'`; `verifyRefreshToken()` rejects payloads with `type === 'access'`. Legacy tokens without a `type` claim are accepted by both for migration compatibility.
+- **Refresh token rotation**: each successful `/api/auth/refresh` call issues a new access + refresh pair. The SHA-256 digest of the currently-valid refresh token is persisted in `users.refresh_token_hash` via `updateUserRefreshTokenHash()` so previously-rotated tokens cannot be replayed.
 
-### Layer 3: API Routes (73 routes in `src/app/api/`)
+### Middleware Flow (`middleware.ts`)
 
-All API routes follow the Next.js 15 App Router convention with `route.ts` files exporting HTTP method handlers.
+The Edge middleware executes for every request matching `/((?!_next/static|_next/image|favicon.ico|public/).*)`. Steps in order:
 
-#### Route Categories
+1. **Public route bypass.** Routes `/`, `/login`, `/signup`, `/admin/login`, plus the API auth endpoints (`/api/auth/login|register|refresh|logout`, `/api/admin/login`) skip token verification.
+2. **Token presence.** Missing `access_token` returns JSON 401 for `/api/**` and a redirect (`/admin/login` for admin paths, `/login` otherwise) for page routes.
+3. **Token verification.** `verifyToken()` is called. If invalid:
+   - API routes always return JSON 401 (NEVER a redirect — the 302 would silently drop the POST body).
+   - Page routes with a refresh cookie are allowed through; client-side `apiFetch` will hit `/api/auth/refresh` on the first 401.
+4. **Admin role check.** `/admin/**` and `/api/admin/**` require `payload.role.toLowerCase() === 'admin'`. Lowercase normalization handles legacy `'ADMIN'` rows. Downstream admin routes do **not** need to re-verify role (per the developer note in middleware.ts:99-107).
+5. **Onboarding gate (regular users only)**. Two cookie gates redirect non-admin users to onboarding until both are set:
+   - `onboarding_done=true` → profile wizard finished (sends to `/onboarding`).
+   - `intro_slides_done=true` → educational intro slides finished (sends to `/onboarding/intro`).
+   - Server-side source of truth is `learning_profiles.intro_slides_completed`; the cookies are a UX guard, not a security boundary.
+   - Exempt paths: `/onboarding/*`, `/logout`, `/api/auth/*`, `/api/learning-profile`, `/api/onboarding-state`, `/favicon.ico`, `/_next/*`.
+6. **CSRF double-submit.** For POST/PUT/DELETE/PATCH on `/api/**`, the `csrf_token` cookie must be present AND match the `x-csrf-token` header — otherwise 403.
+7. **Header injection.** `x-user-id`, `x-user-email`, `x-user-role` are cloned onto the forwarded request via `NextResponse.next({ request: { headers } })`. These headers are SAFE TO TRUST inside any `/api/**` handler that ran middleware. Routes that may bypass middleware (cached/rewritten paths) fall back to `verifyToken(req.cookies.get('access_token'))` directly.
 
-**Authentication (5 routes)**:
-| Route | Method | Purpose |
-|-------|--------|---------|
-| `/api/auth/login` | POST | User login with email/password |
-| `/api/auth/register` | POST | User registration |
-| `/api/auth/logout` | POST | Clear auth cookies |
-| `/api/auth/refresh` | POST | Token rotation (new access + refresh) |
-| `/api/auth/me` | GET | Current user info from token |
+### Frontend Auth Helpers
 
-**Admin (34 routes)**:
-| Route Group | Purpose |
-|-------------|---------|
-| `/api/admin/login`, `/api/admin/register`, `/api/admin/logout`, `/api/admin/me` | Admin authentication |
-| `/api/admin/dashboard` | Aggregated KPIs and stats |
-| `/api/admin/users/*` | User CRUD, detail views, activity summaries, export |
-| `/api/admin/activity/*` | Quiz, journal, transcript, ask-question, challenge, feedback, course, discussion, learning-profile, search, topics, analytics, export |
-| `/api/admin/discussions/*` | Session list, detail, analytics, module status |
-| `/api/admin/insights/*` | Learning insights, export |
-| `/api/admin/research/*` | Sessions, classifications, indicators, analytics, classify, bulk, export |
-| `/api/admin/monitoring/logging` | API log viewer |
+- [`apiFetch(url, options)`](../src/lib/api-client.ts) — every browser-side fetch should go through this wrapper. It auto-attaches the CSRF header, sets `credentials: 'include'`, defaults `Content-Type: application/json` for bodies, and on 401 fires a deduplicated `POST /api/auth/refresh` then retries the original request once. Refresh-exempt URLs: login/register/refresh/logout endpoints (admin + user).
+- `useAuth()` ([src/hooks/useAuth.tsx](../src/hooks/useAuth.tsx)) — provider exposes `{ user, isAuthenticated, login, logout, retryAuth, networkError }` and bootstraps from `GET /api/auth/me`.
 
-**User Features (24 routes)**:
-| Route | Method | Purpose |
-|-------|--------|---------|
-| `/api/courses` | GET | List user's courses |
-| `/api/courses/[id]` | GET, DELETE | Course detail / deletion |
-| `/api/generate-course` | POST | AI course outline generation |
-| `/api/generate-subtopic` | POST | AI subtopic content generation |
-| `/api/generate-examples` | POST | AI example generation |
-| `/api/ask-question` | POST | Streamed AI Q&A |
-| `/api/challenge-thinking` | POST | Streamed AI challenge question |
-| `/api/challenge-feedback` | POST | AI feedback on challenge answer |
-| `/api/challenge-response` | POST | Save challenge response |
-| `/api/quiz/submit` | POST | Submit quiz answers |
-| `/api/jurnal/save` | POST | Save learning journal entry |
-| `/api/transcript/save` | POST | Save course transcript |
-| `/api/feedback` | POST | Submit course feedback |
-| `/api/user-progress` | GET, POST | Track/retrieve completion |
-| `/api/learning-profile` | GET, POST | Learning preference profile |
-| `/api/prompt-journey` | GET | Prompt evolution history |
-| `/api/discussion/start` | POST | Start Socratic discussion session |
-| `/api/discussion/respond` | POST | Continue discussion (AI evaluation + response) |
-| `/api/discussion/history` | GET | Retrieve discussion messages |
-| `/api/discussion/module-status` | GET | Discussion completion per module |
+### Defense in Depth: `withProtection()`
 
-**Debug (3 routes)**: Development-only utilities for course testing, generation, and user inspection.
+[src/lib/api-middleware.ts](../src/lib/api-middleware.ts) exposes `withProtection(handler, { csrfProtection?, requireAuth?, adminOnly? })`. It re-runs CSRF + JWT verification + admin enforcement at the route level. The middleware is the primary guard; `withProtection` exists so individual routes still validate when middleware was bypassed (cached responses, server actions, edge cases).
 
-#### Standard Handler Pattern
+---
+
+## 5. API Layer
+
+The App Router contains **88 `route.ts` files** under `src/app/api/`. They are organised into 19 top-level groups.
+
+### Authentication (`/api/auth/**`)
+
+| Route | Method | Notes |
+|-------|--------|-------|
+| `/api/auth/login` | POST | Validates `LoginSchema`, calls `findUserByEmail` + `verifyPassword` (with constant-time dummy compare on miss), sets cookies. |
+| `/api/auth/register` | POST | `RegisterSchema` (strong password). |
+| `/api/auth/refresh` | POST | Verifies refresh token, compares hash with `users.refresh_token_hash`, rotates pair. |
+| `/api/auth/logout` | POST | Clears cookies + nulls refresh hash. |
+| `/api/auth/me` | GET | Returns the user identity from the access token. |
+
+### Admin (`/api/admin/**`)
+
+| Sub-group | Purpose |
+|-----------|---------|
+| `login`, `logout`, `me`, `register` | Admin-specific auth flow with the 30m access expiry. |
+| `dashboard` | Aggregated KPI feed. |
+| `users/`, `users/[id]/`, `users/export/` | User CRUD + activity summaries + CSV export. |
+| `siswa/` | Indonesian alias for student-detail endpoints used by `/admin/siswa`. |
+| `activity/` | 16 sub-routes: `actions`, `analytics`, `ask-question`, `challenge`, `courses`, `discussion`, `examples`, `export`, `feedback`, `generate-course`, `jurnal`, `learning-profile`, `quiz`, `search`, `topics`, `transcript`. |
+| `discussions/` | Session list, detail, analytics, module status. |
+| `insights/` | Aggregated learning insight queries + export. |
+| `research/` | 14 sub-routes (see Section 11): `analytics`, `artifacts`, `auto-code`, `auto-scores`, `bulk`, `classifications`, `classify`, `evidence`, `export`, `indicators`, `readiness`, `reconcile`, `sessions`, `triangulation`. |
+| `monitoring/` | API log viewer reading `api_logs`. |
+
+### User Features
+
+| Route | Methods | Notes |
+|-------|---------|-------|
+| `/api/courses` | GET | Lists user's courses. |
+| `/api/courses/[id]` | GET, DELETE | Detail + ownership-checked deletion. |
+| `/api/generate-course` | POST | `chatCompletionWithRetry`, validates outline, persists course + subtopics + log row. |
+| `/api/generate-subtopic` | POST | Single AI call, caches into `subtopic_cache`. |
+| `/api/generate-examples` | POST | Returns `{ examples: string[] }` (Zod-validated). |
+| `/api/ask-question` | POST (stream) | Streaming text/plain via `chatCompletionStream`. |
+| `/api/challenge-thinking` | POST (stream) | Streaming challenge prompt. |
+| `/api/challenge-feedback` | POST | Non-streaming feedback. |
+| `/api/challenge-response` | POST | Persists user's challenge answer. |
+| `/api/quiz/submit`, `/api/quiz/status` | POST/GET | Submission + per-subtopic completion lookup. |
+| `/api/jurnal/save` | POST | Saves journal entries (structured reflection or free-form). |
+| `/api/learning-profile`, `/api/learning-progress`, `/api/user-progress` | GET/POST | Profile + progress tracking. |
+| `/api/prompt-journey` | GET | Per-user prompt evolution timeline (RM2 surface). |
+| `/api/onboarding-state` | GET/POST | Drives the 2-stage onboarding gate. |
+| `/api/discussion/start` | POST | Resolves/creates a `discussion_templates` row, opens a `discussion_sessions` row. |
+| `/api/discussion/respond` | POST | Evaluates the student's reply with OpenAI JSON-mode and progresses phase/goals. |
+| `/api/discussion/history`, `/api/discussion/module-status`, `/api/discussion/status`, `/api/discussion/prepare` | GET/POST | Session metadata, module-level completion, template warmup. |
+
+### Standard Handler Pattern
 
 ```typescript
-// Typical API route structure
 export const POST = withApiLogging(
-  withProtection(async (req: NextRequest) => {
-    // 1. Parse and validate request body
+  async (req: NextRequest) => {
     const body = await req.json();
     const parsed = parseBody(SomeSchema, body);
-    if (!parsed.success) return parsed.response;
+    if (!parsed.success) return parsed.response;            // 400 with first Zod issue
 
-    // 2. Extract user identity from middleware-injected headers
-    const userId = req.headers.get('x-user-id');
+    const userId = req.headers.get('x-user-id');            // injected by middleware
+    if (!(await aiRateLimiter.isAllowed(userId!))) {
+      return NextResponse.json({ error: 'Rate limited' }, { status: 429 });
+    }
 
-    // 3. Rate limiting
-    const allowed = await aiRateLimiter.isAllowed(userId);
-    if (!allowed) return NextResponse.json({ error: 'Rate limited' }, { status: 429 });
-
-    // 4. Business logic via service layer
     const result = await someService(parsed.data);
-
-    // 5. Return response
     return NextResponse.json(result);
-  }),
-  { label: 'some-feature' }
+  },
+  { label: 'feature-name' },
 );
 ```
 
-### Layer 4: Services Layer (`src/services/`)
+---
 
-Business logic is extracted from route handlers into service modules.
+## 6. Service Layer
 
-#### `auth.service.ts`
+`src/services/` contains the business-logic layer. Route handlers should remain thin and delegate to these modules.
 
-- **`findUserByEmail(email)`**: Normalized (lowercase, trimmed) lookup via `DatabaseService.getRecords('users')`
-- **`findUserById(id)`**: Direct ID lookup
-- **`resolveUserByIdentifier(identifier)`**: Tries ID first, then email -- used by quiz/submit and generate-course
-- **`getCurrentUser()`**: Extracts user from `access_token` cookie (for routes not using middleware headers)
-- **`verifyPassword(plaintext, hash)`**: `bcrypt.compare()` with bcryptjs
-- **`hashPassword(password)`**: `bcrypt.genSalt(10)` then `bcrypt.hash()`
-- **`generateAuthTokens(user)`**: Returns `{ accessToken, refreshToken }` via `generateAccessToken()` and `generateRefreshToken()`
-- **`generateCsrfToken()`**: `crypto.randomBytes(32).toString('hex')`
+### `auth.service.ts`
 
-#### `ai.service.ts`
+Source: [src/services/auth.service.ts](../src/services/auth.service.ts).
 
-- **`chatCompletion(opts)`**: Single OpenAI call with AbortController timeout (default 30s)
-- **`chatCompletionWithRetry(opts)`**: Retry wrapper -- 3 attempts, exponential backoff (2s, 4s, 6s), 90s timeout for course generation
-- **`chatCompletionStream(opts)`**: Streaming OpenAI call, returns `{ stream, cancelTimeout }`
-- **`openAIStreamToReadable(stream, opts)`**: Converts OpenAI async iterable to `ReadableStream<Uint8Array>` for HTTP streaming; `onComplete` callback fires with full accumulated text for side effects (e.g., saving to DB)
-- **`sanitizePromptInput(input, maxLength=10000)`**: Strips injection patterns (`ignore previous instructions`, `you are now a`, `system prompt:`, etc.), neutralizes XML boundary tags, truncates to 10K chars
-- **`parseAIJsonResponse(raw)`**: Strips markdown code fences, parses JSON
-- **`parseAndValidateAIResponse(raw, schema, label)`**: Parse + Zod validation
-- **`CourseOutlineResponseSchema`**: Validates array of modules with subtopics (1-10 modules)
-- **`AIExamplesResponseSchema`**: Validates `{ examples: string[] }`
+| Export | Purpose |
+|--------|---------|
+| `getCurrentUser()` | Reads `access_token` cookie, verifies, fetches user via `adminDb` with `.is('deleted_at', null)`. Used by routes that bypass middleware injection. |
+| `findUserByEmail(email)`, `findUserById(id)` | Soft-delete-aware lookups. |
+| `resolveUserByIdentifier(id-or-email)` | Tries ID, then email. Used by quiz/submit, generate-course. |
+| `verifyPassword`, `runDummyPasswordCompare` | Bcrypt compare; the dummy compare burns equivalent CPU on the "user not found" branch to resist timing-based enumeration. |
+| `hashPassword(password)` | bcryptjs with `genSalt(10)`. |
+| `generateAuthTokens(user)` | Returns `{ accessToken, refreshToken }` for regular users (15m / 3d). |
+| `generateAdminAuthTokens(user)` | Same shape but uses 30m admin access expiry. |
+| `generateCsrfToken()` | 32 random bytes hex. |
+| `hashRefreshToken(token)` | SHA-256 digest stored on `users.refresh_token_hash`. |
+| `updateUserRefreshTokenHash(userId, hash)` | Persists the latest valid refresh hash (or null on logout). |
 
-#### `course.service.ts`
+### `course.service.ts`
 
-- **`listUserCourses(userId)`**: Returns user's courses ordered by creation date
-- **`getCourseById(courseId)`**: Single course lookup
-- **`getCourseWithSubtopics(courseId)`**: Course + ordered subtopics
-- **`createCourseWithSubtopics(data, userId, modules)`**: Inserts course then iterates modules as subtopics (continues on individual failures, logs warnings)
-- **`deleteCourse(courseId, userId, userRole)`**: Ownership check (owner or admin) before deletion
-- **`canAccessCourse(course, userId, userRole)`**: Authorization predicate
+- `listUserCourses(userId)` — courses ordered by `created_at` desc.
+- `getCourseById(courseId)` — single lookup.
+- `getCourseWithSubtopics(courseId)` — joins subtopics ordered by `order_index`.
+- `createCourseWithSubtopics(data, userId, modules)` — inserts the course, then iterates modules into `subtopics`. Continues on individual subtopic failures and logs warnings (best-effort).
+- `deleteCourse(courseId, userId, userRole)` — owner-or-admin check before delete.
+- `canAccessCourse(course, userId, userRole)` — authorisation predicate reused by GET handlers.
 
-#### `discussion/generateDiscussionTemplate.ts`
+### `ai.service.ts`
 
-- AI-powered generation of Socratic discussion templates
-- Produces structured phases (diagnosis, exploration, practice, synthesis) with step prompts
-- Generates learning goals with thinking skill metadata and rubrics
-- Uses module context (title, summary, objectives, key takeaways, misconceptions)
+Source: [src/services/ai.service.ts](../src/services/ai.service.ts). Re-exports OpenAI primitives from `src/lib/openai.ts` and adds the safety pipeline.
 
-### Layer 5: Infrastructure (`src/lib/`)
+| Export | Purpose |
+|--------|---------|
+| `chatCompletion({ messages, maxTokens, timeoutMs })` | Single non-streaming call. AbortController-based timeout, default 30s, returns the OpenAI completion object. |
+| `chatCompletionWithRetry({ ..., maxAttempts=3, timeoutMs=90000 })` | Retry wrapper with exponential backoff `2s * attempt`. Used by `/api/generate-course`. |
+| `chatCompletionStream(opts)` | Streaming call returning `{ stream, cancelTimeout }`. |
+| `openAIStreamToReadable(stream, { onComplete, cancelTimeout })` | Converts the async iterable to `ReadableStream<Uint8Array>` for HTTP. Fires `onComplete(fullText)` for side effects (DB persistence). |
+| `STREAM_HEADERS` | `text/plain; charset=utf-8`, `Cache-Control: no-cache`, `X-Content-Type-Options: nosniff`. |
+| `sanitizePromptInput(input, max=10000)` | Strips injection patterns (`ignore previous instructions`, `you are now a`, `system prompt:`, etc.) and neutralises XML boundary tags `<user_content>`, `<system>`, `<assistant>`. |
+| `parseAIJsonResponse<T>(raw)` | Strips ` ```json ` fences and `JSON.parse`. |
+| `parseAndValidateAIResponse(raw, schema, label)` | Combines parse + Zod validation. |
+| `CourseOutlineResponseSchema` | Zod schema: 1-10 modules, each with title + 1+ subtopics. |
+| `AIExamplesResponseSchema` | Zod schema: `{ examples: string[] }`. |
 
-#### `database.ts` -- Database Access Layer
+### `prompt-classifier.ts`
 
-Two client tiers:
+Heuristic classifier for the RM2 prompt-development pipeline. Stages are `SCP`, `SRP`, `MQP`, `REFLECTIVE`. The classifier inspects the question text plus the four prompt components (`tujuan`, `konteks`, `batasan`, `reasoning`) and emits `{ stage, confidence, microMarkers[] }`. Reflective and multi-question regex banks are encoded for both Bahasa Indonesia and English.
+
+### `cognitive-scoring.service.ts`
+
+The unified scorer for the RM3 pipeline. Accepts any `InteractionSource` (`ask_question`, `challenge_response`, `quiz_submission`, `journal`, `discussion`) and returns a `CognitiveScores` object with **6 CT** and **6 CTh** indicator scores (each 0-2) plus aggregate `ct_total`, `cth_total`, `cognitive_depth_level` (1-4), confidence, and an evidence summary. Indicator weighting is parameterised per source via `SOURCE_INDICATOR_WEIGHTS`.
+
+### `research-auto-coder.service.ts`
+
+Stage-4 batch auto-coder. For each unscored evidence row in `research_evidence_items` it runs the prompt classifier + cognitive scorer, writes results to `auto_cognitive_scores`, marks the evidence row as `auto_coded`, and may flip the row's `triangulation_status` to `needs_review` when the model has low confidence. Logs every batch into `research_auto_coding_runs`.
+
+### `research-data-reconciliation.service.ts`
+
+Backfill / housekeeping job that scans evidence rows and sources for missing `learning_session_id`, missing `data_collection_week`, etc., and links them to the correct `learning_sessions`. Reports `{ scanned, candidates, updated_evidence, updated_sources, linked_sessions, skipped, ... }`. Always supports a `dryRun` mode.
+
+### `research-field-readiness.service.ts`
+
+Computes the per-student "field readiness" view used by `/admin/riset/readiness` — classifies each student into `siap_tesis` / `sebagian` / `perlu_data` based on minimum quotas of evidence rows, indicator coverage, and discussion sessions. Also produces anonymised participant labels via `formatAnonParticipant()`.
+
+### `research-session.service.ts`
+
+Resolves or creates the `learning_sessions` row for a given `(userId, courseId, sessionNumber, occurredAt)` tuple, computes the ISO week bucket via `getWeekBucket()`, and refreshes per-session aggregate metrics. Also exposes `syncResearchEvidenceItem()` which is the canonical write path for the `research_evidence_items` ledger.
+
+### `discussion/`
+
+- `generateDiscussionTemplate.ts` — calls OpenAI to produce a structured Socratic template (`phases`, `learning_goals`, `closing_message`) given module context (title, summary, objectives, key takeaways, misconceptions). Throws `DiscussionTemplateGenerationError` with structured causes.
+- `templatePreparation.ts` — orchestrates template lookup/creation: caches by subtopic key, persists into `discussion_templates`, and exposes `TemplateRecord` to API routes.
+
+---
+
+## 7. Lib Infrastructure
+
+Concise inventory of `src/lib/`. The most important modules already have dedicated sections (auth flow, AI, data); short bullets here for the rest.
+
+**Core infrastructure**
+
+- [`database.ts`](../src/lib/database.ts) — `adminDb`, `publicDb`, `DatabaseService`, `DatabaseError`, JSONB auto-detect. See Section 8.
+- [`openai.ts`](../src/lib/openai.ts) — Lazy OpenAI client via Proxy + `defaultOpenAIModel`.
+- [`jwt.ts`](../src/lib/jwt.ts) — Token sign/verify, expiry constants.
+- [`schemas.ts`](../src/lib/schemas.ts) — 21 Zod schemas + `parseBody()` helper.
+- [`api-client.ts`](../src/lib/api-client.ts) — Browser `apiFetch` + `readStream`.
+- [`api-middleware.ts`](../src/lib/api-middleware.ts) — `withProtection`, `withCacheHeaders`.
+- [`api-logger.ts`](../src/lib/api-logger.ts) — `withApiLogging` writing to `api_logs` (emails are SHA-256 hashed before storage).
+- [`rate-limit.ts`](../src/lib/rate-limit.ts) — `RateLimiter` class, DB-backed with in-memory fallback. Limiters: `loginRateLimiter`, `registerRateLimiter`, `resetPasswordRateLimiter`, `changePasswordRateLimiter`, `aiRateLimiter`.
+- `auth-helper.ts` — Shared helpers for cookie attrs and Set-Cookie composition.
+- `ownership.ts` — Predicates for "user owns this row" checks reused across routes.
+
+**Admin queries (lightweight, used by `/api/admin/**` handlers)**
+
+- `admin-auth.ts` — Admin-route auth utilities.
+- `admin-prompt-stage.ts` — Aggregate prompt-stage queries.
+- `admin-queries.ts` — Generic admin SELECTs.
+- `admin-quiz-attempts.ts` — Quiz attempt aggregations.
+- `admin-reflection-activity.ts`, `admin-reflection-summary.ts` — Reflection / journal aggregations.
+
+**Discussion**
+
+- `discussion/resolveSubtopic.ts` — Maps a `(courseId, moduleIdx)` to the canonical subtopic row.
+- `discussion/serializers.ts` — Stable JSON serialisation for `discussion_messages`.
+- `discussion/thinkingSkills.ts` — `ThinkingSkillMeta` taxonomy + guidance lines used to seed AI prompts.
+- `discussion-prerequisites.ts` — Computes whether a learner has unlocked the module's discussion (quiz pass + content read).
+
+**Quiz**
+
+- `quiz-content.ts` — Pure helpers for shaping `quiz` rows.
+- `quiz-sync.ts` — Cache-key helpers (`buildSubtopicCacheKey`) shared by quiz + discussion preparation.
+
+**Reflection**
+
+- `reflection-status.ts` — Per-subtopic reflection completion checks.
+- `reflection-submission.ts` — Normalisers for the structured reflection payload (used by both `schemas.ts` and persistence).
+
+**Engagement / progress**
+
+- `engagement.ts` — Engagement rollups powering admin charts.
+- `learning-progress.ts` — Pure helpers for completion percentages.
+- `leaf-subtopics.ts` — Walks the subtopic tree and returns terminal nodes for progress math.
+- `activitySeed.ts` — Deterministic seed for replaying recent activity in admin views.
+
+**Research support**
+
+- `research-normalizers.ts` — Type guards (`isUuid`), week-bucket math (`getWeekBucket`), evidence-source enums (`EvidenceSourceType`), prompt-stage normalisation, score normalisation, anonymised-participant labels.
+- `analytics/reflection-model.ts` — Modelling layer for the reflection analytics chart.
+
+**Misc**
+
+- `challenge-feedback.ts` — Helpers for shaping the challenge-feedback prompt.
+- `supabase-batch.ts` — Batched fetch helpers around `adminDb` to avoid N+1 patterns.
+
+---
+
+## 8. Data Layer
+
+### Clients
 
 | Client | Key | RLS | Use Case |
 |--------|-----|-----|----------|
-| `adminDb` | Service role | Bypassed | All writes, user-scoped reads, admin operations |
-| `publicDb` | Anon key | Respected | Read-only access to shared content (subtopic_cache, discussion_templates) |
+| `adminDb` | `SUPABASE_SERVICE_ROLE_KEY` | Bypassed | All writes, user-scoped reads, admin operations. |
+| `publicDb` | `NEXT_PUBLIC_SUPABASE_ANON_KEY` | Respected | Read-only access to genuinely shared content (`subtopic_cache`, `discussion_templates`). |
 
-Both are lazy-initialized singletons with 10-second fetch timeouts.
+Both clients are lazy singletons created on first use ([src/lib/database.ts:65-128](../src/lib/database.ts)) with a 10-second `fetch` timeout enforced via `AbortController`. If env vars are missing on the first request, `database.ts` falls back to loading `.env` and `.env.local` via dotenv to handle stale build workers.
 
-**DatabaseService** (static class):
-- `getRecords<T>(table, opts)` -- SELECT with filter, order, limit
-- `insertRecord<T>(table, data)` -- INSERT with JSONB auto-detection
-- `updateRecord<T>(table, id, data, idColumn)` -- UPDATE with auto `updated_at`
-- `deleteRecord(table, id, idColumn)` -- DELETE by ID
+### `DatabaseService` (static)
 
-**SupabaseQueryBuilder** (chainable):
-- `adminDb.from('table').select().eq().order().limit().single()` -- mirrors Supabase client API
-- Supports: `select`, `eq`, `neq`, `is`, `gte`, `lte`, `contains`, `in`, `ilike`, `order`, `limit`, `range`, `single`, `maybeSingle`
-- Mutation methods: `insert`, `update`, `delete`, `upsert`
-- Thenable: `await adminDb.from('users').select().eq('id', userId).single()`
+- `getRecords<T>(table, { select, filter, orderBy, limit })` — generic SELECT (filters are `eq` only).
+- `insertRecord<T>(table, data)` — INSERT with JSONB auto-detection.
+- `updateRecord<T>(table, id, data, idColumn)` — UPDATE with auto `updated_at`.
+- `deleteRecord(table, id, idColumn)` — DELETE by id.
 
-**JSONB Auto-Detection**:
-- Calls `get_jsonb_columns()` RPC on first insert
-- Caches column mapping for process lifetime
-- Falls back to hardcoded mapping if RPC fails
-- Non-JSONB columns receiving objects are auto-stringified
+### `SupabaseQueryBuilder` (chainable, reachable as `adminDb.from(...)`)
 
-**DatabaseError**:
-- Custom error class with `.code`, `.is(errorCode)`, `.isUniqueViolation`, `.isForeignKeyViolation`
-- Wraps Supabase PostgREST errors with typed access to error codes (23505, 23503, etc.)
+Mirrors the official Supabase client surface with `select`, `eq`, `neq`, `is`, `gte`, `lte`, `contains`, `in`, `ilike`, `order`, `limit`, `range`, `single`, `maybeSingle`, plus mutation methods `insert`, `update`, `delete`, `upsert`. The builder is thenable so `await adminDb.from('users').select().eq('id', userId).single()` works directly.
 
-#### `schemas.ts` -- Request Validation
+### JSONB auto-detection
 
-14 Zod schemas covering all API input validation:
+On the first insert, `DatabaseService` calls a Supabase RPC `get_jsonb_columns()` and caches the table-column mapping for the process lifetime. Non-JSONB columns receiving objects/arrays are auto-stringified. If the RPC fails, a hardcoded fallback mapping is used.
 
-| Schema | Used By |
-|--------|---------|
-| `LoginSchema` | `/api/auth/login` |
-| `RegisterSchema` | `/api/auth/register` |
-| `AdminLoginSchema` | `/api/admin/login` |
-| `AdminRegisterSchema` | `/api/admin/register` |
-| `GenerateCourseSchema` | `/api/generate-course` |
-| `GenerateSubtopicSchema` | `/api/generate-subtopic` |
-| `QuizSubmitSchema` | `/api/quiz/submit` |
-| `AskQuestionSchema` | `/api/ask-question` |
-| `ChallengeThinkingSchema` | `/api/challenge-thinking` |
-| `ChallengeFeedbackSchema` | `/api/challenge-feedback` |
-| `GenerateExamplesSchema` | `/api/generate-examples` |
-| `FeedbackSchema` | `/api/feedback` |
-| `JurnalSchema` | `/api/jurnal/save` |
+### `DatabaseError`
 
-Helper: `parseBody(schema, body)` returns `{ success: true, data }` or `{ success: false, response: NextResponse(400) }` with the first Zod error message.
+Custom error class with typed access to PostgREST/Postgres error codes (`23505` unique, `23503` FK, `23502` not-null, `23514` check, `PGRST205` table-not-found, `42501` perm-denied). Helpers: `.is(code)`, `.isUniqueViolation`, `.isForeignKeyViolation`.
 
-#### `jwt.ts` -- Token Management
+### Schema (35 public tables)
 
-| Function | Purpose | Details |
-|----------|---------|---------|
-| `generateAccessToken(payload)` | Create access JWT | HS256, 15-minute expiry, `type: 'access'` |
-| `generateRefreshToken(payload)` | Create refresh JWT | HS256, 3-day expiry, `type: 'refresh'` |
-| `verifyToken(token)` | Verify access tokens | Rejects tokens with `type: 'refresh'` |
-| `verifyRefreshToken(token)` | Verify refresh tokens | Rejects tokens with `type: 'access'` |
-| `getTokenExpiration(token)` | Decode expiry date | Non-verifying decode |
+The detailed table-by-table catalog lives in [DATABASE_SCHEMA.md](DATABASE_SCHEMA.md). Tables are grouped logically as:
 
-Payload structure: `{ userId, email, role, type }`.
+- **Identity**: `users`, `learning_profiles`, `rate_limits`.
+- **Content**: `courses`, `subtopics`, `quiz`, `subtopic_cache`, `discussion_templates`, `course_generation_activity`.
+- **Learning activity**: `user_progress`, `quiz_submissions`, `ask_question_history`, `jurnal`, `transcript`, `feedback`, `challenge_responses`, `discussion_sessions`, `discussion_messages`, `discussion_admin_actions`.
+- **Research**: `learning_sessions`, `prompt_classifications`, `prompt_revisions`, `micro_markers`, `cognitive_indicators`, `auto_cognitive_scores`, `research_evidence_items`, `research_auto_coding_runs`, `research_artifacts`, `triangulation_records`, `inter_rater_reliability`, `discussion_assessments`.
+- **Infrastructure**: `api_logs`, `admin_subtopic_delete_logs`.
 
-#### `rate-limit.ts` -- Rate Limiting
+> **RLS posture.** RLS is enabled across the schema, but because custom JWT claims are NOT Supabase Auth tokens, `auth.uid()` is unavailable. Application-level access control (middleware + service layer + ownership predicates) is the enforced authority; RLS serves as defense-in-depth and as documentation of intended access. `publicDb` is only used where `USING (true)` policies make this safe.
 
-DB-backed rate limiter with in-memory fallback. Uses the `rate_limits` table (key TEXT PK, count INT, reset_at TIMESTAMPTZ).
+---
 
-| Limiter | Window | Max Requests |
-|---------|--------|-------------|
-| `loginRateLimiter` | 15 minutes | 5 |
-| `registerRateLimiter` | 1 hour | 3 |
-| `resetPasswordRateLimiter` | 1 hour | 3 |
-| `changePasswordRateLimiter` | 15 minutes | 5 |
-| `aiRateLimiter` | 1 hour | 30 |
+## 9. AI Integration
 
-If the `rate_limits` table is unavailable (missing or connection error), the limiter transparently falls back to an in-memory `Map` with periodic cleanup every 60 seconds.
+### Client setup
 
-#### `api-client.ts` -- Frontend HTTP Client
+`src/lib/openai.ts` exposes a `Proxy`-wrapped lazy singleton so importing `openai` at module load does not throw during build phases (`Collecting page data`) when `OPENAI_API_KEY` is absent. `defaultOpenAIModel` reads `OPENAI_MODEL` env var (default `'gpt-5-mini'`).
 
-`apiFetch(url, options)`:
-- Auto-includes `x-csrf-token` header for POST/PUT/DELETE/PATCH (reads from `csrf_token` cookie)
-- Sets `credentials: 'include'` for cookie transmission
-- Defaults `Content-Type: application/json` when body is present
-- On 401 response (except auth routes): auto-retries by calling `POST /api/auth/refresh` then repeating the original request
+### Endpoint matrix
 
-`readStream(response, onChunk)`:
-- Reads a streaming `text/plain` response using `ReadableStream`
-- Calls `onChunk(accumulatedText)` after each chunk
-- Returns the complete text when done
+| Feature | Endpoint | Function | Timeout | Streaming | Rate Limit |
+|---------|----------|----------|---------|-----------|------------|
+| Course outline | `/api/generate-course` | `chatCompletionWithRetry` | 90s, 3 attempts | No | 30/hr (`aiRateLimiter`) |
+| Subtopic content | `/api/generate-subtopic` | `chatCompletion` | 30s | No | 30/hr |
+| Examples | `/api/generate-examples` | `chatCompletion` | 30s | No | 30/hr |
+| Q&A | `/api/ask-question` | `chatCompletionStream` | 30s | Yes (text/plain) | 30/hr |
+| Challenge prompt | `/api/challenge-thinking` | `chatCompletionStream` | 30s | Yes (text/plain) | 30/hr |
+| Challenge feedback | `/api/challenge-feedback` | `chatCompletion` | 30s | No | 30/hr |
+| Discussion eval | `/api/discussion/respond` | OpenAI JSON-mode | 30s | No | n/a |
+| Discussion start | `/api/discussion/start` | `generateDiscussionTemplate` | 30s | No | n/a |
 
-#### `api-middleware.ts` -- Route-Level Protection
+### Retry strategy
 
-`withProtection(handler, options)`:
-- CSRF validation: compares cookie vs header for non-GET requests
-- Auth verification: validates `access_token` cookie via `verifyToken()`
-- Admin enforcement: checks `role === 'admin'` when `adminOnly: true`
-- Injects `x-user-id`, `x-user-email`, `x-user-role` headers
-- Defense-in-depth layer (middleware.ts provides primary protection)
+`chatCompletionWithRetry` retries up to 3 times with exponential backoff (`2s * attempt`). Each attempt has the configured timeout (90s for course generation). Used only on long-running, high-value calls; everywhere else a single 30s call is preferred so failures are visible to the user immediately.
 
-`withCacheHeaders(response, maxAgeSeconds=60)`:
-- Sets `Cache-Control: private, s-maxage=N, stale-while-revalidate=2N`
-- Used on read-only admin endpoints
+### Streaming pipeline
 
-#### `api-logger.ts` -- Request Logging
+```
+chatCompletionStream() ──► OpenAI (stream: true) ──► AsyncIterable<StreamChunk>
+                                                          │
+                                                          ▼
+                                            openAIStreamToReadable()
+                                                          │
+                                                          ▼
+                                            ReadableStream<Uint8Array>
+                                                          │
+                                                          ▼
+                                            new Response(stream, { headers: STREAM_HEADERS })
+                                                          │
+                                                          ▼
+                                            Browser readStream(response, onChunk)
+                                                          │
+                                                          ▼
+                                            onComplete(fullText) ──► DB save
+```
 
-`withApiLogging(handler, context)`:
-- Wraps any API handler to log requests to the `api_logs` table
-- Records: method, path, query, status_code, duration_ms, ip_address, user_agent, user_id, user_email, user_role, label, metadata, error_message
-- Extracts IP from `x-forwarded-for` or `x-real-ip` headers
-- Catches and re-throws errors while still logging them
+`onComplete` is the standard hook for persisting Q&A history (`ask_question_history`), challenge text, etc., without blocking the user-facing stream.
 
-#### `openai.ts` -- OpenAI Client
+### Prompt-injection defense
 
-- Singleton `OpenAI` instance initialized with `OPENAI_API_KEY` env var
-- `defaultOpenAIModel`: reads from `OPENAI_MODEL` env var, defaults to `'gpt-5-mini'`
-- Throws on startup if `OPENAI_API_KEY` is missing
+1. **Sanitisation** — `sanitizePromptInput()` truncates to 10K chars and regex-strips known override patterns plus the boundary tags themselves.
+2. **Boundary markers** — user content is wrapped in `<user_content>...</user_content>` so the system prompt can refer to it unambiguously.
+3. **System prompt hardening** — explicit instructions to ignore directives that arrive inside `<user_content>`.
+4. **Output validation** — `parseAndValidateAIResponse(raw, schema, label)` rejects malformed AI replies before they reach the database.
 
-### Layer 6: Database (Supabase PostgreSQL)
+---
 
-26 tables across 3 domains, with Row-Level Security (RLS) policies on all tables.
+## 10. Frontend Architecture
 
-#### Core Learning Tables
+### App Router pages (selected)
 
-| Table | Purpose | Key Columns |
-|-------|---------|-------------|
-| `users` | User accounts | id, email, password_hash, name, role |
-| `courses` | Course metadata | id, title, description, difficulty_level, created_by |
-| `subtopics` | Course sections (JSONB content) | id, course_id, title, content, order_index |
-| `user_progress` | Completion tracking | user_id, course_id, subtopic_id, is_completed |
-| `quiz` | Quiz questions per subtopic | id, course_id, subtopic_id, options (JSONB) |
-| `quiz_submissions` | Student quiz answers with scoring | user_id, course_id, subtopic, score, answers |
-| `ask_question_history` | Q&A interaction logs | user_id, course_id, question, answer, prompt_components (JSONB) |
-| `jurnal` | Learning journal entries | user_id, course_id, content, type |
-| `transcript` | Course notes | user_id, course_id, content |
-| `feedback` | Course ratings and comments | user_id, course_id, rating, comment |
-| `challenge_responses` | Critical thinking responses | user_id, question, answer, feedback |
-
-#### Discussion System Tables
-
-| Table | Purpose | Key Columns |
-|-------|---------|-------------|
-| `discussion_templates` | Socratic templates per subtopic | id, template (JSONB), source (JSONB), version |
-| `discussion_sessions` | Active sessions with phase tracking | id, user_id, status, phase, learning_goals (JSONB), template_id |
-| `discussion_messages` | Individual messages | session_id, role, content, metadata (JSONB), step_key |
-| `discussion_admin_actions` | Admin audit trail | session_id, action, payload (JSONB) |
-
-#### AI and Cache Tables
-
-| Table | Purpose |
+| Route | Purpose |
 |-------|---------|
-| `course_generation_activity` | Logs each generation request with request_payload (JSONB) and outline (JSONB) |
-| `subtopic_cache` | Cached AI-generated subtopic content (JSONB) |
+| `/` | Landing page. |
+| `/login`, `/signup` | User auth. |
+| `/onboarding`, `/onboarding/intro` | 2-stage onboarding gated by middleware cookies. |
+| `/dashboard` | User's course library. |
+| `/course/[courseId]` | Module navigation. |
+| `/course/[courseId]/subtopic/[subIdx]/[pageIdx]` | Learning interface (content, takeaways, quiz, examples, ask-question, challenge, structured reflection, what-next). |
+| `/course/[courseId]/discussion/[moduleIdx]` | Socratic discussion (4-phase). |
+| `/request-course/step1`, `step2`, `step3`, `generating`, `result` | Multi-step course wizard backed by `RequestCourseContext`. |
+| `/admin/login`, `/admin/register` | Admin auth. |
+| `/admin/dashboard` | KPI overview. |
+| `/admin/aktivitas` | Activity timelines. |
+| `/admin/siswa/[id]` | Student detail. |
+| `/admin/riset/{bukti, kognitif, prompt, readiness, triangulasi}` | Research console subpages. |
+| `/admin/ekspor` | Export console (currently NOT in active scope per user research notes). |
 
-#### Research Tables (Thesis)
-
-| Table | Purpose | Domain |
-|-------|---------|--------|
-| `learning_sessions` | Longitudinal tracking with cognitive depth scores | RM2, RM3 |
-| `prompt_classifications` | Prompt stage classification (SCP, SRP, MQP, REFLECTIVE) | RM2 |
-| `micro_markers` | Fine-grained prompt behavior markers | RM2 |
-| `cognitive_indicators` | CT (6 dimensions, 0-2) and CTh (6 dimensions, 0-2) assessment | RM3 |
-| `learning_profiles` | User learning preferences | RM2 |
-| `triangulation_records` | Multi-source data triangulation | RM4 |
-| `inter_rater_reliability` | Cohen's Kappa inter-rater metrics | RM4 |
-
-#### Operations Tables
-
-| Table | Purpose |
-|-------|---------|
-| `api_logs` | Request logging (method, path, status, duration, user, metadata) |
-| `rate_limits` | Persistent rate limit counters (key, count, reset_at) |
-| `admin_subtopic_delete_logs` | Admin deletion audit trail |
-
-#### Database Infrastructure
-
-- **Two client types**: `adminDb` (service-role, bypasses RLS) and `publicDb` (anon-key, respects RLS)
-- **JSONB auto-detection**: `get_jsonb_columns()` PL/pgSQL function returns table-column mapping
-- **4 PL/pgSQL functions**: `get_jsonb_columns()`, `get_admin_user_stats()`, and others for aggregation
-- **3 views**: Pre-built query views for admin analytics
-- **RLS policies**: Applied to all 26 tables (most use service-role client to bypass, as custom JWT cannot leverage `auth.uid()`)
-
----
-
-## 4. Data Flow Diagrams
-
-### Authentication Flow
-
-```mermaid
-sequenceDiagram
-    participant B as Browser
-    participant MW as middleware.ts
-    participant API as /api/auth/login
-    participant AS as auth.service
-    participant DB as Supabase (users)
-
-    B->>API: POST /api/auth/login {email, password}
-    Note over API: Route is in apiAuthRoutes -- middleware skips auth
-    API->>API: parseBody(LoginSchema, body)
-    API->>AS: findUserByEmail(email)
-    AS->>DB: DatabaseService.getRecords('users', {filter: {email}})
-    DB-->>AS: UserRecord (id, email, password_hash, role)
-    AS-->>API: user
-    API->>AS: verifyPassword(password, user.password_hash)
-    AS-->>API: true
-    API->>AS: generateAuthTokens(user)
-    AS-->>API: {accessToken (15min), refreshToken (3d)}
-    API->>AS: generateCsrfToken()
-    AS-->>API: csrfToken (32 bytes hex)
-    API-->>B: Set-Cookie: access_token (httpOnly)<br/>Set-Cookie: refresh_token (httpOnly)<br/>Set-Cookie: csrf_token (readable)<br/>JSON: {user: {id, email, role, name}}
-
-    Note over B: Subsequent Requests
-    B->>MW: GET/POST with cookies + x-csrf-token header
-    MW->>MW: verifyToken(access_token)
-    MW->>MW: CSRF check (cookie === header) for mutations
-    MW->>MW: Inject x-user-id, x-user-email, x-user-role
-    MW-->>API: Request with user context headers
-```
-
-### Token Refresh Flow
-
-```mermaid
-sequenceDiagram
-    participant B as Browser (apiFetch)
-    participant API as Protected API Route
-    participant RF as /api/auth/refresh
-    participant JWT as jwt.ts
-
-    B->>API: POST /api/some-endpoint (expired access_token)
-    API-->>B: 401 Unauthorized
-
-    Note over B: apiFetch auto-retry on 401
-    B->>RF: POST /api/auth/refresh (refresh_token cookie)
-    RF->>JWT: verifyRefreshToken(token)
-    JWT-->>RF: payload {userId, email, role}
-    RF->>JWT: generateAccessToken(payload)
-    RF->>JWT: generateRefreshToken(payload)
-    Note over RF: Old refresh token invalidated (rotation)
-    RF-->>B: Set-Cookie: new access_token<br/>Set-Cookie: new refresh_token<br/>Set-Cookie: new csrf_token
-
-    B->>API: POST /api/some-endpoint (fresh access_token)
-    API-->>B: 200 OK
-```
-
-### Course Generation Flow
-
-```mermaid
-sequenceDiagram
-    participant B as Browser
-    participant MW as middleware.ts
-    participant API as /api/generate-course
-    participant ZOD as Zod Validation
-    participant RL as Rate Limiter
-    participant AS as auth.service
-    participant AI as ai.service
-    participant CS as course.service
-    participant DB as Supabase
-    participant OAI as OpenAI API
-
-    B->>MW: POST /api/generate-course {topic, goal, level, ...}
-    MW->>MW: Verify JWT + CSRF + inject headers
-    MW->>API: Forward with x-user-id header
-
-    API->>ZOD: parseBody(GenerateCourseSchema, body)
-    ZOD-->>API: validated data
-
-    API->>RL: aiRateLimiter.isAllowed(userId)
-    RL->>DB: Check rate_limits table
-    DB-->>RL: count < 30/hr
-    RL-->>API: allowed
-
-    API->>AS: resolveUserByIdentifier(x-user-id)
-    AS-->>API: {id, email}
-
-    API->>AI: sanitizePromptInput(topic + goal + extras)
-    API->>AI: chatCompletionWithRetry({messages, maxTokens, timeout: 90s})
-
-    loop Up to 3 attempts (backoff 2s, 4s, 6s)
-        AI->>OAI: POST /chat/completions (gpt-5-mini, 90s timeout)
-        OAI-->>AI: JSON response
-    end
-
-    AI-->>API: Raw AI response text
-    API->>AI: parseAndValidateAIResponse(raw, CourseOutlineResponseSchema)
-    AI-->>API: Validated module array
-
-    Note over API: Append discussion nodes to each module
-    API->>CS: createCourseWithSubtopics(data, userId, modules)
-    CS->>DB: INSERT courses + INSERT subtopics (iterate)
-    DB-->>CS: course {id}
-    CS-->>API: course
-
-    API->>DB: INSERT course_generation_activity (log)
-    API-->>B: {outline: modules[], courseId}
-```
-
-### AI Q&A Streaming Flow
-
-```mermaid
-sequenceDiagram
-    participant B as Browser
-    participant API as /api/ask-question
-    participant AI as ai.service
-    participant OAI as OpenAI API
-    participant DB as Supabase
-
-    B->>API: POST /api/ask-question {question, context, userId, courseId}
-    API->>API: parseBody(AskQuestionSchema)
-    API->>API: Rate limit check
-    API->>AI: sanitizePromptInput(question, 10000)
-
-    API->>AI: chatCompletionStream({messages, timeout: 30s})
-    AI->>OAI: POST /chat/completions (stream: true)
-
-    API->>AI: openAIStreamToReadable(stream, {onComplete, cancelTimeout})
-    Note over API: Returns ReadableStream with text/plain headers
-
-    loop Streaming chunks
-        OAI-->>AI: chunk.choices[0].delta.content
-        AI-->>B: Uint8Array chunk (text/plain)
-        Note over B: readStream() calls onChunk(accumulated)
-    end
-
-    OAI-->>AI: [DONE]
-    Note over AI: onComplete callback fires
-    AI->>DB: INSERT ask_question_history (question, fullText, courseId, promptComponents)
-    AI-->>B: Stream closed
-```
-
-### Socratic Discussion Flow
-
-```mermaid
-sequenceDiagram
-    participant B as Browser
-    participant Start as /api/discussion/start
-    participant Respond as /api/discussion/respond
-    participant Gen as generateDiscussionTemplate
-    participant OAI as OpenAI API
-    participant DB as Supabase
-
-    Note over B: Starting a Discussion
-    B->>Start: POST {courseId, subtopicId, moduleIdx}
-    Start->>DB: Check for existing template (publicDb)
-    alt No template exists
-        Start->>Gen: generateDiscussionTemplate(context)
-        Gen->>OAI: Generate structured template
-        OAI-->>Gen: {phases, learning_goals, closing_message}
-        Gen->>DB: INSERT discussion_templates
-    end
-    Start->>DB: INSERT discussion_sessions (status: in_progress, phase: diagnosis)
-    Start->>DB: INSERT discussion_messages (role: agent, initial prompt)
-    Start-->>B: {sessionId, message, goals, phase}
-
-    Note over B: Responding in Discussion
-    B->>Respond: POST {sessionId, message, stepKey}
-    Respond->>DB: Fetch session + template + goals
-    Respond->>DB: INSERT discussion_messages (role: student)
-
-    Respond->>OAI: Evaluate response (JSON schema mode)
-    Note over OAI: Checks: goal coverage, MCQ correctness,<br/>quality of open-ended answer
-    OAI-->>Respond: {evaluation, next_action, goals_covered}
-
-    Respond->>DB: UPDATE discussion_sessions (goals, phase)
-    Respond->>DB: INSERT discussion_messages (role: agent, AI response)
-
-    alt All goals covered
-        Respond->>DB: UPDATE session status = completed
-        Respond->>DB: UPDATE user_progress (background)
-        Respond-->>B: {message: closing_message, completed: true}
-    else More goals remain
-        Respond-->>B: {message, nextStep, goals, phase}
-    end
-```
-
----
-
-## 5. Component Architecture
-
-### Learning Interface (`/course/[courseId]/subtopic/[subIdx]/[pageIdx]`)
-
-The subtopic page is the primary learning interface, composing multiple interactive components:
-
-```
-SubtopicPage
-  |-- Content Renderer (JSONB content display)
-  |-- KeyTakeaways (module summary points)
-  |-- Quiz (multiple-choice + ReasoningNote)
-  |     |-- QuizQuestion (individual question)
-  |     |-- ReasoningNote (free-text annotation per question)
-  |     |-- QuizResults (score + review)
-  |-- AskQuestion
-  |     |-- PromptBuilder (guided prompt construction)
-  |     |-- QuestionBox (streamed AI answer display)
-  |-- ChallengeThinking
-  |     |-- ChallengeBox (AI challenge question + user response + feedback)
-  |-- Examples
-  |     |-- ExampleList (AI-generated contextual examples)
-  |-- StructuredReflection (guided journal entry)
-  |-- NextSubtopics (navigation)
-  |-- WhatNext (post-lesson guidance)
-```
-
-### Discussion Interface (`/course/[courseId]/discussion/[moduleIdx]`)
-
-The Socratic discussion operates in 4 phases:
-
-| Phase | Purpose | Interaction Style |
-|-------|---------|------------------|
-| **Diagnosis** | Assess prior knowledge | MCQ + open-ended |
-| **Exploration** | Guide discovery of concepts | Open-ended dialogue |
-| **Practice** | Apply understanding | Problem-solving + MCQ |
-| **Synthesis** | Consolidate learning | Reflective open-ended |
-
-Each phase contains template-defined steps with learning goal references. The AI evaluates each student response against goal rubrics and tracks coverage.
-
-### Admin Dashboard
-
-```
-AdminDashboard
-  |-- KPI Cards (total users, courses, active sessions)
-  |-- RM2 Charts (prompt classification distribution, stage transitions)
-  |-- RM3 Charts (cognitive indicator progression, CT/CTh dimension scores)
-  |-- Recent Activity Feed
-```
-
----
-
-## 6. State Management
-
-### Client-Side State
+### State management
 
 | Provider/Hook | Scope | Storage | Purpose |
 |--------------|-------|---------|---------|
-| `AuthProvider` (useAuth) | Global | Memory + cookies | User identity, isAuthenticated, login/logout/refresh, networkError, retryAuth |
-| `RequestCourseProvider` | Course wizard | sessionStorage | Multi-step form state (topic, goal, level, extras, problem, assumption) |
-| `useLocalStorage(key)` | Per-component | localStorage | Persistent per-user data (keyed by user ID) |
-| `useSessionStorage(key)` | Per-component | sessionStorage | Tab-scoped data, auto-cleared on tab close |
-| `useAdmin()` | Admin pages | Memory | Admin user profile via `/api/admin/me` |
+| `AuthProvider` (`useAuth`) | Global | Memory + cookies | User identity, login/logout/refresh, networkError + retryAuth. |
+| `RequestCourseProvider` | Course wizard | sessionStorage | Multi-step form state. |
+| `useAdmin()` | Admin pages | Memory | Admin profile via `/api/admin/me`. |
+| `useLearningProgress` | Subtopic page | Memory + DB | Progress + completion. |
+| `useOnboardingState` | Onboarding | sessionStorage + DB | Drives the 2-stage gate. |
+| `useLocalStorage(key)`, `useSessionStorage(key)`, `useDebouncedValue(value, ms)` | Per-component | localStorage / sessionStorage / memory | Generic hooks. |
 
-### AuthProvider Flow
+### Styling
 
-```
-Mount --> GET /api/auth/me
-  |-- OK --> setUser({id, email, role, name}), isAuthenticated = true
-  |-- 401 --> user = null, isAuthenticated = false
-  |-- Network error --> networkError = true, retryAuth() available
-
-Login --> POST /api/auth/login
-  |-- Server sets httpOnly cookies (access, refresh, CSRF)
-  |-- Provider sets user state from response
-
-Logout --> POST /api/auth/logout (with CSRF header)
-  |-- Server clears cookies
-  |-- Provider sets user = null
-  |-- Router pushes to /login
-```
-
-### Server-Side State
-
-- **JWT tokens**: `access_token` (httpOnly, 15min) and `refresh_token` (httpOnly, 3d) in cookies
-- **CSRF token**: `csrf_token` cookie (readable by JavaScript, sent as `x-csrf-token` header)
-- **User context**: Middleware injects `x-user-id`, `x-user-email`, `x-user-role` into request headers
-- **Rate limits**: Persisted in `rate_limits` table (survives server restarts)
+Every component folder co-locates a `.module.scss` file; class names are scoped per component. There is no global UI framework — base styles live in `src/app/globals.scss` and `src/styles/`.
 
 ---
 
-## 7. Security Architecture
+## 11. Research Pipeline (RM2 / RM3 / RM4)
 
-> Detailed security documentation is maintained in `SECURITY.md`. This section provides a brief architectural overview.
+The platform doubles as the data-collection instrument for the thesis. The pipeline is intentionally split between **synchronous capture** (writes that happen during normal learner activity) and **asynchronous coding** (admin-triggered batch jobs that run the auto-coder + reconciliation services).
 
-### Authentication
+### Pipeline diagram
 
-- **Custom JWT**: Not using Supabase Auth -- full control over token lifecycle, payload structure, and rotation
-- **Token types**: Typed JWT claims (`type: 'access'` vs `type: 'refresh'`) prevent token confusion attacks
-- **Token rotation**: Refresh tokens are single-use; each refresh issues a new pair
-- **Password hashing**: bcryptjs with salt rounds = 10
+```
+Student activity                            Sync capture                       Async coding                  Admin surfaces
+─────────────────                           ─────────────                       ─────────────                 ───────────────
+ask-question  ─────────┐
+challenge-response ────┤
+quiz/submit  ──────────┼─► research_evidence_items  ──► research-auto-coder ──► auto_cognitive_scores ──► /admin/riset/kognitif
+jurnal/save   ─────────┤   (261 rows)                  (41 runs logged)         (12 rows)
+discussion/respond ────┘                                                        prompt_classifications  ──► /admin/riset/prompt
+                                                                                (143 rows)
+                                                                                triangulation_records   ──► /admin/riset/triangulasi
+                                                                                (64 rows)
+                                                                                discussion_assessments  ──► /admin/aktivitas
+                                                                                (45 rows)
+                                                                       ┌──────► research-data-reconciliation
+                                                                       │        (links sessions, week buckets)
+                                                                       │
+prompt submissions ───► prompt-classifier ─► prompt_classifications    │
+                        (heuristic, RM2)                               │
+                                                                       │
+all sources       ────► cognitive-scoring ─► auto_cognitive_scores ────┤
+                        (LLM, 6 CT + 6 CTh,                            │
+                         depth 1-4)                                    │
+                                                                       │
+session lifecycle ────► research-session ──► learning_sessions  ───────┘
+                        (week buckets)      (22 rows)
+```
 
-### CSRF Protection
+### Table population status (verified live counts as of 2026-04)
 
-- **Double-submit cookie pattern**: Server sets `csrf_token` cookie (httpOnly: false); client reads it via `getCsrfToken()` and sends as `x-csrf-token` header
-- **Validation layers**: Both `middleware.ts` (primary) and `withProtection()` (defense in depth) validate CSRF
-- **Scope**: Only enforced on mutation methods (POST, PUT, DELETE, PATCH)
+| Table | Rows | Role |
+|-------|------|------|
+| `prompt_classifications` | 143 | RM2 — output of `prompt-classifier`. |
+| `cognitive_indicators` | 12 | RM3 — definition of the 12 indicators (6 CT + 6 CTh). |
+| `auto_cognitive_scores` | 12 | RM3 — output of `cognitive-scoring.service`. |
+| `research_evidence_items` | 261 | RM2/RM3 — canonical evidence ledger. |
+| `research_auto_coding_runs` | 41 | RM3 — log of every auto-coder batch. |
+| `triangulation_records` | 64 | RM4 — multi-source triangulation. |
+| `discussion_assessments` | 45 | RM3 — per-discussion-turn assessment. |
+| `learning_sessions` | 22 | Longitudinal session container. |
+| `inter_rater_reliability` | 0 | RM4 — reserved (Cohen's Kappa not yet computed). |
+| `research_artifacts` | 0 | Reserved (will hold exported deliverables). |
+| `prompt_revisions` | 0 | Reserved (per-prompt edit history not yet captured). |
 
-### Rate Limiting
+> **Pipeline status, plainly stated.** The classifier + scorer + reconciler + readiness services are wired and producing data. The triangulation, auto-coder, and assessment surfaces have meaningful row counts. **Inter-rater reliability, prompt-revision history, and the research-artifacts ledger are still empty** — these are partial features awaiting either downstream tooling (Cohen's Kappa computation) or upstream capture (revision diff persistence). Do not treat zero-row tables as a bug.
 
-- **DB-backed persistence**: Uses `rate_limits` table so limits survive server restarts and scale across instances
-- **In-memory fallback**: Automatic transparent fallback if DB is unavailable
-- **5 limiter instances**: login (5/15min), register (3/hr), reset password (3/hr), change password (5/15min), AI (30/hr)
+### Admin research endpoints (`/api/admin/research/**`)
 
-### Prompt Injection Defense
-
-Multi-layer protection for all AI endpoints:
-
-1. **Input sanitization** (`sanitizePromptInput()`): Regex-based filtering of injection patterns, XML tag neutralization, truncation to 10K chars
-2. **XML boundary markers**: User content wrapped in `<user_content>...</user_content>` delimiters
-3. **System prompt hardening**: Explicit instructions to ignore user-injected directives
-4. **Output validation**: Zod schemas validate AI responses before database persistence
-
-### Row-Level Security (RLS)
-
-- All 26 tables have RLS policies
-- Since custom JWT auth cannot populate `auth.uid()`, the `adminDb` (service-role) client is used for most operations, bypassing RLS
-- `publicDb` (anon-key) is used for read-only shared content where RLS `USING (true)` policies apply
-- Application-level access control enforced in middleware and service layer
+`analytics`, `artifacts`, `auto-code`, `auto-scores`, `bulk`, `classifications`, `classify`, `evidence`, `export`, `indicators`, `readiness`, `reconcile`, `sessions`, `triangulation`. The corresponding pages under `/admin/riset/` are `bukti`, `kognitif`, `prompt`, `readiness`, `triangulasi`.
 
 ---
 
-## 8. AI Integration
+## 12. Testing Architecture
 
-### Client Configuration
+The project uses two test runners side by side.
 
-```typescript
-// src/lib/openai.ts
-export const openai = new OpenAI({ apiKey: process.env.OPENAI_API_KEY });
-export const defaultOpenAIModel = process.env.OPENAI_MODEL || 'gpt-5-mini';
-```
+### Jest (unit + API integration)
 
-### AI Feature Matrix
+Configuration is the default `jest` setup with `ts-jest` and `jsdom` environment. Key directories:
 
-| Feature | Endpoint | Method | Timeout | Streaming | Rate Limit |
-|---------|----------|--------|---------|-----------|------------|
-| Course generation | `/api/generate-course` | `chatCompletionWithRetry` | 90s | No | 30/hr |
-| Subtopic content | `/api/generate-subtopic` | `chatCompletion` | 30s | No | 30/hr |
-| Example generation | `/api/generate-examples` | `chatCompletion` | 30s | No | 30/hr |
-| Q&A | `/api/ask-question` | `chatCompletionStream` | 30s | Yes (text/plain) | 30/hr |
-| Challenge question | `/api/challenge-thinking` | `chatCompletionStream` | 30s | Yes (text/plain) | 30/hr |
-| Challenge feedback | `/api/challenge-feedback` | `chatCompletion` | 30s | No | 30/hr |
-| Discussion template | Internal service | `chatCompletion` | 30s | No | N/A |
-| Discussion evaluation | `/api/discussion/respond` | OpenAI JSON schema mode | 30s | No | N/A |
+- `tests/api/` — API integration tests grouped by feature: `admin/`, `ai/`, `auth/`, `courses/`, `generate-course/`, `learning/`, `middleware/`, `security/`.
+- `tests/unit/` — Pure unit tests (`schemas.test.ts`, `api-client.test.ts`, `discussion-serializers.test.ts`, `supabase-batch.test.ts`, plus admin-* tests).
+- `tests/setup/jest.setup.ts` — global setup.
+- `tests/setup/test-utils.ts` — shared helpers.
+- `tests/setup/mocks/` — MSW handlers.
+- `tests/fixtures/{users.fixture.ts, courses.fixture.ts}` — typed fixtures.
+- `tests/types/` — shared test types.
 
-### Retry Strategy
+Scripts: `npm test`, `npm run test:watch`, `npm run test:coverage`, `npm run test:unit`.
 
-`chatCompletionWithRetry`:
-- Max attempts: 3
-- Backoff: exponential -- 2s after attempt 1, 4s after attempt 2, 6s after attempt 3
-- Timeout per attempt: 90s (configurable)
-- Used exclusively by course generation (long-running, high-value operation)
+### Playwright (E2E)
 
-### Streaming Architecture
+Three test groups under `tests/e2e/`: `admin/`, `mobile/`, `user/`. Configuration sits alongside via the standard Playwright config. Reports land in `tests/e2e-report/` and `tests/e2e-results/`.
 
-```
-chatCompletionStream() --> OpenAI (stream: true) --> AsyncIterable<StreamChunk>
-                                                          |
-                                                    openAIStreamToReadable()
-                                                          |
-                                                    ReadableStream<Uint8Array>
-                                                          |
-                                                    new Response(stream, {
-                                                      headers: STREAM_HEADERS
-                                                    })
-                                                          |
-                                                    Browser receives text/plain
-                                                          |
-                                                    readStream(response, onChunk)
-                                                          |
-                                                    onComplete(fullText) --> DB save
-```
+Scripts: `npm run test:e2e`, `npm run test:e2e:user`, `npm run test:e2e:admin`, `npm run test:e2e:admin:smoke`, `npm run test:e2e:ui`, `npm run test:e2e:headed`. CI alias: `npm run test:ci` (Jest with coverage + Playwright).
 
-`STREAM_HEADERS`: `Content-Type: text/plain; charset=utf-8`, `Cache-Control: no-cache`, `X-Content-Type-Options: nosniff`
+### HTTP mocking
 
-### Prompt Security Pipeline
-
-```
-User Input
-  |
-  v
-sanitizePromptInput(input, 10000)
-  |-- Truncate to 10,000 characters
-  |-- Strip: "ignore previous instructions", "you are now a", etc.
-  |-- Remove: <user_content>, <system>, <assistant> tags
-  |-- Trim whitespace
-  |
-  v
-System Prompt Construction
-  |-- System message: role definition + hardened instructions
-  |-- User content wrapped in: <user_content>{sanitized}</user_content>
-  |
-  v
-OpenAI API Call
-  |
-  v
-Response Validation
-  |-- parseAIJsonResponse(): strip code fences, parse JSON
-  |-- Zod schema validation (CourseOutlineResponseSchema, AIExamplesResponseSchema)
-  |-- Reject invalid structures before DB persistence
-```
+`msw` 2.x runs inside Jest tests via the handlers under `tests/setup/mocks/`. `node-mocks-http` covers route-handler unit tests where intercepting `fetch` is overkill.
 
 ---
 
-## 9. Research Data Integration (Thesis Support)
+## 13. Build and Deployment
 
-PrincipleLearn V3 serves as the primary research instrument for a thesis investigating AI-driven CT and CTh development. The platform captures multi-layered research data across four research methods (RM).
-
-### RM2: Prompt Development Analysis
-
-Tracks how student prompt-writing skills evolve over learning sessions.
-
-**Classification Stages**:
-| Stage | Code | Description |
-|-------|------|-------------|
-| Simple Copy Prompt | SCP | Verbatim or near-verbatim copying of content |
-| Simple Rephrased Prompt | SRP | Paraphrasing with minimal transformation |
-| Multi-layered Quality Prompt | MQP | Complex, multi-faceted questions |
-| Reflective Prompt | REFLECTIVE | Meta-cognitive, self-aware questioning |
-
-**Data Tables**: `learning_sessions`, `prompt_classifications`, `micro_markers`
-
-**Flow**: Student submits prompt via PromptBuilder --> auto/manual classification --> stage assigned --> micro_markers recorded --> session metrics updated --> stage transitions tracked
-
-### RM3: Cognitive Indicator Assessment
-
-Measures CT and CTh development using standardized indicators.
-
-**CT Dimensions (6, scored 0-2)**:
-Computational Thinking dimensions assessed through quiz performance, challenge responses, and discussion participation.
-
-**CTh Dimensions (6, scored 0-2)**:
-Critical Thinking dimensions assessed through journal reflections, challenge quality, and discussion depth.
-
-**Data Table**: `cognitive_indicators` -- stores per-session, per-dimension scores with assessor identification
-
-### RM4: Triangulation and Reliability
-
-**Triangulation**: `triangulation_records` links multiple data sources (quiz scores, journal entries, discussion transcripts, prompt classifications) for cross-validation.
-
-**Inter-Rater Reliability**: `inter_rater_reliability` stores Cohen's Kappa coefficients comparing assessor agreement on cognitive indicator ratings.
-
-### Research Data Flow
-
-```mermaid
-graph LR
-    subgraph StudentActivity["Student Learning Activity"]
-        Prompts["Prompts<br/>(ask-question)"]
-        Quizzes["Quiz<br/>Submissions"]
-        Journals["Journal<br/>Entries"]
-        Challenges["Challenge<br/>Responses"]
-        Discussions["Discussion<br/>Sessions"]
-    end
-
-    subgraph RM2["RM2: Prompt Development"]
-        PC["prompt_classifications<br/>(SCP/SRP/MQP/REFLECTIVE)"]
-        MM["micro_markers"]
-        LS["learning_sessions"]
-    end
-
-    subgraph RM3["RM3: CT & CTh"]
-        CI["cognitive_indicators<br/>(6 CT + 6 CTh dims, 0-2)"]
-    end
-
-    subgraph RM4["RM4: Triangulation"]
-        TR["triangulation_records"]
-        IRR["inter_rater_reliability<br/>(Cohen's Kappa)"]
-    end
-
-    Prompts --> PC
-    PC --> MM
-    PC --> LS
-
-    Quizzes --> CI
-    Challenges --> CI
-    Discussions --> CI
-    Journals --> CI
-
-    PC --> TR
-    CI --> TR
-    LS --> TR
-    TR --> IRR
-
-    subgraph AdminResearch["Admin Research Panel"]
-        Export["CSV/JSON Export"]
-        Charts["RM2/RM3 Visualizations"]
-        Classify["Manual Classification"]
-    end
-
-    TR --> Export
-    CI --> Charts
-    PC --> Classify
-```
-
-### Admin Research Endpoints
-
-| Endpoint | Purpose |
-|----------|---------|
-| `/api/admin/research/sessions` | List/filter learning sessions |
-| `/api/admin/research/classifications` | View prompt classifications |
-| `/api/admin/research/indicators` | View/edit cognitive indicators |
-| `/api/admin/research/analytics` | Aggregated research metrics |
-| `/api/admin/research/classify` | Manual prompt classification |
-| `/api/admin/research/bulk` | Bulk classification operations |
-| `/api/admin/research/export` | Export research data (CSV/JSON) |
+- [`next.config.ts`](../next.config.ts) — minimal Next config; force-loads `.env` and `.env.local` via dotenv at startup so a globally-set `OPENAI_API_KEY` cannot mask the project-local override.
+- [`vercel.json`](../vercel.json) — pins region `sin1` and sets `maxDuration: 60` for every `src/app/api/**/*.ts` function, which matters for AI routes that may take 30-60 seconds.
+- [`package.json`](../package.json) — Node `22.x` engine. Dev script uses `cross-env FAST_REFRESH=false next dev` (Fast Refresh is intentionally disabled because it corrupts the streaming Q&A state mid-response). `npm run dev:no-lint` skips linting.
+- TypeScript `strict` mode; path alias `@/` → `src/`.
+- Required env vars: `NEXT_PUBLIC_SUPABASE_URL`, `NEXT_PUBLIC_SUPABASE_ANON_KEY`, `SUPABASE_SERVICE_ROLE_KEY`, `JWT_SECRET`, `OPENAI_API_KEY`. Optional: `OPENAI_MODEL` (default `gpt-5-mini`).
+- Hosting: Vercel serverless. Database: Supabase managed Postgres 17.
 
 ---
 
-## 10. Key Design Decisions
+## 14. Cross-References
 
-### 1. Custom JWT over Supabase Auth
-
-**Decision**: Implement custom JWT-based authentication instead of using Supabase Auth.
-
-**Rationale**: Full control over token lifecycle, payload structure, rotation policy, and cookie management. Decouples authentication from the database provider, enabling potential migration without auth rework.
-
-**Trade-off**: Cannot leverage Supabase RLS `auth.uid()` function, requiring the service-role client for most operations.
-
-### 2. Service-Role Client by Default
-
-**Decision**: Use `adminDb` (service-role, bypasses RLS) for the majority of database operations.
-
-**Rationale**: Custom JWT tokens are not Supabase Auth tokens, so RLS policies referencing `auth.uid()` would fail. Application-level access control in middleware and service layer provides equivalent protection.
-
-**Trade-off**: RLS serves as documentation rather than enforcement for most tables. `publicDb` (anon-key) is used for read-only shared content where RLS `USING (true)` policies apply.
-
-### 3. Streaming AI Responses
-
-**Decision**: Use OpenAI streaming for Q&A and challenge-thinking endpoints.
-
-**Rationale**: Long AI responses (10-30 seconds) would create poor UX if delivered as a single payload. Streaming provides immediate visual feedback as the response is generated, with `onComplete` callback for background database persistence.
-
-**Trade-off**: More complex error handling (partial responses, stream interruption). Requires `text/plain` Content-Type instead of JSON.
-
-### 4. Prompt Injection Defense in Depth
-
-**Decision**: Multi-layer protection (sanitization + boundary markers + system prompt hardening + output validation).
-
-**Rationale**: No single defense is sufficient against prompt injection. Regex sanitization catches common patterns, XML boundaries prevent delimiter confusion, system prompts establish behavioral constraints, and output validation rejects malformed responses.
-
-**Trade-off**: Sanitization may occasionally filter legitimate user input containing trigger phrases.
-
-### 5. DB-Backed Rate Limiting
-
-**Decision**: Persist rate limit counters in the `rate_limits` Supabase table with automatic in-memory fallback.
-
-**Rationale**: Vercel serverless functions have no shared memory between invocations. DB-backed limits persist across deployments and scale across instances. In-memory fallback ensures the application never crashes due to rate-limit infrastructure failures.
-
-**Trade-off**: Each rate limit check requires a database round-trip (mitigated by Supabase connection pooling).
-
-### 6. CSRF Double-Submit Cookie Pattern
-
-**Decision**: Set `csrf_token` as a readable cookie; require it as `x-csrf-token` header on mutations.
-
-**Rationale**: CORS-safe pattern that works with cookie-based auth. The server sets the token, the client reads it from `document.cookie`, and sends it as a custom header. Cross-origin attackers cannot read the cookie due to SameSite policy.
-
-**Trade-off**: CSRF cookie must be non-httpOnly (readable by JavaScript), creating a slightly larger XSS attack surface.
-
-### 7. SessionStorage for Learning Data
-
-**Decision**: Use `sessionStorage` (via `useSessionStorage` hook) for in-progress learning data and `RequestCourseContext`.
-
-**Rationale**: Tab-scoped storage auto-clears when the tab is closed, limiting the window for XSS data exfiltration. Prevents stale data from persisting across sessions. Course wizard state should not survive tab closure.
-
-**Trade-off**: Data is lost if the user accidentally closes the tab during a multi-step flow.
+- [API_REFERENCE.md](API_REFERENCE.md) — endpoint-by-endpoint contract reference.
+- [DATABASE_SCHEMA.md](DATABASE_SCHEMA.md) — table-by-table catalog with column types and FK relationships.
+- [SECURITY.md](SECURITY.md) — auth, CSRF, rate-limit, and prompt-injection details.
+- [feature-flows.md](feature-flows.md) — end-to-end user-facing feature flows.
+- [admin-and-research-ops.md](admin-and-research-ops.md) — admin + research operational playbook.
+- [database-and-data-model.md](database-and-data-model.md) — narrative discussion of the schema.
 
 ---
 
-## 11. Technology Stack and Dependencies
-
-### Production Dependencies
-
-| Package | Version | Purpose |
-|---------|---------|---------|
-| `next` | ^15.5.12 | React framework with App Router, API routes, middleware |
-| `react` | ^19.0.0 | UI component library |
-| `react-dom` | ^19.0.0 | React DOM renderer |
-| `typescript` | ^5 | Type-safe JavaScript |
-| `@supabase/supabase-js` | ^2.99.1 | Supabase PostgreSQL client |
-| `openai` | ^4.96.0 | OpenAI API client (chat completions, streaming) |
-| `jsonwebtoken` | ^9.0.2 | JWT creation and verification (HS256) |
-| `bcryptjs` | ^3.0.2 | Password hashing (salt rounds: 10) |
-| `bcrypt` | ^6.0.0 | Native bcrypt (fallback) |
-| `zod` | ^4.3.6 | Request body validation (14 schemas) |
-| `sass` | ^1.87.0 | Sass/SCSS module compilation |
-| `react-icons` | ^5.5.0 | Icon library |
-| `papaparse` | ^5.5.3 | CSV parsing (research data export) |
-| `dotenv` | ^17.2.0 | Environment variable loading |
-| `react-is` | ^19.2.4 | React type checking utilities |
-
-### Development Dependencies
-
-| Package | Version | Purpose |
-|---------|---------|---------|
-| `jest` | ^30.3.0 | Unit test runner |
-| `ts-jest` | ^29.4.6 | TypeScript Jest transformer |
-| `jest-environment-jsdom` | ^30.3.0 | Browser-like test environment |
-| `@testing-library/react` | ^16.3.2 | React component testing utilities |
-| `@testing-library/jest-dom` | ^6.9.1 | Jest DOM matchers |
-| `@playwright/test` | ^1.58.2 | End-to-end browser testing |
-| `msw` | ^2.12.14 | API mocking for tests |
-| `node-mocks-http` | ^1.17.2 | HTTP request/response mocking |
-| `puppeteer` | ^24.37.5 | Browser automation |
-| `recharts` | ^3.8.1 | Chart library (admin dashboards, research visualizations) |
-| `d3-array` | ^3.2.4 | Statistical array operations |
-| `cross-env` | ^7.0.3 | Cross-platform environment variables |
-| `eslint` | ^10.0.2 | Code linting |
-| `eslint-config-next` | ^16.2.2 | Next.js ESLint configuration |
-
-### Environment Variables
-
-| Variable | Required | Purpose |
-|----------|----------|---------|
-| `NEXT_PUBLIC_SUPABASE_URL` | Yes | Supabase project URL |
-| `NEXT_PUBLIC_SUPABASE_ANON_KEY` | Yes | Supabase anonymous key (publicDb) |
-| `SUPABASE_SERVICE_ROLE_KEY` | Yes | Supabase service role key (adminDb) |
-| `JWT_SECRET` | Yes | JWT signing secret (HS256) |
-| `OPENAI_API_KEY` | Yes | OpenAI API key |
-| `OPENAI_MODEL` | No | Override default model (defaults to gpt-5-mini) |
-
-### Project Metrics
-
-| Metric | Value |
-|--------|-------|
-| TypeScript files | ~149 |
-| API routes | 73 |
-| Database tables | 26 |
-| Zod schemas | 14 |
-| Component directories | 13 |
-| Frontend pages | 18 |
-| Custom hooks | 4 |
-| Service modules | 4 |
-| Infrastructure modules | 8 |
-
----
-
-*This document was generated from source code analysis of the PrincipleLearn V3 codebase on the `principle-learn-3.0` branch.*
+*This document is verified against the source tree on branch `principle-learn-3.0`. When code drifts, prefer regenerating this file from the live tree rather than patching individual sections.*

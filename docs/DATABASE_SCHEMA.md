@@ -1,1516 +1,1086 @@
 # PrincipleLearn V3 - Database Schema Documentation
 
-> **Database Engine:** Supabase PostgreSQL with Row-Level Security (RLS)  
-> **Total Tables:** 26  
-> **Total Views:** 3  
-> **Total Functions:** 4  
-> **Last Updated:** 2026-04-08
+> **Database Engine:** Supabase PostgreSQL with Row-Level Security (RLS)
+> **Project ID:** `wesgoqdldgjbwgmubfdm`
+> **Tables:** 34 (in `public` schema)
+> **Views:** 4
+> **Functions:** 10 (incl. triggers and event triggers)
+> **Last Updated:** 2026-04-26
+
+This is the single source of truth for the database schema. The previous companion file [`database-and-data-model.md`](./database-and-data-model.md) is now a pointer to this document.
 
 ---
 
 ## Table of Contents
 
 1. [Overview](#1-overview)
-2. [Entity Relationship Diagram](#2-entity-relationship-diagram)
-3. [Core Learning Tables](#3-core-learning-tables)
-4. [Student Output Tables](#4-student-output-tables)
-5. [Discussion & Content Tables](#5-discussion--content-tables)
-6. [Research Tables](#6-research-tables)
-7. [System Tables](#7-system-tables)
-8. [Row-Level Security (RLS) Policies](#8-row-level-security-rls-policies)
-9. [Database Functions](#9-database-functions)
-10. [Views](#10-views)
-11. [Access Patterns](#11-access-patterns)
-12. [JSONB Column Map](#12-jsonb-column-map)
+2. [Connection Model and Auth Bridge](#2-connection-model-and-auth-bridge)
+3. [Naming and Audit Conventions](#3-naming-and-audit-conventions)
+4. [Table Reference](#4-table-reference)
+   - 4.1 [Identity and Profile](#41-identity-and-profile)
+   - 4.2 [Course Content](#42-course-content)
+   - 4.3 [Learning Activity](#43-learning-activity)
+   - 4.4 [Discussion](#44-discussion)
+   - 4.5 [Research and RM2/RM3 Pipeline](#45-research-and-rm2rm3-pipeline)
+   - 4.6 [Infrastructure](#46-infrastructure)
+5. [Row-Level Security (RLS) Summary](#5-row-level-security-rls-summary)
+6. [Functions and Triggers](#6-functions-and-triggers)
+7. [Views](#7-views)
+8. [JSONB Column Map](#8-jsonb-column-map)
+9. [Foreign Key Map](#9-foreign-key-map)
+10. [Empty / Reserved Tables](#10-empty--reserved-tables)
+11. [Research Pipeline Status (RM2/RM3)](#11-research-pipeline-status-rm2rm3)
+12. [Migration History](#12-migration-history)
+13. [Cross-References](#13-cross-references)
 
 ---
 
 ## 1. Overview
 
-PrincipleLearn V3 uses **Supabase PostgreSQL** as its primary data store. The schema is organized into three logical domains:
+PrincipleLearn V3 uses Supabase Postgres for all persistent state. The schema spans six logical domains:
 
 | Domain | Tables | Purpose |
-|--------|--------|---------|
-| **Learning Platform** | 18 tables | Core application data: users, courses, quizzes, discussions, journals, transcripts, and AI interaction history |
-| **Research & Analysis** | 7 tables | Academic research instrumentation: prompt classification, cognitive indicators, longitudinal tracking, inter-rater reliability |
-| **System** | 1 table | Operational infrastructure: rate limiting |
+|---|---|---|
+| Identity and profile | 2 | Users and learning preferences |
+| Course content | 4 | Course outline, content, leaf-level navigation, AI cache |
+| Learning activity | 10 | Quizzes, journals, transcripts, challenges, Q&A, progress, examples |
+| Discussion | 5 | Guided discussion sessions, messages, templates, assessments, audit |
+| Research / RM2-RM3 | 10 | Prompt classification, cognitive scoring, evidence ledger, triangulation |
+| Infrastructure | 3 | API logs, rate limits, course generation activity |
 
-### Key Design Decisions
-
-- **Custom JWT Authentication**: The application uses its own JWT-based auth rather than Supabase Auth. Consequently, RLS policies that rely on `auth.uid()` cannot identify users, so most write operations go through the **service-role client** (`adminDb`) which bypasses RLS entirely.
-- **Two-Tier Client Access**: `adminDb` (service-role key, bypasses RLS) for all writes and privileged reads; `publicDb` (anon key, respects RLS) for shared/public content.
-- **JSONB for Flexible Content**: Course subtopic content, quiz options, AI prompt components, discussion metadata, and research payloads are stored as JSONB columns, enabling schema-flexible nested data.
-- **Polymorphic References**: `prompt_classifications` uses a `prompt_source` discriminator (`ask_question`, `discussion`, `challenge`) combined with `prompt_id` to reference rows across multiple source tables without a direct foreign key.
-- **Generated Columns**: `cognitive_indicators` uses PostgreSQL generated columns for `ct_total_score` and `cth_total_score`, automatically summing sub-dimension scores.
+Live row counts (snapshot 2026-04-26) are noted on each table.
 
 ---
 
-## 2. Entity Relationship Diagram
+## 2. Connection Model and Auth Bridge
 
-```mermaid
-erDiagram
-    %% ════════════════════════════════════════════════════════════════
-    %% CORE LEARNING DOMAIN
-    %% ════════════════════════════════════════════════════════════════
+Defined in [`src/lib/database.ts`](../src/lib/database.ts).
 
-    users {
-        uuid id PK
-        text email UK
-        text name
-        text role
-        timestamptz created_at
-        timestamptz updated_at
-    }
+| Client | Key | RLS Behaviour | Primary Use |
+|---|---|---|---|
+| `adminDb` | `SUPABASE_SERVICE_ROLE_KEY` | bypassed | All writes, all per-user reads, admin queries, research operations |
+| `publicDb` | `NEXT_PUBLIC_SUPABASE_ANON_KEY` | enforced | Reads of `discussion_templates` and `subtopic_cache` only |
 
-    courses {
-        uuid id PK
-        uuid created_by FK
-        text title
-        text description
-        timestamptz created_at
-        timestamptz updated_at
-    }
+**Auth bridge.** PrincipleLearn does not use Supabase Auth. Authentication is custom JWT (see `src/services/auth.service.ts`, `src/lib/jwt.ts`). The identity reaches API routes via three middleware-injected headers:
 
-    subtopics {
-        uuid id PK
-        uuid course_id FK
-        text title
-        jsonb content
-        integer order_index
-        timestamptz created_at
-        timestamptz updated_at
-    }
+- `x-user-id`
+- `x-user-email`
+- `x-user-role`
 
-    quiz {
-        uuid id PK
-        uuid course_id FK
-        uuid subtopic_id FK
-        text question
-        jsonb options
-        text correct_answer
-        text explanation
-        text subtopic_label
-        uuid leaf_subtopic_id
-        timestamptz created_at
-    }
-
-    quiz_submissions {
-        uuid id PK
-        uuid user_id FK
-        uuid quiz_id FK
-        uuid course_id FK
-        uuid subtopic_id FK
-        text answer
-        boolean is_correct
-        text reasoning_note
-        integer module_index
-        integer subtopic_index
-        integer attempt_number
-        uuid quiz_attempt_id
-        text subtopic_label
-        uuid leaf_subtopic_id
-        timestamptz created_at
-    }
-
-    ask_question_history {
-        uuid id PK
-        uuid user_id FK
-        uuid course_id FK
-        text question
-        text answer
-        jsonb prompt_components
-        uuid learning_session_id FK
-        boolean is_follow_up
-        uuid follow_up_of FK
-        integer response_time_ms
-        timestamptz created_at
-    }
-
-    learning_profiles {
-        uuid id PK
-        uuid user_id FK
-        text displayName
-        text programmingExperience
-        text learningStyle
-        text learningGoals
-        text challenges
-        timestamptz created_at
-        timestamptz updated_at
-    }
-
-    user_progress {
-        uuid id PK
-        uuid user_id FK
-        uuid course_id FK
-        uuid subtopic_id FK
-        boolean is_completed
-        timestamptz completed_at
-        timestamptz created_at
-        timestamptz updated_at
-    }
-
-    %% ════════════════════════════════════════════════════════════════
-    %% STUDENT OUTPUT DOMAIN
-    %% ════════════════════════════════════════════════════════════════
-
-    jurnal {
-        uuid id PK
-        uuid user_id FK
-        uuid course_id FK
-        text content
-        text reflection
-        varchar type
-        uuid subtopic_id FK
-        integer module_index
-        integer subtopic_index
-        text subtopic_label
-        timestamptz created_at
-        timestamptz updated_at
-    }
-
-    transcript {
-        uuid id PK
-        uuid user_id FK
-        uuid course_id FK
-        uuid subtopic_id FK
-        text content
-        text notes
-        timestamptz created_at
-        timestamptz updated_at
-    }
-
-    feedback {
-        uuid id PK
-        uuid user_id FK
-        uuid course_id FK
-        uuid subtopic_id FK
-        integer module_index
-        integer subtopic_index
-        text subtopic_label
-        integer rating
-        text comment
-        uuid origin_jurnal_id FK
-        timestamptz created_at
-    }
-
-    challenge_responses {
-        uuid id PK
-        text user_id
-        uuid challenge_id
-        text response
-        uuid learning_session_id FK
-        timestamptz created_at
-    }
-
-    course_generation_activity {
-        uuid id PK
-        uuid user_id FK
-        uuid course_id FK
-        jsonb request_payload
-        jsonb outline
-        text status
-        timestamptz created_at
-        timestamptz updated_at
-    }
-
-    %% ════════════════════════════════════════════════════════════════
-    %% DISCUSSION & CONTENT DOMAIN
-    %% ════════════════════════════════════════════════════════════════
-
-    discussion_sessions {
-        uuid id PK
-        uuid user_id FK
-        uuid course_id FK
-        uuid subtopic_id FK
-        uuid template_id FK
-        text status
-        text phase
-        jsonb learning_goals
-        timestamptz completed_at
-        text completion_reason
-        jsonb completion_summary
-        timestamptz created_at
-        timestamptz updated_at
-    }
-
-    discussion_messages {
-        uuid id PK
-        uuid session_id FK
-        text role
-        text content
-        jsonb metadata
-        text step_key
-        uuid learning_session_id FK
-        boolean is_prompt_revision
-        uuid revision_of_message_id FK
-        timestamptz created_at
-    }
-
-    discussion_templates {
-        uuid id PK
-        uuid course_id FK
-        uuid subtopic_id FK
-        text version
-        jsonb source
-        jsonb template
-        text generated_by
-        timestamptz created_at
-    }
-
-    discussion_assessments {
-        uuid id PK
-        uuid session_id FK
-        uuid student_message_id FK
-        uuid prompt_message_id FK
-        uuid user_id FK
-        uuid course_id FK
-        uuid subtopic_id FK
-        text goal_id
-        text assessment_status
-        integer proximity_score
-        boolean passed
-        integer attempt_number
-        jsonb assessment_raw
-        timestamptz created_at
-    }
-
-    discussion_admin_actions {
-        uuid id PK
-        uuid session_id FK
-        text admin_id
-        text admin_email
-        text action
-        jsonb payload
-        timestamptz created_at
-    }
-
-    subtopic_cache {
-        uuid id PK
-        uuid course_id FK
-        jsonb content
-        timestamptz generated_at
-        timestamptz expires_at
-        timestamptz created_at
-    }
-
-    api_logs {
-        uuid id PK
-        text endpoint
-        text method
-        integer statusCode
-        integer duration
-        jsonb metadata
-        timestamptz created_at
-    }
-
-    %% ════════════════════════════════════════════════════════════════
-    %% RESEARCH DOMAIN
-    %% ════════════════════════════════════════════════════════════════
-
-    learning_sessions {
-        uuid id PK
-        uuid user_id FK
-        uuid course_id FK
-        integer session_number
-        date session_date
-        timestamptz session_start
-        timestamptz session_end
-        integer total_prompts
-        integer total_revisions
-        varchar dominant_stage
-        integer dominant_stage_score
-        numeric avg_cognitive_depth
-        numeric avg_ct_score
-        numeric avg_cth_score
-        integer stage_transition
-        varchar transition_status
-        text topic_focus
-        integer duration_minutes
-        varchar status
-        boolean is_valid_for_analysis
-        text validity_note
-        text researcher_notes
-        timestamptz created_at
-        timestamptz updated_at
-    }
-
-    prompt_classifications {
-        uuid id PK
-        varchar prompt_source
-        uuid prompt_id
-        uuid learning_session_id FK
-        uuid user_id FK
-        uuid course_id FK
-        text prompt_text
-        integer prompt_sequence
-        varchar prompt_stage
-        integer prompt_stage_score
-        text_array micro_markers
-        varchar primary_marker
-        varchar classified_by
-        varchar classification_method
-        numeric confidence_score
-        text classification_evidence
-        text researcher_notes
-        timestamptz created_at
-        timestamptz updated_at
-    }
-
-    cognitive_indicators {
-        uuid id PK
-        uuid prompt_classification_id FK
-        uuid prompt_id
-        uuid user_id FK
-        integer ct_decomposition
-        integer ct_pattern_recognition
-        integer ct_abstraction
-        integer ct_algorithm_design
-        integer ct_evaluation_debugging
-        integer ct_generalization
-        integer ct_total_score "GENERATED"
-        integer cth_interpretation
-        integer cth_analysis
-        integer cth_evaluation
-        integer cth_inference
-        integer cth_explanation
-        integer cth_self_regulation
-        integer cth_total_score "GENERATED"
-        integer cognitive_depth_level
-        text evidence_text
-        varchar assessed_by
-        timestamptz created_at
-        timestamptz updated_at
-    }
-
-    prompt_revisions {
-        uuid id PK
-        uuid user_id FK
-        uuid learning_session_id FK
-        uuid episode_id
-        text episode_topic
-        uuid original_prompt_id
-        uuid current_prompt_id
-        uuid previous_prompt_id
-        integer revision_sequence
-        varchar revision_type
-        varchar quality_change
-        varchar previous_stage
-        varchar current_stage
-        boolean stage_improved
-        text revision_notes
-        timestamptz created_at
-    }
-
-    research_artifacts {
-        uuid id PK
-        uuid user_id FK
-        uuid course_id FK
-        uuid learning_session_id FK
-        varchar artifact_type
-        text artifact_title
-        text artifact_content
-        uuid_array related_prompt_ids
-        integer total_artifact_score "GENERATED"
-        timestamptz created_at
-        timestamptz updated_at
-    }
-
-    triangulation_records {
-        uuid id PK
-        uuid user_id FK
-        uuid learning_session_id FK
-        varchar finding_type
-        varchar convergence_status
-        integer convergence_score
-        varchar final_decision
-        text decision_rationale
-        timestamptz created_at
-        timestamptz updated_at
-    }
-
-    inter_rater_reliability {
-        uuid id PK
-        varchar coding_round
-        varchar coding_type
-        integer total_units_coded
-        integer sample_size
-        numeric observed_agreement
-        numeric expected_agreement
-        numeric cohens_kappa
-        boolean meets_po_threshold
-        boolean meets_kappa_threshold
-        boolean overall_acceptable
-        timestamptz created_at
-    }
-
-    rate_limits {
-        uuid id PK
-        text key
-        integer count
-        timestamptz window_start
-        timestamptz created_at
-    }
-
-    %% ════════════════════════════════════════════════════════════════
-    %% RELATIONSHIPS
-    %% ════════════════════════════════════════════════════════════════
-
-    users ||--o{ courses : "creates"
-    users ||--o{ quiz_submissions : "submits"
-    users ||--o{ ask_question_history : "asks"
-    users ||--o{ learning_profiles : "has"
-    users ||--o{ user_progress : "tracks"
-    users ||--o{ jurnal : "writes"
-    users ||--o{ transcript : "saves"
-    users ||--o{ feedback : "gives"
-    users ||--o{ course_generation_activity : "generates"
-    users ||--o{ discussion_sessions : "participates"
-    users ||--o{ learning_sessions : "attends"
-    users ||--o{ prompt_classifications : "classified for"
-    users ||--o{ cognitive_indicators : "assessed for"
-    users ||--o{ prompt_revisions : "revises"
-    users ||--o{ research_artifacts : "produces"
-    users ||--o{ triangulation_records : "analyzed in"
-
-    courses ||--o{ subtopics : "contains"
-    courses ||--o{ quiz : "has"
-    courses ||--o{ quiz_submissions : "receives"
-    courses ||--o{ ask_question_history : "context for"
-    courses ||--o{ user_progress : "tracked in"
-    courses ||--o{ transcript : "documented in"
-    courses ||--o{ feedback : "rated in"
-    courses ||--o{ course_generation_activity : "generated as"
-    courses ||--o{ discussion_sessions : "discussed in"
-    courses ||--o{ learning_sessions : "studied in"
-    courses ||--o{ prompt_classifications : "classified in"
-    courses ||--o{ research_artifacts : "produced in"
-    courses ||--o{ subtopic_cache : "cached in"
-
-    subtopics ||--o{ quiz : "tests"
-    subtopics ||--o{ quiz_submissions : "answered in"
-    subtopics ||--o{ transcript : "noted in"
-    subtopics ||--o{ user_progress : "completed in"
-    subtopics ||--o{ discussion_sessions : "discussed in"
-
-    quiz ||--o{ quiz_submissions : "answered by"
-
-    discussion_sessions ||--o{ discussion_messages : "contains"
-    discussion_sessions ||--o{ discussion_admin_actions : "audited by"
-    discussion_sessions ||--o{ discussion_assessments : "assessed by"
-    discussion_messages ||--o{ discussion_assessments : "student answer"
-
-    learning_sessions ||--o{ ask_question_history : "records"
-    learning_sessions ||--o{ discussion_messages : "captures"
-    learning_sessions ||--o{ prompt_classifications : "classified in"
-    learning_sessions ||--o{ research_artifacts : "produces"
-    learning_sessions ||--o{ prompt_revisions : "tracks"
-    learning_sessions ||--o{ triangulation_records : "triangulated in"
-
-    prompt_classifications ||--o{ cognitive_indicators : "scored by"
-
-    ask_question_history ||--o{ ask_question_history : "follow_up_of"
-    discussion_messages ||--o{ discussion_messages : "revision_of"
-```
+Because `auth.uid()` returns NULL for our requests, RLS is **defence-in-depth, not the primary access control**. Layer 1 (mandatory) is application logic that filters by `x-user-id` before issuing queries through `adminDb`. Layer 2 (RLS) only takes effect for `publicDb` reads or if the anon key is ever used directly from the browser.
 
 ---
 
-## 3. Core Learning Tables
+## 3. Naming and Audit Conventions
 
-These tables form the foundation of the learning platform, managing users, courses, content structure, assessments, and progress tracking.
-
-### 3.1 `users`
-
-Central user identity table for both students and administrators.
-
-| Column | Type | Constraints | Description |
-|--------|------|-------------|-------------|
-| `id` | `uuid` | **PK**, default `gen_random_uuid()` | Unique user identifier |
-| `email` | `text` | **UNIQUE**, NOT NULL | User email address (login credential) |
-| `name` | `text` | | Display name |
-| `role` | `text` | | User role: `USER` or `ADMIN` |
-| `created_at` | `timestamptz` | default `now()` | Account creation timestamp |
-| `updated_at` | `timestamptz` | default `now()` | Last update timestamp |
-
-**RLS Policies:**
-- `users_read_own` -- Users can read their own row: `USING (id = auth.uid())`
-- `service_role_full_access` -- Service role has unrestricted access
-
-**Notes:** Password hashes are stored in a separate mechanism managed by the auth service. The `role` field governs access to admin routes via middleware JWT payload inspection.
+- **Indonesian column/table names are intentional.** `jurnal` (journal), `riset` (research), and similar Bahasa Indonesia spellings are part of the domain vocabulary and must not be renamed.
+- **Timestamps.** `created_at` and `updated_at` (`timestamptz`, default `now()`) on virtually every table. `set_updated_at_timestamp` trigger maintains `updated_at`.
+- **Soft delete.** `users.deleted_at` (`timestamptz`, nullable) is the soft-delete marker. Active users index: `idx_users_active ... WHERE deleted_at IS NULL`. Do not hard-delete the admin or `sal@expandly.id` rows during migrations.
+- **Research audit columns.** Most learning-activity tables carry a uniform research-audit triplet:
+  - `research_validity_status` (default `valid`)
+  - `coding_status` (default `uncoded`)
+  - `researcher_notes` (free text)
+  - `data_collection_week` (varchar)
+  - `raw_evidence_snapshot` (jsonb, default `{}`)
+- **Generated columns.** `cognitive_indicators.ct_total_score`, `cognitive_indicators.cth_total_score`, `auto_cognitive_scores.ct_total_score` / `cth_total_score`, and `research_artifacts.total_artifact_score` are PostgreSQL `GENERATED ALWAYS AS (...)` columns and cannot be written to directly.
+- **Polymorphic references.** `prompt_classifications`, `auto_cognitive_scores`, `research_evidence_items`, and `triangulation_records` use a `(source_type, source_id)` (or `prompt_source, prompt_id`) discriminator pattern that crosses table boundaries without an enforced FK. Application code must keep these consistent.
 
 ---
 
-### 3.2 `courses`
+## 4. Table Reference
 
-Stores course metadata. Each course is owned by a single user.
+### 4.1 Identity and Profile
 
-| Column | Type | Constraints | Description |
-|--------|------|-------------|-------------|
-| `id` | `uuid` | **PK**, default `gen_random_uuid()` | Unique course identifier |
-| `created_by` | `uuid` | **FK** -> `users(id)` ON DELETE CASCADE | Course owner/creator |
-| `title` | `text` | NOT NULL | Course title |
-| `description` | `text` | | Course description |
-| `created_at` | `timestamptz` | default `now()` | Creation timestamp |
-| `updated_at` | `timestamptz` | default `now()` | Last update timestamp |
+#### 4.1.1 `users` (29 rows)
 
-**RLS Policies:**
-- `courses_read_own` -- `USING (created_by = auth.uid())`
-- `courses_insert_own` -- `WITH CHECK (created_by = auth.uid())`
-- `courses_delete_own` -- `USING (created_by = auth.uid())`
-- `service_role_full_access`
+Central identity table for both students and admins. Authentication, role, and refresh-token state live here.
 
-**Cascade Behavior:** Deleting a user cascades to delete all their courses, which in turn cascades to subtopics, quizzes, and related data.
+| Column | Type | Notes |
+|---|---|---|
+| `id` | uuid | PK, default `gen_random_uuid()` |
+| `email` | text | UNIQUE, login credential |
+| `name` | text | nullable |
+| `password_hash` | text | bcrypt hash; written by `auth.service.ts` |
+| `role` | text | default `user`; CHECK `lower(role) IN ('user','admin')` |
+| `refresh_token_hash` | text | nullable; rotated on each refresh |
+| `onboarding_completed` | boolean | default `false` |
+| `deleted_at` | timestamptz | soft-delete marker |
+| `created_at`, `updated_at` | timestamptz | default `now()` |
 
----
+- **PK:** `users_pkey (id)`
+- **Unique:** `users_email_key (email)`
+- **Indexes:** `idx_users_active (created_at DESC) WHERE deleted_at IS NULL`, `users_pending_onboarding_idx (id) WHERE onboarding_completed = false`
+- **RLS:** `users_read_own` (SELECT, `id = auth.uid()`), `service_role_full_access`
+- **Zod:** [`LoginSchema`, `RegisterSchema`, `AdminRegisterSchema`](../src/lib/schemas.ts)
 
-### 3.3 `subtopics`
+#### 4.1.2 `learning_profiles` (6 rows)
 
-Course content units. Each subtopic belongs to a course and stores its learning content as JSONB.
+Optional per-user learning preferences captured during onboarding.
 
-| Column | Type | Constraints | Description |
-|--------|------|-------------|-------------|
-| `id` | `uuid` | **PK** | Unique subtopic identifier |
-| `course_id` | `uuid` | **FK** -> `courses(id)` ON DELETE CASCADE | Parent course |
-| `title` | `text` | NOT NULL | Subtopic title |
-| `content` | `jsonb` | | Structured learning content (generated by AI) |
-| `order_index` | `integer` | NOT NULL | Module order within the course outline |
-| `created_at` | `timestamptz` | default `now()` | Creation timestamp |
-| `updated_at` | `timestamptz` | default `now()` | Last update timestamp |
+| Column | Type | Notes |
+|---|---|---|
+| `id` | uuid | PK |
+| `user_id` | uuid | UNIQUE, FK -> `users(id)` ON DELETE CASCADE |
+| `display_name` | varchar | |
+| `programming_experience` | varchar | |
+| `learning_style` | varchar | |
+| `learning_goals` | text | default `''` |
+| `challenges` | text | default `''` |
+| `intro_slides_completed` | boolean | default `false` |
+| `course_tour_completed` | boolean | default `false` |
+| `created_at`, `updated_at` | timestamptz | default `now()` |
 
-**Indexes:**
-- `idx_subtopics_course_id` on `course_id` -- Optimizes course content loading
-
----
-
-### 3.4 `quiz`
-
-Assessment questions associated with courses and subtopics.
-
-| Column | Type | Constraints | Description |
-|--------|------|-------------|-------------|
-| `id` | `uuid` | **PK** | Unique quiz question identifier |
-| `course_id` | `uuid` | **FK** -> `courses(id)` | Parent course |
-| `subtopic_id` | `uuid` | **FK** -> `subtopics(id)` | Parent subtopic |
-| `question` | `text` | NOT NULL | Quiz question text |
-| `options` | `jsonb` | | Answer options (array of `{text, isCorrect}` objects) |
-| `correct_answer` | `text` | | Correct answer label/text |
-| `explanation` | `text` | | Optional explanation |
-| `created_at` | `timestamptz` | default `now()` | Creation timestamp |
-| `subtopic_label` | `text` | nullable | Leaf subtopic title within the module |
-| `leaf_subtopic_id` | `uuid` | nullable | Optional normalized leaf-subtopic identifier |
-
-**Indexes:**
-- `idx_quiz_course_id` on `course_id`
-- `idx_quiz_subtopic_id` on `subtopic_id`
+- **PK:** `learning_profiles_pkey (id)`; **Unique:** `(user_id)`
+- **RLS:** `learning_profiles_own` (`user_id = auth.uid()`), `service_role_full_access`
+- **Zod:** [`LearningProfileSchema`, `OnboardingStateSchema`](../src/lib/schemas.ts)
 
 ---
 
-### 3.5 `quiz_submissions`
+### 4.2 Course Content
 
-Records individual quiz answer submissions by users.
+#### 4.2.1 `courses` (33 rows)
 
-| Column | Type | Constraints | Description |
-|--------|------|-------------|-------------|
-| `id` | `uuid` | **PK** | Unique submission identifier |
-| `user_id` | `uuid` | **FK** -> `users(id)` | Submitting user |
-| `quiz_id` | `uuid` | **FK** -> `quiz(id)` | Answered quiz question |
-| `course_id` | `uuid` | **FK** | Course context |
-| `subtopic_id` | `uuid` | **FK** | Subtopic context |
-| `answer` | `text` | | Submitted answer |
-| `is_correct` | `boolean` | | Whether the answer was correct |
-| `reasoning_note` | `text` | nullable | Optional learner reasoning / justification note |
-| `module_index` | `integer` | nullable | Module position when submitted |
-| `subtopic_index` | `integer` | nullable | Leaf subtopic position when submitted |
-| `attempt_number` | `integer` | NOT NULL | Attempt number within the quiz attempt scope |
-| `quiz_attempt_id` | `uuid` | NOT NULL | Groups the five answers from one quiz submission |
-| `subtopic_label` | `text` | nullable | Leaf subtopic title when submitted |
-| `leaf_subtopic_id` | `uuid` | nullable | Optional normalized leaf-subtopic identifier |
-| `created_at` | `timestamptz` | default `now()` | Submission timestamp |
+Course metadata. One owner per course.
 
-**Indexes:** 5 indexes covering `user_id`, `quiz_id`, `course_id`, `subtopic_id`, and composite lookups.
+| Column | Type | Notes |
+|---|---|---|
+| `id` | uuid | PK |
+| `title` | text | |
+| `description`, `subject`, `difficulty_level` | text | nullable |
+| `estimated_duration` | integer | minutes, nullable |
+| `created_by` | uuid | FK -> `users(id)` ON DELETE SET NULL |
+| `created_at`, `updated_at` | timestamptz | |
 
----
+- **Indexes:** `idx_courses_created_by`
+- **RLS:** `courses_read_own`, `courses_insert_own`, `courses_delete_own` (all keyed on `created_by = auth.uid()`); `service_role_full_access`
+- **Zod:** [`GenerateCourseSchema`](../src/lib/schemas.ts)
 
-### 3.6 `ask_question_history`
+#### 4.2.2 `subtopics` (157 rows)
 
-Stores the complete Q&A interaction history between users and the AI within course contexts.
+Module-level course content. JSONB `content` stores the AI-generated structured payload.
 
-| Column | Type | Constraints | Description |
-|--------|------|-------------|-------------|
-| `id` | `uuid` | **PK** | Unique question identifier |
-| `user_id` | `uuid` | **FK** -> `users(id)` | Asking user |
-| `course_id` | `uuid` | **FK** -> `courses(id)` | Course context |
-| `question` | `text` | | User's question text |
-| `answer` | `text` | | AI-generated answer |
-| `prompt_components` | `jsonb` | | Structured prompt data sent to OpenAI |
-| `learning_session_id` | `uuid` | **FK** -> `learning_sessions(id)` | Research session link |
-| `is_follow_up` | `boolean` | | Whether this is a follow-up question |
-| `follow_up_of` | `uuid` | **FK (self)** -> `ask_question_history(id)` | Parent question for follow-ups |
-| `response_time_ms` | `integer` | | AI response latency in milliseconds |
-| `created_at` | `timestamptz` | default `now()` | Interaction timestamp |
+| Column | Type | Notes |
+|---|---|---|
+| `id` | uuid | PK |
+| `course_id` | uuid | FK -> `courses(id)` ON DELETE CASCADE |
+| `title` | text | |
+| `content` | jsonb | nullable |
+| `order_index` | integer | default `0` |
+| `created_at`, `updated_at` | timestamptz | |
 
-**Self-Referential FK:** `follow_up_of` creates a linked chain of conversational follow-up questions, enabling thread reconstruction for research analysis.
+- **Indexes:** `idx_subtopics_course_id`
+- **RLS:** `subtopics_read_own_course` (joins `courses.created_by = auth.uid()`), `service_role_full_access`
 
----
+#### 4.2.3 `leaf_subtopics` (106 rows)
 
-### 3.7 `learning_profiles`
+Atomic learning units (the smallest unit of progress). Each module (`subtopics` row) owns multiple leaves. Leaf identity is `(course_id, module_id, normalized_title)`.
 
-Stores student learning preference profiles used to personalize AI interactions.
+| Column | Type | Notes |
+|---|---|---|
+| `id` | uuid | PK |
+| `course_id` | uuid | FK -> `courses(id)` ON DELETE CASCADE |
+| `module_id` | uuid | FK -> `subtopics(id)` ON DELETE CASCADE |
+| `module_title` | text | denormalized |
+| `title` | text | CHECK non-empty |
+| `normalized_title` | text | CHECK non-empty; used for dedupe |
+| `module_index`, `subtopic_index` | integer | nullable, must be >= 0 |
+| `created_at`, `updated_at` | timestamptz | |
 
-| Column | Type | Constraints | Description |
-|--------|------|-------------|-------------|
-| `id` | `uuid` | **PK** | Profile identifier |
-| `user_id` | `uuid` | **FK** -> `users(id)` | Profile owner |
-| `displayName` | `text` | | Preferred display name |
-| `programmingExperience` | `text` | | Self-reported programming experience level |
-| `learningStyle` | `text` | | Preferred learning style |
-| `learningGoals` | `text` | | Personal learning objectives |
-| `challenges` | `text` | | Self-identified learning challenges |
-| `created_at` | `timestamptz` | default `now()` | Creation timestamp |
-| `updated_at` | `timestamptz` | default `now()` | Last update timestamp |
+- **Unique:** `leaf_subtopics_course_module_title_key (course_id, module_id, normalized_title)`
+- **Indexes:** `idx_leaf_subtopics_course_module`, `idx_leaf_subtopics_module_id`
+- **RLS:** `leaf_subtopics_service_role_all` only (no per-user policy; access via `adminDb` only)
+- **RPC:** `ensure_leaf_subtopic(course_id, module_id, ...)` and `normalize_leaf_subtopic_title(text)` keep this table in sync with quiz / progress writes.
 
----
+#### 4.2.4 `subtopic_cache` (109 rows)
 
-### 3.8 `user_progress`
+Caches generated subtopic content keyed by `cache_key` to avoid redundant AI calls.
 
-Tracks subtopic completion status per user per course.
+| Column | Type | Notes |
+|---|---|---|
+| `id` | uuid | PK |
+| `cache_key` | text | UNIQUE |
+| `content` | jsonb | nullable |
+| `created_at`, `updated_at` | timestamptz | |
 
-| Column | Type | Constraints | Description |
-|--------|------|-------------|-------------|
-| `id` | `uuid` | **PK** | Progress record identifier |
-| `user_id` | `uuid` | **FK** -> `users(id)` | Tracked user |
-| `course_id` | `uuid` | **FK** -> `courses(id)` | Course being tracked |
-| `subtopic_id` | `uuid` | **FK** -> `subtopics(id)` | Specific subtopic |
-| `is_completed` | `boolean` | default `false` | Completion flag |
-| `completed_at` | `timestamptz` | nullable | Timestamp when the progress item was marked completed |
-| `created_at` | `timestamptz` | default `now()` | Record creation timestamp |
-| `updated_at` | `timestamptz` | default `now()` | Last update timestamp |
+- **Indexes:** `idx_subtopic_cache_key`, `subtopic_cache_cache_key_key`
+- **RLS:** `subtopic_cache_read` (SELECT to `authenticated`, `USING (true)`); `service_role_full_access`
+- Note: production schema differs from older docs; there is no `course_id`, `generated_at`, or `expires_at` column.
 
 ---
 
-## 4. Student Output Tables
+### 4.3 Learning Activity
 
-These tables capture student-generated content: reflective journals, notes, feedback, challenge responses, and course generation logs.
+#### 4.3.1 `quiz` (685 rows)
 
-### 4.1 `jurnal`
+Multiple-choice quiz items, scoped to a course/module/leaf.
 
-Student reflective learning journal entries.
+| Column | Type | Notes |
+|---|---|---|
+| `id` | uuid | PK |
+| `course_id` | uuid | FK -> `courses(id)` ON DELETE CASCADE |
+| `subtopic_id` | uuid | FK -> `subtopics(id)` ON DELETE CASCADE |
+| `question` | text | |
+| `options` | jsonb | array of `{text, isCorrect}` |
+| `correct_answer`, `explanation` | text | nullable |
+| `subtopic_label` | text | leaf title; CHECK non-empty when set |
+| `leaf_subtopic_id` | uuid | FK -> `leaf_subtopics(id)` ON DELETE SET NULL |
+| `created_at` | timestamptz | |
 
-| Column | Type | Constraints | Description |
-|--------|------|-------------|-------------|
-| `id` | `uuid` | **PK** | Journal entry identifier |
-| `user_id` | `uuid` | **FK** -> `users(id)` | Journal author |
-| `course_id` | `uuid` | **FK** -> `courses(id)` | Course context |
-| `content` | `text` | | Journal content (student reflection) |
-| `reflection` | `text` | nullable | Legacy reflection text |
-| `type` | `varchar` | nullable | Journal type, e.g. `structured_reflection` |
-| `subtopic_id` | `uuid` | **FK** -> `subtopics(id)` | Module row associated with the reflection |
-| `module_index` | `integer` | nullable | Module position when saved |
-| `subtopic_index` | `integer` | nullable | Leaf subtopic position when saved |
-| `subtopic_label` | `text` | nullable | Leaf subtopic title when saved |
-| `created_at` | `timestamptz` | default `now()` | Entry timestamp |
-| `updated_at` | `timestamptz` | default `now()` | Last update timestamp |
+- **Indexes:** `idx_quiz_course_id`, `idx_quiz_subtopic_id`, `idx_quiz_subtopic_label`, `idx_quiz_leaf_subtopic_created_at`, `idx_quiz_scope_created_at`
+- **RLS:** `quiz_read_own_course` (joins `courses.created_by`), `service_role_full_access`
 
-**Notes:** Named `jurnal` (Indonesian spelling) rather than `journal`. Viewable by admins via `/api/admin/activity/jurnal`.
+#### 4.3.2 `quiz_submissions` (255 rows)
 
----
+Per-question student answers, grouped into a 5-question attempt by `quiz_attempt_id`.
 
-### 4.2 `transcript`
+| Column | Type | Notes |
+|---|---|---|
+| `id` | uuid | PK |
+| `user_id` | uuid | FK -> `users(id)` ON DELETE CASCADE |
+| `quiz_id` | uuid | FK -> `quiz(id)` ON DELETE CASCADE |
+| `course_id`, `subtopic_id` | uuid | FK, nullable |
+| `answer` | text | |
+| `is_correct` | boolean | |
+| `reasoning_note` | text | nullable |
+| `module_index`, `subtopic_index` | integer | nullable, >= 0 |
+| `attempt_number` | integer | default `1`, CHECK >= 1 |
+| `quiz_attempt_id` | uuid | default `gen_random_uuid()`; groups one attempt |
+| `subtopic_label` | text | nullable |
+| `leaf_subtopic_id` | uuid | FK -> `leaf_subtopics(id)` ON DELETE SET NULL |
+| `learning_session_id` | uuid | FK -> `learning_sessions(id)` ON DELETE SET NULL |
+| Research audit triplet | | `research_validity_status`, `coding_status`, `researcher_notes`, `raw_evidence_snapshot`, `data_collection_week` |
+| `created_at` | timestamptz | |
 
-Student course notes and transcripts per subtopic.
+- **Unique:** `idx_quiz_submissions_attempt_question_unique (quiz_attempt_id, quiz_id)` -- one row per question per attempt
+- **Indexes:** 11 covering attempt, leaf-subtopic, learning-session, course/subtopic combinations
+- **RLS:** `quiz_submissions_own`, `service_role_full_access`
+- **RPC:** `insert_quiz_attempt(...)` writes a five-row attempt atomically.
+- **Zod:** [`QuizSubmitSchema`](../src/lib/schemas.ts)
 
-| Column | Type | Constraints | Description |
-|--------|------|-------------|-------------|
-| `id` | `uuid` | **PK** | Transcript identifier |
-| `user_id` | `uuid` | **FK** -> `users(id)` | Note author |
-| `course_id` | `uuid` | **FK** -> `courses(id)` | Course context |
-| `subtopic_id` | `uuid` | **FK** -> `subtopics(id)` | Subtopic context |
-| `content` | `text` | | Primary transcript content |
-| `notes` | `text` | | Additional student notes |
-| `created_at` | `timestamptz` | default `now()` | Creation timestamp |
-| `updated_at` | `timestamptz` | default `now()` | Last update timestamp |
+#### 4.3.3 `jurnal` (43 rows)
 
----
+Student reflective journal entries. Bahasa Indonesia name is intentional. History-based: each submit creates a new row.
 
-### 4.3 `feedback`
+| Column | Type | Notes |
+|---|---|---|
+| `id` | uuid | PK |
+| `user_id` | uuid | FK -> `users(id)` ON DELETE CASCADE |
+| `course_id` | uuid | FK -> `courses(id)` ON DELETE CASCADE |
+| `subtopic_id` | uuid | FK -> `subtopics(id)` ON DELETE SET NULL |
+| `content`, `reflection` | text | nullable |
+| `type` | varchar | default `free_text` (`structured_reflection` for new flow) |
+| `module_index`, `subtopic_index` | integer | nullable |
+| `subtopic_label` | text | nullable |
+| `learning_session_id` | uuid | FK -> `learning_sessions(id)` ON DELETE SET NULL |
+| Research audit triplet | | as above |
+| `created_at`, `updated_at` | timestamptz | |
 
-User feedback and ratings for courses.
+- **Indexes:** 7 (incl. `idx_jurnal_user_course_subtopic_created_at`, `idx_jurnal_learning_session`)
+- **Note:** legacy unique constraint on `(user_id, course_id)` was dropped (`drop_legacy_jurnal_user_course_unique.sql`) so every submit creates history.
+- **RLS:** `jurnal_own`, `service_role_full_access`
+- **Zod:** [`JurnalSchema`](../src/lib/schemas.ts)
 
-| Column | Type | Constraints | Description |
-|--------|------|-------------|-------------|
-| `id` | `uuid` | **PK** | Feedback identifier |
-| `user_id` | `uuid` | **FK** -> `users(id)` | Feedback author |
-| `course_id` | `uuid` | **FK** -> `courses(id)` | Rated course |
-| `subtopic_id` | `uuid` | **FK** -> `subtopics(id)` | Rated module/subtopic context |
-| `module_index` | `integer` | nullable | Module position when saved |
-| `subtopic_index` | `integer` | nullable | Leaf subtopic position when saved |
-| `subtopic_label` | `text` | nullable | Leaf subtopic title when saved |
-| `rating` | `integer` | | Numeric rating |
-| `comment` | `text` | | Written feedback |
-| `created_at` | `timestamptz` | default `now()` | Submission timestamp |
-| `origin_jurnal_id` | `uuid` | **FK** -> `jurnal(id)` | Structured reflection mirrored into feedback |
+#### 4.3.4 `transcript` (0 rows)
 
----
+Per-subtopic course notes / transcripts.
 
-### 4.4 `challenge_responses`
+| Column | Type | Notes |
+|---|---|---|
+| `id` | uuid | PK |
+| `user_id` | uuid | NOT NULL, FK -> `users(id)` ON DELETE CASCADE |
+| `course_id` | uuid | NOT NULL, FK -> `courses(id)` ON DELETE CASCADE |
+| `subtopic_id` | uuid | nullable, FK -> `subtopics(id)` ON DELETE SET NULL |
+| `content`, `notes` | text | |
+| `created_at`, `updated_at` | timestamptz | |
 
-Records student responses to critical thinking challenges with AI-powered feedback.
+- **Unique:** `transcript_user_course_subtopic_unique (user_id, course_id, subtopic_id)`
+- **Indexes:** `idx_transcript_user_id`, `idx_transcript_course_id`, `idx_transcript_subtopic_id`, `idx_transcript_created_at`
+- **RLS:** `transcript_own`, `service_role_full_access`
 
-| Column | Type | Constraints | Description |
-|--------|------|-------------|-------------|
-| `id` | `uuid` | **PK** | Response identifier |
-| `user_id` | `text` | Legacy type; app treats as string | User identifier |
-| `course_id` | `uuid` | **FK** -> `courses(id)` | Course context |
-| `module_index` | `integer` | | Module position within the course |
-| `subtopic_index` | `integer` | | Subtopic position within the module |
-| `page_number` | `integer` | | Page position within the subtopic |
-| `question` | `text` | | Challenge question shown to the learner |
-| `answer` | `text` | | Student answer |
-| `feedback` | `text` | nullable | AI-generated feedback saved alongside the answer |
-| `reasoning_note` | `text` | nullable | Optional learner reasoning / justification note |
-| `learning_session_id` | `uuid` | **FK** -> `learning_sessions(id)` | Research session link |
-| `created_at` | `timestamptz` | default `now()` | Submission timestamp |
-| `updated_at` | `timestamptz` | default `now()` | Last update timestamp |
+#### 4.3.5 `transcript_integrity_quarantine` (5 rows)
 
-**Known Issue -- Type Mismatch:** `user_id` is still stored as `text` on this table, unlike most user-linked tables. RLS policies compensate with explicit casting such as `user_id::text = auth.uid()::text`. The primary key `id` is a real UUID and the save API must generate a UUID-compatible value.
+Non-destructive audit ledger for transcript rows whose foreign keys do not currently resolve.
 
----
+| Column | Type | Notes |
+|---|---|---|
+| `id` | uuid | PK |
+| `source_table` | text | default `transcript` |
+| `source_id` | uuid | |
+| `quarantine_reason` | text[] | CHECK non-empty |
+| `row_data` | jsonb | snapshot of the offending row |
+| `detected_at`, `resolved_at` | timestamptz | |
+| `resolution_notes` | text | nullable |
+| `created_at`, `updated_at` | timestamptz | |
 
-### 4.5 `course_generation_activity`
+- **Unique:** `(source_table, source_id)`
+- **Indexes:** `idx_transcript_integrity_quarantine_detected`, partial index for unresolved
+- **RLS:** `service_role_full_access` only
+- **View:** `v_transcript_integrity_audit` aggregates findings.
 
-Logs AI course generation requests and their outcomes.
+#### 4.3.6 `feedback` (40 rows)
 
-| Column | Type | Constraints | Description |
-|--------|------|-------------|-------------|
-| `id` | `uuid` | **PK** | Activity log identifier |
-| `user_id` | `uuid` | **FK** -> `users(id)` | Requesting user |
-| `course_id` | `uuid` | **FK** -> `courses(id)` | Generated course |
-| `request_payload` | `jsonb` | | Original generation request parameters |
-| `outline` | `jsonb` | | Generated course outline/structure |
-| `status` | `text` | | Generation status (e.g., `completed`, `failed`) |
-| `created_at` | `timestamptz` | default `now()` | Request timestamp |
-| `updated_at` | `timestamptz` | default `now()` | Last update timestamp |
+Numeric rating + comment. Mirror rows from structured reflections link back via `origin_jurnal_id`.
 
----
+| Column | Type | Notes |
+|---|---|---|
+| `id` | uuid | PK |
+| `user_id` | uuid | FK -> `users(id)` ON DELETE CASCADE |
+| `course_id` | uuid | FK -> `courses(id)` ON DELETE CASCADE |
+| `subtopic_id` | uuid | FK -> `subtopics(id)` ON DELETE SET NULL |
+| `module_index`, `subtopic_index` | integer | nullable |
+| `subtopic_label` | text | nullable |
+| `rating` | integer | nullable, CHECK 1..5 |
+| `comment` | text | default `''` |
+| `origin_jurnal_id` | uuid | FK -> `jurnal(id)` ON DELETE SET NULL |
+| `created_at` | timestamptz | |
 
-## 5. Discussion & Content Tables
+- **Unique:** `idx_feedback_origin_jurnal_unique (origin_jurnal_id) WHERE origin_jurnal_id IS NOT NULL` -- one mirror per `jurnal` row
+- **Indexes:** 7 incl. course-scope and rating partial index
+- **RLS:** `feedback_own`, `service_role_full_access`
+- **Zod:** [`FeedbackSchema`](../src/lib/schemas.ts)
 
-Tables supporting the guided discussion system, content caching, administrative moderation, and API observability.
+#### 4.3.7 `ask_question_history` (17 rows)
 
-### 5.1 `discussion_sessions`
+Q&A interaction log between student and AI, including follow-ups and prompt classification context.
 
-Tracks guided discussion sessions between students and the AI agent.
+| Column | Type | Notes |
+|---|---|---|
+| `id` | uuid | PK |
+| `user_id` | uuid | FK -> `users(id)` ON DELETE CASCADE |
+| `course_id` | uuid | FK -> `courses(id)` ON DELETE CASCADE |
+| `module_index`, `subtopic_index`, `page_number` | integer | nullable, default `0` |
+| `subtopic_label` | varchar | nullable |
+| `question`, `answer`, `reasoning_note` | text | |
+| `prompt_components` | jsonb | nullable |
+| `prompt_version`, `session_number` | integer | nullable, default `1` |
+| `learning_session_id` | uuid | FK -> `learning_sessions(id)` ON DELETE SET NULL |
+| `is_follow_up` | boolean | default `false` |
+| `follow_up_of` | uuid | self-FK -> `ask_question_history(id)` |
+| `response_time_ms` | integer | nullable |
+| `prompt_stage`, `stage_confidence`, `micro_markers` | text/real/jsonb | optional auto-classification |
+| Research audit triplet | | as above |
+| `research_synced_at` | timestamptz | when the row was projected into the evidence ledger |
+| `created_at`, `updated_at` | timestamptz | |
 
-| Column | Type | Constraints | Description |
-|--------|------|-------------|-------------|
-| `id` | `uuid` | **PK** | Session identifier |
-| `user_id` | `uuid` | **FK** -> `users(id)` | Participating student |
-| `course_id` | `uuid` | **FK** -> `courses(id)` | Course context |
-| `subtopic_id` | `uuid` | **FK** -> `subtopics(id)` | Subtopic being discussed |
-| `template_id` | `uuid` | **FK** -> `discussion_templates(id)` | Template used to start the session |
-| `status` | `text` | | Session status (e.g., `in_progress`, `completed`, `failed`) |
-| `phase` | `text` | | Current discussion phase |
-| `learning_goals` | `jsonb` | | Session learning objectives plus proximity status and mentor notes |
-| `completed_at` | `timestamptz` | | Time when the discussion requirement was completed |
-| `completion_reason` | `text` | | Why the session was allowed to complete (all goals met, near enough, remediation exhausted, etc.) |
-| `completion_summary` | `jsonb` | | Final research summary of strengths, weak goals, and completion metadata |
-| `created_at` | `timestamptz` | default `now()` | Session start |
-| `updated_at` | `timestamptz` | default `now()` | Last activity |
+- **Indexes:** 8 (course, learning-session, prompt-stage, follow-up partial)
+- **RLS:** `ask_question_history_own`, `service_role_full_access`
+- **Zod:** [`AskQuestionSchema`](../src/lib/schemas.ts)
 
----
+#### 4.3.8 `challenge_responses` (15 rows)
 
-### 5.2 `discussion_messages`
+Critical-thinking challenge answers and AI feedback.
 
-Individual messages within a discussion session, from both the AI agent and the student.
+| Column | Type | Notes |
+|---|---|---|
+| `id` | uuid | PK (no default; client-generated UUID) |
+| `user_id` | uuid | FK -> `users(id)` ON DELETE CASCADE |
+| `course_id` | uuid | FK -> `courses(id)` ON DELETE CASCADE |
+| `module_index`, `subtopic_index`, `page_number` | integer | nullable, default `0` |
+| `question`, `answer` | text | |
+| `feedback`, `reasoning_note` | text | nullable |
+| `learning_session_id` | uuid | FK -> `learning_sessions(id)` ON DELETE SET NULL |
+| Research audit triplet | | as above |
+| `created_at`, `updated_at` | timestamptz | |
 
-| Column | Type | Constraints | Description |
-|--------|------|-------------|-------------|
-| `id` | `uuid` | **PK** | Message identifier |
-| `session_id` | `uuid` | **FK** -> `discussion_sessions(id)` | Parent session |
-| `role` | `text` | enum: `agent`, `student` | Message sender role |
-| `content` | `text` | | Message body |
-| `metadata` | `jsonb` | | Additional structured data (e.g., prompt context) |
-| `step_key` | `text` | | Discussion flow step identifier |
-| `learning_session_id` | `uuid` | **FK** -> `learning_sessions(id)` | Research session link |
-| `is_prompt_revision` | `boolean` | | Whether this message is a revised version of a prior prompt |
-| `revision_of_message_id` | `uuid` | **FK (self)** -> `discussion_messages(id)` | Original message being revised |
-| `created_at` | `timestamptz` | default `now()` | Message timestamp |
+- **Indexes:** 6 incl. learning-session, coding-status partial
+- **RLS:** `challenge_responses_own`, `service_role_full_access`
+- **Note:** `user_id` is now a real `uuid` (the prior text-vs-uuid issue documented in older revisions has been resolved).
+- **Zod:** [`ChallengeResponseSchema`, `ChallengeThinkingSchema`, `ChallengeFeedbackSchema`](../src/lib/schemas.ts)
 
-**Self-Referential FK:** `revision_of_message_id` links revised prompts back to their originals, enabling prompt revision tracking for research analysis.
+#### 4.3.9 `user_progress` (13 rows)
 
----
+Per-user, per-leaf completion tracking.
 
-### 5.2a `discussion_assessments`
+| Column | Type | Notes |
+|---|---|---|
+| `id` | uuid | PK |
+| `user_id` | uuid | FK -> `users(id)` ON DELETE CASCADE |
+| `course_id` | uuid | FK -> `courses(id)` ON DELETE CASCADE |
+| `subtopic_id` | uuid | FK -> `subtopics(id)` ON DELETE CASCADE |
+| `leaf_subtopic_id` | uuid | nullable, FK -> `leaf_subtopics(id)` ON DELETE SET NULL |
+| `is_completed` | boolean | default `false` |
+| `completed_at` | timestamptz | nullable |
+| `created_at`, `updated_at` | timestamptz | |
 
-Normalized read-model for research analysis of each student discussion answer against each learning goal.
+- **Unique:** `(user_id, course_id, subtopic_id)`
+- **Indexes:** `idx_user_progress_leaf_subtopic`, plus per-FK indexes
+- **Comment on table:** "Access enforced at application layer via custom JWT (x-user-id header) + adminDb (service_role). Supabase auth.uid() is not used."
+- **RLS:** `user_progress_own` (legacy `auth.uid()`), `service_role_full_access`
+- **Zod:** [`UserProgressUpsertSchema`](../src/lib/schemas.ts)
 
-| Column | Type | Constraints | Description |
-|--------|------|-------------|-------------|
-| `id` | `uuid` | **PK** | Assessment row identifier |
-| `session_id` | `uuid` | **FK** -> `discussion_sessions(id)` ON DELETE CASCADE | Parent discussion session |
-| `student_message_id` | `uuid` | **FK** -> `discussion_messages(id)` ON DELETE CASCADE | Student answer being assessed |
-| `prompt_message_id` | `uuid` | **FK** -> `discussion_messages(id)` | AI prompt that the student answered |
-| `user_id` | `uuid` | **FK** -> `users(id)` | Student |
-| `course_id` | `uuid` | **FK** -> `courses(id)` | Course context |
-| `subtopic_id` | `uuid` | **FK** -> `subtopics(id)` | Module/subtopic context |
-| `step_key` | `text` | | Discussion step key |
-| `phase` | `text` | | Discussion phase |
-| `goal_id` | `text` | | Learning goal id from template/session JSON |
-| `goal_description` | `text` | | Snapshot of the goal text |
-| `assessment_status` | `text` | check: `met`, `near`, `weak`, `off_topic`, `unassessable` | Proximity label |
-| `proximity_score` | `integer` | 0-100 | Proximity score |
-| `passed` | `boolean` | | Whether the answer is accepted for progress |
-| `attempt_number` | `integer` | | Attempt number for the current step |
-| `remediation_round` | `integer` | nullable | Remediation sequence if applicable |
-| `quality_flag` | `text` | | Answer quality flag |
-| `evaluator` | `text` | | `mcq`, `llm`, or `fallback` |
-| `model` | `text` | | AI model used for LLM evaluation |
-| `evaluation_version` | `text` | | Evaluator contract version |
-| `coach_feedback` | `text` | | Mentor feedback shown to student |
-| `ideal_answer` | `text` | | Short model answer for learning support |
-| `scaffold_action` | `text` | | retry, advance, remediation, complete, etc. |
-| `advance_allowed` | `boolean` | | Whether the student was allowed to continue after this answer |
-| `evidence_excerpt` | `text` | | Evidence excerpt from the student answer |
-| `assessment_raw` | `jsonb` | | Raw evaluator payload |
-| `created_at` | `timestamptz` | default `now()` | Assessment timestamp |
+#### 4.3.10 `example_usage_events` (18 rows)
 
-**RLS Policies:**
-- `Service role full access to discussion_assessments` -- backend/admin API only.
+Telemetry of when AI-generated examples were displayed/used on a subtopic.
 
----
+| Column | Type | Notes |
+|---|---|---|
+| `id` | uuid | PK |
+| `user_id` | uuid | FK -> `users(id)` ON DELETE CASCADE |
+| `course_id` | uuid | nullable, FK -> `courses(id)` ON DELETE SET NULL |
+| `learning_session_id` | uuid | FK -> `learning_sessions(id)` ON DELETE SET NULL |
+| `module_index`, `subtopic_index`, `page_number` | integer | default `0` |
+| `subtopic_label` | text | nullable |
+| `context_hash` | text | de-dupe key |
+| `context_length`, `examples_count` | integer | CHECK `examples_count > 0` |
+| `usage_scope` | text | default `used_on_subtopic` |
+| `raw_evidence_snapshot` | jsonb | default `{}` |
+| `data_collection_week` | varchar | |
+| `created_at`, `updated_at` | timestamptz | |
 
-### 5.3 `discussion_templates`
-
-Predefined discussion flow templates for each course and subtopic.
-
-| Column | Type | Constraints | Description |
-|--------|------|-------------|-------------|
-| `id` | `uuid` | **PK** | Template identifier |
-| `course_id` | `uuid` | **FK** -> `courses(id)` | Course context |
-| `subtopic_id` | `uuid` | **FK** -> `subtopics(id)` | Subtopic context |
-| `version` | `text` | | Template version string |
-| `source` | `jsonb` | | Template source/origin metadata. Runtime stores `source.generation` for research provenance: `mode` (`ai_initial` or `ai_regenerated`), `scope`, `trigger`, `provider`, `model`, `promptVersion`, `attempts`, `status`, and `generatedAt`. |
-| `template` | `jsonb` | | Discussion flow structure and steps |
-| `generated_by` | `text` | | Runtime compatibility marker (`auto` for subtopic templates, `auto-module` for module templates). Research labels should read `source.generation.mode` instead of overloading this column. |
-| `created_at` | `timestamptz` | default `now()` | Creation timestamp |
-
-**Runtime status rows:**
-- Valid templates are rows with `generated_by = 'auto'` or `generated_by = 'auto-module'` and `source.generation.status` missing or `ready`.
-- Temporary preparation rows use `generated_by = 'preparation-status'` and store `source.generation.status` as `queued`, `running`, `failed`, or `superseded`. These rows are operational status only and must not be used to start a discussion session.
-
-**RLS Policies:**
-- Public read: `USING (true)` -- All authenticated users can read templates
-- `service_role_full_access`
-
----
-
-### 5.4 `discussion_admin_actions`
-
-Audit log of admin monitoring notes and legacy discussion actions.
-
-| Column | Type | Constraints | Description |
-|--------|------|-------------|-------------|
-| `id` | `uuid` | **PK** | Action log identifier |
-| `session_id` | `uuid` | **FK** -> `discussion_sessions(id)` ON DELETE CASCADE | Target session |
-| `admin_id` | `text` | | Acting administrator ID |
-| `admin_email` | `text` | | Administrator email |
-| `action` | `text` | | Action type performed |
-| `payload` | `jsonb` | | Action details/parameters |
-| `created_at` | `timestamptz` | default `now()` | Action timestamp |
-
-**RLS Policies:**
-- `service_role_full_access` only -- No public or user-level access
-
-**Notes:** This table is listed in `OPTIONAL_SUPABASE_TABLES` in `database.ts`, meaning the application gracefully handles its absence (PostgREST error `PGRST205` is suppressed).
+- **Indexes:** `idx_example_usage_events_user_created`, `idx_example_usage_events_course_scope`, `idx_example_usage_events_session`
+- **RLS:** `service_role_full_access` only
 
 ---
 
-### 5.5 `subtopic_cache`
+### 4.4 Discussion
 
-Caches generated subtopic content to reduce AI generation costs and latency.
+#### 4.4.1 `discussion_sessions` (5 rows)
 
-| Column | Type | Constraints | Description |
-|--------|------|-------------|-------------|
-| `id` | `uuid` | **PK** | Cache entry identifier |
-| `course_id` | `uuid` | **FK** -> `courses(id)` | Cached course |
-| `content` | `jsonb` | | Cached subtopic content |
-| `generated_at` | `timestamptz` | | Content generation timestamp |
-| `expires_at` | `timestamptz` | | Cache expiration time |
-| `created_at` | `timestamptz` | default `now()` | Cache entry creation |
+One row per active or completed guided discussion. UNIQUE indexes prevent duplicate sessions per user/course/subtopic (one for `subtopic_id IS NULL`, one for `subtopic_id IS NOT NULL`).
 
-**RLS Policies:**
-- Public read: `USING (true)` -- Accessible via `publicDb` (anon key)
-- `service_role_full_access`
+| Column | Type | Notes |
+|---|---|---|
+| `id` | uuid | PK |
+| `user_id` | uuid | FK -> `users(id)` ON DELETE CASCADE |
+| `course_id` | uuid | FK -> `courses(id)` ON DELETE CASCADE |
+| `subtopic_id` | uuid | FK -> `subtopics(id)` ON DELETE CASCADE |
+| `template_id` | uuid | FK -> `discussion_templates(id)` ON DELETE SET NULL |
+| `status` | text | default `in_progress` |
+| `phase` | text | nullable |
+| `learning_goals` | jsonb | objectives + proximity state |
+| `completed_at`, `completion_reason`, `completion_summary` | timestamptz / text / jsonb | finalisation metadata |
+| `learning_session_id` | uuid | FK -> `learning_sessions(id)` ON DELETE SET NULL |
+| Research audit columns | | `research_validity_status`, `coding_status`, `researcher_notes`, `data_collection_week` |
+| `created_at`, `updated_at` | timestamptz | |
 
----
+- **RLS:** `discussion_sessions_own`, `service_role_full_access`
 
-### 5.6 `api_logs`
+#### 4.4.2 `discussion_messages` (157 rows)
 
-API request/response logging for observability and debugging.
+All messages in a discussion (agent and student). Self-FK supports prompt revision tracking.
 
-| Column | Type | Constraints | Description |
-|--------|------|-------------|-------------|
-| `id` | `uuid` | **PK** | Log entry identifier |
-| `endpoint` | `text` | | API route path |
-| `method` | `text` | | HTTP method (GET, POST, etc.) |
-| `statusCode` | `integer` | | HTTP response status code |
-| `duration` | `integer` | | Request duration in milliseconds |
-| `metadata` | `jsonb` | | Additional request/response metadata |
-| `created_at` | `timestamptz` | default `now()` | Log timestamp |
+| Column | Type | Notes |
+|---|---|---|
+| `id` | uuid | PK |
+| `session_id` | uuid | FK -> `discussion_sessions(id)` ON DELETE CASCADE |
+| `role` | text | `agent` / `student` |
+| `content` | text | |
+| `step_key` | text | nullable |
+| `metadata` | jsonb | nullable |
+| `learning_session_id` | uuid | FK -> `learning_sessions(id)` ON DELETE SET NULL |
+| `is_prompt_revision` | boolean | default `false` |
+| `revision_of_message_id` | uuid | self-FK -> `discussion_messages(id)` |
+| Research audit columns | | as above, plus `raw_evidence_snapshot`, `data_collection_week` |
+| `created_at` | timestamptz | |
 
-**RLS Policies:**
-- `service_role_full_access` only -- No public access (sensitive operational data)
+- **Indexes:** 6 (session, learning-session, revision, coding-status, ordered scan)
+- **RLS:** `discussion_messages_own_session` (joins parent session), `service_role_full_access`
 
-**Usage:** Populated by the `withApiLogging()` middleware in `src/lib/api-logger.ts`.
+#### 4.4.3 `discussion_templates` (59 rows)
 
----
+Pre-generated templates the discussion engine starts a session from. Mixed runtime + research provenance:
 
-## 6. Research Tables
+| Column | Type | Notes |
+|---|---|---|
+| `id` | uuid | PK |
+| `course_id` | uuid | FK -> `courses(id)` ON DELETE CASCADE |
+| `subtopic_id` | uuid | FK -> `subtopics(id)` ON DELETE CASCADE |
+| `version` | text | nullable |
+| `source` | jsonb | research provenance: `source.generation = { mode, scope, trigger, provider, model, promptVersion, attempts, status, generatedAt }` |
+| `template` | jsonb | flow steps |
+| `generated_by` | text | runtime marker: `auto`, `auto-module`, `preparation-status` |
+| `created_at` | timestamptz | |
 
-These tables form the research instrumentation layer, designed for academic study of student prompt engineering behavior, cognitive development, and longitudinal analysis. They support mixed-methods research with quantitative scoring and qualitative evidence.
+- **Runtime gating:** valid templates have `generated_by IN ('auto','auto-module')` AND (`source.generation.status` missing OR `'ready'`). `preparation-status` rows are scratch state (`queued`/`running`/`failed`/`superseded`) and must not seed a session.
+- **RLS:** `discussion_templates_read` (SELECT to `authenticated`, `USING (true)`), `service_role_full_access`
 
-### 6.1 `learning_sessions`
+#### 4.4.4 `discussion_assessments` (45 rows)
 
-The central research unit of analysis. Each session represents a bounded learning interaction period for a student within a course.
+Normalised research read-model: one row per (student message, learning goal). Comment on table: "Research read-model for each student discussion answer assessed against each learning goal."
 
-| Column | Type | Constraints | Description |
-|--------|------|-------------|-------------|
-| `id` | `uuid` | **PK** | Session identifier |
-| `user_id` | `uuid` | **FK** -> `users(id)` | Participating student |
-| `course_id` | `uuid` | **FK** -> `courses(id)` | Course context |
-| `session_number` | `integer` | **UNIQUE** with `(user_id, course_id)` | Sequential session number |
-| `session_date` | `date` | | Session calendar date |
-| `session_start` | `timestamptz` | | Session start time |
-| `session_end` | `timestamptz` | | Session end time |
-| `total_prompts` | `integer` | | Count of prompts in this session |
-| `total_revisions` | `integer` | | Count of prompt revisions |
-| `dominant_stage` | `varchar` | enum: `SCP`, `SRP`, `MQP`, `REFLECTIVE` | Most frequent prompt stage |
-| `dominant_stage_score` | `integer` | range: 1-4 | Numeric score of dominant stage |
-| `avg_cognitive_depth` | `numeric` | range: 1.0-4.0 | Average cognitive depth across prompts |
-| `avg_ct_score` | `numeric` | range: 0.0-12.0 | Average Computational Thinking score |
-| `avg_cth_score` | `numeric` | range: 0.0-12.0 | Average Critical Thinking score |
-| `stage_transition` | `integer` | range: -3 to +3 | Stage change from previous session |
-| `transition_status` | `varchar` | | Human-readable transition descriptor |
-| `topic_focus` | `text` | | Primary topic of the session |
-| `duration_minutes` | `integer` | | Session duration |
-| `status` | `varchar` | | Session status (e.g., `completed`) |
-| `is_valid_for_analysis` | `boolean` | | Researcher flag for data quality |
-| `validity_note` | `text` | | Explanation if marked invalid |
-| `researcher_notes` | `text` | | Free-form researcher annotations |
-| `created_at` | `timestamptz` | default `now()` | Record creation |
-| `updated_at` | `timestamptz` | default `now()` | Last update |
+| Column | Type | Notes |
+|---|---|---|
+| `id` | uuid | PK |
+| `session_id` | uuid | FK -> `discussion_sessions(id)` ON DELETE CASCADE |
+| `student_message_id` | uuid | FK -> `discussion_messages(id)` ON DELETE CASCADE |
+| `prompt_message_id` | uuid | FK -> `discussion_messages(id)` ON DELETE SET NULL |
+| `user_id` | uuid | FK -> `users(id)` ON DELETE CASCADE |
+| `course_id` | uuid | FK -> `courses(id)` ON DELETE CASCADE |
+| `subtopic_id` | uuid | FK -> `subtopics(id)` ON DELETE SET NULL |
+| `step_key`, `phase` | text | nullable |
+| `goal_id`, `goal_description` | text | |
+| `assessment_status` | text | CHECK `met / near / weak / off_topic / unassessable` |
+| `proximity_score` | integer | CHECK 0..100 |
+| `passed` | boolean | default `false` |
+| `attempt_number` | integer | default `1`, CHECK >= 1 |
+| `remediation_round` | integer | nullable, >= 1 |
+| `quality_flag` | text | default `adequate`; CHECK `adequate / low_effort / off_topic` |
+| `evaluator` | text | CHECK `mcq / llm / fallback` |
+| `model`, `evaluation_version`, `coach_feedback`, `ideal_answer`, `scaffold_action`, `evidence_excerpt` | text | |
+| `advance_allowed` | boolean | default `false` |
+| `assessment_raw` | jsonb | nullable; raw evaluator payload |
+| `created_at` | timestamptz | |
 
-**Unique Constraint:** `UNIQUE(user_id, course_id, session_number)` -- Ensures sequential session numbering per student per course.
+- **Unique:** `discussion_assessments_student_goal_unique (student_message_id, goal_id)`
+- **Indexes:** 6
+- **RLS:** `Service role full access to discussion_assessments` only
 
-**Prompt Stage Taxonomy:**
-| Stage Code | Name | Score | Description |
-|------------|------|-------|-------------|
-| `SCP` | Simple Copy Prompt | 1 | Direct copying or minimal modification of given prompts |
-| `SRP` | Structured Refined Prompt | 2 | Structured prompts with clear parameters and constraints |
-| `MQP` | Multi-layered Quality Prompt | 3 | Complex, multi-faceted prompts showing deep understanding |
-| `REFLECTIVE` | Reflective Prompt | 4 | Meta-cognitive prompts demonstrating self-awareness |
+#### 4.4.5 `discussion_admin_actions` (0 rows)
 
----
+Audit log for admin moderation events on discussion sessions. Listed in `OPTIONAL_SUPABASE_TABLES`; the application tolerates its absence (PostgREST `PGRST205` is suppressed).
 
-### 6.2 `prompt_classifications`
+| Column | Type | Notes |
+|---|---|---|
+| `id` | uuid | PK |
+| `session_id` | uuid | FK -> `discussion_sessions(id)` ON DELETE CASCADE |
+| `admin_id`, `admin_email`, `action` | text | |
+| `payload` | jsonb | nullable |
+| `created_at` | timestamptz | |
 
-Per-prompt research coding of student prompts across all interaction sources (Q&A, discussion, challenge).
-
-| Column | Type | Constraints | Description |
-|--------|------|-------------|-------------|
-| `id` | `uuid` | **PK** | Classification identifier |
-| `prompt_source` | `varchar` | enum: `ask_question`, `discussion`, `challenge` | Source interaction type |
-| `prompt_id` | `uuid` | | ID of the source prompt (polymorphic) |
-| `learning_session_id` | `uuid` | **FK** -> `learning_sessions(id)` | Research session |
-| `user_id` | `uuid` | **FK** -> `users(id)` | Classified student |
-| `course_id` | `uuid` | **FK** -> `courses(id)` | Course context |
-| `prompt_text` | `text` | | Denormalized prompt text for analysis |
-| `prompt_sequence` | `integer` | | Order within session |
-| `prompt_stage` | `varchar` | enum: `SCP`, `SRP`, `MQP`, `REFLECTIVE` | Classified prompt engineering stage |
-| `prompt_stage_score` | `integer` | range: 1-4 | Numeric stage score |
-| `micro_markers` | `text[]` | | Array of observed micro-markers |
-| `primary_marker` | `varchar` | enum: `GCP`, `PP`, `ARP` | Primary prompt quality marker |
-| `classified_by` | `varchar` | | Classifier identity (researcher name or `system`) |
-| `classification_method` | `varchar` | | Method used (e.g., `manual`, `rubric_v2`) |
-| `confidence_score` | `numeric` | range: 0.0-1.0 | Classification confidence |
-| `classification_evidence` | `text` | | Textual evidence supporting the classification |
-| `researcher_notes` | `text` | | Additional researcher annotations |
-| `created_at` | `timestamptz` | default `now()` | Classification timestamp |
-| `updated_at` | `timestamptz` | default `now()` | Last update |
-
-**Unique Constraint:** `UNIQUE(prompt_source, prompt_id, classified_by)` -- Prevents duplicate classifications by the same rater.
-
-**Polymorphic Reference Pattern:** The `prompt_source` + `prompt_id` pair references different tables depending on the source:
-- `ask_question` -> `ask_question_history.id`
-- `discussion` -> `discussion_messages.id`
-- `challenge` -> `challenge_responses.id`
-
-No database-level FK enforces this; application logic maintains referential integrity.
-
-**Primary Marker Codes:**
-| Code | Name | Description |
-|------|------|-------------|
-| `GCP` | General Copy Prompt | Generic, unrefined prompt pattern |
-| `PP` | Patterned Prompt | Shows structural awareness |
-| `ARP` | Adaptive Refined Prompt | Context-aware, sophisticated prompt design |
+- **Indexes:** `idx_discussion_admin_actions_session_created`, `idx_discussion_admin_actions_created`
+- **RLS:** `service_role_full_access` only
+- **Status:** Empty in production. Discussion module is out of admin scope (per project memory) so this remains untouched.
 
 ---
 
-### 6.3 `cognitive_indicators`
+### 4.5 Research and RM2/RM3 Pipeline
 
-Detailed cognitive assessment scores per classified prompt, covering Computational Thinking (CT) and Critical Thinking (CTh) dimensions.
+#### 4.5.1 `learning_sessions` (22 rows)
 
-| Column | Type | Constraints | Description |
-|--------|------|-------------|-------------|
-| `id` | `uuid` | **PK** | Indicator record identifier |
-| `prompt_classification_id` | `uuid` | **FK** -> `prompt_classifications(id)` ON DELETE CASCADE | Parent classification |
-| `prompt_id` | `uuid` | | Source prompt ID (denormalized) |
-| `user_id` | `uuid` | **FK** -> `users(id)` | Assessed student |
-| **CT Dimensions** | | | |
-| `ct_decomposition` | `integer` | range: 0-2 | Breaking problems into sub-problems |
-| `ct_pattern_recognition` | `integer` | range: 0-2 | Identifying patterns and similarities |
-| `ct_abstraction` | `integer` | range: 0-2 | Focusing on essential information |
-| `ct_algorithm_design` | `integer` | range: 0-2 | Designing step-by-step solutions |
-| `ct_evaluation_debugging` | `integer` | range: 0-2 | Testing and correcting solutions |
-| `ct_generalization` | `integer` | range: 0-2 | Applying solutions to new contexts |
-| `ct_total_score` | `integer` | **GENERATED ALWAYS AS** sum of CT fields, range: 0-12 | Total CT score |
-| **CTh Dimensions** | | | |
-| `cth_interpretation` | `integer` | range: 0-2 | Understanding meaning and significance |
-| `cth_analysis` | `integer` | range: 0-2 | Examining ideas and arguments |
-| `cth_evaluation` | `integer` | range: 0-2 | Assessing credibility and strength |
-| `cth_inference` | `integer` | range: 0-2 | Drawing reasonable conclusions |
-| `cth_explanation` | `integer` | range: 0-2 | Justifying reasoning processes |
-| `cth_self_regulation` | `integer` | range: 0-2 | Monitoring own thinking |
-| `cth_total_score` | `integer` | **GENERATED ALWAYS AS** sum of CTh fields, range: 0-12 | Total CTh score |
-| **General** | | | |
-| `cognitive_depth_level` | `integer` | range: 1-4 | Overall cognitive depth |
-| `evidence_text` | `text` | | Textual evidence for the assessment |
-| `assessed_by` | `varchar` | | Assessor identity |
-| `created_at` | `timestamptz` | default `now()` | Assessment timestamp |
-| `updated_at` | `timestamptz` | default `now()` | Last update |
+Central research unit of analysis. Comment: "Tracking sesi pembelajaran longitudinal per siswa untuk analisis perkembangan prompt (Bab 3)."
 
-**Generated Columns:**
-- `ct_total_score = ct_decomposition + ct_pattern_recognition + ct_abstraction + ct_algorithm_design + ct_evaluation_debugging + ct_generalization`
-- `cth_total_score = cth_interpretation + cth_analysis + cth_evaluation + cth_inference + cth_explanation + cth_self_regulation`
+| Column | Type | Notes |
+|---|---|---|
+| `id` | uuid | PK |
+| `user_id` | uuid | FK -> `users(id)` ON DELETE CASCADE |
+| `course_id` | uuid | FK -> `courses(id)` ON DELETE CASCADE |
+| `session_number` | integer | UNIQUE within `(user_id, course_id)` |
+| `session_date` | date | |
+| `session_start`, `session_end` | timestamptz | nullable |
+| `total_prompts`, `total_revisions` | integer | default `0` |
+| `dominant_stage` | varchar | `SCP` / `SRP` / `MQP` / `REFLECTIVE` |
+| `dominant_stage_score` | integer | 1..4 |
+| `avg_cognitive_depth`, `avg_ct_score`, `avg_cth_score` | numeric | nullable |
+| `stage_transition` | integer | -3..+3 |
+| `transition_status` | varchar | nullable |
+| `is_valid_for_analysis` | boolean | default `true` |
+| `validity_note`, `researcher_notes`, `topic_focus` | text | |
+| `duration_minutes` | integer | |
+| `status` | varchar | default `active` |
+| `data_collection_week` | varchar | |
+| `evidence_summary` | jsonb | default `{}` |
+| `raw_event_count`, `coded_event_count`, `artifact_count`, `triangulation_count` | integer | default `0` |
+| `readiness_status` | varchar | default `perlu_data` |
+| `readiness_score` | numeric | default `0` |
+| `last_research_sync_at` | timestamptz | nullable |
+| `created_at`, `updated_at` | timestamptz | |
 
-These are computed automatically by PostgreSQL and cannot be manually set.
+- **Unique:** `(user_id, course_id, session_number)`
+- **Indexes:** 6 incl. `idx_learning_sessions_readiness_status`, `idx_learning_sessions_sync`
+- **RLS:** `learning_sessions_own`, `service_role_full_access`
+- **Helpers:** `update_session_metrics(p_session_id)`, `refresh_learning_session_research_metrics(p_session_id)`, `calculate_stage_transition(p_user_id, p_course_id)`.
 
----
+#### 4.5.2 `prompt_classifications` (143 rows)
 
-### 6.4 `prompt_revisions`
+Per-prompt research coding (RM2). Comment: "Klasifikasi tahap prompt: SCP, SRP, MQP, Reflektif (Bab 3, Tabel 7 & 8)."
 
-Tracks how students revise their prompts over time within learning sessions, capturing the evolution of prompt engineering skill.
+| Column | Type | Notes |
+|---|---|---|
+| `id` | uuid | PK |
+| `prompt_source` | varchar | discriminator: `ask_question` / `discussion` / `challenge` |
+| `prompt_id` | uuid | polymorphic source ID |
+| `learning_session_id` | uuid | FK -> `learning_sessions(id)` ON DELETE SET NULL |
+| `user_id` | uuid | FK -> `users(id)` ON DELETE CASCADE |
+| `course_id` | uuid | FK -> `courses(id)` ON DELETE CASCADE |
+| `prompt_text` | text | denormalized |
+| `prompt_sequence` | integer | |
+| `prompt_stage` | varchar | `SCP` / `SRP` / `MQP` / `REFLECTIVE` |
+| `prompt_stage_score` | integer | CHECK 1..4 |
+| `micro_markers` | text[] | |
+| `primary_marker` | varchar | `GCP` / `PP` / `ARP` |
+| `classified_by`, `classification_method` | varchar | |
+| `confidence_score` | numeric | |
+| `secondary_classification_id` | uuid | for IRR pairing |
+| `agreement_status` | varchar | |
+| `classification_evidence`, `researcher_notes` | text | |
+| `source_snapshot` | jsonb | default `{}` |
+| `auto_stage`, `auto_stage_confidence` | varchar / numeric | when classified by LLM |
+| `classification_status` | varchar | default `final` |
+| `research_validity_status` | varchar | default `valid` |
+| `data_collection_week` | varchar | |
+| `created_at`, `updated_at` | timestamptz | |
 
-| Column | Type | Constraints | Description |
-|--------|------|-------------|-------------|
-| `id` | `uuid` | **PK** | Revision record identifier |
-| `user_id` | `uuid` | **FK** -> `users(id)` | Revising student |
-| `learning_session_id` | `uuid` | **FK** -> `learning_sessions(id)` | Session context |
-| `episode_id` | `uuid` | | Revision episode grouping ID |
-| `episode_topic` | `text` | | Topic being discussed during revision |
-| `original_prompt_id` | `uuid` | | First prompt in the revision chain |
-| `current_prompt_id` | `uuid` | | Current (revised) prompt |
-| `previous_prompt_id` | `uuid` | | Immediately preceding prompt version |
-| `revision_sequence` | `integer` | | Order within revision episode |
-| `revision_type` | `varchar` | | Type of revision (e.g., `refinement`, `restructure`) |
-| `quality_change` | `varchar` | | Quality delta (e.g., `improved`, `degraded`, `neutral`) |
-| `previous_stage` | `varchar` | | Stage before revision |
-| `current_stage` | `varchar` | | Stage after revision |
-| `stage_improved` | `boolean` | | Whether the revision improved the stage |
-| `revision_notes` | `text` | | Researcher annotations |
-| `created_at` | `timestamptz` | default `now()` | Record creation |
+- **Unique:** `(prompt_source, prompt_id, classified_by)` -- one classification per rater per prompt
+- **Indexes:** 6 incl. validity composite
+- **RLS:** `prompt_classifications_own`, `service_role_full_access`
+- **Polymorphic mapping:** `ask_question -> ask_question_history.id`, `discussion -> discussion_messages.id`, `challenge -> challenge_responses.id`. Application enforces; no DB FK.
 
----
+#### 4.5.3 `cognitive_indicators` (12 rows)
 
-### 6.5 `research_artifacts`
+Manual CT/CTh scoring per classified prompt (RM3). Comment: "Indikator CT dan Critical Thinking per prompt (Bab 3, Tabel 9 & 10)."
 
-Captures student-produced artifacts (pseudocode, flowcharts, algorithms, solutions) linked to learning sessions.
+| Column | Type | Notes |
+|---|---|---|
+| `id` | uuid | PK |
+| `prompt_classification_id` | uuid | FK -> `prompt_classifications(id)` ON DELETE CASCADE |
+| `prompt_id`, `user_id` | uuid | denormalised, `user_id` FK -> `users(id)` ON DELETE CASCADE |
+| `ct_decomposition`, `ct_pattern_recognition`, `ct_abstraction`, `ct_algorithm_design`, `ct_evaluation_debugging`, `ct_generalization` | integer | each CHECK 0..2 |
+| `ct_total_score` | integer | **GENERATED** = sum of CT dimensions |
+| `cth_interpretation`, `cth_analysis`, `cth_evaluation`, `cth_inference`, `cth_explanation`, `cth_self_regulation` | integer | each CHECK 0..2 |
+| `cth_total_score` | integer | **GENERATED** = sum of CTh dimensions |
+| `cognitive_depth_level` | integer | CHECK 1..4 |
+| `evidence_text`, `indicator_notes` | text | |
+| `assessed_by`, `assessment_method` | varchar | |
+| `secondary_assessment_id` | uuid | for IRR pairing |
+| `agreement_status` | varchar | |
+| `indicator_evidence` | jsonb | default `{}` |
+| `assessment_confidence` | numeric | |
+| `research_validity_status` | varchar | default `valid` |
+| `created_at`, `updated_at` | timestamptz | |
 
-| Column | Type | Constraints | Description |
-|--------|------|-------------|-------------|
-| `id` | `uuid` | **PK** | Artifact identifier |
-| `user_id` | `uuid` | **FK** -> `users(id)` | Producing student |
-| `course_id` | `uuid` | **FK** -> `courses(id)` | Course context |
-| `learning_session_id` | `uuid` | **FK** -> `learning_sessions(id)` | Session context |
-| `artifact_type` | `varchar` | enum: `pseudocode`, `flowchart`, `algorithm`, `solution` | Artifact category |
-| `artifact_title` | `text` | | Artifact title |
-| `artifact_content` | `text` | | Artifact body content |
-| `related_prompt_ids` | `uuid[]` | | Array of related prompt IDs |
-| Quality scores | `integer` | range: 0-2 each | Individual quality dimension scores |
-| `total_artifact_score` | `integer` | **GENERATED**, range: 0-10 | Total quality score |
-| `created_at` | `timestamptz` | default `now()` | Creation timestamp |
-| `updated_at` | `timestamptz` | default `now()` | Last update |
+- **Indexes:** `idx_cog_ind_classification`, `idx_cog_ind_user`, `idx_cog_ind_ct_score`, `idx_cog_ind_cth_score`, `idx_cog_ind_depth`
+- **RLS:** `cognitive_indicators_own`, `service_role_full_access`
 
----
+#### 4.5.4 `auto_cognitive_scores` (12 rows)
 
-### 6.6 `triangulation_records`
+Auto-classified CT/CTh scoring produced by LLM. Same schema as `cognitive_indicators` but uses `smallint` and a `(source, source_id)` polymorphic key (text source_id).
 
-Supports methodological triangulation by recording how multiple evidence sources converge or diverge for research findings.
+| Column | Type | Notes |
+|---|---|---|
+| `id` | uuid | PK |
+| `source` | text | CHECK in `ask_question / challenge_response / quiz_submission / journal / discussion` |
+| `source_id` | text | polymorphic id (text, not uuid) |
+| `user_id` | uuid | FK -> `users(id)` ON DELETE CASCADE |
+| `course_id` | uuid | FK -> `courses(id)` ON DELETE CASCADE |
+| CT and CTh sub-dimensions | smallint | each CHECK 0..2 |
+| `ct_total_score`, `cth_total_score` | smallint | **GENERATED** |
+| `cognitive_depth_level` | smallint | CHECK 1..4 |
+| `confidence` | real | CHECK 0..1 |
+| `evidence_summary` | text | |
+| `assessment_method` | text | default `llm_auto` |
+| `prompt_stage` | text | nullable |
+| `is_follow_up` | boolean | default `false` |
+| `created_at` | timestamptz | |
 
-| Column | Type | Constraints | Description |
-|--------|------|-------------|-------------|
-| `id` | `uuid` | **PK** | Record identifier |
-| `user_id` | `uuid` | **FK** -> `users(id)` | Subject student |
-| `learning_session_id` | `uuid` | **FK** -> `learning_sessions(id)` | Session context |
-| `finding_type` | `varchar` | | Type of research finding |
-| 4 evidence sources | `varchar` each | status: `supports`, `neutral`, `contradicts` | Four evidence source assessments |
-| `convergence_status` | `varchar` | enum: `convergent`, `partial`, `contradictory` | Overall convergence |
-| `convergence_score` | `integer` | | Numeric convergence metric |
-| `final_decision` | `varchar` | | Researcher's final determination |
-| `decision_rationale` | `text` | | Justification for the decision |
-| `created_at` | `timestamptz` | default `now()` | Record creation |
-| `updated_at` | `timestamptz` | default `now()` | Last update |
+- **Indexes:** `idx_acs_source (source, source_id)`, `idx_acs_user_source`, plus FK indexes
+- **RLS:** `service_role_full_access` only
 
----
+#### 4.5.5 `research_evidence_items` (261 rows)
 
-### 6.7 `inter_rater_reliability`
+Unified evidence ledger across all activity sources. Comment: "Unified evidence ledger for RM2/RM3 thesis admin workflows across prompt logs, challenges, journals, discussion, quizzes, and artifacts."
 
-Records inter-rater reliability statistics for research coding quality assurance.
+| Column | Type | Notes |
+|---|---|---|
+| `id` | uuid | PK |
+| `source_type` | varchar | CHECK in `ask_question / challenge_response / quiz_submission / journal / discussion / artifact / observation / manual_note` |
+| `source_id` | uuid | nullable |
+| `source_table` | text | nullable |
+| `user_id` | uuid | FK -> `users(id)` ON DELETE CASCADE |
+| `course_id` | uuid | FK -> `courses(id)` ON DELETE SET NULL |
+| `learning_session_id` | uuid | FK -> `learning_sessions(id)` ON DELETE SET NULL |
+| `prompt_classification_id` | uuid | FK -> `prompt_classifications(id)` ON DELETE SET NULL |
+| `rm_focus` | varchar | default `RM2_RM3`; CHECK in `RM2 / RM3 / RM2_RM3` |
+| `indicator_code`, `prompt_stage` | varchar | |
+| `unit_sequence` | integer | |
+| `evidence_title`, `evidence_text`, `ai_response_text`, `artifact_text`, `evidence_source_summary`, `researcher_notes` | text | |
+| `evidence_status` | varchar | default `raw`; CHECK in `raw / coded / triangulated / excluded / needs_review` |
+| `coding_status` | varchar | default `uncoded`; CHECK in `uncoded / auto_coded / manual_coded / reviewed` |
+| `research_validity_status` | varchar | default `valid`; CHECK in `valid / low_information / duplicate / excluded / manual_note` |
+| `triangulation_status` | varchar | nullable |
+| `data_collection_week` | varchar | |
+| `auto_confidence` | numeric | |
+| `raw_evidence_snapshot`, `metadata` | jsonb | default `{}` |
+| `coded_by`, `reviewed_by` | varchar | |
+| `coded_at`, `reviewed_at` | timestamptz | |
+| `is_auto_generated` | boolean | default `false` |
+| `auto_coding_status` | varchar | default `pending`; CHECK in `pending / completed / needs_review / failed / skipped` |
+| `auto_coding_run_id` | uuid | FK -> `research_auto_coding_runs(id)` ON DELETE SET NULL |
+| `auto_coding_version`, `auto_coding_model`, `auto_coding_reason` | varchar / text | |
+| `auto_coded_at` | timestamptz | |
+| `created_at`, `updated_at` | timestamptz | |
 
-| Column | Type | Constraints | Description |
-|--------|------|-------------|-------------|
-| `id` | `uuid` | **PK** | Record identifier |
-| `coding_round` | `varchar` | | Coding round identifier |
-| `coding_type` | `varchar` | | What is being coded |
-| `total_units_coded` | `integer` | | Total items in the dataset |
-| `sample_size` | `integer` | | Items coded by multiple raters |
-| Rater IDs | `varchar` | | Identifiers for each rater |
-| `observed_agreement` | `numeric` | | Percentage observed agreement (Po) |
-| `expected_agreement` | `numeric` | | Expected chance agreement (Pe) |
-| `cohens_kappa` | `numeric` | | Cohen's Kappa statistic (kappa) |
-| `meets_po_threshold` | `boolean` | | Whether Po >= 0.80 |
-| `meets_kappa_threshold` | `boolean` | | Whether kappa >= 0.70 |
-| `overall_acceptable` | `boolean` | | Whether reliability is acceptable |
-| `created_at` | `timestamptz` | default `now()` | Record creation |
+- **Unique:** `uniq_research_evidence_items_source (source_type, source_table, source_id) WHERE source_id IS NOT NULL` -- de-dupes evidence by origin row
+- **Indexes:** 9
+- **RLS:** `research_evidence_items_own`, `service_role_full_access`
 
-**RLS Policies:**
-- `service_role_full_access` only -- Research data restricted to service role
+#### 4.5.6 `research_auto_coding_runs` (41 rows)
 
-**Thresholds:** The standard reliability thresholds used are Po >= 0.80 (80% observed agreement) and Cohen's Kappa >= 0.70 (substantial agreement), following established social science research conventions.
+Stage 4 run log for automatic RM2/RM3 coding and triangulation. Comment: "Stage 4 run log for automatic RM2/RM3 coding and triangulation from the thesis evidence ledger."
 
----
+| Column | Type | Notes |
+|---|---|---|
+| `id` | uuid | PK |
+| `requested_by` | uuid | FK -> `users(id)` ON DELETE SET NULL |
+| `requested_by_email` | text | |
+| `status` | varchar | default `running`; CHECK in `running / completed / failed / dry_run` |
+| `scope`, `summary` | jsonb | default `{}` |
+| `error_message` | text | |
+| `started_at`, `completed_at` | timestamptz | |
+| `created_at`, `updated_at` | timestamptz | |
 
-## 7. System Tables
+- **Indexes:** `idx_research_auto_coding_runs_status`, `idx_research_auto_coding_runs_requested_by`
+- **RLS:** `service_role_full_access` only
 
-### 7.1 `rate_limits`
+#### 4.5.7 `triangulation_records` (64 rows)
 
-In-memory rate limiting state persisted to the database. Used by the rate limiter in `src/lib/rate-limit.ts`.
+Cross-source triangulation outputs (Bab 3, Tabel 22).
 
-| Column | Type | Constraints | Description |
-|--------|------|-------------|-------------|
-| `id` | `uuid` | **PK** | Record identifier |
-| `key` | `text` | | Rate limit key (typically IP or user ID + endpoint) |
-| `count` | `integer` | | Request count within the current window |
-| `window_start` | `timestamptz` | | Start of the current rate limit window |
-| `created_at` | `timestamptz` | default `now()` | Record creation |
+| Column | Type | Notes |
+|---|---|---|
+| `id` | uuid | PK |
+| `user_id` | uuid | FK -> `users(id)` ON DELETE CASCADE |
+| `course_id` | uuid | FK -> `courses(id)` ON DELETE SET NULL |
+| `learning_session_id` | uuid | FK -> `learning_sessions(id)` ON DELETE SET NULL |
+| `prompt_classification_id` | uuid | FK -> `prompt_classifications(id)` ON DELETE SET NULL |
+| `auto_coding_run_id` | uuid | FK -> `research_auto_coding_runs(id)` ON DELETE SET NULL |
+| `finding_type`, `finding_description` | varchar / text | |
+| Four evidence pairs | text + status | `log_evidence`, `observation_evidence`, `artifact_evidence`, `interview_evidence` plus `*_status` |
+| `convergence_status`, `convergence_score` | varchar / integer | |
+| `triangulation_status` | varchar | default `sebagian` |
+| `final_decision`, `decision_rationale`, `researcher_notes`, `evidence_excerpt`, `missing_reason` | text | |
+| `rm_focus` | varchar | default `RM2_RM3` |
+| `indicator_code` | varchar | |
+| `sources` | jsonb | default `{}` |
+| `auto_generated` | boolean | default `false` |
+| `generated_by`, `review_status`, `data_collection_week` | varchar | |
+| `support_count`, `contradiction_count` | integer | default `0` |
+| `evidence_item_ids` | uuid[] | default `'{}'`; cross-link into `research_evidence_items` |
+| `created_at`, `updated_at` | timestamptz | |
 
----
+- **Indexes:** 6 incl. `idx_triangulation_records_auto_indicator`
+- **RLS:** `triangulation_records_own`, `service_role_full_access`
 
-## 8. Row-Level Security (RLS) Policies
+#### 4.5.8 `research_artifacts` (0 rows)
 
-All 26 tables have RLS enabled. The policies follow a consistent pattern:
+Student-produced solution artifacts (pseudocode, algorithms). Comment: "Artefak solusi siswa: pseudocode, algoritma (Bab 3, Tabel 13)." Schema is implemented but pipeline has not yet populated rows.
 
-### 8.1 Universal Policy
+Key columns: `artifact_type`, `artifact_title`, `artifact_content`, five quality dimensions (CHECK 0..2 each), `total_artifact_score` (**GENERATED**), `source_type / source_id / source_table`, file fields (`file_url`, `file_name`, `mime_type`, `storage_path`), `artifact_metadata` jsonb, `evidence_status`, `coding_status` (default `manual_coded`), `research_validity_status`, `data_collection_week`.
 
-Every table has a `service_role_full_access` policy:
+- **RLS:** `research_artifacts_own`, `service_role_full_access`
 
-```sql
-CREATE POLICY service_role_full_access ON <table>
-  FOR ALL
-  USING (true)
-  WITH CHECK (true);
-```
+#### 4.5.9 `prompt_revisions` (0 rows)
 
-This grants the service-role client (`adminDb`) unrestricted access to all tables, bypassing all other RLS rules.
+Tracks revision episodes within a learning session. Schema in place; no rows yet.
 
-### 8.2 User-Scoped Policies
+Key columns: `episode_id`, `episode_topic`, `original_prompt_id`, `previous_prompt_id`, `current_prompt_id`, `revision_sequence`, `revision_type`, `quality_change`, `previous_stage`, `current_stage`, `stage_improved`, `revision_notes`.
 
-Tables containing user data typically have policies restricting access to the owning user:
+- **RLS:** `prompt_revisions_own`, `service_role_full_access`
 
-| Table | Policy Name | Rule |
-|-------|------------|------|
-| `users` | `users_read_own` | `USING (id = auth.uid())` |
-| `courses` | `courses_read_own` | `USING (created_by = auth.uid())` |
-| `courses` | `courses_insert_own` | `WITH CHECK (created_by = auth.uid())` |
-| `courses` | `courses_delete_own` | `USING (created_by = auth.uid())` |
-| `challenge_responses` | *(casting policy)* | `USING (user_id::text = auth.uid()::text)` |
+#### 4.5.10 `inter_rater_reliability` (0 rows)
 
-### 8.3 Public Read Policies
+Cohen's Kappa / Po per coding round. Comment: "Rekaman reliabilitas antar-penilai (Bab 3, Tabel 25)." Schema in place; no IRR studies recorded yet.
 
-Some tables allow unauthenticated or any-authenticated reads:
+Key columns: `coding_round`, `coding_type`, `total_units_coded`, `sample_size`, `sample_percentage`, `rater_1_id`, `rater_2_id`, `observed_agreement`, `expected_agreement`, `cohens_kappa`, `meets_po_threshold` (Po >= 0.80), `meets_kappa_threshold` (kappa >= 0.70), `overall_acceptable`, `disagreement_resolution`, `codebook_revisions`, `notes`.
 
-| Table | Policy | Rule |
-|-------|--------|------|
-| `discussion_templates` | public read | `USING (true)` |
-| `subtopic_cache` | public read | `USING (true)` |
-
-### 8.4 System-Only Tables
-
-These tables are accessible only through the service-role client:
-
-- `api_logs`
-- `discussion_admin_actions`
-- `discussion_assessments`
-- `inter_rater_reliability`
-
-### 8.5 Practical Impact
-
-Because the application uses **custom JWT authentication** (not Supabase Auth), `auth.uid()` in RLS policies does not resolve to the application user. As a result:
-
-- **All write operations** go through `adminDb` (service-role), which bypasses RLS entirely.
-- **Most read operations** also use `adminDb` for the same reason.
-- **`publicDb`** (anon key) is used for shared reads when the live Supabase policy allows it; discussion template and cache reads may fall back to `adminDb` if the anon client is blocked by RLS.
-
----
-
-## 9. Database Functions
-
-### 9.1 `get_jsonb_columns()`
-
-Returns a list of all JSONB columns across all tables. Used by `detectJsonbColumns()` in `database.ts` to auto-detect JSONB columns for proper serialization/deserialization.
-
-```sql
-CREATE OR REPLACE FUNCTION get_jsonb_columns()
-RETURNS TABLE(table_name text, column_name text)
-AS $$
-  SELECT table_name::text, column_name::text
-  FROM information_schema.columns
-  WHERE table_schema = 'public'
-    AND data_type = 'jsonb';
-$$ LANGUAGE sql STABLE;
-```
-
-**Called by:** `DatabaseService` during JSONB column detection for automatic JSON parsing.
-
----
-
-### 9.2 `get_admin_user_stats()`
-
-Returns aggregated user activity statistics across 10 tables using `LATERAL` joins. Used by the admin dashboard to display per-user activity summaries.
-
-```sql
-CREATE OR REPLACE FUNCTION get_admin_user_stats()
-RETURNS TABLE(...)
-```
-
-**Aggregates from:** `courses`, `quiz_submissions`, `ask_question_history`, `jurnal`, `transcript`, `feedback`, `challenge_responses`, `course_generation_activity`, `discussion_sessions`, `user_progress`
-
-**Called by:** `/api/admin/dashboard` endpoint
+- **RLS:** `service_role_full_access` only
 
 ---
 
-### 9.3 `update_session_metrics(p_session_id UUID)`
+### 4.6 Infrastructure
 
-Recalculates derived metrics for a learning session based on its linked prompt classifications and cognitive indicators.
+#### 4.6.1 `api_logs` (3801 rows)
 
-**Computes:**
-- `total_prompts` -- Count of linked prompt classifications
-- `total_revisions` -- Count of prompt revisions in the session
-- `dominant_stage` -- Most frequent prompt stage (`SCP`, `SRP`, `MQP`, `REFLECTIVE`)
-- `dominant_stage_score` -- Numeric score of the dominant stage
-- `avg_cognitive_depth` -- Mean cognitive depth across classified prompts
-- `avg_ct_score` -- Mean CT total score from cognitive indicators
-- `avg_cth_score` -- Mean CTh total score from cognitive indicators
+Request/response logging populated by `withApiLogging()` in [`src/lib/api-logger.ts`](../src/lib/api-logger.ts).
 
-**Called by:** Research data entry workflows after classifications are added or updated.
+| Column | Type | Notes |
+|---|---|---|
+| `id` | uuid | PK |
+| `method`, `path`, `query` | text | nullable |
+| `status_code`, `duration_ms` | integer | |
+| `ip_address`, `user_agent` | text | |
+| `user_id`, `user_email`, `user_role` | text | as captured by middleware |
+| `user_email_hash` | text | for anonymized analytics |
+| `label` | text | endpoint label |
+| `metadata` | jsonb | nullable |
+| `error_message` | text | |
+| `created_at` | timestamptz | |
 
----
+- **Indexes:** `api_logs_created_at_idx`, `api_logs_path_created_at_idx`, `api_logs_user_id_idx (WHERE user_id IS NOT NULL)`, `idx_api_logs_path`
+- **RLS:** `service_role_full_access` only
 
-### 9.4 `calculate_stage_transition(p_user_id UUID, p_course_id UUID)`
+#### 4.6.2 `rate_limits` (115 rows)
 
-Calculates the prompt engineering stage transition between a student's most recent two sessions in a course.
+Persistent state for the in-process rate limiter ([`src/lib/rate-limit.ts`](../src/lib/rate-limit.ts)). Note: the PK is `(key)`, not `(id)` -- this table has no surrogate id.
 
-**Computes:**
-- `stage_transition` -- Integer difference in dominant stage scores between sessions (range: -3 to +3)
-- `transition_status` -- Human-readable label (e.g., `progressed`, `regressed`, `maintained`)
+| Column | Type | Notes |
+|---|---|---|
+| `key` | text | **PK** |
+| `count` | integer | default `1` |
+| `reset_at` | timestamptz | |
 
-**Logic:** Compares `dominant_stage_score` of the latest session with the immediately preceding session. Positive values indicate improvement; negative values indicate regression.
+- **Indexes:** `idx_rate_limits_reset_at`
+- **RLS:** `rate_limits_service_role_all` only
 
----
+#### 4.6.3 `course_generation_activity` (38 rows)
 
-## 10. Views
+AI course-generation request log.
 
-### 10.1 `v_longitudinal_prompt_development`
+| Column | Type | Notes |
+|---|---|---|
+| `id` | uuid | PK |
+| `user_id` | uuid | FK -> `users(id)` ON DELETE CASCADE |
+| `course_id` | uuid | FK -> `courses(id)` ON DELETE SET NULL |
+| `request_payload`, `outline` | jsonb | nullable |
+| `created_at` | timestamptz | |
 
-Provides a per-session longitudinal view of each student's prompt engineering development. Used for time-series analysis of student growth.
-
-**Key Columns:**
-- User and course identifiers
-- Session number and date
-- Total prompts and revisions
-- Dominant stage and score
-- Average cognitive depth, CT score, CTh score
-- Stage transition from previous session
-
-**Joins:** `learning_sessions` with `users` and `courses`
-
----
-
-### 10.2 `v_prompt_classification_summary`
-
-Aggregates prompt classification counts per session, showing the distribution of prompt stages.
-
-**Key Columns:**
-- Session identifiers
-- Count of prompts per stage (`SCP`, `SRP`, `MQP`, `REFLECTIVE`)
-- Total classified prompts
-- Percentage distribution across stages
-
-**Joins:** `prompt_classifications` grouped by `learning_session_id`
+- **Indexes:** `idx_course_gen_activity_user`, `idx_course_gen_activity_course_id`
+- **RLS:** `course_gen_activity_own`, `service_role_full_access`
+- **Note:** The previously-documented `status` and `updated_at` columns are not present in production.
 
 ---
 
-### 10.3 `v_cognitive_indicators_summary`
+## 5. Row-Level Security (RLS) Summary
 
-Aggregates cognitive indicator scores per session, providing mean CT and CTh dimension scores.
+RLS is enabled on every public table. The pattern is consistent:
 
-**Key Columns:**
-- Session identifiers
-- Average score for each CT dimension (decomposition, pattern recognition, abstraction, algorithm design, evaluation/debugging, generalization)
-- Average score for each CTh dimension (interpretation, analysis, evaluation, inference, explanation, self-regulation)
-- Average total CT and CTh scores
+1. **Universal** `service_role_full_access` policy: `FOR ALL USING (true) WITH CHECK (true)` to the `service_role` role. This is what `adminDb` uses.
+2. **Per-user `*_own` policy** to `authenticated`: `USING (user_id = (SELECT auth.uid()))`. Defence-in-depth only -- since the app does not use Supabase Auth, `auth.uid()` is NULL and these policies effectively block direct anon/authenticated access until the app key is replaced. The protection layer is application-level filtering on `x-user-id`.
+3. **Public-read policies** on `discussion_templates` and `subtopic_cache` (`SELECT ... USING (true)`).
+4. **Service-role only tables** (no per-user policy): `api_logs`, `auto_cognitive_scores`, `course_generation_activity` (note: also has `course_gen_activity_own`), `discussion_admin_actions`, `discussion_assessments`, `example_usage_events`, `inter_rater_reliability`, `leaf_subtopics`, `rate_limits`, `research_auto_coding_runs`, `subtopics` (write side), `transcript_integrity_quarantine`, `triangulation_records` (also has `*_own`), and `users` (write side).
 
-**Joins:** `cognitive_indicators` with `prompt_classifications` grouped by `learning_session_id`
-
----
-
-## 11. Access Patterns
-
-### 11.1 `adminDb` (Service-Role Client)
-
-**Key:** `SUPABASE_SERVICE_ROLE_KEY`  
-**RLS:** Bypassed entirely  
-**Timeout:** 10 seconds per request  
-**Session:** No auto-refresh, no persistence
-
-Used for:
-- All INSERT, UPDATE, DELETE operations
-- All user-specific reads (since `auth.uid()` does not resolve)
-- Admin dashboard queries
-- Research data operations
-- API logging
-
-```typescript
-// Usage in API routes
-import { adminDb } from '@/lib/database';
-
-const { data, error } = await adminDb
-  .from('courses')
-  .select('*')
-  .eq('created_by', userId)
-  .order('created_at', { ascending: false });
-```
-
-### 11.2 `publicDb` (Anon-Key Client)
-
-**Key:** `NEXT_PUBLIC_SUPABASE_ANON_KEY`  
-**RLS:** Fully enforced  
-**Timeout:** 10 seconds per request  
-**Fallback:** Falls back to service-role client if anon key is not configured
-
-Used for:
-- Reading `discussion_templates` (public `USING (true)` policy)
-- Reading `subtopic_cache` (public `USING (true)` policy)
-
-```typescript
-// Usage for public reads
-import { publicDb } from '@/lib/database';
-
-const { data, error } = await publicDb
-  .from('discussion_templates')
-  .select('*');
-```
-
-### 11.3 `DatabaseService` (Static Methods)
-
-A higher-level abstraction over `adminDb` providing generic CRUD operations:
-
-| Method | Description |
-|--------|-------------|
-| `getRecords<T>()` | SELECT with filtering, ordering, limiting |
-| `getRecordById<T>()` | SELECT single record by ID |
-| `createRecord<T>()` | INSERT single record |
-| `updateRecord<T>()` | UPDATE by ID with partial data |
-| `deleteRecord()` | DELETE by ID |
-
-All methods use the service-role client internally and include automatic JSONB column detection via `get_jsonb_columns()`.
+Operational guidance: never expose the anon key path to write user-scoped data. All writes go through `adminDb`.
 
 ---
 
-## 12. JSONB Column Map
+## 6. Functions and Triggers
 
-The following columns store structured JSON data. The `get_jsonb_columns()` database function detects these automatically for proper serialization.
+| Function | Signature | Purpose |
+|---|---|---|
+| `get_jsonb_columns()` | returns `TABLE(table_name, column_name)` | Used by `DatabaseService.detectJsonbColumns()` to auto-parse JSONB fields |
+| `get_admin_user_stats()` | returns `TABLE(...16 cols...)` | Per-user activity rollup for the admin dashboard |
+| `update_session_metrics(p_session_id uuid)` | void | Recalculates per-session prompt totals and means |
+| `refresh_learning_session_research_metrics(p_session_id uuid)` | void | Refreshes `evidence_summary`, readiness, and counts on `learning_sessions` |
+| `calculate_stage_transition(p_user_id, p_course_id)` | void | Diff of dominant stage between latest two sessions |
+| `ensure_leaf_subtopic(p_course_id, p_module_id, p_module_title, p_subtopic_title, p_module_index?, p_subtopic_index?)` | uuid | Idempotent get-or-create for `leaf_subtopics` |
+| `normalize_leaf_subtopic_title(value text)` | text | Canonical normalization for leaf title dedupe |
+| `insert_quiz_attempt(p_user_id, p_course_id, p_subtopic_id, p_subtopic_label, p_leaf_subtopic_id, p_module_index, p_subtopic_index, p_quiz_attempt_id, p_answers jsonb)` | TABLE | Atomic 5-question attempt insert |
+| `set_updated_at_timestamp()` | trigger | Auto-touch `updated_at` |
+| `rls_auto_enable()` | event_trigger | Enables RLS on every newly created public table |
+
+---
+
+## 7. Views
+
+| View | Purpose |
+|---|---|
+| `v_longitudinal_prompt_development` | Per-session longitudinal joined view (`learning_sessions` + `users` + `courses`) used for time-series analytics |
+| `v_prompt_classification_summary` | Aggregates prompt-stage counts and percentages per session from `prompt_classifications` |
+| `v_cognitive_indicators_summary` | Mean per-dimension CT/CTh scores per session |
+| `v_transcript_integrity_audit` | Aggregated view of `transcript_integrity_quarantine` for audit dashboards |
+
+---
+
+## 8. JSONB Column Map
+
+`get_jsonb_columns()` enumerates every JSONB column for `DatabaseService` auto-parse. Inventory:
 
 | Table | Column | Typical Structure |
-|-------|--------|-------------------|
-| `subtopics` | `content` | Structured learning content (sections, explanations, examples) |
-| `quiz` | `options` | `[{text: string, isCorrect: boolean}, ...]` |
-| `ask_question_history` | `prompt_components` | Structured prompt parts sent to OpenAI |
-| `course_generation_activity` | `request_payload` | Original course generation request parameters |
-| `course_generation_activity` | `outline` | Generated course outline structure |
-| `discussion_sessions` | `learning_goals` | Array of learning objective objects |
-| `discussion_sessions` | `completion_summary` | Final discussion completion summary |
-| `discussion_messages` | `metadata` | Message context (prompt info, step data) |
-| `discussion_assessments` | `assessment_raw` | Raw evaluator payload for each goal assessment |
-| `discussion_templates` | `source` | Template origin metadata |
-| `discussion_templates` | `template` | Discussion flow steps and structure |
-| `discussion_admin_actions` | `payload` | Action-specific parameters |
-| `subtopic_cache` | `content` | Cached subtopic content (mirrors `subtopics.content`) |
-| `api_logs` | `metadata` | Request/response metadata (headers, body snippets, user info) |
+|---|---|---|
+| `subtopics` | `content` | Structured AI-generated module content |
+| `subtopic_cache` | `content` | Mirror of generated subtopic content |
+| `quiz` | `options` | `[{text, isCorrect}, ...]` |
+| `course_generation_activity` | `request_payload`, `outline` | Course generation request and outline |
+| `ask_question_history` | `prompt_components`, `micro_markers`, `raw_evidence_snapshot` | Prompt parts, RM2 markers, evidence snapshot |
+| `quiz_submissions` | `raw_evidence_snapshot` | Evidence snapshot |
+| `jurnal` | `raw_evidence_snapshot` | Evidence snapshot |
+| `challenge_responses` | `raw_evidence_snapshot` | Evidence snapshot |
+| `discussion_sessions` | `learning_goals`, `completion_summary` | Goals + final summary |
+| `discussion_messages` | `metadata`, `raw_evidence_snapshot` | Per-message context, evidence |
+| `discussion_templates` | `source`, `template` | Provenance + template flow |
+| `discussion_assessments` | `assessment_raw` | Raw evaluator payload |
+| `discussion_admin_actions` | `payload` | Action parameters |
+| `cognitive_indicators` | `indicator_evidence` | Detailed evidence map |
+| `prompt_classifications` | `source_snapshot` | Snapshot of classified source |
+| `research_evidence_items` | `raw_evidence_snapshot`, `metadata` | Evidence ledger payloads |
+| `research_artifacts` | `artifact_metadata` | File / artifact metadata |
+| `research_auto_coding_runs` | `scope`, `summary` | Run scope and result summary |
+| `triangulation_records` | `sources` | Per-source triangulation map |
+| `learning_sessions` | `evidence_summary` | Aggregated readiness payload |
+| `example_usage_events` | `raw_evidence_snapshot` | Evidence snapshot |
+| `api_logs` | `metadata` | Request/response context |
 
 ---
 
-## Appendix: Foreign Key Relationship Summary
+## 9. Foreign Key Map
 
-The following table summarizes all foreign key relationships across the schema, organized by parent table.
+(Compact view of every FK that exists in production. ON DELETE action shown.)
 
-| Parent Table | Child Table | FK Column | On Delete |
-|-------------|-------------|-----------|-----------|
-| `users` | `courses` | `created_by` | CASCADE |
-| `users` | `quiz_submissions` | `user_id` | -- |
-| `users` | `ask_question_history` | `user_id` | -- |
-| `users` | `learning_profiles` | `user_id` | -- |
-| `users` | `user_progress` | `user_id` | -- |
-| `users` | `jurnal` | `user_id` | -- |
-| `users` | `transcript` | `user_id` | -- |
-| `users` | `feedback` | `user_id` | -- |
-| `users` | `course_generation_activity` | `user_id` | -- |
-| `users` | `discussion_sessions` | `user_id` | -- |
-| `users` | `learning_sessions` | `user_id` | -- |
-| `users` | `prompt_classifications` | `user_id` | -- |
-| `users` | `cognitive_indicators` | `user_id` | -- |
-| `users` | `prompt_revisions` | `user_id` | -- |
-| `users` | `research_artifacts` | `user_id` | -- |
-| `users` | `triangulation_records` | `user_id` | -- |
+| Parent | Child | FK column | ON DELETE |
+|---|---|---|---|
+| `users` | `courses` | `created_by` | SET NULL |
+| `users` | `learning_profiles` | `user_id` | CASCADE |
+| `users` | `ask_question_history` | `user_id` | CASCADE |
+| `users` | `auto_cognitive_scores` | `user_id` | CASCADE |
+| `users` | `challenge_responses` | `user_id` | CASCADE |
+| `users` | `cognitive_indicators` | `user_id` | CASCADE |
+| `users` | `course_generation_activity` | `user_id` | CASCADE |
+| `users` | `discussion_assessments` | `user_id` | CASCADE |
+| `users` | `discussion_sessions` | `user_id` | CASCADE |
+| `users` | `example_usage_events` | `user_id` | CASCADE |
+| `users` | `feedback` | `user_id` | CASCADE |
+| `users` | `jurnal` | `user_id` | CASCADE |
+| `users` | `learning_sessions` | `user_id` | CASCADE |
+| `users` | `prompt_classifications` | `user_id` | CASCADE |
+| `users` | `prompt_revisions` | `user_id` | CASCADE |
+| `users` | `quiz_submissions` | `user_id` | CASCADE |
+| `users` | `research_artifacts` | `user_id` | CASCADE |
+| `users` | `research_auto_coding_runs` | `requested_by` | SET NULL |
+| `users` | `research_evidence_items` | `user_id` | CASCADE |
+| `users` | `transcript` | `user_id` | CASCADE |
+| `users` | `triangulation_records` | `user_id` | CASCADE |
+| `users` | `user_progress` | `user_id` | CASCADE |
 | `courses` | `subtopics` | `course_id` | CASCADE |
-| `courses` | `quiz` | `course_id` | -- |
-| `courses` | `quiz_submissions` | `course_id` | -- |
-| `courses` | `ask_question_history` | `course_id` | -- |
-| `courses` | `user_progress` | `course_id` | -- |
-| `courses` | `transcript` | `course_id` | -- |
-| `courses` | `feedback` | `course_id` | -- |
-| `courses` | `course_generation_activity` | `course_id` | -- |
-| `courses` | `discussion_sessions` | `course_id` | -- |
-| `courses` | `learning_sessions` | `course_id` | -- |
-| `courses` | `prompt_classifications` | `course_id` | -- |
-| `courses` | `research_artifacts` | `course_id` | -- |
-| `courses` | `subtopic_cache` | `course_id` | -- |
-| `subtopics` | `quiz` | `subtopic_id` | -- |
-| `subtopics` | `quiz_submissions` | `subtopic_id` | -- |
-| `subtopics` | `transcript` | `subtopic_id` | -- |
-| `subtopics` | `user_progress` | `subtopic_id` | -- |
-| `subtopics` | `discussion_sessions` | `subtopic_id` | -- |
-| `discussion_templates` | `discussion_sessions` | `template_id` | -- |
-| `quiz` | `quiz_submissions` | `quiz_id` | -- |
-| `jurnal` | `feedback` | `origin_jurnal_id` | -- |
-| `learning_sessions` | `ask_question_history` | `learning_session_id` | -- |
-| `learning_sessions` | `discussion_messages` | `learning_session_id` | -- |
-| `learning_sessions` | `challenge_responses` | `learning_session_id` | -- |
-| `learning_sessions` | `prompt_classifications` | `learning_session_id` | -- |
-| `learning_sessions` | `research_artifacts` | `learning_session_id` | -- |
-| `learning_sessions` | `prompt_revisions` | `learning_session_id` | -- |
-| `learning_sessions` | `triangulation_records` | `learning_session_id` | -- |
-| `discussion_sessions` | `discussion_messages` | `session_id` | -- |
+| `courses` | `leaf_subtopics` | `course_id` | CASCADE |
+| `courses` | `quiz` | `course_id` | CASCADE |
+| `courses` | `quiz_submissions` (via -> quiz only; no direct course FK) | -- | -- |
+| `courses` | `ask_question_history` | `course_id` | CASCADE |
+| `courses` | `auto_cognitive_scores` | `course_id` | CASCADE |
+| `courses` | `challenge_responses` | `course_id` | CASCADE |
+| `courses` | `course_generation_activity` | `course_id` | SET NULL |
+| `courses` | `discussion_assessments` | `course_id` | CASCADE |
+| `courses` | `discussion_sessions` | `course_id` | CASCADE |
+| `courses` | `discussion_templates` | `course_id` | CASCADE |
+| `courses` | `example_usage_events` | `course_id` | SET NULL |
+| `courses` | `feedback` | `course_id` | CASCADE |
+| `courses` | `jurnal` | `course_id` | CASCADE |
+| `courses` | `learning_sessions` | `course_id` | CASCADE |
+| `courses` | `prompt_classifications` | `course_id` | CASCADE |
+| `courses` | `research_artifacts` | `course_id` | CASCADE |
+| `courses` | `research_evidence_items` | `course_id` | SET NULL |
+| `courses` | `transcript` | `course_id` | CASCADE |
+| `courses` | `triangulation_records` | `course_id` | SET NULL |
+| `courses` | `user_progress` | `course_id` | CASCADE |
+| `subtopics` | `leaf_subtopics` | `module_id` | CASCADE |
+| `subtopics` | `quiz` | `subtopic_id` | CASCADE |
+| `subtopics` | `discussion_sessions` | `subtopic_id` | CASCADE |
+| `subtopics` | `discussion_assessments` | `subtopic_id` | SET NULL |
+| `subtopics` | `discussion_templates` | `subtopic_id` | CASCADE |
+| `subtopics` | `feedback` | `subtopic_id` | SET NULL |
+| `subtopics` | `jurnal` | `subtopic_id` | SET NULL |
+| `subtopics` | `transcript` | `subtopic_id` | SET NULL |
+| `subtopics` | `user_progress` | `subtopic_id` | CASCADE |
+| `leaf_subtopics` | `quiz` | `leaf_subtopic_id` | SET NULL |
+| `leaf_subtopics` | `quiz_submissions` | `leaf_subtopic_id` | SET NULL |
+| `leaf_subtopics` | `user_progress` | `leaf_subtopic_id` | SET NULL |
+| `quiz` | `quiz_submissions` | `quiz_id` | CASCADE |
+| `discussion_sessions` | `discussion_messages` | `session_id` | CASCADE |
+| `discussion_sessions` | `discussion_assessments` | `session_id` | CASCADE |
 | `discussion_sessions` | `discussion_admin_actions` | `session_id` | CASCADE |
+| `discussion_messages` | `discussion_assessments` (student) | `student_message_id` | CASCADE |
+| `discussion_messages` | `discussion_assessments` (prompt) | `prompt_message_id` | SET NULL |
+| `discussion_messages` | `discussion_messages` (self) | `revision_of_message_id` | -- |
+| `discussion_templates` | `discussion_sessions` | `template_id` | SET NULL |
+| `learning_sessions` | `ask_question_history` | `learning_session_id` | SET NULL |
+| `learning_sessions` | `challenge_responses` | `learning_session_id` | SET NULL |
+| `learning_sessions` | `discussion_messages` | `learning_session_id` | SET NULL |
+| `learning_sessions` | `discussion_sessions` | `learning_session_id` | SET NULL |
+| `learning_sessions` | `example_usage_events` | `learning_session_id` | SET NULL |
+| `learning_sessions` | `jurnal` | `learning_session_id` | SET NULL |
+| `learning_sessions` | `prompt_classifications` | `learning_session_id` | SET NULL |
+| `learning_sessions` | `prompt_revisions` | `learning_session_id` | SET NULL |
+| `learning_sessions` | `quiz_submissions` | `learning_session_id` | SET NULL |
+| `learning_sessions` | `research_artifacts` | `learning_session_id` | SET NULL |
+| `learning_sessions` | `research_evidence_items` | `learning_session_id` | SET NULL |
+| `learning_sessions` | `triangulation_records` | `learning_session_id` | SET NULL |
 | `prompt_classifications` | `cognitive_indicators` | `prompt_classification_id` | CASCADE |
-| `ask_question_history` | `ask_question_history` | `follow_up_of` | -- (self) |
-| `discussion_messages` | `discussion_messages` | `revision_of_message_id` | -- (self) |
+| `prompt_classifications` | `research_evidence_items` | `prompt_classification_id` | SET NULL |
+| `prompt_classifications` | `triangulation_records` | `prompt_classification_id` | SET NULL |
+| `research_auto_coding_runs` | `research_evidence_items` | `auto_coding_run_id` | SET NULL |
+| `research_auto_coding_runs` | `triangulation_records` | `auto_coding_run_id` | SET NULL |
+| `ask_question_history` | `ask_question_history` (self) | `follow_up_of` | -- |
+| `jurnal` | `feedback` | `origin_jurnal_id` | SET NULL |
+
+---
+
+## 10. Empty / Reserved Tables
+
+These tables exist with full schema but have zero rows in production. They are intentionally reserved for upcoming pipeline stages or out-of-scope features.
+
+| Table | Reason |
+|---|---|
+| `discussion_admin_actions` | Discussion module is out of admin scope (per project memory); audit log unused. |
+| `inter_rater_reliability` | No second rater has been onboarded yet; IRR studies pending. |
+| `prompt_revisions` | Revision-detection step of the RM3 pipeline not yet implemented. |
+| `research_artifacts` | Artifact ingestion (file upload + scoring) not yet wired into the admin UI. |
+| `transcript` | Transcript module is currently disabled; the table remains for forward compatibility. |
+
+---
+
+## 11. Research Pipeline Status (RM2/RM3)
+
+Per the project research-pipeline memory, the auto-coding pipeline is partially built. Live status:
+
+| Table | Rows | Status |
+|---|---|---|
+| `prompt_classifications` | 143 | Active (mix of manual + auto stages). |
+| `cognitive_indicators` | 12 | Active (manual scoring). |
+| `auto_cognitive_scores` | 12 | Active (LLM auto-scoring). |
+| `research_evidence_items` | 261 | Active (unified ledger). |
+| `research_auto_coding_runs` | 41 | Active (run log). |
+| `triangulation_records` | 64 | Active (auto + manual). |
+| `discussion_assessments` | 45 | Active (research read-model). |
+| `learning_sessions` | 22 | Active. |
+| `research_artifacts` | 0 | Reserved -- no rows yet. |
+| `prompt_revisions` | 0 | Reserved -- not yet populated. |
+| `inter_rater_reliability` | 0 | Reserved -- IRR not yet recorded. |
+| `discussion_admin_actions` | 0 | Reserved -- discussion module out of admin scope. |
+
+The pipeline is functional end-to-end for evidence and triangulation but does not yet feed artifact, revision, or IRR steps.
+
+---
+
+## 12. Migration History
+
+The folder [`docs/sql/`](./sql/) is kept as a historical reference of forward migrations. It is not the source of truth (the live database is) but is useful for recovery and audit. Files (alphabetical):
+
+```
+add_ask_question_research_columns.sql
+add_challenge_reasoning_note.sql
+add_discussion_assessment_research_model.sql
+add_discussion_session_unique_constraint.sql
+add_feedback_origin_jurnal_link.sql
+add_feedback_rating_guardrails.sql
+add_jurnal_transcript_unique_constraints.sql
+add_quiz_attempt_tracking.sql
+add_quiz_submission_context_columns.sql
+add_refresh_token_hash.sql
+add_rls_policies_all_tables.sql
+add_subtopic_label_to_quiz.sql
+add_user_progress_completed_at.sql
+add_users_onboarding_completed.sql
+align_reflection_history_model.sql
+alter_learning_sessions_add_fields.sql
+backfill_feedback_origin_jurnal_id.sql
+create_discussion_admin_actions.sql
+create_get_admin_user_stats_function.sql
+create_get_jsonb_columns_function.sql
+create_leaf_subtopics_and_atomic_quiz_attempts.sql
+create_rate_limits_table.sql
+create_research_tables.sql
+create_transcript_table.sql
+drop_legacy_jurnal_user_course_unique.sql
+enforce_feedback_origin_jurnal_uniqueness.sql
+fix_api_logs_schema.sql
+fix_leaf_subtopic_advisor_findings.sql
+fix_supabase_advisor_discussion_rate_limits.sql
+harden_leaf_subtopic_rpc_permissions.sql
+harden_quiz_integrity_and_indexes.sql
+```
+
+Files most relevant to active maintenance:
+
+- Reflection model: `align_reflection_history_model.sql`, `add_feedback_origin_jurnal_link.sql`, `enforce_feedback_origin_jurnal_uniqueness.sql`, `drop_legacy_jurnal_user_course_unique.sql`, `backfill_feedback_origin_jurnal_id.sql`
+- Quiz integrity: `add_quiz_attempt_tracking.sql`, `add_quiz_submission_context_columns.sql`, `harden_quiz_integrity_and_indexes.sql`, `create_leaf_subtopics_and_atomic_quiz_attempts.sql`
+- RLS hardening: `add_rls_policies_all_tables.sql`, `harden_leaf_subtopic_rpc_permissions.sql`, `fix_supabase_advisor_discussion_rate_limits.sql`
+- Research model: `create_research_tables.sql`, `alter_learning_sessions_add_fields.sql`, `add_discussion_assessment_research_model.sql`, `add_ask_question_research_columns.sql`
+
+---
+
+## 13. Cross-References
+
+- [`ARCHITECTURE.md`](./ARCHITECTURE.md) -- request lifecycle and module boundaries.
+- [`API_REFERENCE.md`](./API_REFERENCE.md) -- endpoint contracts and Zod payloads.
+- [`SECURITY.md`](./SECURITY.md) -- end-to-end auth, RLS strategy, CSRF, rate-limit detail.
+- [`src/lib/database.ts`](../src/lib/database.ts) -- `adminDb`, `publicDb`, `DatabaseService`, JSONB auto-detection.
+- [`src/lib/schemas.ts`](../src/lib/schemas.ts) -- Zod request validators referenced per table.
+- [`src/lib/api-middleware.ts`](../src/lib/api-middleware.ts), [`src/lib/api-logger.ts`](../src/lib/api-logger.ts) -- the writers behind `api_logs`.

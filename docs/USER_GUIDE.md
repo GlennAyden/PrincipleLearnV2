@@ -1,409 +1,296 @@
-# Manual Pengguna PrincipleLearn V3
+# Panduan Pengguna PrincipleLearn V3
 
-**Platform Pembelajaran Adaptif Berbasis AI**
+**Platform Pembelajaran Adaptif Berbasis AI untuk Critical & Computational Thinking**
 
-> Versi: 3.0  
+> Versi: 3.0 (Principle Learn)
+> Audience: Mahasiswa peserta riset thesis
 > Terakhir diperbarui: April 2026
 
 ---
 
 ## Daftar Isi
 
-- [1. Pendahuluan](#1-pendahuluan)
-- [2. Panduan Pengguna (Mahasiswa)](#2-panduan-pengguna-mahasiswa)
-  - [2.1 Registrasi Akun Baru](#21-registrasi-akun-baru)
-  - [2.2 Login](#22-login)
-  - [2.3 Onboarding (Pengaturan Profil Belajar)](#23-onboarding-pengaturan-profil-belajar)
-  - [2.4 Dashboard](#24-dashboard)
-  - [2.5 Membuat Kursus Baru](#25-membuat-kursus-baru)
-  - [2.6 Halaman Overview Kursus](#26-halaman-overview-kursus)
-  - [2.7 Mempelajari Subtopik (Halaman Materi)](#27-mempelajari-subtopik-halaman-materi)
-  - [2.8 Fitur Interaktif saat Belajar](#28-fitur-interaktif-saat-belajar)
-  - [2.9 Diskusi Penutup Modul (Metode Socratic)](#29-diskusi-penutup-modul-metode-socratic)
-  - [2.10 Logout](#210-logout)
-- [3. Panduan Administrator](#3-panduan-administrator)
-  - [3.1 Login Admin](#31-login-admin)
-  - [3.2 Dashboard Admin](#32-dashboard-admin)
-  - [3.3 Manajemen Mahasiswa](#33-manajemen-mahasiswa)
-  - [3.4 Manajemen Diskusi](#34-manajemen-diskusi)
-  - [3.5 Insights](#35-insights)
-  - [3.6 Research Dashboard](#36-research-dashboard)
-  - [3.7 Activity Log](#37-activity-log)
-  - [3.8 Registrasi Admin Baru](#38-registrasi-admin-baru)
-- [4. Tips dan Pertanyaan Umum (FAQ)](#4-tips-dan-pertanyaan-umum-faq)
+- [1. Selamat Datang](#1-selamat-datang)
+- [2. Akun: Daftar, Login, Logout](#2-akun-daftar-login-logout)
+- [3. Onboarding Pertama Kali](#3-onboarding-pertama-kali)
+- [4. Dashboard](#4-dashboard)
+- [5. Membuat Course Baru](#5-membuat-course-baru)
+- [6. Belajar di dalam Course](#6-belajar-di-dalam-course)
+- [7. Fitur Prompt Engineering](#7-fitur-prompt-engineering)
+- [8. Refleksi dan Catatan](#8-refleksi-dan-catatan)
+- [9. Bantuan di dalam Aplikasi: Help Drawer dan Product Tour](#9-bantuan-di-dalam-aplikasi-help-drawer-dan-product-tour)
+- [10. Privasi dan Data Riset](#10-privasi-dan-data-riset)
+- [11. Troubleshooting Umum](#11-troubleshooting-umum)
+- [12. FAQ](#12-faq)
+- [13. Glosarium](#13-glosarium)
 
 ---
 
-## 1. Pendahuluan
+## 1. Selamat Datang
 
-### Apa itu PrincipleLearn V3?
+### Apa itu PrincipleLearn?
 
-PrincipleLearn V3 adalah **platform pembelajaran adaptif berbasis kecerdasan buatan (AI)** yang dirancang untuk mendukung pengembangan **Critical Thinking (CT)** dan **Computational Thinking (CTh)** pada mahasiswa. Platform ini dikembangkan sebagai bagian dari penelitian thesis di bidang teknologi pendidikan.
+PrincipleLearn adalah platform belajar adaptif berbasis AI. Setiap course dirakit khusus untukmu — sesuai topik, tujuan, level, dan gaya belajar — bukan satu kurikulum yang sama untuk semua orang. Di dalam setiap subtopic kamu mendapat penjelasan, contoh, kuis, tantangan berpikir kritis, dan tempat menulis refleksi.
 
-### Tujuan Platform
+### Untuk siapa panduan ini?
 
-- Menyediakan pengalaman belajar yang **dipersonalisasi** berdasarkan profil dan kebutuhan setiap mahasiswa.
-- Mendorong kemampuan **berpikir kritis** melalui fitur-fitur interaktif seperti Challenge Thinking, diskusi Socratic, dan refleksi terstruktur.
-- Memantau perkembangan kemampuan **prompt engineering** mahasiswa, dari tahap Simple Copy-Paste (SCP) hingga tahap Reflektif.
-- Menyediakan **dashboard penelitian** bagi administrator untuk menganalisis data pembelajaran secara komprehensif.
+Panduan ini ditujukan untuk **mahasiswa peserta penelitian thesis** yang menggunakan PrincipleLearn sebagai media belajar. Tidak ada prasyarat teknis — kamu hanya perlu browser modern (Chrome, Edge, Firefox, atau Safari versi terbaru) dan koneksi internet.
 
-### Teknologi yang Digunakan
+### Apa yang akan kamu latih?
 
-| Komponen | Teknologi |
-|---|---|
-| Framework | Next.js 15 (App Router) |
-| Frontend | React 19, TypeScript, Sass Modules |
-| Database | Supabase (PostgreSQL) |
-| AI | OpenAI API |
-| Autentikasi | JWT + CSRF double-submit cookie |
-| Deployment | Vercel |
+- **Critical Thinking (CT)** — kemampuan menganalisis, mempertanyakan, dan mengevaluasi informasi.
+- **Computational Thinking (CTh)** — memecah masalah, melihat pola, abstraksi, dan menyusun langkah pemecahan.
+- **Prompt Engineering** — kemampuan menyusun pertanyaan ke AI agar jawaban yang didapat berkualitas. Ini bagian inti dari riset.
 
-### Peran Pengguna
-
-PrincipleLearn V3 memiliki dua peran pengguna:
-
-1. **Mahasiswa (User)** -- Pengguna utama yang belajar melalui kursus yang digenerate oleh AI.
-2. **Administrator (Admin)** -- Pengelola platform yang memantau aktivitas mahasiswa dan menganalisis data penelitian.
+> Catatan: Ada juga sisi admin (`/admin/login`) yang dipakai oleh peneliti untuk memantau aktivitas. Sebagai peserta, kamu tidak perlu membukanya.
 
 ---
 
-## 2. Panduan Pengguna (Mahasiswa)
+## 2. Akun: Daftar, Login, Logout
 
-### 2.1 Registrasi Akun Baru
+### 2.1 Daftar (Signup)
 
-Untuk mulai menggunakan PrincipleLearn, Anda perlu membuat akun terlebih dahulu.
+1. Buka halaman utama, lalu klik tombol **Get Started** atau langsung ke `/signup`.
+2. Isi formulir:
+   - **Full Name** — nama lengkap (opsional).
+   - **Email** — alamat email aktif (wajib).
+   - **Password** — minimal 8 karakter (wajib).
+3. Indikator kekuatan password akan muncul:
+   - **Weak / Fair / Good / Strong** sesuai jumlah kriteria yang terpenuhi (panjang ≥ 8, huruf besar, huruf kecil, angka).
+4. Klik **Create account**. Setelah berhasil, kamu otomatis login dan diarahkan ke onboarding.
 
-**Langkah-langkah:**
+> Screenshot: halaman-signup
 
-1. Buka halaman utama PrincipleLearn, lalu klik tombol **"Get Started"** di pojok kanan atas.
-2. Di halaman login, klik link **"Create an account"** di bagian bawah.
-3. Anda akan diarahkan ke halaman registrasi (`/signup`).
-
-[Screenshot: halaman-registrasi]
-
-4. Isi formulir registrasi berikut:
-
-| Field | Keterangan |
-|---|---|
-| **Full Name** | Nama lengkap Anda (opsional, boleh dikosongkan) |
-| **Email** | Alamat email yang valid (wajib) |
-| **Password** | Password minimal 8 karakter (wajib) |
-
-5. Perhatikan **indikator kekuatan password** yang muncul saat Anda mengetik password:
-
-| Level | Keterangan |
-|---|---|
-| **Weak** (Merah) | Hanya memenuhi 1 kriteria |
-| **Fair** (Oranye) | Memenuhi 2 kriteria |
-| **Good** (Kuning) | Memenuhi 3 kriteria |
-| **Strong** (Hijau) | Memenuhi semua 4 kriteria |
-
-   Kriteria password yang diperiksa:
-   - Panjang minimal 8 karakter
-   - Mengandung huruf besar (A-Z)
-   - Mengandung huruf kecil (a-z)
-   - Mengandung angka (0-9)
-
-6. Klik tombol mata di sebelah kanan field password untuk melihat/menyembunyikan password yang Anda ketik.
-7. Klik tombol **"Create account"** untuk mendaftar.
-8. Setelah registrasi berhasil, Anda akan **otomatis login** dan diarahkan ke halaman Onboarding.
-
-> **Catatan:** Jika email sudah terdaftar, akan muncul pesan error "An account with this email already exists."
-
----
+Jika email sudah terdaftar, akan muncul pesan "An account with this email already exists." Coba login, atau gunakan email lain.
 
 ### 2.2 Login
 
-Jika Anda sudah memiliki akun, Anda bisa langsung login.
+1. Buka `/login`.
+2. Isi email dan password yang sudah didaftarkan.
+3. Centang **Remember me** kalau kamu memakai perangkat pribadi (sesi 7 hari). Kalau tidak dicentang, sesi berakhir setelah 2 jam.
+4. Klik **Sign in**.
 
-**Langkah-langkah:**
+Setelah login, sistem otomatis memeriksa:
+- Apakah profil belajar sudah dibuat? Kalau belum → diarahkan ke onboarding.
+- Apakah slide pengenalan sudah ditonton? Kalau belum → diarahkan ke `/onboarding/intro`.
+- Kalau dua-duanya selesai → masuk ke Dashboard.
 
-1. Buka halaman login (`/login`).
-2. Masukkan **email** dan **password** yang sudah didaftarkan.
+> Screenshot: halaman-login
 
-[Screenshot: halaman-login]
+### 2.3 Logout
 
-3. **Opsi "Remember me":** Centang opsi ini jika Anda ingin tetap login selama 7 hari. Jika tidak dicentang, sesi akan berakhir setelah 2 jam.
-4. Klik tombol **"Sign in"**.
-5. Sistem akan memeriksa beberapa hal secara otomatis:
-   - Apakah profil belajar sudah dibuat? Jika belum, Anda diarahkan ke halaman Onboarding.
-   - Apakah sudah ada kursus? Jika belum, Anda diarahkan ke halaman pembuatan kursus baru.
-   - Jika keduanya sudah ada, Anda masuk ke Dashboard.
+Klik **Log out** di pojok kanan atas Dashboard. Semua cookie sesi dihapus dan kamu kembali ke halaman login. Kalau kamu memakai perangkat bersama, selalu logout manual.
 
-> **Catatan tentang Token:** Sistem menggunakan token autentikasi yang akan otomatis di-refresh ketika hampir kedaluwarsa. Anda tidak perlu melakukan apa pun secara manual -- proses ini berlangsung di balik layar.
+### 2.4 Lupa Password
 
----
-
-### 2.3 Onboarding (Pengaturan Profil Belajar)
-
-Halaman onboarding (`/onboarding`) adalah proses pengaturan profil yang hanya dilakukan **satu kali** setelah registrasi. Informasi yang Anda berikan akan membantu AI menyesuaikan konten pembelajaran.
-
-[Screenshot: halaman-onboarding]
-
-Onboarding terdiri dari **3 langkah** yang ditunjukkan oleh indikator progress di atas formulir:
-
-#### Langkah 1: Identitas
-
-- Masukkan **Nama Panggilan** (minimal 2 karakter).
-- Nama ini akan ditampilkan di seluruh aplikasi (misalnya di salam pembuka di Dashboard).
-- Contoh: "Budi", "Sarah", "Dika".
-
-#### Langkah 2: Gaya Belajar
-
-**Pengalaman Pemrograman** -- Pilih salah satu:
-
-| Pilihan | Keterangan |
-|---|---|
-| Belum pernah | Baru pertama kali belajar pemrograman |
-| Pemula | Pernah belajar sedikit (kurang dari 6 bulan) |
-| Menengah | Sudah punya pengalaman (6-24 bulan) |
-| Mahir | Berpengalaman (lebih dari 2 tahun) |
-
-**Gaya Belajar Favorit** -- Pilih salah satu:
-
-| Pilihan | Keterangan |
-|---|---|
-| Visual | Lebih mudah paham lewat gambar, diagram, dan video |
-| Membaca | Suka membaca penjelasan tertulis yang detail |
-| Praktik | Belajar paling baik dengan langsung mencoba kode |
-| Diskusi | Lebih paham lewat tanya-jawab dan berdiskusi |
-
-> **Penting:** Kedua pilihan pada langkah ini wajib dipilih sebelum bisa melanjutkan.
-
-#### Langkah 3: Tujuan
-
-- **Tujuan Belajar** (opsional): Tuliskan apa yang ingin Anda capai. Contoh: "Ingin bisa membuat website sendiri", "Memahami algoritma untuk karir."
-- **Tantangan Terbesar** (opsional): Tuliskan hambatan dalam belajar Anda. Contoh: "Sulit memahami konsep abstrak", "Kurang waktu untuk latihan."
-
-Setelah selesai, klik **"Mulai Belajar"** untuk menyimpan profil dan memulai perjalanan belajar Anda.
+Saat ini fitur reset password mandiri belum tersedia. Hubungi peneliti / admin untuk dibantu reset manual.
 
 ---
 
-### 2.4 Dashboard
+## 3. Onboarding Pertama Kali
 
-Dashboard (`/dashboard`) adalah halaman utama setelah login. Di sini Anda dapat melihat semua kursus yang telah dibuat dan mengelolanya.
+Onboarding wajib diselesaikan sekali di awal. Ada **dua tahap** terpisah, dan keduanya harus tuntas sebelum kamu masuk ke Dashboard.
 
-[Screenshot: halaman-dashboard]
+### Tahap 1 — Profil Belajar (`/onboarding`)
 
-#### Elemen-elemen Dashboard:
+Wizard 3 langkah:
 
-**Header:**
-- Logo PrincipleLearn di kiri atas.
-- Avatar inisial nama dan alamat email Anda di kanan atas.
-- Tombol **"Log out"** untuk keluar dari akun.
+1. **Identitas**
+   - Nama panggilan (minimal 2 karakter). Nama ini muncul di salam Dashboard.
+2. **Gaya Belajar** — wajib dipilih.
+   - Pengalaman pemrograman: Belum pernah / Pemula / Menengah / Mahir.
+   - Gaya belajar favorit: Visual / Membaca / Praktik / Diskusi.
+3. **Tujuan**
+   - Tujuan belajar (opsional, tapi sangat membantu AI).
+   - Tantangan terbesar (opsional).
 
-**Salam Personalisasi:**
-- Menampilkan salam berdasarkan waktu (Good morning / Good afternoon / Good evening) diikuti nama panggilan Anda.
-- Jumlah kursus yang sedang Anda pelajari.
+Klik **Mulai Belajar** untuk menyimpan profil.
 
-**Tombol "Create Course":**
-- Klik tombol biru **"Create Course"** untuk memulai pembuatan kursus baru.
+> Screenshot: onboarding-profil
 
-**Daftar Kursus (My Courses):**
-- Setiap kursus ditampilkan dalam bentuk kartu dengan informasi:
-  - **Level badge**: Beginner (hijau), Intermediate (biru), atau Advanced (ungu).
-  - **Judul kursus**: Klik untuk membuka halaman kursus.
-  - **Tombol "Continue Learning"**: Langsung menuju halaman overview kursus.
-  - **Menu titik tiga**: Klik untuk opsi menghapus kursus.
+### Tahap 2 — Slide Pengenalan (`/onboarding/intro`)
 
-**Menghapus Kursus:**
-1. Klik ikon titik tiga di pojok kanan atas kartu kursus.
-2. Overlay konfirmasi akan muncul dengan pesan "Delete this course?"
-3. Klik **"Delete"** untuk menghapus atau **"Cancel"** untuk membatalkan.
+Setelah profil tersimpan, kamu otomatis diarahkan ke 4 slide pengenalan singkat. Slide ini menjelaskan:
+- Apa itu PrincipleLearn dan kenapa dipersonalisasi.
+- Cara belajar aktif (Tanya AI, Quiz, Challenge, Jurnal Refleksi).
+- Alur belajar yang disarankan: buat course → pelajari subtopic → kuis & refleksi → diskusi modul.
+- Tombol bantuan yang tersedia di setiap subtopic.
 
-> **Peringatan:** Penghapusan kursus bersifat permanen. Semua data terkait (quiz, jurnal, transkrip, dll.) juga akan ikut terhapus.
+> Penting: Jangan tutup tab di tengah slide. Tekan **Lanjut** sampai slide terakhir, lalu **Mulai Belajar**. Slide ini hanya muncul sekali — kamu bisa memanggil panduan ulang lewat tombol bantuan di subtopic.
 
-**Jika Belum Ada Kursus:**
-- Ditampilkan empty state dengan pesan "No courses yet".
-- Klik tombol **"Create Your First Course"** untuk memulai.
+> Tip: Pastikan cookie aktif di browser. Status onboarding disimpan via cookie (`onboarding_done`, `intro_slides_done`) plus database. Kalau cookie diblokir, kamu bisa terus dilempar balik ke onboarding.
 
 ---
 
-### 2.5 Membuat Kursus Baru
+## 4. Dashboard
 
-Pembuatan kursus dilakukan melalui **3 langkah** yang ditunjukkan oleh indikator progress (1-2-3) di atas formulir. Setiap langkah harus diisi sebelum melanjutkan ke langkah berikutnya.
+Dashboard (`/dashboard`) adalah pusat kontrol setelah login.
 
-#### Step 1: Topik dan Tujuan (`/request-course/step1`)
+> Screenshot: dashboard
 
-[Screenshot: step1-buat-kursus]
+Yang ada di sana:
+- **Salam personal** berdasarkan waktu hari (Good morning / afternoon / evening) plus nama panggilanmu.
+- **Tombol Create Course** — biru, di sisi kanan atas konten utama. Klik untuk memulai pembuatan course baru.
+- **Daftar course (My Courses)** — setiap kartu menampilkan:
+  - Badge level (Beginner hijau, Intermediate biru, Advanced ungu).
+  - Judul course (klik untuk membuka).
+  - Tombol **Continue Learning**.
+  - Menu titik tiga untuk menghapus course.
+- **Empty state** — kalau belum ada course, muncul tombol **Create Your First Course**.
 
-| Field | Keterangan | Status |
+### Menghapus course
+
+Klik titik tiga di kartu course → **Delete** untuk konfirmasi. Penghapusan **permanen** dan menghapus semua data terkait (kuis, jurnal, transkrip). Pikir dua kali sebelum menghapus.
+
+---
+
+## 5. Membuat Course Baru
+
+Pembuatan course dilakukan dalam 3 langkah, ditandai indikator progress 1-2-3 di atas formulir. Kamu bisa kembali ke Dashboard kapan saja lewat link di pojok kiri atas (data form sementara disimpan di context React, jadi pindah halaman bisa kehilangan progress — sebaiknya selesaikan sekali jalan).
+
+### Step 1 — Topik & Tujuan (`/request-course/step1`)
+
+| Field | Wajib | Contoh |
 |---|---|---|
-| **Topic** | Topik yang ingin dipelajari | Wajib |
-| **Learning Goal** | Apa yang ingin dicapai dari mempelajari topik ini | Wajib |
+| **Topic** | Ya | "Machine Learning", "Web Development", "Data Science" |
+| **Learning Goal** | Ya | "Memahami konsep dasar neural network dan cara mengimplementasikannya" |
 
-Contoh pengisian:
-- **Topic:** "Machine Learning", "Web Development", "Data Science"
-- **Learning Goal:** "Memahami konsep dasar neural network dan cara mengimplementasikannya"
+Klik **Continue**.
 
-Klik **"Continue"** untuk melanjutkan ke Step 2.
+### Step 2 — Level & Sub-topik (`/request-course/step2`)
 
-> **Tip:** Anda bisa kembali ke Dashboard kapan saja dengan mengklik link "Dashboard" di pojok kiri atas.
+- **Level pengetahuan** — pilih satu kartu: Beginner, Intermediate, atau Advanced.
+- **Specific topics to cover** (opsional) — sub-topik tertentu yang ingin dimasukkan, misalnya "Neural Networks, Transfer Learning, NLP".
 
-#### Step 2: Level Pengetahuan (`/request-course/step2`)
+Klik **Continue**.
 
-[Screenshot: step2-buat-kursus]
+### Step 3 — Konteks & Asumsi (`/request-course/step3`)
 
-**Pilih Level Pengetahuan** -- Klik salah satu kartu:
-
-| Level | Keterangan |
-|---|---|
-| **Beginner** | Memulai dari dasar-dasar |
-| **Intermediate** | Sudah memiliki pengetahuan awal |
-| **Advanced** | Ingin mendalami topik secara mendalam |
-
-**Specific Topics to Cover** (opsional):
-- Tuliskan sub-topik tertentu yang ingin dipelajari.
-- Contoh: "Neural Networks, Transfer Learning, NLP"
-
-Klik **"Continue"** untuk melanjutkan ke Step 3.
-
-#### Step 3: Konteks dan Asumsi (`/request-course/step3`)
-
-[Screenshot: step3-buat-kursus]
-
-| Field | Keterangan | Status |
+| Field | Wajib | Contoh |
 |---|---|---|
-| **Real-world problem** | Masalah dunia nyata yang ingin diselesaikan dengan mempelajari topik ini | Wajib |
-| **Initial assumption** | Asumsi awal Anda tentang materi ini sebelum mulai belajar | Wajib |
+| **Real-world problem** | Ya | "Saya ingin membuat sistem rekomendasi produk untuk toko online saya" |
+| **Initial assumption** | Ya | "Saya pikir machine learning butuh data sangat besar dan mahal" |
 
-Contoh pengisian:
-- **Real-world problem:** "Ingin membuat sistem rekomendasi produk untuk toko online saya"
-- **Initial assumption:** "Saya pikir machine learning membutuhkan data sangat besar dan mahal"
+Field ini sangat penting — AI memakainya untuk membuat course yang relevan dengan situasimu, dan jawaban kamu juga jadi data riset (lihat bagian 10).
 
-Klik **"Generate Course"** untuk memulai proses pembuatan kursus oleh AI.
+Klik **Generate Course**.
 
-#### Proses Generating (`/request-course/generating`)
+### Proses Generating (`/request-course/generating`)
 
-[Screenshot: generating-kursus]
+> Screenshot: generating
 
-Setelah klik "Generate Course", Anda akan diarahkan ke halaman proses yang menampilkan:
+Kamu diarahkan ke halaman proses dengan progress bar dan timeline 5 tahap:
+1. Sending Request
+2. AI Processing (≈ 30–60 detik — AI sedang menyusun outline)
+3. Processing Response
+4. Saving Course
+5. Complete!
 
-**Progress bar** dengan persentase kemajuan.
+Selama menunggu, tips edukasi berputar setiap 5 detik. **Jangan refresh** — kalau kamu refresh, request bisa terulang. Setelah selesai, kamu otomatis diarahkan ke halaman overview course.
 
-**Timeline 5 tahap:**
-
-| Tahap | Keterangan |
-|---|---|
-| 1. Sending Request | Mengirim data kursus ke server |
-| 2. AI Processing | AI sedang meng-generate outline kursus (biasanya 30-60 detik) |
-| 3. Processing Response | Memvalidasi respons AI |
-| 4. Saving Course | Menyimpan kursus ke database |
-| 5. Complete! | Kursus berhasil dibuat |
-
-Selama proses AI, sistem akan menampilkan **tips informatif** yang berganti setiap 5 detik, seperti:
-- "Structuring modules based on your learning level..."
-- "Connecting topics to your real-world problem..."
-- "Building progressive learning pathways..."
-
-**Ringkasan kursus** ditampilkan di bawah, menunjukkan topik dan level yang dipilih.
-
-Setelah selesai, Anda akan **otomatis diarahkan** ke halaman overview kursus.
-
-> **Jika terjadi error:** Klik tombol "Go back & try again" untuk kembali ke Step 3 dan mencoba ulang.
+Kalau muncul error, klik **Go back & try again** untuk kembali ke Step 3.
 
 ---
 
-### 2.6 Halaman Overview Kursus
+## 6. Belajar di dalam Course
 
-Halaman overview kursus (`/course/[courseId]`) menampilkan struktur kursus yang telah digenerate oleh AI.
+### 6.1 Halaman Overview Course (`/course/[courseId]`)
 
-[Screenshot: overview-kursus]
+Course terdiri dari beberapa **modul**. Setiap modul punya beberapa **subtopic**.
 
-#### Struktur Kursus
+> Screenshot: course-overview
 
-Setiap kursus terdiri dari beberapa **modul**, dan setiap modul memiliki beberapa **subtopik** serta satu **diskusi penutup**.
+Setiap kartu subtopic menampilkan:
+- Nomor (1.1, 1.2, ...).
+- Judul.
+- Ringkasan singkat (klik **Lihat detail** untuk mengembangkan).
+- Tombol aksi: **Mulai Materi** (belum dibuka) atau **Lanjutkan Materi** (sudah pernah dibuka).
 
-**Header Modul:**
-- Menampilkan nomor dan nama modul yang sedang aktif.
-- Deskripsi: "Pelajari konsep-konsep utama dalam modul ini dan kuasai aplikasinya."
+Untuk berpindah modul, gunakan navigasi modul di halaman (atau lewat URL `?module=N` di mana N dimulai dari 0).
 
-**Daftar Kartu Subtopik:**
+### 6.2 Halaman Subtopic (`/course/[courseId]/subtopic/[subIdx]/[pageIdx]`)
 
-Setiap kartu menampilkan:
-- **Nomor subtopik** (misalnya 1.1, 1.2, 1.3).
-- **Judul subtopik**.
-- **Ringkasan** singkat isi subtopik.
-- **Tombol aksi**:
-  - "Mulai Materi" -- jika subtopik belum pernah dibuka.
-  - "Lanjutkan Materi" -- jika subtopik sudah pernah dibuka sebelumnya.
+Saat pertama kali dibuka, AI akan meng-generate konten subtopic. Tunggu sebentar — proses ini hanya berjalan sekali, hasilnya disimpan untuk berikutnya.
 
-**Kartu Diskusi Penutup:**
-- Terletak di posisi terakhir dalam daftar subtopik modul.
-- Menampilkan status diskusi: "Mulai Diskusi", "Lanjutkan Diskusi", atau "Lihat Ringkasan Diskusi".
-- Fase saat ini dan jumlah goals yang tercapai (jika diskusi sudah dimulai).
-- Badge "Selesai" jika diskusi sudah tuntas.
+> Screenshot: subtopic-page
 
-> **Navigasi antar Modul:** Gunakan parameter URL `?module=N` (di mana N adalah indeks modul dimulai dari 0) untuk berpindah antar modul. Navigasi ini biasanya terjadi otomatis melalui tombol-tombol di dalam halaman subtopik dan diskusi.
-
----
-
-### 2.7 Mempelajari Subtopik (Halaman Materi)
-
-Halaman subtopik (`/course/[courseId]/subtopic/[moduleIdx]/[pageIdx]`) adalah tempat utama Anda belajar. Ketika pertama kali membuka subtopik, AI akan meng-generate konten materi secara otomatis.
-
-[Screenshot: halaman-subtopik]
-
-#### Progress Bar
-
-Di bagian atas halaman, terdapat **progress bar** berupa rangkaian titik-titik yang menunjukkan posisi Anda dalam alur pembelajaran subtopik. Titik yang aktif ditandai dengan warna berbeda.
-
-#### Alur Halaman dalam Satu Subtopik
-
-Setiap subtopik memiliki urutan halaman sebagai berikut:
+Alur halaman dalam satu subtopic:
 
 ```
-Halaman Konten 1 --> Halaman Konten 2 --> ... --> Key Takeaways --> Quiz --> Feedback & Next Steps
+Halaman Konten 1 → Halaman Konten 2 → ... → Key Takeaways → Quiz → Feedback & Next Steps
 ```
 
-**1. Halaman Konten** (beberapa halaman)
+**Progress bar** berupa rangkaian titik di atas halaman menunjukkan posisimu. Tombol **Next** dan **Back** untuk navigasi.
 
-Berisi materi utama dalam bentuk:
-- **Judul halaman** yang menjelaskan topik bahasan.
-- **Paragraf-paragraf** penjelasan yang dihasilkan oleh AI.
-- **Tombol interaktif** di bawah konten (lihat Bagian 2.8).
+### 6.3 Konten subtopic
 
-Gunakan tombol **"Next"** di bagian bawah halaman untuk melanjutkan ke halaman berikutnya, dan tombol **"Back"** untuk kembali ke halaman sebelumnya.
+Setiap halaman konten berisi:
+- Judul halaman.
+- Beberapa paragraf penjelasan AI.
+- Tombol interaktif di bawah (lihat 6.4).
 
-**2. Key Takeaways (Poin-Poin Penting)**
+Baca runtut dari atas. Konten disesuaikan dengan level dan gaya belajar yang kamu set di onboarding.
 
-Setelah semua halaman konten selesai, Anda akan menemui halaman Key Takeaways yang berisi:
-- Ringkasan poin-poin penting dari seluruh materi subtopik.
-- Ditampilkan dalam format daftar yang mudah dipahami.
+### 6.4 Tombol interaktif: Examples, Ask Question, Challenge
 
-[Screenshot: key-takeaways]
+Di setiap halaman konten ada tiga tombol:
 
-**3. Quiz (Kuis)**
+#### a. Give Me Examples (Contoh)
 
-Setelah Key Takeaways, Anda harus mengerjakan kuis untuk menguji pemahaman.
+- Klik untuk minta AI memberi contoh konkret atau analogi.
+- Klik **Regenerate** untuk minta contoh baru.
+- Navigasi panah kiri/kanan untuk melihat contoh sebelumnya yang sudah pernah digenerate. Indikator "Contoh ke-X dari Y" memperlihatkan posisi.
 
-[Screenshot: quiz]
+#### b. Ask Question (Tanya AI)
 
-**Detail Quiz:**
-- Terdiri dari **5 soal pilihan ganda** per subtopik.
-- Setiap soal menampilkan beberapa opsi jawaban.
-- **Reasoning Note** (opsional): Pada setiap soal, Anda bisa menuliskan catatan alasan mengapa memilih jawaban tersebut. Ini membantu melatih kemampuan berpikir kritis Anda.
-- Klik opsi jawaban untuk memilih, lalu klik **"Submit"** setelah menjawab semua soal.
-- **Hasil langsung**: Setelah submit, Anda langsung melihat jawaban mana yang benar dan salah.
-  - Jawaban benar ditandai warna hijau.
-  - Jawaban salah ditandai warna merah, beserta jawaban yang seharusnya.
-- **Skor disimpan otomatis** ke database.
+Tanya bebas tentang materi. Jawaban dialirkan secara streaming (mengetik real-time).
 
-> **Penting:** Jawaban quiz tidak bisa diubah setelah submit. Pastikan Anda sudah yakin sebelum mengirimkan.
+Tab Ask Question membuka **PromptBuilder** dengan dua mode:
+- **Guided** (default) — terstruktur dengan field Tujuan, Konteks, dan Batasan (opsional). Setiap field punya chip cepat.
+- **Simple** — langsung mengetik pertanyaan tanpa panduan.
 
-**4. Feedback & Langkah Selanjutnya**
+Setelah jawaban selesai, kamu bisa menambahkan **Reasoning Note** (alasan kenapa kamu menanyakan itu) — penting untuk latihan refleksi dan jadi data riset.
 
-Halaman terakhir dalam alur subtopik berisi tiga bagian:
+Riwayat tanya-jawab ditampilkan di atas input. **Prompt Timeline** muncul di bawah setelah pertanyaan pertama (lihat bagian 7).
 
-**(a) What's Next (Ringkasan & Motivasi)**
-- Ringkasan singkat tentang apa yang telah dipelajari.
-- Pesan motivasi untuk melanjutkan perjalanan belajar.
+#### c. Challenge My Thinking
 
-**(b) Structured Reflection (Refleksi Terstruktur)**
+AI memberi pertanyaan tantangan berdasarkan materi:
+1. Klik tab **Challenge My Thinking**.
+2. AI generate pertanyaan otomatis. Klik **Regenerate** kalau ingin pertanyaan lain.
+3. Tulis jawaban di "Type your answer here..."
+4. (Opsional) Tulis alasan di "Why do you choose this answer?"
+5. Klik **Submit**.
 
-[Screenshot: refleksi-terstruktur]
+Kamu mendapat **feedback terstruktur** dari AI (kekuatan, area perbaikan, konsep kunci). Riwayat tantangan tersimpan di **Previous Challenges**.
 
-Formulir refleksi dengan 4 pertanyaan:
+### 6.5 Key Takeaways
+
+Setelah semua halaman konten, muncul halaman **Key Takeaways** — ringkasan poin penting subtopic dalam format daftar. Bacalah ini sebagai kunci jawaban "apa yang seharusnya saya ingat."
+
+> Screenshot: key-takeaways
+
+### 6.6 Quiz
+
+5 soal pilihan ganda untuk cek pemahaman.
+
+> Screenshot: quiz
+
+- Klik opsi untuk memilih jawaban.
+- (Opsional, sangat disarankan) Tulis **Reasoning Note** di tiap soal — alasan memilih jawaban itu.
+- Klik **Submit** kalau sudah yakin. Jawaban final, **tidak bisa diubah** setelah submit.
+- Hasil ditampilkan langsung: hijau = benar, merah = salah (dengan jawaban yang seharusnya).
+- Skor disimpan otomatis.
+
+Kalau kuis terasa tidak relevan atau ada soal aneh, ada tombol **Regenerate** untuk meminta soal baru (sebelum submit).
+
+### 6.7 Feedback & Next Steps
+
+Halaman terakhir setiap subtopic punya tiga bagian:
+
+**(a) What's Next** — ringkasan apa yang kamu pelajari dan motivasi untuk lanjut.
+
+**(b) Structured Reflection** — formulir refleksi dengan 4 pertanyaan:
 
 | Bagian | Pertanyaan |
 |---|---|
@@ -412,595 +299,199 @@ Formulir refleksi dengan 4 pertanyaan:
 | Strategi ke Depan | Apa strategi belajar saya selanjutnya? |
 | Evolusi Cara Bertanya | Bagaimana cara saya bertanya berubah dari sesi sebelumnya? |
 
-**Rating Konten:**
-- Beri rating 1-5 bintang untuk kualitas konten.
-- Tulis feedback tambahan jika ada (opsional).
-- Klik **"Simpan Refleksi & Feedback"** untuk menyimpan.
+Plus rating konten (1–5 bintang) dan feedback tambahan (opsional). Klik **Simpan Refleksi & Feedback**.
 
-**(c) Next Subtopics (Subtopik Berikutnya)**
-- Daftar subtopik lain dalam modul yang sama.
-- Klik untuk langsung menuju subtopik tersebut.
+> Screenshot: structured-reflection
 
-Klik tombol **"Finish"** di bagian bawah untuk kembali ke halaman Overview kursus.
+**(c) Next Subtopics** — daftar subtopic berikutnya dalam modul yang sama. Klik salah satu untuk langsung ke sana, atau klik **Finish** untuk kembali ke overview course.
 
----
+### 6.8 Diskusi modul (opsional)
 
-### 2.8 Fitur Interaktif saat Belajar
-
-Pada setiap halaman konten subtopik, terdapat tiga tombol interaktif yang dapat Anda gunakan untuk memperdalam pemahaman:
-
-[Screenshot: tombol-interaktif]
-
-Ketika pertama kali dimuat, tombol ditampilkan sebagai tiga pilihan:
-- **Ask Question** (Tanya Jawab)
-- **Challenge My Thinking** (Tantangan Berpikir)
-- **Give Me Examples** (Berikan Contoh)
-
-Setelah salah satu dipilih, tampilan berubah menjadi **tab navigasi** sehingga Anda bisa berpindah antar fitur. Klik tombol **"x"** untuk menutup panel interaktif.
+Setiap modul memiliki kartu **Diskusi Penutup** di akhir daftar subtopic. Untuk thesis ini, modul Diskusi tersedia tapi **bukan komponen wajib** untuk peserta. Kalau peneliti tidak menginstruksikan kamu memakainya, fokuskan waktu di subtopic, kuis, dan refleksi. (Kalau diminta, peneliti akan memberi instruksi terpisah.)
 
 ---
 
-#### a. Ask Question (Tanya Jawab)
+## 7. Fitur Prompt Engineering
 
-Fitur ini memungkinkan Anda bertanya tentang materi yang sedang dipelajari, dan AI akan menjawab secara real-time.
+Salah satu hal paling penting yang dilatih di PrincipleLearn adalah **cara menyusun prompt yang baik**. Ini diukur dan dianalisis sebagai bagian riset.
 
-[Screenshot: ask-question]
+### 7.1 PromptBuilder
 
-**Cara menggunakan:**
+Muncul di tab **Ask Question**. Mode default adalah **Guided** dengan tiga komponen:
 
-1. Klik tab **"Ask Question"**.
-2. Anda akan melihat **PromptBuilder** -- alat bantu untuk menyusun pertanyaan yang berkualitas.
-
-**PromptBuilder memiliki dua mode:**
-
-| Mode | Keterangan |
-|---|---|
-| **Guided** (default) | Menyusun pertanyaan secara terstruktur dengan panduan |
-| **Simple** | Mengetik pertanyaan langsung tanpa panduan |
-
-**Mode Guided memiliki field-field:**
-
-| Field | Keterangan | Contoh |
+| Komponen | Fungsi | Tips |
 |---|---|---|
-| **Tujuan** | Apa yang ingin Anda ketahui | "Saya ingin memahami bagaimana..." |
-| **Konteks** | Apa yang sudah Anda ketahui | "Yang sudah saya ketahui adalah..." |
-| **Batasan** (opsional) | Format jawaban yang diinginkan | "Jelaskan dengan bahasa sederhana" |
+| **Tujuan** | Apa yang ingin kamu ketahui | Mulai dengan kata kerja: "Saya ingin memahami...", "Tolong jelaskan..." |
+| **Konteks** | Apa yang sudah kamu tahu | Sebut sumber atau pemahaman awal: "Sejauh ini saya tahu bahwa..." |
+| **Batasan** (opsional) | Format jawaban yang kamu inginkan | "Jelaskan untuk pemula", "Berikan analogi sehari-hari", "Dalam 3 poin" |
 
-Setiap field dilengkapi **chip** (tombol cepat) yang bisa diklik untuk memulai kalimat.
+Chip cepat di setiap field bisa diklik untuk memulai kalimat. Mode **Simple** tetap tersedia kalau kamu sudah tahu mau tanya apa.
 
-3. Setelah menyusun pertanyaan, klik **"Kirim"**.
-4. AI akan menjawab secara **streaming** (teks muncul secara bertahap, seperti sedang diketik).
-5. Setelah jawaban selesai, Anda bisa menambahkan **Reasoning Note** (catatan alasan) -- mengapa Anda mengajukan pertanyaan tersebut.
-6. Riwayat tanya-jawab akan ditampilkan di atas area input.
+### 7.2 Prompt Timeline
 
-**Prompt Journey Timeline:**
-- Setelah mengajukan setidaknya satu pertanyaan, **Prompt Timeline** akan muncul di bawah.
-- Timeline ini menunjukkan evolusi cara Anda bertanya dari waktu ke waktu, termasuk komponen prompt yang digunakan.
+Setelah satu pertanyaan dikirim, **Prompt Timeline** muncul di bawah area input. Timeline ini menunjukkan evolusi cara bertanyamu — komponen apa saja yang kamu pakai dari waktu ke waktu, dan bagaimana kualitas promptmu berkembang. Ini cermin dari kemajuanmu di skala stage prompt: SCP → SRP → MQP → Reflektif (lihat glosarium).
 
----
+### 7.3 Tips menulis prompt yang baik
 
-#### b. Challenge My Thinking (Tantangan Berpikir)
-
-Fitur ini membantu Anda melatih kemampuan berpikir kritis melalui pertanyaan tantangan dari AI.
-
-[Screenshot: challenge-thinking]
-
-**Cara menggunakan:**
-
-1. Klik tab **"Challenge My Thinking"**.
-2. AI akan secara otomatis **meng-generate pertanyaan tantangan** berdasarkan materi yang sedang Anda baca dan level kursus Anda.
-3. Selama proses loading, indikator AI ditampilkan dengan pesan "Menyiapkan pertanyaan...", "Menganalisis materi...", dll.
-4. Pertanyaan tantangan ditampilkan di dalam **ChallengeBox** berwarna berbeda.
-5. Jika pertanyaan kurang sesuai, klik tombol **"Regenerate"** untuk mendapatkan pertanyaan baru.
-6. Jawab pertanyaan di field **"Type your answer here..."**
-7. (Opsional) Tambahkan alasan di field **"Why do you choose this answer?"**
-8. Klik **"Submit"** untuk mengirim jawaban.
-
-**Feedback yang Diterima:**
-
-Setelah submit, AI memberikan **feedback terstruktur** yang berisi:
-- Kekuatan jawaban Anda.
-- Area yang perlu diperbaiki.
-- Konsep kunci yang relevan.
-
-**Riwayat Challenge:**
-- Semua tantangan yang telah dijawab disimpan dalam **Previous Challenges**.
-- Klik salah satu untuk melihat kembali pertanyaan, jawaban, dan feedback-nya.
-- Klik **"Try a New Challenge"** atau **"Buat Pertanyaan Baru"** untuk mengerjakan tantangan baru.
+1. **Spesifik lebih baik daripada umum.** "Jelaskan apa itu deep learning" → "Jelaskan kenapa deep learning butuh banyak data, dengan contoh kasus dari NLP."
+2. **Berikan konteks.** Sebut apa yang sudah kamu pahami supaya AI tidak mengulang dari nol.
+3. **Sebutkan batasan output.** Kamu bisa minta format daftar, analogi, contoh, level bahasa tertentu.
+4. **Tulis Reasoning Note.** Setelah dapat jawaban, catat alasan kenapa kamu bertanya itu — ini melatih metakognisi.
+5. **Gunakan PromptBuilder Guided di awal.** Setelah terbiasa, kamu bisa pindah ke Simple — tapi struktur Guided membantu membentuk kebiasaan baik.
 
 ---
 
-#### c. Give Me Examples (Berikan Contoh)
+## 8. Refleksi dan Catatan
 
-Fitur ini menghasilkan contoh kontekstual dari AI untuk membantu memahami materi lebih baik.
+### 8.1 Structured Reflection (Jurnal)
 
-[Screenshot: give-me-examples]
+Lihat 6.7. Tips menulis refleksi yang baik:
+- **Jujur**, jangan tulis demi formalitas.
+- **Konkret** — sebut konsep spesifik, bukan "saya paham semuanya".
+- **Hubungkan dengan pengalaman** — kapan kamu pernah lihat ini di kehidupan nyata?
+- **Tulis kebingungan dengan jelas** — ini sinyal berharga bagi diri sendiri (dan bagi peneliti).
 
-**Cara menggunakan:**
+### 8.2 Reasoning Note
 
-1. Klik tab **"Give Me Examples"**.
-2. AI akan **meng-generate contoh** berdasarkan konten halaman yang sedang Anda baca.
-3. Contoh ditampilkan dalam card yang rapi.
-4. **Navigasi contoh:**
-   - Klik tombol **sebelumnya/berikutnya** untuk melihat contoh yang pernah digenerate.
-   - Indikator menunjukkan "Contoh ke-X dari Y total".
-5. Klik tombol **"Regenerate"** untuk meng-generate contoh baru.
-6. Contoh baru ditambahkan ke riwayat dan dapat dinavigasi kembali.
+Tersedia di:
+- Setiap soal Quiz — alasan pilihan jawaban.
+- Setelah jawaban Ask Question — alasan kenapa bertanya itu.
+- Setelah Challenge feedback — refleksi atas feedback yang diterima.
 
----
-
-### 2.9 Diskusi Penutup Modul (Metode Socratic)
-
-Diskusi penutup adalah fitur **dialog interaktif** dengan mentor virtual (AI) yang menggunakan **metode Socratic** untuk memperdalam pemahaman Anda tentang seluruh modul.
-
-[Screenshot: diskusi-penutup]
-
-#### Prasyarat
-
-Sebelum dapat memulai diskusi penutup modul, Anda harus:
-1. **Meng-generate semua subtopik** dalam modul tersebut (membuka setiap subtopik sehingga konten digenerate oleh AI).
-2. **Menyelesaikan quiz** pada setiap subtopik.
-
-Jika prasyarat belum terpenuhi, halaman diskusi akan menampilkan:
-- **Panel "Lengkapi Materi Terlebih Dahulu"** dengan detail:
-  - Jumlah subtopik yang sudah siap vs yang diharapkan.
-  - Jumlah kuis yang sudah dijawab vs total.
-  - Daftar status setiap subtopik (Siap, Belum digenerate, Kuis belum selesai, dll.).
-- Tombol **"Pelajari Subtopik Modul"** untuk kembali ke halaman overview.
-
-#### Memulai Diskusi
-
-1. Pastikan semua prasyarat terpenuhi.
-2. Klik **"Mulai Diskusi"** pada kartu Diskusi Penutup di halaman overview kursus.
-3. Diskusi dimulai dengan pesan intro dari mentor.
-
-#### 4 Fase Diskusi
-
-Diskusi melewati empat fase secara berurutan:
-
-| Fase | Nama | Keterangan |
-|---|---|---|
-| 1 | **Diagnosis** | Mentor menilai pemahaman awal Anda terhadap materi modul |
-| 2 | **Exploration** (Penjelasan) | Menjelajahi konsep-konsep lebih dalam melalui dialog |
-| 3 | **Practice** (Latihan) | Latihan menerapkan konsep yang sudah dipelajari |
-| 4 | **Synthesis** (Konsolidasi) | Menyimpulkan dan menghubungkan semua konsep |
-
-#### Antarmuka Diskusi
-
-**Header:**
-- Breadcrumb **"Kembali ke Outline"** untuk kembali ke overview kursus.
-- Judul "Diskusi Penutup" dengan informasi modul dan cakupan.
-- **Status badge**: Ready (siap), In Progress (sedang berlangsung), atau Done (selesai).
-
-**Panel Learning Goals (Tujuan Diskusi):**
-- Klik tombol **"Goal Diskusi"** di atas thread untuk membuka panel dropdown.
-- Menampilkan daftar tujuan pembelajaran dengan status tercapai/belum.
-- Progress: "X/Y tercapai".
-- Fase aktif saat ini ditampilkan.
-
-**Thread Percakapan:**
-- Pesan **Mentor** ditampilkan di sisi kiri.
-- Pesan **Anda** ditampilkan di sisi kanan.
-- Setiap pesan menampilkan waktu pengiriman.
-- Thread otomatis scroll ke bawah saat ada pesan baru.
-
-**Area Input:**
-- Tipe input bergantung pada instruksi mentor:
-  - **Pertanyaan terbuka**: Textarea untuk menuliskan jawaban bebas, lalu klik **"Kirim Jawaban"**.
-  - **Pilihan ganda (MCQ)**: Pilih salah satu opsi, lalu klik **"Kirim Jawaban"**.
-
-#### Penyelesaian Diskusi
-
-- Diskusi **otomatis selesai** ketika semua tujuan pembelajaran (learning goals) tercapai.
-- Setelah selesai, panel penutup ditampilkan dengan pesan:
-  *"Semua tujuan pembelajaran telah tercapai. Lanjutkan perjalanan belajar ke modul berikutnya."*
-- Klik **"Lanjut Modul Berikutnya"** untuk melanjutkan ke modul selanjutnya.
-
-#### Melanjutkan Diskusi yang Tertunda
-
-Jika Anda meninggalkan diskusi sebelum selesai:
-1. Kembali ke halaman overview kursus.
-2. Kartu Diskusi Penutup akan menampilkan tombol **"Lanjutkan Diskusi"** beserta fase dan progress saat ini.
-3. Klik untuk melanjutkan dari titik terakhir.
+Walaupun opsional, **isi sesering mungkin**. Reasoning Note adalah tempat kamu melatih dan menunjukkan critical thinking.
 
 ---
 
-### 2.10 Logout
+## 9. Bantuan di dalam Aplikasi: Help Drawer dan Product Tour
 
-**Langkah-langkah logout:**
+### 9.1 Help Drawer
 
-1. Klik tombol **"Log out"** di header Dashboard (pojok kanan atas).
-2. Semua cookie autentikasi akan dihapus.
-3. Anda akan diarahkan kembali ke halaman login.
+Di setiap subtopic, ada tombol bantuan (biasanya berikon tanda tanya) yang membuka **drawer panduan kontekstual**. Drawer ini menjelaskan setiap fitur di halaman: Materi, Examples, Tanya AI, Quiz, Challenge, Refleksi, dst. Klik **Tunjukkan** pada item tertentu untuk scroll ke elemen yang dimaksud.
 
-> **Catatan:** Jika Anda mengaktifkan "Remember me" saat login, pastikan untuk logout secara manual jika menggunakan perangkat bersama.
+> Screenshot: help-drawer
 
----
+Pakai Help Drawer kapan pun kamu ragu — lebih cepat daripada bertanya ke peneliti.
 
-## 3. Panduan Administrator
+### 9.2 Product Tour
 
-### 3.1 Login Admin
-
-Akun admin memiliki alur login yang terpisah dari akun mahasiswa.
-
-**Langkah-langkah:**
-
-1. Buka halaman `/admin/login`.
-2. Masukkan **email** dan **password** akun admin.
-3. Klik tombol **"Login"**.
-4. Jika berhasil, Anda diarahkan ke Dashboard Admin.
-
-[Screenshot: admin-login]
-
-> **Catatan:** Token admin berlaku selama 2 jam. Setelah itu, Anda perlu login kembali.
+Saat pertama kali masuk ke beberapa halaman utama (Dashboard, halaman subtopic), **Product Tour** otomatis muncul dengan tooltip langkah demi langkah yang menunjuk elemen-elemen kunci. Ikuti sampai selesai untuk pemahaman cepat. Tour hanya muncul sekali per halaman; kamu bisa selalu kembali ke Help Drawer kalau lupa.
 
 ---
 
-### 3.2 Dashboard Admin
+## 10. Privasi dan Data Riset
 
-Dashboard Admin (`/admin/dashboard`) menyediakan ringkasan komprehensif tentang aktivitas platform dan data penelitian.
+### Apa yang dicatat?
 
-[Screenshot: admin-dashboard]
+Sebagai bagian dari riset thesis, aktivitasmu di PrincipleLearn dicatat:
+- Profil belajar (nama panggilan, level, gaya, tujuan, tantangan).
+- Course dan subtopic yang kamu buka.
+- Setiap pertanyaan ke AI (Ask Question) beserta komponen prompt.
+- Setiap challenge yang dijawab dan feedback AI.
+- Skor dan reasoning note di setiap kuis.
+- Jurnal refleksi.
+- Rating dan feedback konten.
 
-#### Navigasi Dashboard
+### Bagaimana data dipakai?
 
-Dashboard memiliki **4 tab utama** dan **filter waktu**:
+Data dipakai untuk **analisis kuantitatif dan kualitatif** sesuai pertanyaan riset (RM2: kualitas prompt, RM3: indikator critical & computational thinking). Hasil analisis ditulis dalam thesis.
 
-**Tab:**
-| Tab | Ikon | Keterangan |
-|---|---|---|
-| **Overview** | Grid | Ringkasan KPI dan grafik penelitian |
-| **Students** | Users | Tabel ringkasan mahasiswa |
-| **Activity** | Activity | Timeline aktivitas terbaru |
-| **System Health** | Shield | Status kesehatan sistem |
+### Anonimisasi
 
-**Filter Waktu:**
-| Filter | Keterangan |
+Identitas personal (email, nama) **tidak ditampilkan** dalam laporan. Data dianonimisasi menggunakan ID internal sebelum dianalisis.
+
+### Kontrol kamu
+
+- Kamu bisa berhenti kapan saja — hubungi peneliti.
+- Kamu bisa minta data kamu dihapus — hubungi peneliti.
+- Cookie sesi otomatis dihapus saat logout.
+
+### Kontak peneliti
+
+Hubungi peneliti (admin sekaligus peneliti utama) lewat kanal komunikasi yang sudah disepakati di awal partisipasi (biasanya email atau WhatsApp).
+
+---
+
+## 11. Troubleshooting Umum
+
+| Masalah | Yang harus dilakukan |
 |---|---|
-| 7 Days | Data 7 hari terakhir |
-| 30 Days | Data 30 hari terakhir |
-| 90 Days | Data 90 hari terakhir |
-| All Time | Seluruh data |
-
-Header juga menampilkan waktu query (dalam milidetik), tombol **Refresh**, dan badge email admin.
-
----
-
-#### Tab Overview
-
-**13 KPI Cards:**
-
-| KPI | Keterangan |
-|---|---|
-| Active Students | Jumlah mahasiswa yang terdaftar |
-| Total Courses | Jumlah kursus yang dibuat |
-| Quiz Accuracy | Rata-rata akurasi quiz (%) |
-| CT Coverage | Persentase coverage Computational Thinking |
-| Discussions | Jumlah sesi diskusi |
-| Total Prompts | Jumlah prompt yang dikirim mahasiswa |
-| Ask Questions | Jumlah pertanyaan yang diajukan |
-| Rating | Rata-rata rating konten (dari 5) |
-| Journals | Jumlah jurnal refleksi yang ditulis |
-| Challenges | Jumlah challenge thinking yang dikerjakan |
-| Transcripts | Jumlah transkrip yang disimpan |
-| Learning Profiles | Jumlah profil belajar yang terdaftar |
-| Onboarding Rate | Persentase penyelesaian onboarding |
-
-**Grafik RM2 -- Prompt Stages:**
-- Bar chart yang menunjukkan distribusi tahapan prompt mahasiswa:
-  - **SCP** (Simple Copy-Paste) -- Merah
-  - **SRP** (Structured Prompt) -- Kuning
-  - **MQP** (Multi-Quality Prompt) -- Biru
-  - **Reflektif** (Reflective Prompt) -- Hijau
-- Legend di bawah menunjukkan jumlah dan persentase tiap tahap.
-
-**Grafik RM3 -- Critical Thinking:**
-- Jika data penelitian tersedia: Menampilkan skor CT dan CTh beserta radar chart 6 dimensi (Decomposition, Pattern Recognition, Abstraction, Algorithm Design, Evaluation/Debugging, Generalization).
-- Jika data belum tersedia: Menampilkan ring chart Quiz Accuracy dan CT Coverage, serta statistik Challenges, Journals, dan Rating.
-
-**Micro Marker Distribution:**
-- Kartu-kartu yang menampilkan distribusi micro marker (penanda detail dari kualitas prompt).
+| **Stuck di onboarding, terus diarahkan balik** | Pastikan cookie diaktifkan di browser. Coba logout, login ulang. Kalau masih, hubungi peneliti — server flag mungkin perlu di-reset. |
+| **AI loading lama (> 1 menit)** | Sabar, AI butuh waktu (terutama generate course pertama kali, 30–60 detik). **Jangan refresh** — request bisa terulang dan menghabiskan kuota. |
+| **Quiz tidak muncul** | Coba tombol **Regenerate** di area kuis. Kalau masih kosong, refresh halaman sekali — soal tersimpan di database. |
+| **Konten subtopic kosong / error** | Refresh halaman. Konten digenerate sekali dan disimpan; kalau gagal di percobaan pertama, biasanya percobaan kedua berhasil. |
+| **Tidak bisa login** | Cek email dan password. Pastikan caps lock mati. Kalau lupa password, hubungi peneliti — fitur reset mandiri belum tersedia. |
+| **Halaman blank / putih** | Refresh (Ctrl+R / Cmd+R). Kalau masih, buka DevTools (F12) → tab Console, screenshot error, kirim ke peneliti. |
+| **Cookie / session error** | Clear cache & cookies di browser, lalu login ulang. |
+| **Streaming jawaban Ask Question terhenti di tengah** | Tunggu beberapa detik. Kalau benar-benar mati, kirim ulang pertanyaan. Riwayat jawaban sebelumnya tetap tersimpan. |
+| **Generate course gagal terus** | Coba topik yang lebih spesifik (bukan "AI" tapi "Convolutional Neural Networks untuk klasifikasi gambar"). Sistem juga punya rate limit (30 request/jam). Tunggu 5 menit, coba lagi. |
+| **Notifikasi "session expired" muncul** | Token kamu kedaluwarsa. Login ulang. Kalau memilih "Remember me" saat login, sesi 7 hari. |
 
 ---
 
-#### Tab Students
+## 12. FAQ
 
-- Tabel ringkasan semua mahasiswa.
-- Kolom: Student (email), Stage (tahap prompt), Courses, Ask Q, Quiz Acc., Challenges, Discussions, Journals, Last Active.
-- Stage badge berwarna sesuai level (SCP/SRP/MQP/Reflektif).
-- Klik baris untuk melihat detail di halaman Manajemen Mahasiswa.
-- Tombol **"View Details"** mengarah ke `/admin/users`.
+**T: Apa itu Critical Thinking (CT)?**
+J: Kemampuan menganalisis informasi secara objektif, mempertanyakan asumsi, dan menyusun argumen berdasar bukti. Di PrincipleLearn, CT dilatih lewat Challenge Thinking, Reasoning Note, dan Structured Reflection.
 
----
+**T: Apa itu Computational Thinking (CTh)?**
+J: Cara berpikir memecahkan masalah dengan: dekomposisi (memecah jadi bagian kecil), pengenalan pola, abstraksi, dan menyusun algoritma. Berguna jauh melampaui pemrograman.
 
-#### Tab Activity
+**T: Apa beda Examples dengan Ask Question?**
+J: **Examples** menampilkan contoh konkret/analogi yang relevan dengan paragraf yang sedang kamu baca, tanpa kamu harus mengetik. **Ask Question** untuk pertanyaan spesifik yang kamu rumuskan sendiri — lebih fleksibel tapi butuh prompt yang baik.
 
-- Timeline aktivitas terbaru dari seluruh platform.
-- **8 tipe aktivitas** yang dilacak:
-  - Course (pembuatan kursus)
-  - Ask Question (tanya jawab)
-  - Challenge (challenge thinking)
-  - Quiz (pengerjaan kuis)
-  - Journal (penulisan jurnal refleksi)
-  - Transcript (penyimpanan transkrip)
-  - Feedback (pemberian feedback)
-  - Discussion (diskusi Socratic)
-- Setiap item menampilkan email pengguna, detail aktivitas, tipe, dan waktu.
-- Legend warna di atas untuk membedakan tipe aktivitas.
+**T: Bisakah saya skip Quiz?**
+J: Sebaiknya tidak. Skor kuis adalah salah satu sinyal pemahaman dalam riset. Selain itu, kamu jadi tahu di mana posisi pemahamanmu sebelum lanjut.
 
----
-
-#### Tab System Health
-
-- Metrik kesehatan sistem selama 7 hari terakhir.
-- **KPI Sistem:**
-  - Total Requests
-  - Successful (jumlah request berhasil)
-  - Failures (jumlah kegagalan dan persentase)
-- **Alerts:** Peringatan jika ada endpoint dengan failure rate tinggi.
-- **Top Failing Endpoints:** Tabel endpoint yang paling sering gagal dengan detail total, success, failed, dan failure rate.
-- Jika semua sistem normal: "All systems operational. No alerts detected."
-
----
-
-### 3.3 Manajemen Mahasiswa
-
-Halaman Manajemen Mahasiswa (`/admin/users`) menyediakan tampilan detail untuk setiap mahasiswa.
-
-[Screenshot: admin-users]
-
-#### Layout
-
-**Sidebar Kiri -- Daftar Mahasiswa:**
-- **Search bar** untuk mencari berdasarkan email.
-- **Filter role:** ALL, USER, ADMIN.
-- **Sort:** Recent (terbaru), Email (abjad), Engagement, Completion.
-- Daftar mahasiswa dengan informasi ringkas.
-
-**Panel Kanan -- Detail Mahasiswa:**
-
-Setelah memilih mahasiswa, panel kanan menampilkan:
-
-**Stats Grid:**
-- Kursus, Quiz, Jurnal, Challenges, Transcripts, Ask Questions, Discussions, Feedback.
-
-**Tab Overview:**
-- 8 kartu aktivitas dengan ringkasan detail.
-
-**Tab Activity (Timeline):**
-- Aktivitas kronologis mahasiswa terpilih.
-
-**Fitur Tambahan:**
-- **Export Data:** Unduh data mahasiswa dalam format CSV atau JSON.
-- **Hapus Mahasiswa:** Hapus akun mahasiswa beserta seluruh datanya (cascade delete ke 17 tabel terkait).
-
-> **Peringatan:** Penghapusan mahasiswa bersifat permanen dan tidak dapat dibatalkan.
-
----
-
-### 3.4 Manajemen Diskusi
-
-Halaman Manajemen Diskusi (`/admin/discussions`) memungkinkan admin memantau dan mengelola semua sesi diskusi Socratic.
-
-[Screenshot: admin-discussions]
-
-#### Fitur Utama:
-
-**Daftar Sesi Diskusi:**
-- Filter status: Semua Status, Sedang Berlangsung, Selesai.
-- Setiap sesi menampilkan:
-  - Nama mahasiswa/email.
-  - Judul modul dan subtopik.
-  - Fase saat ini (Diagnosis/Penjelasan/Latihan/Konsolidasi/Selesai).
-  - Health Score.
-
-**Health Score:**
-| Warna | Keterangan |
-|---|---|
-| Hijau | Diskusi berjalan lancar |
-| Kuning | Ada potensi masalah |
-| Merah | Memerlukan perhatian admin |
-
-**Detail Sesi:**
-- Informasi lengkap mahasiswa.
-- Fase dan status diskusi.
-- Thread pesan (percakapan antara mentor dan mahasiswa).
-- Goal tracking (tujuan yang sudah dan belum tercapai).
-- Prasyarat modul (status kesiapan subtopik dan quiz).
-
-**Admin Actions:**
-- Admin dapat memberikan **feedback** atau catatan pada sesi diskusi.
-
----
-
-### 3.5 Insights
-
-Halaman Insights (`/admin/insights`) menyediakan analisis agregat tentang pola belajar mahasiswa.
-
-[Screenshot: admin-insights]
-
-#### Filter yang Tersedia:
-- **Per Mahasiswa:** Pilih mahasiswa tertentu untuk analisis individual.
-- **Per Kursus:** Pilih kursus tertentu.
-- **Rentang Waktu:** 7 hari, 30 hari, 90 hari, atau semua.
-
-#### Konten Insights:
-- **Prompt Evolution Chart:** Grafik evolusi kualitas prompt mahasiswa dari waktu ke waktu.
-- **Ringkasan Mahasiswa:** Statistik agregat per mahasiswa.
-- **Analisis Pola Belajar:** Data tentang bagaimana mahasiswa berinteraksi dengan platform.
-- **Export:** Unduh data insights.
-
----
-
-### 3.6 Research Dashboard
-
-Research Dashboard (`/admin/research`) adalah pusat analisis data untuk keperluan penelitian thesis.
-
-[Screenshot: admin-research]
-
-#### Halaman Utama Research
-
-**KPI Research:**
-| KPI | Keterangan |
-|---|---|
-| Total Sesi | Jumlah total sesi interaksi |
-| Total Klasifikasi | Jumlah klasifikasi prompt yang dilakukan |
-| Total Indikator | Jumlah indikator kognitif yang terdeteksi |
-| Total Mahasiswa | Jumlah mahasiswa yang terdata |
-
-**Distribusi Stage:**
-- Persentase mahasiswa di setiap tahap: SCP, SRP, MQP, Reflektif.
-- Visualisasi chart (heatmap dan progression chart).
-
-#### Sub-halaman Research:
-
-| Halaman | Path | Keterangan |
-|---|---|---|
-| **Classifications** | `/admin/research/classifications` | Data klasifikasi prompt secara detail |
-| **Indicators** | `/admin/research/indicators` | Breakdown indikator Critical Thinking dan Computational Thinking |
-| **Sessions** | `/admin/research/sessions` | Analisis mendalam sesi diskusi |
-| **Export** | `/admin/research/export` | Export data penelitian |
-
-#### Export Data Penelitian (`/admin/research/export`)
-
-Tersedia beberapa tipe dan format export:
-
-| Tipe Export | Keterangan |
-|---|---|
-| **Sessions** | Data sesi interaksi |
-| **Classifications** | Data klasifikasi prompt |
-| **Indicators** | Data indikator CT/CTh |
-| **SPSS** | Format khusus untuk analisis statistik SPSS |
-| **Full** | Semua data penelitian dalam satu paket |
-
-**Format:** JSON atau CSV.
-
-**Filter Export:**
-- Filter berdasarkan User ID, tanggal mulai, dan tanggal akhir.
-
----
-
-### 3.7 Activity Log
-
-Halaman Activity Log (`/admin/activity`) mencatat semua aktivitas pengguna di platform secara mendetail.
-
-[Screenshot: admin-activity]
-
-#### Tipe Aktivitas yang Dilacak:
-
-| Ikon | Tipe | Keterangan |
-|---|---|---|
-| Buku | Course Generation | Log pembuatan kursus (termasuk request payload, outline) |
-| Tanda Tanya | Ask Question | Log pertanyaan yang diajukan (pertanyaan, jawaban, reasoning note, prompt components) |
-| Target | Challenge | Log challenge thinking |
-| Checkbox | Quiz | Log pengerjaan kuis |
-| Bintang | Feedback | Log pemberian feedback/rating |
-| Pesan | Discussion | Log sesi diskusi |
-| File | Transcript | Log transkrip yang disimpan |
-| Edit | Journal | Log jurnal refleksi |
-
-#### Fitur:
-- **Filter** berdasarkan tipe aktivitas.
-- **Pencarian** berdasarkan email pengguna.
-- Setiap log entry menampilkan timestamp, tipe aksi, dan email pengguna.
-- Klik entry untuk melihat detail lengkap (untuk Jurnal dan Transkrip, modal detail akan terbuka).
-
----
-
-### 3.8 Registrasi Admin Baru
-
-Pendaftaran admin baru hanya dapat dilakukan oleh admin yang sudah terdaftar.
-
-**Langkah-langkah:**
-
-1. Login sebagai admin.
-2. Buka halaman `/admin/register`.
-3. Isi email dan password untuk akun admin baru.
-4. Submit formulir.
-5. Akun admin baru akan dibuat dan bisa langsung digunakan untuk login.
-
-> **Catatan:** Tidak ada fitur self-registration untuk admin. Hanya admin yang sudah ada yang bisa membuat akun admin baru.
-
----
-
-## 4. Tips dan Pertanyaan Umum (FAQ)
-
-### Pertanyaan Umum
-
-**T: Bagaimana jika saya lupa password?**
-J: Saat ini belum tersedia fitur reset password secara mandiri. Silakan hubungi administrator untuk mendapatkan bantuan.
-
-**T: Apakah data saya tersimpan otomatis?**
-J: Ya, semua aktivitas Anda tersimpan secara otomatis ke database. Ini termasuk jawaban quiz, jurnal refleksi, riwayat tanya-jawab, challenge thinking, dan progres diskusi.
-
-**T: Apakah PrincipleLearn bisa diakses dari HP/tablet?**
-J: Ya, tampilan PrincipleLearn sudah responsive dan dapat digunakan di berbagai ukuran layar, termasuk smartphone dan tablet.
-
-**T: Berapa banyak kursus yang bisa saya buat?**
-J: Tidak ada batasan jumlah kursus. Anda bisa membuat sebanyak yang Anda butuhkan.
-
-**T: Bagaimana jika AI gagal meng-generate kursus?**
-J: Ada beberapa kemungkinan penyebab:
-- **Timeout:** Jika topik terlalu luas, proses bisa melebihi batas waktu. Coba gunakan topik yang lebih spesifik.
-- **Rate limit:** Platform membatasi 30 request per jam. Tunggu beberapa menit sebelum mencoba lagi.
-- **Server error:** Coba lagi dalam beberapa menit. Jika masalah berlanjut, hubungi administrator.
+**T: Berapa lama 1 course?**
+J: Sangat tergantung topik, level, dan kecepatan kamu. Kasaran: tiap subtopic 15–30 menit aktif (membaca + interaksi + kuis + refleksi). Course rata-rata punya beberapa modul, masing-masing 3–6 subtopic. Total bisa 4–10 jam — bisa dicicil banyak sesi.
 
 **T: Apakah jawaban quiz bisa diubah setelah submit?**
-J: Tidak. Setelah Anda menekan tombol Submit pada quiz, jawaban bersifat final dan tidak dapat diubah. Skor akan langsung dihitung dan disimpan.
+J: Tidak. Final setelah klik Submit. Pikir baik-baik dulu.
 
-**T: Apakah saya bisa melihat kembali challenge yang pernah saya kerjakan?**
-J: Ya. Riwayat challenge tersimpan dan dapat dilihat kembali di bagian "Previous Challenges" pada tab Challenge My Thinking.
+**T: Apakah saya bisa membuat banyak course?**
+J: Bisa, tidak ada batasan jumlah. Tapi sebaiknya selesaikan satu sebelum memulai berikutnya supaya fokus.
 
-**T: Apa itu PromptBuilder dan mengapa harus menggunakannya?**
-J: PromptBuilder adalah alat bantu untuk menyusun pertanyaan yang terstruktur. Dengan menyusun pertanyaan secara terstruktur (tujuan, konteks, batasan), Anda melatih kemampuan berpikir kritis dan kualitas prompt Anda, yang merupakan salah satu tujuan utama platform ini. Mode "Simple" juga tersedia jika Anda ingin langsung mengetik pertanyaan.
+**T: Apakah PrincipleLearn bisa di HP?**
+J: Bisa. Tampilan responsive. Untuk pengalaman terbaik (terutama Ask Question dan Challenge yang banyak menulis), laptop atau tablet lebih nyaman.
 
-**T: Apa bedanya "Remember me" dicentang dan tidak?**
-J: Jika dicentang, sesi login Anda berlaku selama 7 hari. Jika tidak dicentang, sesi berakhir setelah 2 jam atau ketika browser ditutup (mana yang lebih dulu).
+**T: Apa bedanya "Remember me" dicentang vs tidak?**
+J: Dicentang → sesi 7 hari. Tidak dicentang → 2 jam atau saat browser ditutup. Pakai "Remember me" hanya di perangkat pribadi.
 
-**T: Apa prasyarat untuk memulai Diskusi Penutup modul?**
-J: Semua subtopik dalam modul tersebut harus sudah digenerate kontennya (dibuka) dan semua quiz pada setiap subtopik harus sudah dikerjakan. Halaman diskusi akan menampilkan daftar checklist yang menunjukkan status kesiapan setiap subtopik.
+**T: Saya pernah baca dokumentasi yang menyebut Diskusi Modul. Wajib tidak?**
+J: Untuk peserta riset thesis ini, modul Diskusi **tidak wajib**. Kalau peneliti memintamu memakainya, akan ada instruksi terpisah.
 
-**T: Bisakah saya melanjutkan diskusi yang tertunda?**
-J: Ya. Diskusi yang belum selesai akan menyimpan progress Anda. Kembali ke halaman overview kursus dan klik "Lanjutkan Diskusi" pada kartu diskusi yang bersangkutan.
+**T: Datanya disimpan di mana?**
+J: Di database Supabase (PostgreSQL) yang dikelola peneliti. Akses dibatasi dengan otentikasi dan RLS (row-level security). Lihat bagian 10 untuk detail.
 
----
-
-### Tips untuk Pengalaman Belajar Optimal
-
-1. **Isi profil onboarding dengan jujur.** Informasi tentang pengalaman, gaya belajar, dan tantangan Anda membantu AI menyesuaikan konten dan tingkat kesulitan.
-
-2. **Gunakan PromptBuilder dalam mode Guided.** Menyusun pertanyaan secara terstruktur bukan hanya membantu mendapat jawaban lebih baik, tapi juga melatih kemampuan berpikir kritis Anda.
-
-3. **Tulis Reasoning Note di setiap quiz.** Meskipun opsional, menuliskan alasan pilihan jawaban membantu Anda memproses pemahaman secara lebih mendalam.
-
-4. **Jangan lewatkan Structured Reflection.** Bagian refleksi di akhir setiap subtopik sangat penting untuk mengonsolidasikan pemahaman Anda.
-
-5. **Manfaatkan ketiga fitur interaktif.** Kombinasikan Ask Question, Challenge Thinking, dan Examples untuk mendapatkan pemahaman yang menyeluruh tentang setiap topik.
-
-6. **Selesaikan semua subtopik sebelum memulai Diskusi Penutup.** Diskusi Socratic dirancang untuk merekap seluruh modul, jadi pastikan Anda sudah mempelajari semua materi terlebih dahulu.
-
-7. **Perhatikan Prompt Journey Timeline.** Timeline ini menunjukkan bagaimana cara Anda bertanya berkembang dari waktu ke waktu -- indikator penting dalam perkembangan kemampuan berpikir kritis.
-
-8. **Isi masalah dunia nyata dan asumsi awal dengan serius** saat membuat kursus (Step 3). Informasi ini membantu AI menghasilkan konten yang lebih relevan dan kontekstual untuk kebutuhan Anda.
+**T: Saya nemu bug. Lapor ke siapa?**
+J: Hubungi peneliti. Sertakan: halaman/URL, langkah reproduksi, screenshot error (kalau ada), jam kejadian. Itu sangat membantu debugging.
 
 ---
 
-### Glosarium
+## 13. Glosarium
 
-| Istilah | Keterangan |
+| Istilah | Arti |
 |---|---|
-| **CT (Critical Thinking)** | Berpikir kritis -- kemampuan menganalisis, mengevaluasi, dan menyintesis informasi |
-| **CTh (Computational Thinking)** | Berpikir komputasional -- kemampuan memecah masalah, mengenali pola, abstraksi, dan merancang algoritma |
-| **SCP (Simple Copy-Paste)** | Tahap prompt awal di mana mahasiswa hanya menyalin pertanyaan sederhana |
-| **SRP (Structured Prompt)** | Tahap di mana mahasiswa mulai menyusun pertanyaan yang terstruktur |
-| **MQP (Multi-Quality Prompt)** | Tahap di mana mahasiswa memberikan konteks dan batasan dalam pertanyaan |
-| **Reflektif** | Tahap tertinggi di mana mahasiswa menyertakan refleksi dan evaluasi dalam pertanyaan |
-| **Metode Socratic** | Metode diskusi yang menggunakan pertanyaan-pertanyaan terstruktur untuk mendorong pemahaman mendalam |
-| **PromptBuilder** | Alat bantu di dalam platform untuk menyusun pertanyaan terstruktur |
-| **Reasoning Note** | Catatan alasan yang ditulis mahasiswa untuk menjelaskan pilihan atau pemikiran mereka |
-| **Learning Goals** | Tujuan pembelajaran yang harus dicapai dalam sesi diskusi |
-| **Onboarding** | Proses pengaturan profil awal saat pertama kali menggunakan platform |
+| **Course** | Satu unit pembelajaran lengkap pada satu topik. Terdiri dari beberapa modul. |
+| **Modul** | Bagian besar dalam course. Berisi beberapa subtopic. |
+| **Subtopic** | Unit terkecil pembelajaran. Punya konten, examples, ask question, challenge, kuis, dan refleksi. |
+| **Leaf subtopic** | Subtopic yang bisa diakses langsung (tidak punya anak). Lawannya: subtopic kontainer. |
+| **Quiz** | 5 soal pilihan ganda di akhir setiap subtopic. |
+| **Reasoning Note** | Catatan alasan singkat — kenapa pilih jawaban tertentu, kenapa bertanya itu. |
+| **Structured Reflection** | Jurnal refleksi terstruktur 4 pertanyaan di akhir subtopic. |
+| **Key Takeaways** | Ringkasan poin penting subtopic. |
+| **PromptBuilder** | Alat bantu menyusun pertanyaan AI dengan komponen Tujuan / Konteks / Batasan. |
+| **Prompt Timeline** | Visualisasi evolusi cara kamu menyusun prompt dari waktu ke waktu. |
+| **Help Drawer** | Drawer panduan kontekstual yang dibuka dari tombol bantuan di subtopic. |
+| **Product Tour** | Tour interaktif tooltip yang muncul sekali di halaman utama. |
+| **Onboarding** | Proses setup awal: profil belajar + slide pengenalan. Wajib selesai sekali. |
+| **CT (Critical Thinking)** | Berpikir kritis: analisis, evaluasi, sintesis informasi. |
+| **CTh (Computational Thinking)** | Berpikir komputasional: dekomposisi, pengenalan pola, abstraksi, algoritma. |
+| **SCP** | Simple Copy-Paste — tahap prompt paling dasar. |
+| **SRP** | Structured Prompt — prompt mulai terstruktur. |
+| **MQP** | Multi-Quality Prompt — prompt menyertakan konteks dan batasan. |
+| **Reflektif** | Tahap prompt tertinggi — pertanyaan disertai refleksi dan evaluasi diri. |
 
 ---
 
-*Dokumen ini merupakan bagian dari dokumentasi PrincipleLearn V3 untuk keperluan penelitian thesis.*
+*Panduan ini bagian dari dokumentasi PrincipleLearn V3 untuk peserta riset thesis. Kalau ada bagian yang kurang jelas atau perlu ditambahkan, beri tahu peneliti.*

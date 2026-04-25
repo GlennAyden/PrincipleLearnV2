@@ -40,11 +40,19 @@ graph TD
 |-------------|-------|----------------------|
 | Quiz Submissions | Kuantitatif | Skor, pola jawaban benar/salah |
 | Challenge Responses | Kualitatif | Isi respons, perubahan setelah feedback |
-| Discussion Messages | Kualitatif | Kedalaman dialog, kualitas argumen |
 | Ask Question | Kualitatif | Tingkat pertanyaan, fokus |
-| Journal Entries | Kualitatif | Kedalaman refleksi |
+| Structured Reflection (Journal) | Kualitatif | Kedalaman refleksi |
 | Course Feedback | Mixed | Rating + komentar |
 | Request Course Form | Kualitatif | Kejelasan kebutuhan belajar |
+| Prompt Builder + Timeline | Kualitatif | Evolusi struktur prompt (RM2) |
+| Reasoning Note | Kualitatif | Marker reflektif sebelum bertanya |
+
+> Catatan: rubrik untuk **Discussion (Socratic)** masih dipertahankan di Bab di
+> bawah sebagai referensi konseptual, tetapi modul Discussion **tidak digunakan**
+> untuk pengumpulan data tesis pada periode 2026 (lihat
+> [`ADMIN_RM2_RM3_DATA_COMPLETENESS.md`](./ADMIN_RM2_RM3_DATA_COMPLETENESS.md)
+> bagian 2.6). Sumber data utama berpindah ke Ask Question, Challenge Thinking,
+> dan Structured Reflection.
 
 ---
 

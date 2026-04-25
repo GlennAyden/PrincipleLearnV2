@@ -51,12 +51,36 @@ Berikut saran pemetaan per fitur ke indikator **Critical Thinking (CT)** dan **C
 - **CPT**: Debugging / Error Correction (opsional)  
   Jika ada bagian feedback yang mengusulkan perbaikan langkah atau alur, itu bisa dipetakan ke kemampuan menemukan dan mengusulkan perbaikan “prosedur”.
 
-### Discussion (Socratic discussion engine)
+### Discussion (Socratic discussion engine) — TIDAK DIPAKAI untuk Tesis
 
-- **CT**: Analysis, Explanation, Inference, Self‑Regulation  
-  Pertukaran pesan (jawaban, justifikasi, penutup) sangat cocok dianalisis untuk melihat cara mereka mengurai masalah, menjelaskan ulang, menarik kesimpulan, dan merefleksi di akhir sesi.
-- **CPT**: Decomposition  
-  Ketika mahasiswa diminta memecah masalah atau studi kasus dalam diskusi, kita bisa menandai bagian itu sebagai indikator pemecahan masalah kompleks.
+> Catatan 2026-04-26: modul Discussion **tidak digunakan** untuk pengumpulan
+> data tesis. Hanya 5 sesi historis pada `discussion_sessions`. Pemetaan di
+> bawah dipertahankan sebagai referensi konseptual; aktivitas Sokratik dialihkan
+> ke Ask Question dan Challenge Thinking.
+
+- **CT**: Analysis, Explanation, Inference, Self‑Regulation
+- **CPT**: Decomposition
+
+### Prompt Builder + Prompt Timeline (RM2 instrumen)
+
+- **CT**: Self-Regulation
+  Siswa secara eksplisit menyusun ulang prompt dan melihat evolusinya, melatih
+  kesadaran metakognitif tentang cara bertanya.
+- **CPT**: Decomposition, Abstraction
+  Builder memandu siswa memecah pertanyaan dan memfokuskan pada inti.
+
+### Reasoning Note
+
+- **CT**: Self-Regulation, Explanation
+  Catatan alur penalaran sebelum bertanya menjadi marker tahap Reflective pada
+  klasifikasi RM2 dan bukti Self-Regulation pada RM3.
+
+### Structured Reflection (Jurnal terstruktur)
+
+- **CT**: Self-Regulation, Explanation, Evaluation
+  Refleksi terstruktur (What — So What — Now What) memberi data tekstual
+  paling kaya untuk indikator Self-Regulation. Tabel `jurnal` (43 baris per
+  2026-04-26) adalah sumber utama untuk RM3.
 
 ### Request Course (step 1–3: topik, goal, level, problem, assumption)
 
