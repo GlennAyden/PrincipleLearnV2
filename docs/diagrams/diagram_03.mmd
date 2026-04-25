@@ -1,0 +1,21 @@
+flowchart TD
+    A[Sign Up / Login] --> B[Onboarding Edukatif]
+    B --> C[Request Course<br/>Step 1: Topik & Tujuan]
+    C --> D[Step 2: Level & Topik Tambahan]
+    D --> E[Step 3: Masalah & Asumsi]
+    E --> F[/Generating: AI buat course/]
+    F --> G[Course View]
+    G --> H[Subtopic Page]
+    H --> I{Pilih Aktivitas}
+    I --> J[Ask Question]
+    I --> K[Challenge Thinking]
+    I --> L[Kuis]
+    I --> M[Jurnal & Transkrip]
+    I --> N[Diskusi Modul]
+    J --> H
+    K --> H
+    L --> O[Submit Kuis]
+    M --> H
+    N --> H
+    O --> P[Progress Tersimpan]
+    P --> H

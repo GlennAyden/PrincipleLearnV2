@@ -1,0 +1,27 @@
+flowchart LR
+    subgraph Browser[Klien / Browser Siswa]
+        UI[Komponen React]
+        APIClient[apiFetch + CSRF]
+        Ctx[RequestCourseContext]
+    end
+
+    subgraph NextServer[Server Next.js 15 / Vercel]
+        MW[middleware.ts<br/>auth + role check]
+        Routes[Route Handlers<br/>src/app/api/*]
+        Services[Service Layer<br/>auth / course / ai]
+        Logger[withApiLogging]
+    end
+
+    subgraph External[Layanan Eksternal]
+        SB[(Supabase Postgres<br/>+ RLS)]
+        OAI[OpenAI API]
+    end
+
+    UI --> APIClient
+    APIClient -- "JWT cookie + x-csrf-token" --> MW
+    MW --> Routes
+    Routes --> Services
+    Services --> SB
+    Services --> OAI
+    Routes --> Logger
+    Logger --> SB

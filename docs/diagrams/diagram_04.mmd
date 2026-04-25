@@ -1,0 +1,17 @@
+sequenceDiagram
+    participant S as Siswa
+    participant FE as Komponen UI
+    participant API as Route Handler
+    participant AI as ai.service.ts
+    participant OAI as OpenAI
+
+    S->>FE: Mengetik pertanyaan / jawaban
+    FE->>API: POST /api/ask-question (CSRF + JWT)
+    API->>API: parseBody (Zod) + sanitizePromptInput
+    API->>AI: chatCompletionStream(messages)
+    AI->>OAI: stream request
+    OAI-->>AI: token stream
+    AI-->>API: stream chunks
+    API-->>FE: stream chunks
+    FE-->>S: render bertahap
+    API->>API: tulis ke ask_question_history (async)
