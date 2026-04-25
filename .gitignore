@@ -66,9 +66,7 @@ yarn-error.log*
 /.vibe/
 /.windsurf/
 /.zencoder/
-/.claude/skills/
-/.claude/agents/
-/.claude/scheduled_tasks.lock
+/.claude/
 /.vscode/
 /skills/
 /skills-lock.json
