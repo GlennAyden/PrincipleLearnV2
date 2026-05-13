@@ -15,6 +15,7 @@ interface LearningProfileRow {
   learning_style?: string;
   learning_goals?: string;
   challenges?: string;
+  preferred_language?: 'id' | 'en';
   created_at?: string | null;
   updated_at?: string | null;
 }
@@ -29,6 +30,7 @@ function sanitizeProfile(profile: LearningProfileRow | null) {
     learningStyle: profile.learning_style ?? '',
     learningGoals: profile.learning_goals ?? '',
     challenges: profile.challenges ?? '',
+    preferredLanguage: profile.preferred_language ?? 'id',
     createdAt: profile.created_at ?? null,
     updatedAt: profile.updated_at ?? null,
   };
@@ -99,22 +101,31 @@ async function postHandler(request: NextRequest) {
       learningStyle,
       learningGoals,
       challenges,
+      preferredLanguage,
     } = parsed.data;
 
     const userId = payload.userId;
 
-    // Upsert profile
+    // Build upsert payload — only include fields the client actually sent
+    // (LearningProfileSchema makes them optional now). The CHECK constraint
+    // on preferred_language guarantees only 'id'|'en' reach the DB.
+    const upsertPayload: Record<string, unknown> = {
+      user_id: userId,
+      updated_at: new Date().toISOString(),
+    };
+    if (displayName !== undefined) upsertPayload.display_name = displayName;
+    if (programmingExperience !== undefined) upsertPayload.programming_experience = programmingExperience;
+    if (learningStyle !== undefined) upsertPayload.learning_style = learningStyle;
+    if (learningGoals !== undefined && learningGoals !== '') upsertPayload.learning_goals = learningGoals;
+    if (challenges !== undefined && challenges !== '') upsertPayload.challenges = challenges;
+    if (preferredLanguage !== undefined) upsertPayload.preferred_language = preferredLanguage;
+
     const { data, error } = await adminDb
       .from('learning_profiles')
-      .upsert({
-        user_id: userId,
-        display_name: displayName,
-        programming_experience: programmingExperience,
-        learning_style: learningStyle,
-        learning_goals: learningGoals,
-        challenges: challenges,
-        updated_at: new Date().toISOString(),
-      }, { onConflict: 'user_id' }) as { data: LearningProfileRow[] | LearningProfileRow | null; error: { message: string } | null };
+      .upsert(upsertPayload, { onConflict: 'user_id' }) as {
+        data: LearningProfileRow[] | LearningProfileRow | null;
+        error: { message: string } | null;
+      };
 
     if (error) {
       console.error('[LearningProfile] Save error:', error);
