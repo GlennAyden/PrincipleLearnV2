@@ -285,12 +285,16 @@ export type UserProgressUpsertInput = z.infer<typeof UserProgressUpsertSchema>;
 // Note: `userId` is intentionally NOT part of this schema — the API route
 // MUST derive it from the JWT payload to prevent IDOR-style overrides.
 export const LearningProfileSchema = z.object({
-  displayName: z.string().trim().min(1, 'displayName diperlukan'),
-  programmingExperience: z.string().trim().min(1, 'programmingExperience diperlukan'),
-  learningStyle: z.string().trim().min(1, 'learningStyle diperlukan'),
+  displayName: z.string().trim().min(1, 'displayName diperlukan').optional(),
+  programmingExperience: z.string().trim().min(1, 'programmingExperience diperlukan').optional(),
+  learningStyle: z.string().trim().min(1, 'learningStyle diperlukan').optional(),
   learningGoals: z.string().trim().optional().default(''),
   challenges: z.string().trim().optional().default(''),
-});
+  preferredLanguage: z.enum(['id', 'en']).optional(),
+}).refine(
+  (data) => Object.values(data).some((v) => v !== undefined && v !== ''),
+  { message: 'Setidaknya satu field harus diisi' }
+);
 
 // ── Onboarding state schema ────────────────────────────────────────
 // Server-authoritative flags backing the post-signup slide deck and the
