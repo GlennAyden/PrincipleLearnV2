@@ -62,9 +62,9 @@ describe('dict', () => {
   it('has non-empty values in every entry', () => {
     for (const locale of ['id', 'en'] as const) {
       for (const [key, value] of Object.entries(dict[locale])) {
-        expect(value).withContext?.(`${locale}.${key}`) ?? expect(value);
-        expect(typeof value).toBe('string');
-        expect(value.length).toBeGreaterThan(0);
+        if (typeof value !== 'string' || value.length === 0) {
+          throw new Error(`dict.${locale}.${key} must be a non-empty string`);
+        }
       }
     }
   });

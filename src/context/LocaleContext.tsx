@@ -26,9 +26,14 @@ function writeLocaleCookie(next: Locale) {
   if (typeof document === 'undefined') return;
   // Match the cookie spec of onboarding_done / intro_slides_done so the
   // browser treats locale identically (visible to client JS, Lax SameSite,
-  // sent with same-site navigations).
+  // sent with same-site navigations). Secure flag matches onboarding cookies
+  // when running under HTTPS so we don't get stripped by mixed-content rules.
+  const secure =
+    typeof window !== 'undefined' && window.location.protocol === 'https:'
+      ? '; Secure'
+      : '';
   document.cookie =
-    `${LOCALE_COOKIE}=${next}; Path=/; SameSite=Lax; Max-Age=${ONE_YEAR_SECONDS}`;
+    `${LOCALE_COOKIE}=${next}; Path=/; SameSite=Lax; Max-Age=${ONE_YEAR_SECONDS}${secure}`;
 }
 
 export function LocaleProvider({
@@ -47,13 +52,15 @@ export function LocaleProvider({
 
     // Fire-and-forget DB persistence. We deliberately do NOT block the UI on
     // this — the cookie is already the immediate source of truth for the
-    // current tab, and the next login will re-sync from DB regardless.
+    // current tab, and the next login will re-sync from DB regardless. A
+    // missing profile (user pre-onboarding) or transient network error is
+    // acceptable here, but we still surface it so a stuck locale shows up in
+    // devtools rather than vanishing.
     apiFetch('/api/learning-profile', {
       method: 'POST',
       body: JSON.stringify({ preferredLanguage: next }),
-    }).catch(() => {
-      // Swallow: a missing profile (user pre-onboarding) or transient network
-      // error is acceptable here. The UX guard (cookie) is already updated.
+    }).catch((err) => {
+      console.warn('[locale] failed to persist preferredLanguage', err);
     });
   }, [locale]);
 
