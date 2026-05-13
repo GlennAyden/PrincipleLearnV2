@@ -5,6 +5,7 @@ import {
   isLocale,
   parseLocale,
 } from '@/lib/i18n/locale';
+import { dict } from '@/lib/i18n/dict';
 
 describe('locale helpers', () => {
   describe('constants', () => {
@@ -50,5 +51,21 @@ describe('locale helpers', () => {
       expect(parseLocale(null)).toBe(DEFAULT_LOCALE);
       expect(parseLocale('')).toBe(DEFAULT_LOCALE);
     });
+  });
+});
+
+describe('dict', () => {
+  it('has identical key sets in id and en', () => {
+    expect(Object.keys(dict.id).sort()).toEqual(Object.keys(dict.en).sort());
+  });
+
+  it('has non-empty values in every entry', () => {
+    for (const locale of ['id', 'en'] as const) {
+      for (const [key, value] of Object.entries(dict[locale])) {
+        expect(value).withContext?.(`${locale}.${key}`) ?? expect(value);
+        expect(typeof value).toBe('string');
+        expect(value.length).toBeGreaterThan(0);
+      }
+    }
   });
 });
