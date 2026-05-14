@@ -7,6 +7,9 @@ import styles from './page.module.scss';
 import { useAuth } from '@/hooks/useAuth';
 import { useOnboardingState } from '@/hooks/useOnboardingState';
 import { apiFetch } from '@/lib/api-client';
+import LanguageToggle from '@/components/LanguageToggle/LanguageToggle';
+import { useLocale } from '@/context/LocaleContext';
+import type { DictKey } from '@/lib/i18n/dict';
 
 interface SlideConfig {
   emoji: string;
@@ -15,51 +18,55 @@ interface SlideConfig {
   bullets?: string[];
 }
 
-const SLIDES: SlideConfig[] = [
-  {
-    emoji: '👋',
-    title: 'Selamat datang di PrincipleLearn',
-    body: 'Platform belajar personal berbasis AI. Course kamu dirakit sesuai topik, tujuan, dan gaya belajarmu — bukan satu kurikulum untuk semua orang.',
-  },
-  {
-    emoji: '🧠',
-    title: 'Belajar dengan berpikir, bukan menghafal',
-    body: 'Setiap subtopic punya alat bantu yang mendorong kamu aktif:',
-    bullets: [
-      'Tanya AI kapan saja saat bingung',
-      'Quiz cepat untuk cek pemahaman',
-      'Challenge berpikir kritis + feedback AI',
-      'Jurnal refleksi untuk menguatkan ingatan',
-    ],
-  },
-  {
-    emoji: '🗺️',
-    title: 'Alurmu di sini',
-    body: 'Urutan belajar yang disarankan:',
-    bullets: [
-      '1. Buat course sesuai topik yang ingin dikuasai',
-      '2. Pelajari subtopic satu per satu',
-      '3. Selesaikan quiz & tulis refleksi',
-      '4. Modul selesai → Diskusi modul terbuka',
-    ],
-  },
-  {
-    emoji: '🚀',
-    title: 'Siap mulai?',
-    body: 'Kamu bisa panggil panduan ini lagi kapan saja lewat tombol bantuan di tiap subtopic. Kita mulai dari membuat course pertamamu.',
-  },
-];
+function buildSlides(t: (key: DictKey) => string): SlideConfig[] {
+  return [
+    {
+      emoji: '👋',
+      title: t('intro_slide1_title'),
+      body: t('intro_slide1_body'),
+    },
+    {
+      emoji: '🧠',
+      title: t('intro_slide2_title'),
+      body: t('intro_slide2_body'),
+      bullets: [
+        t('intro_slide2_bullet1'),
+        t('intro_slide2_bullet2'),
+        t('intro_slide2_bullet3'),
+        t('intro_slide2_bullet4'),
+      ],
+    },
+    {
+      emoji: '🗺️',
+      title: t('intro_slide3_title'),
+      body: t('intro_slide3_body'),
+      bullets: [
+        t('intro_slide3_bullet1'),
+        t('intro_slide3_bullet2'),
+        t('intro_slide3_bullet3'),
+        t('intro_slide3_bullet4'),
+      ],
+    },
+    {
+      emoji: '🚀',
+      title: t('intro_slide4_title'),
+      body: t('intro_slide4_body'),
+    },
+  ];
+}
 
 export default function OnboardingIntroPage() {
   const router = useRouter();
   const { user, isLoading: authLoading, isAuthenticated } = useAuth();
   const { state, loading: stateLoading, markCompleted } = useOnboardingState(isAuthenticated);
+  const { t } = useLocale();
 
   const [index, setIndex] = useState(0);
   const [finishing, setFinishing] = useState(false);
 
-  const lastIndex = SLIDES.length - 1;
-  const slide = useMemo(() => SLIDES[index], [index]);
+  const slides = useMemo(() => buildSlides(t), [t]);
+  const lastIndex = slides.length - 1;
+  const slide = slides[index];
 
   useEffect(() => {
     if (!authLoading && !isAuthenticated) {
@@ -130,7 +137,7 @@ export default function OnboardingIntroPage() {
   }
 
   if (authLoading || stateLoading) {
-    return <div className={styles.loadingPage}>Memuat…</div>;
+    return <div className={styles.loadingPage}>{t('intro_loading')}</div>;
   }
 
   return (
@@ -138,13 +145,24 @@ export default function OnboardingIntroPage() {
       <div className={styles.bgOrb1} />
       <div className={styles.bgOrb2} />
 
+      <div
+        style={{
+          position: 'fixed',
+          top: '1rem',
+          right: '1rem',
+          zIndex: 50,
+        }}
+      >
+        <LanguageToggle />
+      </div>
+
       <button
         type="button"
         className={styles.skipBtn}
         onClick={finish}
         disabled={finishing}
       >
-        Lewati
+        {t('intro_skip')}
       </button>
 
       <div className={styles.card}>
@@ -161,8 +179,8 @@ export default function OnboardingIntroPage() {
           </ul>
         )}
 
-        <div className={styles.dots} role="tablist" aria-label="Slide progress">
-          {SLIDES.map((_, i) => (
+        <div className={styles.dots} role="tablist" aria-label={t('intro_progress_label')}>
+          {slides.map((_, i) => (
             <span
               key={i}
               role="tab"
@@ -175,7 +193,7 @@ export default function OnboardingIntroPage() {
         <div className={styles.nav}>
           {index > 0 ? (
             <button type="button" className={styles.backBtn} onClick={handleBack}>
-              ← Kembali
+              {t('intro_back')}
             </button>
           ) : (
             <span />
@@ -187,10 +205,10 @@ export default function OnboardingIntroPage() {
             disabled={finishing}
           >
             {finishing
-              ? 'Memuat…'
+              ? t('intro_finishing')
               : index === lastIndex
-                ? '🚀 Mulai belajar'
-                : 'Lanjut →'}
+                ? t('intro_finish')
+                : t('intro_next')}
           </button>
         </div>
       </div>

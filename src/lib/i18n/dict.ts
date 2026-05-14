@@ -47,6 +47,33 @@ const id = {
   tour_step4_title: 'Diskusi modul',
   tour_step4_body:
     'Di akhir tiap modul ada Diskusi Penutup. Terbuka setelah semua subtopic modul itu selesai (quiz + refleksi).',
+
+  // ── Onboarding intro slides ──────────────────────────────────────
+  intro_loading: 'Memuat…',
+  intro_skip: 'Lewati',
+  intro_back: '← Kembali',
+  intro_next: 'Lanjut →',
+  intro_finish: '🚀 Mulai belajar',
+  intro_finishing: 'Memuat…',
+  intro_progress_label: 'Progres slide',
+  intro_slide1_title: 'Selamat datang di PrincipleLearn',
+  intro_slide1_body:
+    'Platform belajar personal berbasis AI. Course kamu dirakit sesuai topik, tujuan, dan gaya belajarmu — bukan satu kurikulum untuk semua orang.',
+  intro_slide2_title: 'Belajar dengan berpikir, bukan menghafal',
+  intro_slide2_body: 'Setiap subtopic punya alat bantu yang mendorong kamu aktif:',
+  intro_slide2_bullet1: 'Tanya AI kapan saja saat bingung',
+  intro_slide2_bullet2: 'Quiz cepat untuk cek pemahaman',
+  intro_slide2_bullet3: 'Challenge berpikir kritis + feedback AI',
+  intro_slide2_bullet4: 'Jurnal refleksi untuk menguatkan ingatan',
+  intro_slide3_title: 'Alurmu di sini',
+  intro_slide3_body: 'Urutan belajar yang disarankan:',
+  intro_slide3_bullet1: '1. Buat course sesuai topik yang ingin dikuasai',
+  intro_slide3_bullet2: '2. Pelajari subtopic satu per satu',
+  intro_slide3_bullet3: '3. Selesaikan quiz & tulis refleksi',
+  intro_slide3_bullet4: '4. Modul selesai → Diskusi modul terbuka',
+  intro_slide4_title: 'Siap mulai?',
+  intro_slide4_body:
+    'Kamu bisa panggil panduan ini lagi kapan saja lewat tombol bantuan di tiap subtopic. Kita mulai dari membuat course pertamamu.',
 } as const;
 
 const en = {
@@ -92,6 +119,33 @@ const en = {
   tour_step4_title: 'Module discussion',
   tour_step4_body:
     'A Closing Discussion waits at the end of each module. It unlocks once every subtopic in that module is complete (quiz + reflection).',
+
+  // ── Onboarding intro slides ──────────────────────────────────────
+  intro_loading: 'Loading…',
+  intro_skip: 'Skip',
+  intro_back: '← Back',
+  intro_next: 'Next →',
+  intro_finish: '🚀 Start learning',
+  intro_finishing: 'Loading…',
+  intro_progress_label: 'Slide progress',
+  intro_slide1_title: 'Welcome to PrincipleLearn',
+  intro_slide1_body:
+    'A personal, AI-powered learning platform. Your course is built around your topic, goal, and learning style — not a one-size-fits-all curriculum.',
+  intro_slide2_title: 'Learn by thinking, not memorising',
+  intro_slide2_body: 'Every subtopic ships with tools that keep you active:',
+  intro_slide2_bullet1: 'Ask AI any time you get stuck',
+  intro_slide2_bullet2: 'Quick quizzes to check your understanding',
+  intro_slide2_bullet3: 'Critical-thinking challenges with AI feedback',
+  intro_slide2_bullet4: 'A reflection journal to lock in what you learned',
+  intro_slide3_title: 'Your flow here',
+  intro_slide3_body: 'The suggested learning order:',
+  intro_slide3_bullet1: '1. Create a course around a topic you want to master',
+  intro_slide3_bullet2: '2. Work through the subtopics one by one',
+  intro_slide3_bullet3: '3. Finish the quiz and write your reflection',
+  intro_slide3_bullet4: '4. Module complete → the module Discussion unlocks',
+  intro_slide4_title: 'Ready to start?',
+  intro_slide4_body:
+    'You can pull up this guide any time via the help button in each subtopic. Let’s begin by creating your first course.',
 } as const satisfies Record<keyof typeof id, string>;
 
 export const dict = { id, en } as const;
