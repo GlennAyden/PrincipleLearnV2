@@ -169,6 +169,80 @@ const id = {
   request_course_step3_incomplete:
     'Data topik/level belum lengkap. Kembali ke langkah 1.',
 
+  // ── Subtopic page ───────────────────────────────────────────────
+  subtopic_loading_course: 'Memuat kursus…',
+  subtopic_error_course_not_found: 'Kursus tidak ditemukan',
+  subtopic_skeleton_section_prefix: 'Memuat section',
+  subtopic_skeleton_section_separator: 'dari',
+  subtopic_error_course_load: 'Failed to load course data',
+  subtopic_error_invalid_module: 'Invalid module or subtopic',
+  subtopic_error_progress_prefix: 'Gagal memuat progres belajar',
+  subtopic_error_progress_suffix:
+    'Silakan coba lagi sebelum melanjutkan materi.',
+  subtopic_error_locked:
+    'Selesaikan langkah sebelumnya terlebih dahulu sebelum membuka subtopik ini.',
+  subtopic_error_session_expired:
+    'Sesi Anda telah berakhir. Mengalihkan ke halaman login...',
+  subtopic_error_forbidden:
+    'Selesaikan langkah sebelumnya terlebih dahulu sebelum membuka subtopic ini',
+  subtopic_error_not_found: 'Course atau subtopic tidak ditemukan',
+  subtopic_error_rate_limit:
+    'Terlalu banyak permintaan ke AI. Tunggu beberapa detik lalu tekan "Coba lagi".',
+  subtopic_error_load_generic_prefix: 'Gagal memuat subtopic',
+  subtopic_error_load_retry_suffix: 'Tekan "Coba lagi" untuk mengulang.',
+  subtopic_error_unknown: 'Unknown error',
+  subtopic_error_quiz_regenerate: 'Gagal membuat kuis baru',
+  subtopic_success_quiz_saved: 'Kuis berhasil tersimpan. Kamu bisa melanjutkan.',
+  subtopic_success_reflection_saved:
+    'Refleksi tersimpan. Klik Selesai untuk menutup subtopik.',
+  subtopic_nav_warn_quiz_first:
+    'Selesaikan kuis terlebih dahulu. Hasil kuis harus berhasil tersimpan sebelum lanjut.',
+  subtopic_nav_warn_quiz_before_close:
+    'Selesaikan kuis terlebih dahulu sebelum menutup subtopik ini.',
+  subtopic_nav_warn_reflection_first:
+    'Harap mengisi feedback dulu. Refleksi harus berhasil tersimpan sebelum lanjut.',
+  subtopic_examples_error_prefix: 'Gagal generate contoh',
+  subtopic_challenge_save_error_server:
+    'Respons tantanganmu belum tersimpan di server',
+  subtopic_challenge_save_error_server_status: 'Server mengembalikan status',
+  subtopic_challenge_save_error_retry: 'Silakan coba lagi.',
+  subtopic_challenge_save_error_network:
+    'Respons tantanganmu belum tersimpan: koneksi terputus. Silakan coba lagi.',
+  subtopic_retry_button: 'Coba lagi',
+  subtopic_tab_ask: 'Tanya Pertanyaan',
+  subtopic_tab_challenge: 'Tantang Pemikiranku',
+  subtopic_tab_examples: 'Beri Contoh',
+  subtopic_history_title: 'Tantangan Sebelumnya:',
+  subtopic_answer_label: 'Jawabanmu:',
+  subtopic_reasoning_label: 'Penalaranmu:',
+  subtopic_new_challenge: 'Coba Tantangan Baru',
+  subtopic_pending_save_note_pre: 'Umpan balik AI sudah dibuat, tetapi respons ini belum tersimpan ke server. Tekan',
+  subtopic_pending_save_note_post: 'lagi untuk mencoba menyimpan ulang.',
+  subtopic_pending_save_action: 'Submit',
+  subtopic_regenerate_title: 'Buat pertanyaan tantangan baru',
+  subtopic_regenerate_label: 'Buat Ulang',
+  subtopic_answer_placeholder: 'Ketik jawabanmu di sini...',
+  subtopic_reasoning_placeholder: 'Mengapa kamu memilih jawaban ini? (opsional)',
+  subtopic_submit_button: 'Submit',
+  subtopic_loading_preparing: 'Menyiapkan pertanyaan...',
+  subtopic_loading_analyzing: 'Menganalisis materi...',
+  subtopic_loading_almost: 'Hampir siap...',
+  subtopic_new_question_button: 'Buat Pertanyaan Baru',
+  subtopic_generate_question_button: 'Generate Pertanyaan',
+  subtopic_section_takeaways_title: '💡 Poin Penting',
+  subtopic_section_takeaways_desc:
+    'Poin-poin penting yang perlu Anda ingat dari materi ini',
+  subtopic_section_quiz_title: '🧠 Waktu Kuis!',
+  subtopic_section_quiz_desc:
+    'Uji pemahaman Anda tentang materi yang telah dipelajari',
+  subtopic_section_feedback_title: '📝 Umpan Balik & Langkah Selanjutnya',
+  subtopic_section_feedback_desc:
+    'Berikan masukan dan lihat langkah selanjutnya dalam pembelajaran Anda',
+  subtopic_nav_syncing: 'Menyinkronkan progres…',
+  subtopic_nav_back: 'Kembali',
+  subtopic_nav_finish: 'Selesai',
+  subtopic_nav_next: 'Selanjutnya',
+
   // ── Course overview page ────────────────────────────────────────
   course_overview_loading: 'Kursus tidak ditemukan',
   course_overview_error_no_access: 'Anda tidak memiliki akses ke kursus ini',
@@ -432,6 +506,80 @@ const en = {
   request_course_step3_must_login: 'You must be logged in to create a course',
   request_course_step3_incomplete:
     'Topic / level data is incomplete. Going back to step 1.',
+
+  // ── Subtopic page ───────────────────────────────────────────────
+  subtopic_loading_course: 'Loading course…',
+  subtopic_error_course_not_found: 'Course not found',
+  subtopic_skeleton_section_prefix: 'Loading section',
+  subtopic_skeleton_section_separator: 'of',
+  subtopic_error_course_load: 'Failed to load course data',
+  subtopic_error_invalid_module: 'Invalid module or subtopic',
+  subtopic_error_progress_prefix: 'Failed to load learning progress',
+  subtopic_error_progress_suffix:
+    'Please try again before continuing with the material.',
+  subtopic_error_locked:
+    'Please complete the previous step before opening this subtopic.',
+  subtopic_error_session_expired:
+    'Your session has expired. Redirecting to the login page...',
+  subtopic_error_forbidden:
+    'Please complete the previous step before opening this subtopic',
+  subtopic_error_not_found: 'Course or subtopic not found',
+  subtopic_error_rate_limit:
+    'Too many requests to AI. Wait a few seconds, then press "Try again".',
+  subtopic_error_load_generic_prefix: 'Failed to load subtopic',
+  subtopic_error_load_retry_suffix: 'Press "Try again" to retry.',
+  subtopic_error_unknown: 'Unknown error',
+  subtopic_error_quiz_regenerate: 'Failed to create a new quiz',
+  subtopic_success_quiz_saved: 'Quiz saved successfully. You can continue.',
+  subtopic_success_reflection_saved:
+    'Reflection saved. Click Finish to close the subtopic.',
+  subtopic_nav_warn_quiz_first:
+    'Complete the quiz first. Your quiz result must be saved before continuing.',
+  subtopic_nav_warn_quiz_before_close:
+    'Complete the quiz first before closing this subtopic.',
+  subtopic_nav_warn_reflection_first:
+    'Please fill out the feedback first. Reflection must be saved before continuing.',
+  subtopic_examples_error_prefix: 'Failed to generate examples',
+  subtopic_challenge_save_error_server:
+    'Your challenge response has not been saved on the server',
+  subtopic_challenge_save_error_server_status: 'Server returned status',
+  subtopic_challenge_save_error_retry: 'Please try again.',
+  subtopic_challenge_save_error_network:
+    'Your challenge response was not saved: connection lost. Please try again.',
+  subtopic_retry_button: 'Try again',
+  subtopic_tab_ask: 'Ask a Question',
+  subtopic_tab_challenge: 'Challenge My Thinking',
+  subtopic_tab_examples: 'Give Examples',
+  subtopic_history_title: 'Previous Challenges:',
+  subtopic_answer_label: 'Your answer:',
+  subtopic_reasoning_label: 'Your reasoning:',
+  subtopic_new_challenge: 'Try a New Challenge',
+  subtopic_pending_save_note_pre: 'The AI feedback was generated, but the response has not been saved to the server. Press',
+  subtopic_pending_save_note_post: 'again to retry saving.',
+  subtopic_pending_save_action: 'Submit',
+  subtopic_regenerate_title: 'Generate a new challenge question',
+  subtopic_regenerate_label: 'Regenerate',
+  subtopic_answer_placeholder: 'Type your answer here...',
+  subtopic_reasoning_placeholder: 'Why did you choose this answer? (optional)',
+  subtopic_submit_button: 'Submit',
+  subtopic_loading_preparing: 'Preparing question...',
+  subtopic_loading_analyzing: 'Analyzing the material...',
+  subtopic_loading_almost: 'Almost ready...',
+  subtopic_new_question_button: 'Generate a New Question',
+  subtopic_generate_question_button: 'Generate Question',
+  subtopic_section_takeaways_title: '💡 Key Takeaways',
+  subtopic_section_takeaways_desc:
+    'The key points to remember from this material',
+  subtopic_section_quiz_title: '🧠 Quiz Time!',
+  subtopic_section_quiz_desc:
+    'Test your understanding of the material you have studied',
+  subtopic_section_feedback_title: '📝 Feedback & Next Steps',
+  subtopic_section_feedback_desc:
+    'Share your feedback and see the next steps in your learning',
+  subtopic_nav_syncing: 'Syncing progress…',
+  subtopic_nav_back: 'Back',
+  subtopic_nav_finish: 'Finish',
+  subtopic_nav_next: 'Next',
 
   // ── Course overview page ────────────────────────────────────────
   course_overview_loading: 'Course not found',

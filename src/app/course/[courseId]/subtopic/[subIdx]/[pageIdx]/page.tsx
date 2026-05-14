@@ -18,6 +18,8 @@ import WhatNext from '@/components/WhatNext/WhatNext';
 import NextSubtopics from '@/components/NextSubtopics/NextSubtopics';
 import AILoadingIndicator from '@/components/AILoadingIndicator/AILoadingIndicator';
 import HelpDrawer, { HelpButton } from '@/components/HelpDrawer/HelpDrawer';
+import { useLocale } from '@/context/LocaleContext';
+import type { DictKey } from '@/lib/i18n/dict';
 import styles from './page.module.scss';
 
 // Dynamic imports for heavy interactive components
@@ -100,9 +102,11 @@ function normalizeSkeletonProgress(
 const SkeletonLoading = ({
   stepCount,
   activeStepIndex,
+  t,
 }: {
   stepCount?: number;
   activeStepIndex?: number;
+  t: (key: DictKey) => string;
 }) => {
   const skeletonProgress = normalizeSkeletonProgress(stepCount, activeStepIndex);
 
@@ -111,7 +115,7 @@ const SkeletonLoading = ({
       {/* Progress bar */}
       <div
         className={styles.progressBar}
-        aria-label={`Memuat section ${skeletonProgress.activeIndex + 1} dari ${skeletonProgress.stepCount}`}
+        aria-label={`${t('subtopic_skeleton_section_prefix')} ${skeletonProgress.activeIndex + 1} ${t('subtopic_skeleton_section_separator')} ${skeletonProgress.stepCount}`}
       >
         {Array.from({ length: skeletonProgress.stepCount }).map((_, i) => (
           <span
@@ -213,6 +217,7 @@ function writeCachedSubtopicDetail(cacheKey: string, value: SubtopicResponse) {
 
 export default function SubtopicPage() {
   const router = useRouter();
+  const { t } = useLocale();
   const { user } = useAuth();
   // Cast params to ensure courseId, subIdx, pageIdx are strings
   const { courseId, subIdx: pathSubIdx, pageIdx: pathPageIdx } =
@@ -432,7 +437,7 @@ export default function SubtopicPage() {
         }
       } catch (error) {
         console.error('[Subtopic] Error loading course:', error);
-        setError('Failed to load course data');
+        setError(t('subtopic_error_course_load'));
       } finally {
         setCourseLoading(false);
       }
@@ -447,7 +452,7 @@ export default function SubtopicPage() {
     const subInfo = moduleInfo?.subtopics?.[subtopicIndex];
     if (!moduleInfo || !subInfo) {
       setContentLoadState('error');
-      setError('Invalid module or subtopic');
+      setError(t('subtopic_error_invalid_module'));
       return;
     }
     if (progressLoading && !currentProgress) {
@@ -459,7 +464,7 @@ export default function SubtopicPage() {
       setLoading(false);
       setContentLoadState('error');
       setError(
-        `Gagal memuat progres belajar: ${progressError}. Silakan coba lagi sebelum melanjutkan materi.`,
+        `${t('subtopic_error_progress_prefix')}: ${progressError}. ${t('subtopic_error_progress_suffix')}`,
       );
       return;
     }
@@ -469,7 +474,7 @@ export default function SubtopicPage() {
       setContentLoadState('blocked');
       setError(
         currentProgress.reason ||
-          'Selesaikan langkah sebelumnya terlebih dahulu sebelum membuka subtopik ini.',
+          t('subtopic_error_locked'),
       );
       return;
     }
@@ -528,7 +533,7 @@ export default function SubtopicPage() {
           // user to login with a clear banner instead of the generic
           // "Failed to load subtopic" that used to mask auth expiry.
           setContentLoadState('error');
-          setError('Sesi Anda telah berakhir. Mengalihkan ke halaman login...');
+          setError(t('subtopic_error_session_expired'));
           setLoading(false);
           setTimeout(() => router.push('/login'), 1800);
           return;
@@ -539,20 +544,20 @@ export default function SubtopicPage() {
           setError(
             detail && typeof detail.error === 'string'
               ? detail.error
-              : 'Selesaikan langkah sebelumnya terlebih dahulu sebelum membuka subtopic ini',
+              : t('subtopic_error_forbidden'),
           );
           setLoading(false);
           return;
         }
         if (res.status === 404) {
           setContentLoadState('error');
-          setError('Course atau subtopic tidak ditemukan');
+          setError(t('subtopic_error_not_found'));
           setLoading(false);
           return;
         }
         if (res.status === 429) {
           setContentLoadState('error');
-          setError('Terlalu banyak permintaan ke AI. Tunggu beberapa detik lalu tekan "Coba lagi".');
+          setError(t('subtopic_error_rate_limit'));
           setLoading(false);
           return;
         }
@@ -565,9 +570,9 @@ export default function SubtopicPage() {
           const reason =
             detail && typeof detail.error === 'string'
               ? detail.error
-              : `Gagal memuat subtopic (status ${res.status}).`;
+              : `${t('subtopic_error_load_generic_prefix')} (status ${res.status}).`;
           setContentLoadState('error');
-          setError(`${reason} Tekan "Coba lagi" untuk mengulang.`);
+          setError(`${reason} ${t('subtopic_error_load_retry_suffix')}`);
           setLoading(false);
           return;
         }
@@ -600,7 +605,7 @@ export default function SubtopicPage() {
       } catch (e: unknown) {
         if (!cancelled) {
           setContentLoadState('error');
-          setError(e instanceof Error ? e.message : 'Unknown error');
+          setError(e instanceof Error ? e.message : t('subtopic_error_unknown'));
         }
       } finally {
         if (!cancelled) {
@@ -753,7 +758,7 @@ export default function SubtopicPage() {
       });
       if (!response.ok) {
         const err = await response.json().catch(() => ({}));
-        throw new Error(err.error || 'Gagal membuat kuis baru');
+        throw new Error(err.error || t('subtopic_error_quiz_regenerate'));
       }
       const result = await response.json();
       if (Array.isArray(result.quiz) && result.quiz.length > 0) {
@@ -765,7 +770,7 @@ export default function SubtopicPage() {
     } catch (err) {
       console.error('Quiz reshuffle failed:', err);
       if (typeof window !== 'undefined') {
-        window.alert(err instanceof Error ? err.message : 'Gagal membuat kuis baru');
+        window.alert(err instanceof Error ? err.message : t('subtopic_error_quiz_regenerate'));
       }
     } finally {
       setReshuffling(false);
@@ -776,15 +781,15 @@ export default function SubtopicPage() {
     setQuizStatusVersion((current) => current + 1);
     refreshProgress();
     setNavWarning(null);
-    setNavSuccess('Kuis berhasil tersimpan. Kamu bisa melanjutkan.');
-  }, [refreshProgress]);
+    setNavSuccess(t('subtopic_success_quiz_saved'));
+  }, [refreshProgress, t]);
 
   const handleReflectionSaved = useCallback(() => {
     setReflectionSaved(true);
     refreshProgress();
     setNavWarning(null);
-    setNavSuccess('Refleksi tersimpan. Klik Selesai untuk menutup subtopik.');
-  }, [refreshProgress]);
+    setNavSuccess(t('subtopic_success_reflection_saved'));
+  }, [refreshProgress, t]);
 
   useEffect(() => {
     if (!navSuccess) return;
@@ -796,8 +801,8 @@ export default function SubtopicPage() {
     setNavSuccess(null);
   }, [courseId, moduleIndex, subtopicIndex]);
 
-  if (courseLoading) return <div className={styles.loading}>Memuat kursus…</div>;
-  if (!course) return <div className={styles.error}>Kursus tidak ditemukan</div>;
+  if (courseLoading) return <div className={styles.loading}>{t('subtopic_loading_course')}</div>;
+  if (!course) return <div className={styles.error}>{t('subtopic_error_course_not_found')}</div>;
   const isPreparingContent =
     !data &&
     !error &&
@@ -813,6 +818,7 @@ export default function SubtopicPage() {
       <SkeletonLoading
         stepCount={skeletonStepCount}
         activeStepIndex={pageNumber}
+        t={t}
       />
     );
   }
@@ -830,7 +836,7 @@ export default function SubtopicPage() {
             onClick={handleRetryLoadSubtopic}
             className={styles.retryButton}
           >
-            Coba lagi
+            {t('subtopic_retry_button')}
           </button>
         )}
       </div>
@@ -841,6 +847,7 @@ export default function SubtopicPage() {
       <SkeletonLoading
         stepCount={skeletonStepCount}
         activeStepIndex={pageNumber}
+        t={t}
       />
     );
   }
@@ -850,17 +857,17 @@ export default function SubtopicPage() {
 
   const goNext = () => {
     if (pageNumber === contentCount + 1 && !quizCompleteForGate) {
-      setNavWarning('Selesaikan kuis terlebih dahulu. Hasil kuis harus berhasil tersimpan sebelum lanjut.');
+      setNavWarning(t('subtopic_nav_warn_quiz_first'));
       return;
     }
 
     if (pageNumber === feedbackStep && !quizCompleteForGate) {
-      setNavWarning('Selesaikan kuis terlebih dahulu sebelum menutup subtopik ini.');
+      setNavWarning(t('subtopic_nav_warn_quiz_before_close'));
       return;
     }
 
     if (pageNumber === feedbackStep && !reflectionCompleteForGate) {
-      setNavWarning('Harap mengisi feedback dulu. Refleksi harus berhasil tersimpan sebelum lanjut.');
+      setNavWarning(t('subtopic_nav_warn_reflection_first'));
       return;
     }
 
@@ -986,9 +993,9 @@ export default function SubtopicPage() {
           console.error('Failed to persist challenge response:', errorDetails);
           const reason =
             (errorDetails && typeof errorDetails.error === 'string' && errorDetails.error) ||
-            `Server mengembalikan status ${saveResponse.status}`;
+            `${t('subtopic_challenge_save_error_server_status')} ${saveResponse.status}`;
           setChallengeSaveError(
-            `Respons tantanganmu belum tersimpan di server: ${reason}. Silakan coba lagi.`,
+            `${t('subtopic_challenge_save_error_server')}: ${reason}. ${t('subtopic_challenge_save_error_retry')}`,
           );
         } else {
           const newChallengeData = [...challengeData, newChallengeItem];
@@ -1002,7 +1009,7 @@ export default function SubtopicPage() {
       } catch (saveError) {
         console.error('Error saving challenge to database:', saveError);
         setChallengeSaveError(
-          'Respons tantanganmu belum tersimpan: koneksi terputus. Silakan coba lagi.',
+          t('subtopic_challenge_save_error_network'),
         );
       }
     } catch (error) {
@@ -1044,7 +1051,7 @@ export default function SubtopicPage() {
     } catch (e: unknown) {
       console.error(e);
       setExamplesError(
-        'Gagal generate contoh: ' + (e instanceof Error ? e.message : 'Unknown error')
+        `${t('subtopic_examples_error_prefix')}: ` + (e instanceof Error ? e.message : t('subtopic_error_unknown'))
       );
     } finally {
       setLoadingExamples(false);
@@ -1091,7 +1098,7 @@ export default function SubtopicPage() {
           {activeTab === null ? (
             <div className={styles.initialButtons}>
               <button className={styles.initialBtn} onClick={() => setActiveTab('ask')}>
-                Tanya Pertanyaan
+                {t('subtopic_tab_ask')}
               </button>
               <button
                 className={styles.initialBtn}
@@ -1100,7 +1107,7 @@ export default function SubtopicPage() {
                   if (!challengeQ) fetchChallengeQ();
                 }}
               >
-                Tantang Pemikiranku
+                {t('subtopic_tab_challenge')}
               </button>
               <button
                 className={styles.initialBtn}
@@ -1109,7 +1116,7 @@ export default function SubtopicPage() {
                   if (!examplesData.length) fetchExamples();
                 }}
               >
-                Beri Contoh
+                {t('subtopic_tab_examples')}
               </button>
             </div>
           ) : (
@@ -1122,7 +1129,7 @@ export default function SubtopicPage() {
                   className={`${styles.tab} ${activeTab === 'ask' ? styles.activeTab : ''}`}
                   onClick={() => setActiveTab('ask')}
                 >
-                  Tanya Pertanyaan
+                  {t('subtopic_tab_ask')}
                 </button>
                 <button
                   className={`${styles.tab} ${activeTab === 'challenge' ? styles.activeTab : ''}`}
@@ -1131,7 +1138,7 @@ export default function SubtopicPage() {
                     if (!challengeQ) fetchChallengeQ();
                   }}
                 >
-                  Tantang Pemikiranku
+                  {t('subtopic_tab_challenge')}
                 </button>
                 <button
                   className={`${styles.tab} ${activeTab === 'examples' ? styles.activeTab : ''}`}
@@ -1140,7 +1147,7 @@ export default function SubtopicPage() {
                     if (!examplesData.length) fetchExamples();
                   }}
                 >
-                  Beri Contoh
+                  {t('subtopic_tab_examples')}
                 </button>
               </div>
               <div className={styles.tabContent}>
@@ -1167,7 +1174,7 @@ export default function SubtopicPage() {
                     {/* Show challenge history if available */}
                     {challengeData.length > 0 && (
                       <div className={styles.challengeHistory}>
-                        <h3 className={styles.historyTitle}>Tantangan Sebelumnya:</h3>
+                        <h3 className={styles.historyTitle}>{t('subtopic_history_title')}</h3>
                         <div className={styles.historyList}>
                           {challengeData.map((item, idx) => (
                             <div
@@ -1199,7 +1206,7 @@ export default function SubtopicPage() {
                       <div className={styles.challengeReview}>
                         <ChallengeBox question={challengeData[activeChallengeIndex].question} />
                         <div className={styles.challengeAnswer}>
-                          <div className={styles.answerLabel}>Jawabanmu:</div>
+                          <div className={styles.answerLabel}>{t('subtopic_answer_label')}</div>
                           <div className={styles.answerContent}>{challengeData[activeChallengeIndex].answer}</div>
                         </div>
                         {challengeData[activeChallengeIndex].feedback && (
@@ -1207,15 +1214,15 @@ export default function SubtopicPage() {
                         )}
                         {challengeData[activeChallengeIndex].reasoningNote && (
                           <div className={styles.challengeAnswer}>
-                            <div className={styles.answerLabel}>Penalaranmu:</div>
+                            <div className={styles.answerLabel}>{t('subtopic_reasoning_label')}</div>
                             <div className={styles.answerContent}>{challengeData[activeChallengeIndex].reasoningNote}</div>
                           </div>
                         )}
-                        <button 
-                          onClick={() => setActiveChallengeIndex(-1)} 
+                        <button
+                          onClick={() => setActiveChallengeIndex(-1)}
                           className={styles.newChallengeBtn}
                         >
-                          Coba Tantangan Baru
+                          {t('subtopic_new_challenge')}
                         </button>
                       </div>
                     )}
@@ -1240,12 +1247,13 @@ export default function SubtopicPage() {
                     {pendingChallengeResult && (
                       <div className={styles.challengeReview}>
                         <div className={styles.pendingSaveNote}>
-                          Umpan balik AI sudah dibuat, tetapi respons ini belum tersimpan ke server.
-                          Tekan <strong>Submit</strong> lagi untuk mencoba menyimpan ulang.
+                          {t('subtopic_pending_save_note_pre')}{' '}
+                          <strong>{t('subtopic_pending_save_action')}</strong>{' '}
+                          {t('subtopic_pending_save_note_post')}
                         </div>
                         <ChallengeBox question={pendingChallengeResult.question} />
                         <div className={styles.challengeAnswer}>
-                          <div className={styles.answerLabel}>Jawabanmu:</div>
+                          <div className={styles.answerLabel}>{t('subtopic_answer_label')}</div>
                           <div className={styles.answerContent}>{pendingChallengeResult.answer}</div>
                         </div>
                         {pendingChallengeResult.feedback && (
@@ -1253,7 +1261,7 @@ export default function SubtopicPage() {
                         )}
                         {pendingChallengeResult.reasoningNote && (
                           <div className={styles.challengeAnswer}>
-                            <div className={styles.answerLabel}>Penalaranmu:</div>
+                            <div className={styles.answerLabel}>{t('subtopic_reasoning_label')}</div>
                             <div className={styles.answerContent}>{pendingChallengeResult.reasoningNote}</div>
                           </div>
                         )}
@@ -1267,11 +1275,11 @@ export default function SubtopicPage() {
                           <>
                             <ChallengeBox question={challengeQ} />
                             <div className={styles.challengeActions}>
-                              <button 
-                                className={styles.regenerateBtn} 
-                                onClick={fetchChallengeQ} 
+                              <button
+                                className={styles.regenerateBtn}
+                                onClick={fetchChallengeQ}
                                 disabled={loadingChallenge}
-                                title="Buat pertanyaan tantangan baru"
+                                title={t('subtopic_regenerate_title')}
                               >
                                 {loadingChallenge ? (
                                   <span className={styles.loadingSpinner}></span>
@@ -1280,7 +1288,7 @@ export default function SubtopicPage() {
                                     <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                                       <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
                                     </svg>
-                                    <span>Buat Ulang</span>
+                                    <span>{t('subtopic_regenerate_label')}</span>
                                   </>
                                 )}
                               </button>
@@ -1288,7 +1296,7 @@ export default function SubtopicPage() {
                                 <textarea
                                   value={challengeAnswer}
                                   onChange={(e) => setChallengeAnswer(e.target.value)}
-                                  placeholder="Ketik jawabanmu di sini..."
+                                  placeholder={t('subtopic_answer_placeholder')}
                                   className={styles.answerInput}
                                   disabled={loadingChallenge}
                                   rows={3}
@@ -1296,17 +1304,17 @@ export default function SubtopicPage() {
                                 <textarea
                                   value={challengeReasoning}
                                   onChange={(e) => setChallengeReasoning(e.target.value)}
-                                  placeholder="Mengapa kamu memilih jawaban ini? (opsional)"
+                                  placeholder={t('subtopic_reasoning_placeholder')}
                                   className={styles.answerInput}
                                   disabled={loadingChallenge}
                                   rows={2}
                                 />
-                                <button 
-                                  onClick={handleChallengeSubmit} 
+                                <button
+                                  onClick={handleChallengeSubmit}
                                   disabled={loadingChallenge || !challengeAnswer.trim()}
                                   className={styles.submitButton}
                                 >
-                                  Submit
+                                  {t('subtopic_submit_button')}
                                 </button>
                               </div>
                             </div>
@@ -1315,17 +1323,17 @@ export default function SubtopicPage() {
                           <div className={styles.loadingContainer}>
                             {loadingChallenge ? (
                               <AILoadingIndicator
-                                messages={['Menyiapkan pertanyaan...', 'Menganalisis materi...', 'Hampir siap...']}
+                                messages={[t('subtopic_loading_preparing'), t('subtopic_loading_analyzing'), t('subtopic_loading_almost')]}
                               />
                             ) : (
                               <>
                                 {challengeData.length > 0 ? (
                                   <button onClick={fetchChallengeQ} className={styles.startChallengeBtn}>
-                                    Buat Pertanyaan Baru
+                                    {t('subtopic_new_question_button')}
                                   </button>
                                 ) : (
                                   <button onClick={fetchChallengeQ} className={styles.startChallengeBtn}>
-                                    Generate Pertanyaan
+                                    {t('subtopic_generate_question_button')}
                                   </button>
                                 )}
                               </>
@@ -1364,9 +1372,9 @@ export default function SubtopicPage() {
       {pageNumber === contentCount && (
         <div className={styles.sectionContainer}>
           <div className={styles.sectionHeader}>
-            <h2 className={styles.sectionTitle}>💡 Poin Penting</h2>
+            <h2 className={styles.sectionTitle}>{t('subtopic_section_takeaways_title')}</h2>
             <p className={styles.sectionDescription}>
-              Poin-poin penting yang perlu Anda ingat dari materi ini
+              {t('subtopic_section_takeaways_desc')}
             </p>
           </div>
           <KeyTakeaways items={data.keyTakeaways} />
@@ -1377,9 +1385,9 @@ export default function SubtopicPage() {
       {pageNumber === contentCount + 1 && course?.outline && (
         <div className={styles.sectionContainer}>
           <div className={styles.sectionHeader}>
-            <h2 className={styles.sectionTitle}>🧠 Waktu Kuis!</h2>
+            <h2 className={styles.sectionTitle}>{t('subtopic_section_quiz_title')}</h2>
             <p className={styles.sectionDescription}>
-              Uji pemahaman Anda tentang materi yang telah dipelajari
+              {t('subtopic_section_quiz_desc')}
             </p>
           </div>
           <Quiz
@@ -1406,9 +1414,9 @@ export default function SubtopicPage() {
       {pageNumber === contentCount + 2 && (
         <div className={styles.sectionContainer}>
           <div className={styles.sectionHeader}>
-            <h2 className={styles.sectionTitle}>📝 Umpan Balik & Langkah Selanjutnya</h2>
+            <h2 className={styles.sectionTitle}>{t('subtopic_section_feedback_title')}</h2>
             <p className={styles.sectionDescription}>
-              Berikan masukan dan lihat langkah selanjutnya dalam pembelajaran Anda
+              {t('subtopic_section_feedback_desc')}
             </p>
           </div>
           <WhatNext
@@ -1460,17 +1468,17 @@ export default function SubtopicPage() {
       {progressLoading && !navWarning && !navSuccess && currentProgress && (
         <div className={styles.navStatus} role="status" aria-live="polite">
           <span className={styles.navStatusSpinner} aria-hidden="true" />
-          <span>Menyinkronkan progres…</span>
+          <span>{t('subtopic_nav_syncing')}</span>
         </div>
       )}
       <div className={styles.navigationButtons}>
         {pageNumber > 0 && (
           <button className={styles.backBtn} onClick={goBack}>
-            Kembali
+            {t('subtopic_nav_back')}
           </button>
         )}
         <button className={styles.nextBtn} onClick={goNext}>
-          {pageNumber === feedbackStep ? 'Selesai' : 'Selanjutnya'}
+          {pageNumber === feedbackStep ? t('subtopic_nav_finish') : t('subtopic_nav_next')}
         </button>
       </div>
 
