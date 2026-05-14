@@ -1,9 +1,10 @@
 'use client';
 
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useMemo, useState } from 'react';
 import { createPortal } from 'react-dom';
 import styles from './HelpDrawer.module.scss';
-import { SUBTOPIC_HELP_FEATURES, type HelpFeature } from './featureData';
+import { buildSubtopicHelpFeatures, type HelpFeature } from './featureData';
+import { useLocale } from '@/context/LocaleContext';
 
 interface HelpDrawerProps {
   open: boolean;
@@ -14,8 +15,11 @@ interface HelpDrawerProps {
 export default function HelpDrawer({
   open,
   onClose,
-  features = SUBTOPIC_HELP_FEATURES,
+  features,
 }: HelpDrawerProps) {
+  const { t } = useLocale();
+  const defaultFeatures = useMemo(() => buildSubtopicHelpFeatures(t), [t]);
+  const resolvedFeatures = features ?? defaultFeatures;
   const [mounted, setMounted] = useState(false);
   const [expandedId, setExpandedId] = useState<string | null>(null);
 
@@ -66,7 +70,7 @@ export default function HelpDrawer({
       {/* Backdrop — clickable, closes drawer */}
       <button
         type="button"
-        aria-label="Tutup panduan"
+        aria-label={t('help_drawer_backdrop_aria')}
         className={`${styles.backdrop} ${open ? styles.backdropOpen : ''}`}
         onClick={onClose}
         tabIndex={open ? 0 : -1}
@@ -76,32 +80,31 @@ export default function HelpDrawer({
         className={`${styles.drawer} ${open ? styles.drawerOpen : ''}`}
         role="dialog"
         aria-modal="true"
-        aria-label="Panduan fitur"
+        aria-label={t('help_drawer_aria_label')}
         aria-hidden={!open}
       >
         <header className={styles.header}>
           <div>
-            <div className={styles.eyebrow}>Bantuan</div>
-            <h2 className={styles.title}>Fitur di halaman ini</h2>
+            <div className={styles.eyebrow}>{t('help_drawer_eyebrow')}</div>
+            <h2 className={styles.title}>{t('help_drawer_title')}</h2>
           </div>
           <button
             type="button"
             className={styles.closeBtn}
             onClick={onClose}
-            aria-label="Tutup"
+            aria-label={t('help_drawer_close_aria')}
           >
             ✕
           </button>
         </header>
 
         <p className={styles.intro}>
-          Setiap fitur di subtopic punya peran berbeda. Klik kartu untuk detail,
-          atau tekan <strong>Tunjukkan</strong> supaya kami arahkan ke element
-          yang dimaksud.
+          {t('help_drawer_intro_prefix')} <strong>{t('help_drawer_intro_action')}</strong>{' '}
+          {t('help_drawer_intro_suffix')}
         </p>
 
         <div className={styles.list}>
-          {features.map((f) => {
+          {resolvedFeatures.map((f) => {
             const isOpen = expandedId === f.id;
             return (
               <div key={f.id} className={`${styles.card} ${isOpen ? styles.cardOpen : ''}`}>
@@ -126,7 +129,7 @@ export default function HelpDrawer({
                         className={styles.showBtn}
                         onClick={() => handleShowTarget(f.targetSelector)}
                       >
-                        Tunjukkan di halaman →
+                        {t('help_drawer_show_target')}
                       </button>
                     )}
                   </div>
@@ -147,14 +150,16 @@ interface HelpButtonProps {
 }
 
 /** Floating question-mark button that opens the drawer. */
-export function HelpButton({ onClick, label = 'Panduan fitur' }: HelpButtonProps) {
+export function HelpButton({ onClick, label }: HelpButtonProps) {
+  const { t } = useLocale();
+  const resolvedLabel = label ?? t('help_drawer_button_label');
   return (
     <button
       type="button"
       className={styles.floatingBtn}
       onClick={onClick}
-      aria-label={label}
-      title={label}
+      aria-label={resolvedLabel}
+      title={resolvedLabel}
     >
       <span aria-hidden="true">?</span>
     </button>

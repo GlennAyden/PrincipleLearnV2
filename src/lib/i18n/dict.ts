@@ -353,6 +353,43 @@ const id = {
   course_overview_discussion_body_subtopic_part3:
     'melalui dialog Socratic empat fase. Mentor virtual akan mengecek capaian dan memberi umpan balik.',
 
+  // ── HelpDrawer ───────────────────────────────────────────────────
+  help_drawer_backdrop_aria: 'Tutup panduan',
+  help_drawer_aria_label: 'Panduan fitur',
+  help_drawer_eyebrow: 'Bantuan',
+  help_drawer_title: 'Fitur di halaman ini',
+  help_drawer_close_aria: 'Tutup',
+  help_drawer_intro_prefix:
+    'Setiap fitur di subtopic punya peran berbeda. Klik kartu untuk detail, atau tekan',
+  help_drawer_intro_action: 'Tunjukkan',
+  help_drawer_intro_suffix: 'supaya kami arahkan ke element yang dimaksud.',
+  help_drawer_show_target: 'Tunjukkan di halaman →',
+  help_drawer_button_label: 'Panduan fitur',
+  help_feature_materi_title: 'Materi utama',
+  help_feature_materi_desc:
+    'Penjelasan konsep subtopic. Baca runtut dari atas — bagian ini digenerate menyesuaikan level dan gaya belajarmu.',
+  help_feature_examples_title: 'Contoh',
+  help_feature_examples_desc:
+    'Minta AI menyajikan contoh konkret atau analogi jika materinya terasa abstrak. Contoh baru bisa dihasilkan kapan saja.',
+  help_feature_ask_title: 'Tanya AI',
+  help_feature_ask_desc:
+    'Punya pertanyaan spesifik? Tulis di kotak tanya. Jawaban dialirkan real-time dan tersimpan di riwayat.',
+  help_feature_quiz_title: 'Quiz',
+  help_feature_quiz_desc:
+    '5 soal cepat untuk mengecek pemahaman. Hasilmu dicatat sebagai syarat subtopic dianggap selesai.',
+  help_feature_challenge_title: 'Challenge berpikir kritis',
+  help_feature_challenge_desc:
+    'Pertanyaan terbuka yang mendorong kamu berpikir lebih dalam. AI memberi feedback terhadap jawabanmu.',
+  help_feature_reflection_title: 'Refleksi terstruktur',
+  help_feature_reflection_desc:
+    'Tuliskan apa yang kamu pahami, apa yang masih bingung, dan strategimu. Wajib diisi untuk menandai subtopic selesai.',
+  help_feature_takeaways_title: 'Key takeaways',
+  help_feature_takeaways_desc:
+    'Ringkasan poin utama di akhir halaman. Kamu bisa review cepat sebelum lanjut ke subtopic berikutnya.',
+  help_feature_discussion_title: 'Syarat buka diskusi',
+  help_feature_discussion_desc:
+    'Diskusi modul terbuka setelah kamu menyelesaikan SEMUA subtopic dalam modul itu (quiz + refleksi). Indikator terkunci di sidebar.',
+
   // ── PromptBuilder ────────────────────────────────────────────────
   prompt_mode_simple: '⚡ Langsung',
   prompt_mode_guided: '🧭 Guided Builder',
@@ -781,6 +818,43 @@ const en = {
   course_overview_discussion_body_subtopic_part2: 'in the module',
   course_overview_discussion_body_subtopic_part3:
     'via a four-phase Socratic dialogue. The virtual mentor will check your progress and give feedback.',
+
+  // ── HelpDrawer ───────────────────────────────────────────────────
+  help_drawer_backdrop_aria: 'Close help',
+  help_drawer_aria_label: 'Feature guide',
+  help_drawer_eyebrow: 'Help',
+  help_drawer_title: 'Features on this page',
+  help_drawer_close_aria: 'Close',
+  help_drawer_intro_prefix:
+    'Each feature in a subtopic plays a different role. Click a card for details, or press',
+  help_drawer_intro_action: 'Show',
+  help_drawer_intro_suffix: 'and we will jump to the element on the page.',
+  help_drawer_show_target: 'Show on page →',
+  help_drawer_button_label: 'Feature guide',
+  help_feature_materi_title: 'Main material',
+  help_feature_materi_desc:
+    'Subtopic concept explanation. Read top to bottom — this section is generated to match your level and learning style.',
+  help_feature_examples_title: 'Examples',
+  help_feature_examples_desc:
+    'Ask the AI for concrete examples or analogies when the material feels abstract. New examples can be generated any time.',
+  help_feature_ask_title: 'Ask AI',
+  help_feature_ask_desc:
+    'Have a specific question? Type it in the question box. The answer streams in real time and is saved to your history.',
+  help_feature_quiz_title: 'Quiz',
+  help_feature_quiz_desc:
+    '5 quick questions to check your understanding. Your result is recorded as a requirement for marking this subtopic complete.',
+  help_feature_challenge_title: 'Critical-thinking challenge',
+  help_feature_challenge_desc:
+    'An open-ended question that pushes you to think more deeply. The AI gives feedback on your answer.',
+  help_feature_reflection_title: 'Structured reflection',
+  help_feature_reflection_desc:
+    'Write down what you understood, what is still confusing, and your strategy. Required to mark the subtopic complete.',
+  help_feature_takeaways_title: 'Key takeaways',
+  help_feature_takeaways_desc:
+    'A summary of the main points at the end of the page. Quickly review before moving to the next subtopic.',
+  help_feature_discussion_title: 'How to unlock the discussion',
+  help_feature_discussion_desc:
+    'The module discussion unlocks once you complete EVERY subtopic in that module (quiz + reflection). The locked indicator shows in the sidebar.',
 
   // ── PromptBuilder ────────────────────────────────────────────────
   prompt_mode_simple: '⚡ Quick',
