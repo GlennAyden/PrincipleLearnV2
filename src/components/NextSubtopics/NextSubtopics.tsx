@@ -5,6 +5,7 @@ import React, { useState, useRef } from 'react';
 import { useParams, useRouter, useSearchParams } from 'next/navigation';
 import styles from './NextSubtopics.module.scss';
 import type { LearningProgressModule } from '@/hooks/useLearningProgress';
+import { useLocale } from '@/context/LocaleContext';
 
 export interface NextSubtopicsProps {
   /** List subtopic titles or objects with title */
@@ -26,6 +27,7 @@ export default function NextSubtopics({
   moduleTitle,
   progressModule,
 }: NextSubtopicsProps) {
+  const { t } = useLocale();
   const router = useRouter();
   const { courseId } = useParams<{ courseId: string }>();
   const searchParams = useSearchParams();
@@ -64,9 +66,9 @@ export default function NextSubtopics({
   if (!nextItems.length) {
     return (
       <div className={styles.wrapper}>
-        <h3 className={styles.heading}>🎉 Selamat!</h3>
+        <h3 className={styles.heading}>{t('next_subtopics_congrats')}</h3>
         <p className={styles.completionMessage}>
-          Anda telah menyelesaikan semua subtopik dalam modul ini!
+          {t('next_subtopics_completion_message')}
         </p>
       </div>
     );
@@ -74,7 +76,7 @@ export default function NextSubtopics({
 
   return (
     <div className={styles.wrapper}>
-      <h3 className={styles.heading}>Subtopik Selanjutnya</h3>
+      <h3 className={styles.heading}>{t('next_subtopics_heading')}</h3>
       <ul className={styles.list}>
         {nextItems.map(({ idx, moduleIdx, title, isDiscussion }) => {
           const status = isDiscussion
@@ -83,7 +85,7 @@ export default function NextSubtopics({
           const locked = status ? !status.unlocked : false;
           const reason =
             status?.reason ??
-            'Selesaikan langkah sebelumnya terlebih dahulu.';
+            t('next_subtopics_locked_default');
 
           return (
             <li key={`${moduleIdx}-${idx}`} className={styles.item}>
@@ -122,12 +124,12 @@ export default function NextSubtopics({
               >
                 {isDiscussion && (
                   <span className={styles.moduleLabel}>
-                    Diskusi Wajib:
+                    {t('next_subtopics_required_discussion')}
                   </span>
                 )}
                 {moduleIdx !== moduleIndex && (
                   <span className={styles.moduleLabel}>
-                    Modul {moduleIdx + 1}:
+                    {t('next_subtopics_module_prefix')} {moduleIdx + 1}:
                   </span>
                 )}
                 {title}
@@ -143,7 +145,7 @@ export default function NextSubtopics({
                   <button
                     type="button"
                     className={styles.lockedWarningClose}
-                    aria-label="Tutup pesan"
+                    aria-label={t('next_subtopics_close_warning_aria')}
                     onClick={(e) => { e.stopPropagation(); setActiveLockedKey(null); }}
                   >✕</button>
                 </div>

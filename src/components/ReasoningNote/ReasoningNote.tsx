@@ -2,6 +2,7 @@
 'use client';
 import React, { useState } from 'react';
 import styles from './ReasoningNote.module.scss';
+import { useLocale } from '@/context/LocaleContext';
 
 export interface ReasoningNoteProps {
   /** Current value of the reasoning note */
@@ -21,11 +22,14 @@ export interface ReasoningNoteProps {
 export default function ReasoningNote({
   value,
   onChange,
-  label = 'Catatan Penalaran',
-  placeholder = 'Tuliskan alasan Anda memilih langkah/jawaban ini...',
+  label,
+  placeholder,
   disabled = false,
   defaultCollapsed = true,
 }: ReasoningNoteProps) {
+  const { t } = useLocale();
+  const resolvedLabel = label ?? t('reasoning_default_label');
+  const resolvedPlaceholder = placeholder ?? t('reasoning_default_placeholder');
   const [isCollapsed, setIsCollapsed] = useState(defaultCollapsed);
 
   return (
@@ -52,23 +56,23 @@ export default function ReasoningNote({
             <polyline points="9 18 15 12 9 6" />
           </svg>
           <span className={styles.labelIcon}>💭</span>
-          <span className={styles.label}>{label}</span>
+          <span className={styles.label}>{resolvedLabel}</span>
         </div>
         {value.trim() && (
-          <span className={styles.filledBadge}>Terisi ✓</span>
+          <span className={styles.filledBadge}>{t('reasoning_filled_badge')}</span>
         )}
       </button>
 
       {!isCollapsed && (
         <div className={styles.contentArea}>
           <p className={styles.helperText}>
-            Jelaskan <strong>mengapa</strong> Anda memilih langkah ini. Catatan ini membantu Anda dan pengajar memahami proses berpikir Anda.
+            {t('reasoning_helper_prefix')} <strong>{t('reasoning_helper_emphasis')}</strong> {t('reasoning_helper_suffix')}
           </p>
           <textarea
             className={styles.textarea}
             value={value}
             onChange={(e) => onChange(e.target.value)}
-            placeholder={placeholder}
+            placeholder={resolvedPlaceholder}
             disabled={disabled}
             rows={3}
           />

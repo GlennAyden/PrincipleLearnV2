@@ -353,6 +353,37 @@ const id = {
   course_overview_discussion_body_subtopic_part3:
     'melalui dialog Socratic empat fase. Mentor virtual akan mengecek capaian dan memberi umpan balik.',
 
+  // ── KeyTakeaways ─────────────────────────────────────────────────
+  key_takeaways_header: 'Poin Penting',
+
+  // ── WhatNext ─────────────────────────────────────────────────────
+  what_next_header: 'Selanjutnya?',
+
+  // ── NextSubtopics ────────────────────────────────────────────────
+  next_subtopics_congrats: '🎉 Selamat!',
+  next_subtopics_completion_message:
+    'Anda telah menyelesaikan semua subtopik dalam modul ini!',
+  next_subtopics_heading: 'Subtopik Selanjutnya',
+  next_subtopics_locked_default: 'Selesaikan langkah sebelumnya terlebih dahulu.',
+  next_subtopics_module_prefix: 'Modul',
+  next_subtopics_required_discussion: 'Diskusi Wajib:',
+  next_subtopics_close_warning_aria: 'Tutup pesan',
+
+  // ── AILoadingIndicator ───────────────────────────────────────────
+  ai_loading_thinking: 'Sedang berpikir...',
+  ai_loading_drafting: 'Menyusun jawaban...',
+  ai_loading_almost: 'Hampir selesai...',
+
+  // ── ReasoningNote ────────────────────────────────────────────────
+  reasoning_default_label: 'Catatan Penalaran',
+  reasoning_default_placeholder:
+    'Tuliskan alasan Anda memilih langkah/jawaban ini...',
+  reasoning_filled_badge: 'Terisi ✓',
+  reasoning_helper_prefix: 'Jelaskan',
+  reasoning_helper_emphasis: 'mengapa',
+  reasoning_helper_suffix:
+    'Anda memilih langkah ini. Catatan ini membantu Anda dan pengajar memahami proses berpikir Anda.',
+
   // ── AskQuestion ──────────────────────────────────────────────────
   ask_question_must_login: 'Kamu harus masuk untuk bertanya.',
   ask_question_answer_label: 'Jawaban :',
@@ -859,6 +890,37 @@ const en = {
   course_overview_discussion_body_subtopic_part2: 'in the module',
   course_overview_discussion_body_subtopic_part3:
     'via a four-phase Socratic dialogue. The virtual mentor will check your progress and give feedback.',
+
+  // ── KeyTakeaways ─────────────────────────────────────────────────
+  key_takeaways_header: 'Key Takeaways',
+
+  // ── WhatNext ─────────────────────────────────────────────────────
+  what_next_header: 'What is next?',
+
+  // ── NextSubtopics ────────────────────────────────────────────────
+  next_subtopics_congrats: '🎉 Congratulations!',
+  next_subtopics_completion_message:
+    'You have completed every subtopic in this module!',
+  next_subtopics_heading: 'Next subtopics',
+  next_subtopics_locked_default: 'Complete the previous step first.',
+  next_subtopics_module_prefix: 'Module',
+  next_subtopics_required_discussion: 'Required Discussion:',
+  next_subtopics_close_warning_aria: 'Close message',
+
+  // ── AILoadingIndicator ───────────────────────────────────────────
+  ai_loading_thinking: 'Thinking...',
+  ai_loading_drafting: 'Drafting an answer...',
+  ai_loading_almost: 'Almost done...',
+
+  // ── ReasoningNote ────────────────────────────────────────────────
+  reasoning_default_label: 'Reasoning Note',
+  reasoning_default_placeholder:
+    'Write down the reason you chose this step/answer...',
+  reasoning_filled_badge: 'Filled ✓',
+  reasoning_helper_prefix: 'Explain',
+  reasoning_helper_emphasis: 'why',
+  reasoning_helper_suffix:
+    'you picked this step. This note helps you and the teacher understand your thinking.',
 
   // ── AskQuestion ──────────────────────────────────────────────────
   ask_question_must_login: 'You must be logged in to ask a question.',
