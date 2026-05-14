@@ -78,6 +78,19 @@ Both cookies are non-HttpOnly (the client sets them after the relevant page comp
 
 Routes exempt from onboarding redirects: `/onboarding`, `/onboarding/...`, `/logout`, `/api/auth/...`, `/api/learning-profile`, `/api/onboarding-state`, `/favicon.ico`, `/_next/...`, and any `/api/...` route (API responses are not redirected).
 
+### Bilingual UI (ID / EN)
+
+User-facing UI is bilingual ID / EN. The `LanguageToggle` button is mounted in user headers (dashboard, course layout, onboarding intro, onboarding wizard). Admin pages remain Indonesian (single-researcher scope).
+
+- **Locale source of truth**: `learning_profiles.preferred_language` (`VARCHAR(5) NOT NULL DEFAULT 'id' CHECK IN ('id','en')`).
+- **Cookie mirror**: `locale=id|en`, non-HttpOnly, Lax, Path=/, 1-year Max-Age — set on `/api/auth/login` response and re-written by `LocaleProvider.setLocale`. Read in `src/app/layout.tsx` via `cookies()` to inject `<html lang>` and seed the provider for SSR / first paint.
+- **State**: `LocaleProvider` (`src/context/LocaleContext.tsx`) exposes `{ locale, t, setLocale }` via `useLocale()`. `setLocale` updates the cookie immediately and fires `POST /api/learning-profile { preferredLanguage }` fire-and-forget to persist.
+- **Dictionary**: `src/lib/i18n/dict.ts`. Flat snake_case keys (`<area>_<purpose>`). Compile-time parity enforced via `as const satisfies Record<keyof typeof id, string>` on the `en` block — missing or extra keys break tsc.
+- **AI-generated content stays in its generation language.** Course titles, subtopic bodies, quiz questions, AI Q&A responses, challenge feedback, key takeaways, AskQuestion answers, and ChallengeThinking outputs are NEVER translated post-hoc. Most generation prompts already detect the dominant input language and respond in it.
+- **Out of scope (deferred)**: admin pages, API error message refactor to `error_code` pattern (~26 routes), AI prompt `lang` parameter, `subtopic_cache` cache-key language tokenization, backfill of existing AI content. The 6 hardcoded "Bahasa Indonesia" prompt instructions in `src/app/api/discussion/respond/route.ts` and `src/services/discussion/generateDiscussionTemplate.ts` + `src/services/cognitive-scoring.service.ts` are also untouched — discussion module is dormant and `evidence_summary` is research-internal.
+
+Static UI strings translated across: dashboard, course layout (header + tour steps + nav alerts + sidebar), course overview, subtopic page, onboarding intro + wizard, request-course wizard (step1–3 + generating), `LanguageToggle`, `PromptBuilder` (chips + labels), `HelpDrawer` (features + drawer chrome), `StructuredReflection` (fields + star labels), `Quiz`, `AskQuestion`, `ChallengeThinking`, `KeyTakeaways`, `WhatNext`, `NextSubtopics`, `AILoadingIndicator`, `ReasoningNote`.
+
 ### Database Architecture
 
 - **Primary interface**: `DatabaseService` class in `src/lib/database.ts` — generic CRUD over Supabase.
