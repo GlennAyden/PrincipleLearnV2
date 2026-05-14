@@ -1,30 +1,55 @@
 // src/app/onboarding/page.tsx
 'use client';
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import { useRouter } from 'next/navigation';
 import styles from './page.module.scss';
 import { useAuth } from '@/hooks/useAuth';
 import { apiFetch } from '@/lib/api-client';
+import LanguageToggle from '@/components/LanguageToggle/LanguageToggle';
+import { useLocale } from '@/context/LocaleContext';
+import type { DictKey } from '@/lib/i18n/dict';
 
-const STEPS = ['Identitas', 'Gaya Belajar', 'Tujuan'];
+function buildSteps(t: (key: DictKey) => string): string[] {
+  return [
+    t('onboarding_step_identity'),
+    t('onboarding_step_style'),
+    t('onboarding_step_goals'),
+  ];
+}
 
-const EXPERIENCE_OPTIONS = [
-  { value: 'none', icon: '🌱', label: 'Belum pernah', desc: 'Baru pertama kali belajar pemrograman' },
-  { value: 'beginner', icon: '🌿', label: 'Pemula', desc: 'Pernah belajar sedikit (< 6 bulan)' },
-  { value: 'intermediate', icon: '🌳', label: 'Menengah', desc: 'Sudah punya pengalaman (6-24 bulan)' },
-  { value: 'advanced', icon: '🏔️', label: 'Mahir', desc: 'Berpengalaman (> 2 tahun)' },
-];
+interface OptionEntry {
+  value: string;
+  icon: string;
+  label: string;
+  desc: string;
+}
 
-const STYLE_OPTIONS = [
-  { value: 'visual', icon: '👁️', label: 'Visual', desc: 'Lebih mudah paham lewat gambar, diagram, dan video' },
-  { value: 'reading', icon: '📖', label: 'Membaca', desc: 'Suka membaca penjelasan tertulis yang detail' },
-  { value: 'practice', icon: '⌨️', label: 'Praktik', desc: 'Belajar paling baik dengan langsung mencoba kode' },
-  { value: 'discussion', icon: '💬', label: 'Diskusi', desc: 'Lebih paham lewat tanya-jawab dan berdiskusi' },
-];
+function buildExperienceOptions(t: (key: DictKey) => string): OptionEntry[] {
+  return [
+    { value: 'none', icon: '🌱', label: t('onboarding_experience_none_label'), desc: t('onboarding_experience_none_desc') },
+    { value: 'beginner', icon: '🌿', label: t('onboarding_experience_beginner_label'), desc: t('onboarding_experience_beginner_desc') },
+    { value: 'intermediate', icon: '🌳', label: t('onboarding_experience_intermediate_label'), desc: t('onboarding_experience_intermediate_desc') },
+    { value: 'advanced', icon: '🏔️', label: t('onboarding_experience_advanced_label'), desc: t('onboarding_experience_advanced_desc') },
+  ];
+}
+
+function buildStyleOptions(t: (key: DictKey) => string): OptionEntry[] {
+  return [
+    { value: 'visual', icon: '👁️', label: t('onboarding_style_visual_label'), desc: t('onboarding_style_visual_desc') },
+    { value: 'reading', icon: '📖', label: t('onboarding_style_reading_label'), desc: t('onboarding_style_reading_desc') },
+    { value: 'practice', icon: '⌨️', label: t('onboarding_style_practice_label'), desc: t('onboarding_style_practice_desc') },
+    { value: 'discussion', icon: '💬', label: t('onboarding_style_discussion_label'), desc: t('onboarding_style_discussion_desc') },
+  ];
+}
 
 export default function OnboardingPage() {
   const router = useRouter();
   const { user, isLoading: authLoading, isAuthenticated } = useAuth();
+  const { t } = useLocale();
+
+  const STEPS = useMemo(() => buildSteps(t), [t]);
+  const EXPERIENCE_OPTIONS = useMemo(() => buildExperienceOptions(t), [t]);
+  const STYLE_OPTIONS = useMemo(() => buildStyleOptions(t), [t]);
 
   const [step, setStep] = useState(0);
   const [displayName, setDisplayName] = useState('');
@@ -149,13 +174,24 @@ export default function OnboardingPage() {
   };
 
   if (authLoading) {
-    return <div className={styles.loadingPage}>Loading...</div>;
+    return <div className={styles.loadingPage}>{t('onboarding_loading')}</div>;
   }
 
   return (
     <div className={styles.page}>
       <div className={styles.bgOrb1} />
       <div className={styles.bgOrb2} />
+
+      <div
+        style={{
+          position: 'fixed',
+          top: '1rem',
+          right: '1rem',
+          zIndex: 50,
+        }}
+      >
+        <LanguageToggle />
+      </div>
 
       <div className={styles.card}>
         {/* Logo */}
@@ -174,9 +210,9 @@ export default function OnboardingPage() {
           <span className={styles.logoText}>PrincipleLearn</span>
         </div>
 
-        <h1 className={styles.title}>Kenali Dirimu 🎯</h1>
+        <h1 className={styles.title}>{t('onboarding_title')}</h1>
         <p className={styles.subtitle}>
-          Bantu kami menyesuaikan pengalaman belajar untukmu
+          {t('onboarding_subtitle')}
         </p>
 
         {/* Progress Steps */}
@@ -193,7 +229,7 @@ export default function OnboardingPage() {
         <div className={styles.stepContent}>
           {step === 0 && (
             <div className={styles.stepPanel}>
-              <label className={styles.fieldLabel}>Nama Panggilan</label>
+              <label className={styles.fieldLabel}>{t('onboarding_display_name_label')}</label>
               <input
                 className={styles.textInput}
                 type="text"
@@ -202,19 +238,19 @@ export default function OnboardingPage() {
                 autoCapitalize="words"
                 value={displayName}
                 onChange={e => setDisplayName(e.target.value)}
-                placeholder="Contoh: Budi, Sarah, dll."
+                placeholder={t('onboarding_display_name_placeholder')}
                 autoFocus
                 maxLength={50}
               />
               <p className={styles.fieldHint}>
-                Nama ini akan digunakan di dalam aplikasi
+                {t('onboarding_display_name_hint')}
               </p>
             </div>
           )}
 
           {step === 1 && (
             <div className={styles.stepPanel}>
-              <label className={styles.fieldLabel}>Pengalaman Pemrograman</label>
+              <label className={styles.fieldLabel}>{t('onboarding_experience_label')}</label>
               <div className={styles.optionGrid}>
                 {EXPERIENCE_OPTIONS.map(opt => (
                   <button
@@ -231,7 +267,7 @@ export default function OnboardingPage() {
               </div>
 
               <label className={styles.fieldLabel} style={{ marginTop: '1rem' }}>
-                Gaya Belajar Favorit
+                {t('onboarding_style_label')}
               </label>
               <div className={styles.optionGrid}>
                 {STYLE_OPTIONS.map(opt => (
@@ -252,23 +288,23 @@ export default function OnboardingPage() {
 
           {step === 2 && (
             <div className={styles.stepPanel}>
-              <label className={styles.fieldLabel}>Apa tujuan belajarmu? (opsional)</label>
+              <label className={styles.fieldLabel}>{t('onboarding_goals_label')}</label>
               <textarea
                 className={styles.textArea}
                 value={goals}
                 onChange={e => setGoals(e.target.value)}
-                placeholder="Contoh: Ingin bisa membuat website sendiri, memahami algoritma untuk karir..."
+                placeholder={t('onboarding_goals_placeholder')}
                 rows={3}
               />
 
               <label className={styles.fieldLabel} style={{ marginTop: '0.85rem' }}>
-                Apa tantangan terbesarmu dalam belajar? (opsional)
+                {t('onboarding_challenges_label')}
               </label>
               <textarea
                 className={styles.textArea}
                 value={challenges}
                 onChange={e => setChallenges(e.target.value)}
-                placeholder="Contoh: Sulit memahami konsep abstrak, kurang waktu untuk latihan..."
+                placeholder={t('onboarding_challenges_placeholder')}
                 rows={3}
               />
             </div>
@@ -281,7 +317,7 @@ export default function OnboardingPage() {
         <div className={styles.navButtons}>
           {step > 0 && (
             <button type="button" className={styles.backBtn} onClick={handleBack}>
-              ← Kembali
+              {t('onboarding_back')}
             </button>
           )}
           <button
@@ -290,7 +326,7 @@ export default function OnboardingPage() {
             onClick={handleNext}
             disabled={!canProceed() || saving}
           >
-            {saving ? 'Menyimpan...' : step === STEPS.length - 1 ? '🚀 Mulai Belajar' : 'Lanjut →'}
+            {saving ? t('onboarding_saving') : step === STEPS.length - 1 ? t('onboarding_finish') : t('onboarding_next')}
           </button>
         </div>
       </div>

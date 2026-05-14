@@ -74,6 +74,45 @@ const id = {
   intro_slide4_title: 'Siap mulai?',
   intro_slide4_body:
     'Kamu bisa panggil panduan ini lagi kapan saja lewat tombol bantuan di tiap subtopic. Kita mulai dari membuat course pertamamu.',
+
+  // ── Onboarding wizard ────────────────────────────────────────────
+  onboarding_loading: 'Loading...',
+  onboarding_title: 'Kenali Dirimu 🎯',
+  onboarding_subtitle: 'Bantu kami menyesuaikan pengalaman belajar untukmu',
+  onboarding_step_identity: 'Identitas',
+  onboarding_step_style: 'Gaya Belajar',
+  onboarding_step_goals: 'Tujuan',
+  onboarding_display_name_label: 'Nama Panggilan',
+  onboarding_display_name_placeholder: 'Contoh: Budi, Sarah, dll.',
+  onboarding_display_name_hint: 'Nama ini akan digunakan di dalam aplikasi',
+  onboarding_experience_label: 'Pengalaman Pemrograman',
+  onboarding_experience_none_label: 'Belum pernah',
+  onboarding_experience_none_desc: 'Baru pertama kali belajar pemrograman',
+  onboarding_experience_beginner_label: 'Pemula',
+  onboarding_experience_beginner_desc: 'Pernah belajar sedikit (< 6 bulan)',
+  onboarding_experience_intermediate_label: 'Menengah',
+  onboarding_experience_intermediate_desc: 'Sudah punya pengalaman (6-24 bulan)',
+  onboarding_experience_advanced_label: 'Mahir',
+  onboarding_experience_advanced_desc: 'Berpengalaman (> 2 tahun)',
+  onboarding_style_label: 'Gaya Belajar Favorit',
+  onboarding_style_visual_label: 'Visual',
+  onboarding_style_visual_desc: 'Lebih mudah paham lewat gambar, diagram, dan video',
+  onboarding_style_reading_label: 'Membaca',
+  onboarding_style_reading_desc: 'Suka membaca penjelasan tertulis yang detail',
+  onboarding_style_practice_label: 'Praktik',
+  onboarding_style_practice_desc: 'Belajar paling baik dengan langsung mencoba kode',
+  onboarding_style_discussion_label: 'Diskusi',
+  onboarding_style_discussion_desc: 'Lebih paham lewat tanya-jawab dan berdiskusi',
+  onboarding_goals_label: 'Apa tujuan belajarmu? (opsional)',
+  onboarding_goals_placeholder:
+    'Contoh: Ingin bisa membuat website sendiri, memahami algoritma untuk karir...',
+  onboarding_challenges_label: 'Apa tantangan terbesarmu dalam belajar? (opsional)',
+  onboarding_challenges_placeholder:
+    'Contoh: Sulit memahami konsep abstrak, kurang waktu untuk latihan...',
+  onboarding_back: '← Kembali',
+  onboarding_next: 'Lanjut →',
+  onboarding_finish: '🚀 Mulai Belajar',
+  onboarding_saving: 'Menyimpan...',
 } as const;
 
 const en = {
@@ -146,6 +185,45 @@ const en = {
   intro_slide4_title: 'Ready to start?',
   intro_slide4_body:
     'You can pull up this guide any time via the help button in each subtopic. Let’s begin by creating your first course.',
+
+  // ── Onboarding wizard ────────────────────────────────────────────
+  onboarding_loading: 'Loading...',
+  onboarding_title: 'Get to Know You 🎯',
+  onboarding_subtitle: 'Help us tailor the learning experience to you',
+  onboarding_step_identity: 'Identity',
+  onboarding_step_style: 'Learning Style',
+  onboarding_step_goals: 'Goals',
+  onboarding_display_name_label: 'Display Name',
+  onboarding_display_name_placeholder: 'e.g. Budi, Sarah, ...',
+  onboarding_display_name_hint: 'This name will be used inside the app',
+  onboarding_experience_label: 'Programming Experience',
+  onboarding_experience_none_label: 'Never',
+  onboarding_experience_none_desc: 'Learning programming for the first time',
+  onboarding_experience_beginner_label: 'Beginner',
+  onboarding_experience_beginner_desc: 'A little experience (< 6 months)',
+  onboarding_experience_intermediate_label: 'Intermediate',
+  onboarding_experience_intermediate_desc: 'Some experience (6-24 months)',
+  onboarding_experience_advanced_label: 'Advanced',
+  onboarding_experience_advanced_desc: 'Experienced (> 2 years)',
+  onboarding_style_label: 'Preferred Learning Style',
+  onboarding_style_visual_label: 'Visual',
+  onboarding_style_visual_desc: 'Learn best through images, diagrams, and videos',
+  onboarding_style_reading_label: 'Reading',
+  onboarding_style_reading_desc: 'Enjoy detailed written explanations',
+  onboarding_style_practice_label: 'Practice',
+  onboarding_style_practice_desc: 'Learn best by writing code hands-on',
+  onboarding_style_discussion_label: 'Discussion',
+  onboarding_style_discussion_desc: 'Understand best through Q&A and conversation',
+  onboarding_goals_label: 'What is your learning goal? (optional)',
+  onboarding_goals_placeholder:
+    'e.g. Build my own website, understand algorithms for a career change...',
+  onboarding_challenges_label: 'What is your biggest learning challenge? (optional)',
+  onboarding_challenges_placeholder:
+    'e.g. Trouble grasping abstract concepts, limited practice time...',
+  onboarding_back: '← Back',
+  onboarding_next: 'Next →',
+  onboarding_finish: '🚀 Start Learning',
+  onboarding_saving: 'Saving...',
 } as const satisfies Record<keyof typeof id, string>;
 
 export const dict = { id, en } as const;
