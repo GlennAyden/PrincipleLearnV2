@@ -169,6 +169,56 @@ const id = {
   request_course_step3_incomplete:
     'Data topik/level belum lengkap. Kembali ke langkah 1.',
 
+  // ── StructuredReflection ────────────────────────────────────────
+  reflection_title: 'Refleksi & Feedback',
+  reflection_subtitle:
+    'Semua bagian refleksi wajib diisi. Masukan materi tetap opsional.',
+  reflection_loading: 'Memuat refleksi terakhir...',
+  reflection_already_submitted: 'Refleksi subtopik ini sudah tersimpan.',
+  reflection_revision_hint:
+    'Form ini berisi versi terakhir dan tetap bisa diperbarui sebagai revisi.',
+  reflection_revision_count_prefix: 'Total revisi',
+  reflection_saved_revision: 'Revisi refleksi berhasil tersimpan.',
+  reflection_saved_first:
+    'Refleksi berhasil tersimpan. Kamu bisa melanjutkan setelah ini.',
+  reflection_saved_subtext: 'Perubahan baru tersimpan di server.',
+  reflection_rating_label: 'Seberapa puas kamu dengan materi ini?',
+  reflection_feedback_placeholder: 'Ada masukan untuk materi ini? (opsional)',
+  reflection_divider: 'Refleksi Belajar',
+  reflection_progress_suffix: 'terisi',
+  reflection_error_required:
+    'Harap isi semua bagian refleksi dan rating sebelum melanjutkan.',
+  reflection_error_load: 'Gagal memuat status refleksi',
+  reflection_error_save: 'Gagal menyimpan refleksi',
+  reflection_error_unknown: 'Unknown error',
+  reflection_missing_hint:
+    'Harap isi feedback dulu: empat textarea refleksi dan rating bintang wajib terisi.',
+  reflection_button_loading: 'Menyimpan...',
+  reflection_button_save_revision: 'Simpan Revisi',
+  reflection_button_save_first: 'Simpan Refleksi & Feedback',
+  reflection_star_low: 'Kurang',
+  reflection_star_ok: 'Cukup',
+  reflection_star_good: 'Baik',
+  reflection_star_great: 'Sangat Baik',
+  reflection_star_excellent: 'Luar Biasa',
+  reflection_understood_title: 'Apa yang Saya Pahami',
+  reflection_understood_question: 'Apa hal utama yang saya pahami hari ini?',
+  reflection_understood_placeholder:
+    'Contoh: Saya sekarang mengerti bahwa loop while terus berjalan selama kondisinya benar...',
+  reflection_confused_title: 'Yang Masih Membingungkan',
+  reflection_confused_question: 'Apa yang masih salah atau membingungkan?',
+  reflection_confused_placeholder:
+    'Contoh: Saya masih bingung kapan harus memilih for vs while loop...',
+  reflection_strategy_title: 'Strategi ke Depan',
+  reflection_strategy_question: 'Apa strategi belajar saya selanjutnya?',
+  reflection_strategy_placeholder:
+    'Contoh: Saya akan mencoba membuat 3 program kecil yang menggunakan kedua jenis loop...',
+  reflection_prompt_evolution_title: 'Evolusi Cara Bertanya',
+  reflection_prompt_evolution_question:
+    'Bagaimana cara saya bertanya berubah dari sesi sebelumnya?',
+  reflection_prompt_evolution_placeholder:
+    'Contoh: Awalnya saya hanya bertanya "apa itu loop", sekarang saya bertanya lebih spesifik...',
+
   // ── Subtopic page ───────────────────────────────────────────────
   subtopic_loading_course: 'Memuat kursus…',
   subtopic_error_course_not_found: 'Kursus tidak ditemukan',
@@ -506,6 +556,56 @@ const en = {
   request_course_step3_must_login: 'You must be logged in to create a course',
   request_course_step3_incomplete:
     'Topic / level data is incomplete. Going back to step 1.',
+
+  // ── StructuredReflection ────────────────────────────────────────
+  reflection_title: 'Reflection & Feedback',
+  reflection_subtitle:
+    'All reflection sections are required. Course feedback stays optional.',
+  reflection_loading: 'Loading your latest reflection...',
+  reflection_already_submitted: 'This subtopic reflection is saved.',
+  reflection_revision_hint:
+    'This form shows the latest version and can still be updated as a revision.',
+  reflection_revision_count_prefix: 'Total revisions',
+  reflection_saved_revision: 'Reflection revision saved.',
+  reflection_saved_first:
+    'Reflection saved. You can continue after this.',
+  reflection_saved_subtext: 'The latest changes are stored on the server.',
+  reflection_rating_label: 'How satisfied are you with this material?',
+  reflection_feedback_placeholder: 'Any feedback on this material? (optional)',
+  reflection_divider: 'Learning Reflection',
+  reflection_progress_suffix: 'filled',
+  reflection_error_required:
+    'Please complete every reflection section and the rating before continuing.',
+  reflection_error_load: 'Failed to load reflection status',
+  reflection_error_save: 'Failed to save reflection',
+  reflection_error_unknown: 'Unknown error',
+  reflection_missing_hint:
+    'Please fill in the feedback first: all four reflection textareas and the star rating are required.',
+  reflection_button_loading: 'Saving...',
+  reflection_button_save_revision: 'Save Revision',
+  reflection_button_save_first: 'Save Reflection & Feedback',
+  reflection_star_low: 'Poor',
+  reflection_star_ok: 'Fair',
+  reflection_star_good: 'Good',
+  reflection_star_great: 'Very Good',
+  reflection_star_excellent: 'Excellent',
+  reflection_understood_title: 'What I Understood',
+  reflection_understood_question: 'What is the main thing I understood today?',
+  reflection_understood_placeholder:
+    'Example: I now understand that a while loop keeps running as long as its condition is true...',
+  reflection_confused_title: 'What Is Still Confusing',
+  reflection_confused_question: 'What is still wrong or confusing?',
+  reflection_confused_placeholder:
+    'Example: I am still unsure when to choose for vs while loops...',
+  reflection_strategy_title: 'Next Strategy',
+  reflection_strategy_question: 'What is my next learning strategy?',
+  reflection_strategy_placeholder:
+    'Example: I will try to build 3 small programs that use both loop types...',
+  reflection_prompt_evolution_title: 'How My Questions Evolved',
+  reflection_prompt_evolution_question:
+    'How did the way I ask questions change from previous sessions?',
+  reflection_prompt_evolution_placeholder:
+    'Example: I used to just ask "what is a loop", now I ask more specific questions...',
 
   // ── Subtopic page ───────────────────────────────────────────────
   subtopic_loading_course: 'Loading course…',
