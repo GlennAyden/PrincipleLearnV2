@@ -6,6 +6,8 @@ import { useRouter } from 'next/navigation';
 import Link from 'next/link';
 import { useAuth } from '@/hooks/useAuth';
 import { apiFetch } from '@/lib/api-client';
+import LanguageToggle from '@/components/LanguageToggle/LanguageToggle';
+import { useLocale } from '@/context/LocaleContext';
 import styles from './page.module.scss';
 
 type Level = 'Beginner' | 'Intermediate' | 'Advanced';
@@ -25,6 +27,7 @@ const levelConfig: Record<Level, { color: string; icon: string }> = {
 export default function DashboardPage() {
   const router = useRouter();
   const { user, isLoading: authLoading, isAuthenticated, logout } = useAuth();
+  const { t } = useLocale();
   const [courses, setCourses] = useState<Course[]>([]);
   const [loading, setLoading] = useState(true);
   const [loadError, setLoadError] = useState<string | null>(null);
@@ -94,9 +97,9 @@ export default function DashboardPage() {
 
   const greeting = () => {
     const hour = new Date().getHours();
-    if (hour < 12) return 'Selamat Pagi';
-    if (hour < 17) return 'Selamat Siang';
-    return 'Selamat Malam';
+    if (hour < 12) return t('dashboard_greeting_morning');
+    if (hour < 17) return t('dashboard_greeting_afternoon');
+    return t('dashboard_greeting_night');
   };
 
   const userName = user?.name || user?.email?.split('@')[0] || 'Learner';
@@ -127,6 +130,7 @@ export default function DashboardPage() {
           </Link>
 
           <div className={styles.headerRight}>
+            <LanguageToggle />
             <div className={styles.userBadge}>
               <div className={styles.avatar}>
                 {userName.charAt(0).toUpperCase()}
@@ -139,7 +143,7 @@ export default function DashboardPage() {
                 <path d="M12 12.75L15 9.75L12 6.75" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" />
                 <path d="M15 9.75H6.75" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" />
               </svg>
-              Keluar
+              {t('common_logout')}
             </button>
           </div>
         </div>
@@ -155,8 +159,8 @@ export default function DashboardPage() {
             </h1>
             <p className={styles.greetingSub}>
               {courses.length > 0
-                ? `${courses.length} kursus sedang berjalan`
-                : 'Siap memulai perjalanan belajarmu?'
+                ? `${courses.length} ${t('dashboard_courses_running')}`
+                : t('dashboard_ready_to_start')
               }
             </p>
           </div>
