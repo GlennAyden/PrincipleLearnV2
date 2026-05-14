@@ -1,24 +1,39 @@
 // Path: src/app/request-course/step2/page.tsx
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useMemo } from 'react';
 import { useRouter } from 'next/navigation';
 import Link from 'next/link';
 import { useRequestCourse } from '@/context/RequestCourseContext';
 import { useAuth } from '@/hooks/useAuth';
+import { useLocale } from '@/context/LocaleContext';
 import type { Level } from '@/context/RequestCourseContext';
+import type { DictKey } from '@/lib/i18n/dict';
 import styles from './page.module.scss';
 
-const levels: { value: Level; label: string; icon: string; desc: string; color: string }[] = [
-  { value: 'Beginner',     label: 'Beginner',     icon: '🌱', desc: 'Mulai dari dasar',               color: 'green' },
-  { value: 'Intermediate', label: 'Intermediate', icon: '📚', desc: 'Sudah punya pengetahuan dasar', color: 'blue' },
-  { value: 'Advanced',     label: 'Advanced',     icon: '🚀', desc: 'Pembahasan mendalam & topik lanjutan', color: 'purple' },
-];
+interface LevelEntry {
+  value: Level;
+  label: string;
+  icon: string;
+  desc: string;
+  color: string;
+}
+
+function buildLevels(t: (key: DictKey) => string): LevelEntry[] {
+  return [
+    { value: 'Beginner',     label: t('request_course_step2_level_beginner_label'),     icon: '🌱', desc: t('request_course_step2_level_beginner_desc'),     color: 'green' },
+    { value: 'Intermediate', label: t('request_course_step2_level_intermediate_label'), icon: '📚', desc: t('request_course_step2_level_intermediate_desc'), color: 'blue' },
+    { value: 'Advanced',     label: t('request_course_step2_level_advanced_label'),     icon: '🚀', desc: t('request_course_step2_level_advanced_desc'),     color: 'purple' },
+  ];
+}
 
 export default function RequestCourseStep2() {
   const router = useRouter();
   const { answers, setPartial } = useRequestCourse();
   const { isAuthenticated, isLoading: authLoading } = useAuth();
+  const { t } = useLocale();
+
+  const levels = useMemo(() => buildLevels(t), [t]);
 
   const [level, setLevel]             = useState(answers.level);
   const [extraTopics, setExtraTopics] = useState(answers.extraTopics);
@@ -33,7 +48,7 @@ export default function RequestCourseStep2() {
 
   const handleContinue = () => {
     if (!level) {
-      setError('Pilih level pengetahuanmu');
+      setError(t('request_course_step2_pick_level'));
       return;
     }
     setPartial({ level, extraTopics });
@@ -49,7 +64,7 @@ export default function RequestCourseStep2() {
         <svg width="16" height="16" viewBox="0 0 16 16" fill="none">
           <path d="M10 12L6 8L10 4" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" />
         </svg>
-        Kembali
+        {t('request_course_step2_back')}
       </Link>
 
       <div className={styles.card}>
@@ -70,8 +85,8 @@ export default function RequestCourseStep2() {
               <path d="M4 18L14 24L24 18" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" />
             </svg>
           </div>
-          <h1 className={styles.title}>Level pengetahuanmu</h1>
-          <p className={styles.subtitle}>Bantu kami menyesuaikan tingkat kesulitan kursus</p>
+          <h1 className={styles.title}>{t('request_course_step2_title')}</h1>
+          <p className={styles.subtitle}>{t('request_course_step2_subtitle')}</p>
         </div>
 
         {error && (
@@ -112,19 +127,19 @@ export default function RequestCourseStep2() {
         {/* Extra topics */}
         <div className={styles.field}>
           <label className={styles.label}>
-            Topik spesifik yang ingin dipelajari
-            <span className={styles.optional}>(opsional)</span>
+            {t('request_course_step2_extra_label')}
+            <span className={styles.optional}>{t('request_course_step2_extra_optional')}</span>
           </label>
           <textarea
             className={styles.textarea}
-            placeholder="contoh: Neural Networks, Transfer Learning, NLP..."
+            placeholder={t('request_course_step2_extra_placeholder')}
             value={extraTopics}
             onChange={e => setExtraTopics(e.currentTarget.value)}
           />
         </div>
 
         <button className={styles.submitBtn} onClick={handleContinue}>
-          Lanjut
+          {t('request_course_step2_continue')}
           <svg width="16" height="16" viewBox="0 0 16 16" fill="none">
             <path d="M3 8H13M13 8L9 4M13 8L9 12" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" />
           </svg>

@@ -126,6 +126,23 @@ const id = {
     'Apa yang ingin kamu capai dengan mempelajari topik ini?',
   request_course_step1_continue: 'Lanjut',
   request_course_step1_fill_both: 'Mohon isi kedua kolom',
+
+  // ── Request course wizard — step 2 ───────────────────────────────
+  request_course_step2_back: 'Kembali',
+  request_course_step2_title: 'Level pengetahuanmu',
+  request_course_step2_subtitle: 'Bantu kami menyesuaikan tingkat kesulitan kursus',
+  request_course_step2_pick_level: 'Pilih level pengetahuanmu',
+  request_course_step2_level_beginner_label: 'Beginner',
+  request_course_step2_level_beginner_desc: 'Mulai dari dasar',
+  request_course_step2_level_intermediate_label: 'Intermediate',
+  request_course_step2_level_intermediate_desc: 'Sudah punya pengetahuan dasar',
+  request_course_step2_level_advanced_label: 'Advanced',
+  request_course_step2_level_advanced_desc: 'Pembahasan mendalam & topik lanjutan',
+  request_course_step2_extra_label: 'Topik spesifik yang ingin dipelajari',
+  request_course_step2_extra_optional: '(opsional)',
+  request_course_step2_extra_placeholder:
+    'contoh: Neural Networks, Transfer Learning, NLP...',
+  request_course_step2_continue: 'Lanjut',
 } as const;
 
 const en = {
@@ -250,6 +267,23 @@ const en = {
     'What do you want to achieve by studying this topic?',
   request_course_step1_continue: 'Continue',
   request_course_step1_fill_both: 'Please fill in both fields',
+
+  // ── Request course wizard — step 2 ───────────────────────────────
+  request_course_step2_back: 'Back',
+  request_course_step2_title: 'Your knowledge level',
+  request_course_step2_subtitle: 'Helps us tune the course difficulty to you',
+  request_course_step2_pick_level: 'Please pick your knowledge level',
+  request_course_step2_level_beginner_label: 'Beginner',
+  request_course_step2_level_beginner_desc: 'Start from the basics',
+  request_course_step2_level_intermediate_label: 'Intermediate',
+  request_course_step2_level_intermediate_desc: 'Already have the fundamentals',
+  request_course_step2_level_advanced_label: 'Advanced',
+  request_course_step2_level_advanced_desc: 'In-depth coverage and advanced topics',
+  request_course_step2_extra_label: 'Specific topics you want to learn',
+  request_course_step2_extra_optional: '(optional)',
+  request_course_step2_extra_placeholder:
+    'e.g. Neural Networks, Transfer Learning, NLP...',
+  request_course_step2_continue: 'Continue',
 } as const satisfies Record<keyof typeof id, string>;
 
 export const dict = { id, en } as const;
