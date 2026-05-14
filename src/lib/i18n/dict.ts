@@ -143,6 +143,23 @@ const id = {
   request_course_step2_extra_placeholder:
     'contoh: Neural Networks, Transfer Learning, NLP...',
   request_course_step2_continue: 'Lanjut',
+
+  // ── Request course wizard — step 3 ───────────────────────────────
+  request_course_step3_back: 'Kembali',
+  request_course_step3_loading: 'Memuat...',
+  request_course_step3_title: 'Konteks & Asumsi',
+  request_course_step3_subtitle: 'Bantu AI memahami kebutuhanmu di dunia nyata',
+  request_course_step3_problem_label: 'Masalah dunia nyata',
+  request_course_step3_problem_placeholder:
+    'Sebutkan satu masalah nyata yang ingin kamu selesaikan dengan mempelajari ini...',
+  request_course_step3_assumption_label: 'Asumsi awal',
+  request_course_step3_assumption_placeholder:
+    'Apa asumsi awalmu tentang materi ini sebelum kamu mulai belajar?',
+  request_course_step3_generate: 'Buat Kursus',
+  request_course_step3_fill_both: 'Mohon isi kedua kolom',
+  request_course_step3_must_login: 'Kamu harus masuk untuk membuat kursus',
+  request_course_step3_incomplete:
+    'Data topik/level belum lengkap. Kembali ke langkah 1.',
 } as const;
 
 const en = {
@@ -284,6 +301,23 @@ const en = {
   request_course_step2_extra_placeholder:
     'e.g. Neural Networks, Transfer Learning, NLP...',
   request_course_step2_continue: 'Continue',
+
+  // ── Request course wizard — step 3 ───────────────────────────────
+  request_course_step3_back: 'Back',
+  request_course_step3_loading: 'Loading...',
+  request_course_step3_title: 'Context & Assumptions',
+  request_course_step3_subtitle: 'Help the AI understand your real-world needs',
+  request_course_step3_problem_label: 'Real-world problem',
+  request_course_step3_problem_placeholder:
+    'Name one real-world problem you want to solve by learning this...',
+  request_course_step3_assumption_label: 'Initial assumption',
+  request_course_step3_assumption_placeholder:
+    'What is your initial assumption about this topic before you start?',
+  request_course_step3_generate: 'Create Course',
+  request_course_step3_fill_both: 'Please fill in both fields',
+  request_course_step3_must_login: 'You must be logged in to create a course',
+  request_course_step3_incomplete:
+    'Topic / level data is incomplete. Going back to step 1.',
 } as const satisfies Record<keyof typeof id, string>;
 
 export const dict = { id, en } as const;
