@@ -6,12 +6,14 @@ import { useRouter } from 'next/navigation';
 import Link from 'next/link';
 import { useRequestCourse } from '@/context/RequestCourseContext';
 import { useAuth } from '@/hooks/useAuth';
+import { useLocale } from '@/context/LocaleContext';
 import styles from './page.module.scss';
 
 export default function Step1() {
   const router = useRouter();
   const { answers, setPartial } = useRequestCourse();
   const { isAuthenticated, isLoading: authLoading } = useAuth();
+  const { t } = useLocale();
 
   const [topic, setTopic] = useState(answers.topic);
   const [goal, setGoal]   = useState(answers.goal);
@@ -26,7 +28,7 @@ export default function Step1() {
 
   const continueToStep2 = () => {
     if (!topic.trim() || !goal.trim()) {
-      setErr('Mohon isi kedua kolom');
+      setErr(t('request_course_step1_fill_both'));
       return;
     }
     setPartial({ topic, goal });
@@ -42,7 +44,7 @@ export default function Step1() {
         <svg width="16" height="16" viewBox="0 0 16 16" fill="none">
           <path d="M10 12L6 8L10 4" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" />
         </svg>
-        Dasbor
+        {t('request_course_dashboard_link')}
       </Link>
 
       <div className={styles.card}>
@@ -64,8 +66,8 @@ export default function Step1() {
               <path d="M7 13H11" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" />
             </svg>
           </div>
-          <h1 className={styles.title}>Apa yang ingin kamu pelajari?</h1>
-          <p className={styles.subtitle}>Beritahu kami topik dan tujuan belajarmu</p>
+          <h1 className={styles.title}>{t('request_course_step1_title')}</h1>
+          <p className={styles.subtitle}>{t('request_course_step1_subtitle')}</p>
         </div>
 
         {err && (
@@ -81,7 +83,7 @@ export default function Step1() {
 
         <div className={styles.form}>
           <div className={styles.field}>
-            <label className={styles.label}>Topik</label>
+            <label className={styles.label}>{t('request_course_step1_topic_label')}</label>
             <div className={styles.inputWrap}>
               <div className={styles.inputIcon}>
                 <svg width="18" height="18" viewBox="0 0 18 18" fill="none">
@@ -94,7 +96,7 @@ export default function Step1() {
                 inputMode="text"
                 autoComplete="off"
                 autoCapitalize="words"
-                placeholder="contoh: Machine Learning, Pengembangan Web, Data Science..."
+                placeholder={t('request_course_step1_topic_placeholder')}
                 value={topic}
                 onChange={e => setTopic(e.target.value)}
               />
@@ -102,7 +104,7 @@ export default function Step1() {
           </div>
 
           <div className={styles.field}>
-            <label className={styles.label}>Tujuan Belajar</label>
+            <label className={styles.label}>{t('request_course_step1_goal_label')}</label>
             <div className={styles.inputWrap}>
               <div className={styles.textareaIcon}>
                 <svg width="18" height="18" viewBox="0 0 18 18" fill="none">
@@ -113,7 +115,7 @@ export default function Step1() {
               </div>
               <textarea
                 className={styles.textarea}
-                placeholder="Apa yang ingin kamu capai dengan mempelajari topik ini?"
+                placeholder={t('request_course_step1_goal_placeholder')}
                 value={goal}
                 onChange={e => setGoal(e.target.value)}
               />
@@ -121,7 +123,7 @@ export default function Step1() {
           </div>
 
           <button className={styles.submitBtn} onClick={continueToStep2}>
-            Lanjut
+            {t('request_course_step1_continue')}
             <svg width="16" height="16" viewBox="0 0 16 16" fill="none">
               <path d="M3 8H13M13 8L9 4M13 8L9 12" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" />
             </svg>

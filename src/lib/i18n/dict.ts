@@ -113,6 +113,19 @@ const id = {
   onboarding_next: 'Lanjut →',
   onboarding_finish: '🚀 Mulai Belajar',
   onboarding_saving: 'Menyimpan...',
+
+  // ── Request course wizard — step 1 ───────────────────────────────
+  request_course_dashboard_link: 'Dasbor',
+  request_course_step1_title: 'Apa yang ingin kamu pelajari?',
+  request_course_step1_subtitle: 'Beritahu kami topik dan tujuan belajarmu',
+  request_course_step1_topic_label: 'Topik',
+  request_course_step1_topic_placeholder:
+    'contoh: Machine Learning, Pengembangan Web, Data Science...',
+  request_course_step1_goal_label: 'Tujuan Belajar',
+  request_course_step1_goal_placeholder:
+    'Apa yang ingin kamu capai dengan mempelajari topik ini?',
+  request_course_step1_continue: 'Lanjut',
+  request_course_step1_fill_both: 'Mohon isi kedua kolom',
 } as const;
 
 const en = {
@@ -224,6 +237,19 @@ const en = {
   onboarding_next: 'Next →',
   onboarding_finish: '🚀 Start Learning',
   onboarding_saving: 'Saving...',
+
+  // ── Request course wizard — step 1 ───────────────────────────────
+  request_course_dashboard_link: 'Dashboard',
+  request_course_step1_title: 'What do you want to learn?',
+  request_course_step1_subtitle: 'Tell us your topic and learning goal',
+  request_course_step1_topic_label: 'Topic',
+  request_course_step1_topic_placeholder:
+    'e.g. Machine Learning, Web Development, Data Science...',
+  request_course_step1_goal_label: 'Learning Goal',
+  request_course_step1_goal_placeholder:
+    'What do you want to achieve by studying this topic?',
+  request_course_step1_continue: 'Continue',
+  request_course_step1_fill_both: 'Please fill in both fields',
 } as const satisfies Record<keyof typeof id, string>;
 
 export const dict = { id, en } as const;
