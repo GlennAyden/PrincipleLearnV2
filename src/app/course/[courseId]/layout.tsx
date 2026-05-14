@@ -14,37 +14,36 @@ import { apiFetch } from '@/lib/api-client';
 import ProductTour, { type TourStep } from '@/components/ProductTour/ProductTour';
 import LanguageToggle from '@/components/LanguageToggle/LanguageToggle';
 import { useLocale } from '@/context/LocaleContext';
+import type { DictKey } from '@/lib/i18n/dict';
 
-const COURSE_TOUR_STEPS: TourStep[] = [
-  {
-    targetSelector: '[data-tour="sidebar"]',
-    title: 'Daftar modul & subtopic',
-    body:
-      'Di sini tersusun seluruh perjalanan belajarmu. Modul dan subtopic terbuka bertahap — mulai dari paling atas.',
-    placement: 'right',
-  },
-  {
-    targetSelector: '[data-tour="first-module"]',
-    title: 'Modul pertamamu',
-    body:
-      'Setiap modul punya beberapa subtopic. Klik modul untuk membuka daftar subtopic-nya.',
-    placement: 'right',
-  },
-  {
-    targetSelector: '[data-tour="first-subtopic"]',
-    title: 'Mulai belajar',
-    body:
-      'Setiap subtopic berisi materi + alat bantu (quiz, tanya AI, challenge, refleksi). Di dalam subtopic ada tombol "?" untuk panduan fitur kapan saja.',
-    placement: 'right',
-  },
-  {
-    targetSelector: '[data-tour="discussion-item"]',
-    title: 'Diskusi modul',
-    body:
-      'Di akhir tiap modul ada Diskusi Penutup. Terbuka setelah semua subtopic modul itu selesai (quiz + refleksi).',
-    placement: 'right',
-  },
-];
+function buildCourseTourSteps(t: (key: DictKey) => string): TourStep[] {
+  return [
+    {
+      targetSelector: '[data-tour="sidebar"]',
+      title: t('tour_step1_title'),
+      body: t('tour_step1_body'),
+      placement: 'right',
+    },
+    {
+      targetSelector: '[data-tour="first-module"]',
+      title: t('tour_step2_title'),
+      body: t('tour_step2_body'),
+      placement: 'right',
+    },
+    {
+      targetSelector: '[data-tour="first-subtopic"]',
+      title: t('tour_step3_title'),
+      body: t('tour_step3_body'),
+      placement: 'right',
+    },
+    {
+      targetSelector: '[data-tour="discussion-item"]',
+      title: t('tour_step4_title'),
+      body: t('tour_step4_body'),
+      placement: 'right',
+    },
+  ];
+}
 
 interface Subtopic {
   title: string;
@@ -196,7 +195,7 @@ export default function CourseLayout({ children }: { children: ReactNode }) {
   // `useMemo` guards against needless recomputation of the tour steps array on
   // every render — they're static, but React would otherwise compare new refs
   // in ProductTour's effect deps. Not a perf problem, just a hygiene win.
-  const tourSteps = useMemo(() => COURSE_TOUR_STEPS, []);
+  const tourSteps = useMemo(() => buildCourseTourSteps(t), [t]);
 
   const toggleSidebar = () => {
     setIsSidebarCollapsed((prev) => !prev);

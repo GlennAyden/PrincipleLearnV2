@@ -33,6 +33,20 @@ const id = {
   course_header_logout: 'Logout',
   course_header_menu_toggle: 'Toggle menu',
   course_outline_loading: 'Memuat outline…',
+
+  // ── Course product tour ──────────────────────────────────────────
+  tour_step1_title: 'Daftar modul & subtopic',
+  tour_step1_body:
+    'Di sini tersusun seluruh perjalanan belajarmu. Modul dan subtopic terbuka bertahap — mulai dari paling atas.',
+  tour_step2_title: 'Modul pertamamu',
+  tour_step2_body:
+    'Setiap modul punya beberapa subtopic. Klik modul untuk membuka daftar subtopic-nya.',
+  tour_step3_title: 'Mulai belajar',
+  tour_step3_body:
+    'Setiap subtopic berisi materi + alat bantu (quiz, tanya AI, challenge, refleksi). Di dalam subtopic ada tombol "?" untuk panduan fitur kapan saja.',
+  tour_step4_title: 'Diskusi modul',
+  tour_step4_body:
+    'Di akhir tiap modul ada Diskusi Penutup. Terbuka setelah semua subtopic modul itu selesai (quiz + refleksi).',
 } as const;
 
 const en = {
@@ -64,6 +78,20 @@ const en = {
   course_header_logout: 'Logout',
   course_header_menu_toggle: 'Toggle menu',
   course_outline_loading: 'Loading outline…',
+
+  // ── Course product tour ──────────────────────────────────────────
+  tour_step1_title: 'Modules & subtopics list',
+  tour_step1_body:
+    'Your entire learning path is laid out here. Modules and subtopics unlock in order — start from the top.',
+  tour_step2_title: 'Your first module',
+  tour_step2_body:
+    'Each module contains several subtopics. Click a module to open its subtopic list.',
+  tour_step3_title: 'Start learning',
+  tour_step3_body:
+    'Every subtopic has reading material plus tools (quiz, ask AI, challenge, reflection). Inside a subtopic, the "?" button opens a feature guide any time.',
+  tour_step4_title: 'Module discussion',
+  tour_step4_body:
+    'A Closing Discussion waits at the end of each module. It unlocks once every subtopic in that module is complete (quiz + reflection).',
 } as const satisfies Record<keyof typeof id, string>;
 
 export const dict = { id, en } as const;
