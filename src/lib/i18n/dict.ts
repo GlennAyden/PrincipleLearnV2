@@ -353,6 +353,38 @@ const id = {
   course_overview_discussion_body_subtopic_part3:
     'melalui dialog Socratic empat fase. Mentor virtual akan mengecek capaian dan memberi umpan balik.',
 
+  // ── Quiz component ───────────────────────────────────────────────
+  quiz_header: 'Waktu Kuis!',
+  quiz_completion_title: 'Anda sudah menyelesaikan kuis ini',
+  quiz_completion_latest_score_prefix: 'Skor terakhir:',
+  quiz_completion_attempt_prefix: 'Attempt #',
+  quiz_completion_attempt_of: 'dari',
+  quiz_completion_hint: 'Nilai dan jawaban lama tetap tersimpan untuk riwayat.',
+  quiz_reshuffle_preparing: 'Menyiapkan kuis baru...',
+  quiz_reshuffle_button: '↻ Reshuffle Kuis (kerjakan baru)',
+  quiz_reshuffle_button_short: '↻ Reshuffle Kuis',
+  quiz_reshuffle_preparing_short: 'Menyiapkan...',
+  quiz_reshuffle_confirm: 'Yakin ingin mengerjakan kuis baru? Nilai lama tetap tersimpan.',
+  quiz_empty_message:
+    'Quiz sedang disiapkan untuk subtopik ini. Silakan lanjut ke bagian selanjutnya atau kembali lagi nanti.',
+  quiz_results_panel_title: 'Hasil evaluasi tersimpan',
+  quiz_results_score_prefix: 'Skor:',
+  quiz_results_attempt_prefix: 'Attempt #',
+  quiz_correct_answer_prefix: 'Jawaban benar:',
+  quiz_reasoning_label: 'Kenapa memilih jawaban ini?',
+  quiz_reasoning_placeholder: 'Jelaskan alasan Anda memilih jawaban tersebut...',
+  quiz_submit_error_heading: 'Simpan gagal.',
+  quiz_submit_retry_button: '↻ Coba lagi',
+  quiz_submit_retrying: 'Mencoba ulang...',
+  quiz_check_button: 'Cek Hasil',
+  quiz_check_button_saving: 'Menyimpan...',
+  quiz_check_button_done: 'Selesai',
+  quiz_submit_error_status_prefix: 'Server mengembalikan status',
+  quiz_submit_error_save_prefix: 'Gagal menyimpan hasil kuis:',
+  quiz_submit_error_save_suffix: '. Silakan coba lagi atau muat ulang halaman.',
+  quiz_submit_error_network:
+    'Gagal menyimpan hasil kuis: koneksi terputus. Silakan coba lagi.',
+
   // ── HelpDrawer ───────────────────────────────────────────────────
   help_drawer_backdrop_aria: 'Tutup panduan',
   help_drawer_aria_label: 'Panduan fitur',
@@ -818,6 +850,38 @@ const en = {
   course_overview_discussion_body_subtopic_part2: 'in the module',
   course_overview_discussion_body_subtopic_part3:
     'via a four-phase Socratic dialogue. The virtual mentor will check your progress and give feedback.',
+
+  // ── Quiz component ───────────────────────────────────────────────
+  quiz_header: 'Quiz Time!',
+  quiz_completion_title: 'You have completed this quiz',
+  quiz_completion_latest_score_prefix: 'Latest score:',
+  quiz_completion_attempt_prefix: 'Attempt #',
+  quiz_completion_attempt_of: 'of',
+  quiz_completion_hint: 'Your previous score and answers are kept in history.',
+  quiz_reshuffle_preparing: 'Preparing a new quiz...',
+  quiz_reshuffle_button: '↻ Reshuffle Quiz (start over)',
+  quiz_reshuffle_button_short: '↻ Reshuffle Quiz',
+  quiz_reshuffle_preparing_short: 'Preparing...',
+  quiz_reshuffle_confirm: 'Are you sure you want to retake the quiz? Your old score stays saved.',
+  quiz_empty_message:
+    'A quiz is being prepared for this subtopic. Continue to the next section or come back later.',
+  quiz_results_panel_title: 'Evaluation saved',
+  quiz_results_score_prefix: 'Score:',
+  quiz_results_attempt_prefix: 'Attempt #',
+  quiz_correct_answer_prefix: 'Correct answer:',
+  quiz_reasoning_label: 'Why did you pick this answer?',
+  quiz_reasoning_placeholder: 'Explain the reason behind your choice...',
+  quiz_submit_error_heading: 'Save failed.',
+  quiz_submit_retry_button: '↻ Try again',
+  quiz_submit_retrying: 'Retrying...',
+  quiz_check_button: 'Check Results',
+  quiz_check_button_saving: 'Saving...',
+  quiz_check_button_done: 'Done',
+  quiz_submit_error_status_prefix: 'Server returned status',
+  quiz_submit_error_save_prefix: 'Failed to save quiz results:',
+  quiz_submit_error_save_suffix: '. Please try again or reload the page.',
+  quiz_submit_error_network:
+    'Failed to save quiz results: connection lost. Please try again.',
 
   // ── HelpDrawer ───────────────────────────────────────────────────
   help_drawer_backdrop_aria: 'Close help',

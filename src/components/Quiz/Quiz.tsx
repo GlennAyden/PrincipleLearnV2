@@ -1,9 +1,11 @@
 // src/components/Quiz/Quiz.tsx
+'use client';
 import React, { useState, useCallback, useEffect, useRef } from 'react';
 import styles from './Quiz.module.scss';
 import { useAuth } from '@/hooks/useAuth';
 import { apiFetch } from '@/lib/api-client';
 import ReasoningNote from '@/components/ReasoningNote/ReasoningNote';
+import { useLocale } from '@/context/LocaleContext';
 
 export interface QuizItem {
   question: string;
@@ -98,6 +100,7 @@ export default function Quiz({
 }: QuizProps) {
   const safeItems = questions;
   const { user } = useAuth();
+  const { t } = useLocale();
   const quizScopeKey = `${courseId}|${moduleTitle}|${subtopic}|${subtopicTitle}|${moduleIndex}|${subtopicIndex}`;
 
   const [selectedAnswers, setSelectedAnswers] = useState<(number | null)[]>(
@@ -232,23 +235,21 @@ export default function Quiz({
         console.error('Failed to save quiz attempt:', errorResult);
         const reason =
           (errorResult && typeof errorResult.error === 'string' && errorResult.error) ||
-          `Server mengembalikan status ${response.status}`;
+          `${t('quiz_submit_error_status_prefix')} ${response.status}`;
         setSubmitError(
-          `Gagal menyimpan hasil kuis: ${reason}. Silakan coba lagi atau muat ulang halaman.`,
+          `${t('quiz_submit_error_save_prefix')} ${reason}${t('quiz_submit_error_save_suffix')}`,
         );
         return null;
       } catch (error) {
         console.error('Error saving quiz attempt:', error);
-        setSubmitError(
-          'Gagal menyimpan hasil kuis: koneksi terputus. Silakan coba lagi.',
-        );
+        setSubmitError(t('quiz_submit_error_network'));
         return null;
       } finally {
         setLoading(false);
         submittingRef.current = false;
       }
     },
-    [submitted, user, courseId, moduleTitle, subtopic, subtopicTitle, moduleIndex, subtopicIndex, onCompleted],
+    [submitted, user, courseId, moduleTitle, subtopic, subtopicTitle, moduleIndex, subtopicIndex, onCompleted, t],
   );
 
   const buildAnswersFromState = useCallback(() => {
@@ -314,7 +315,7 @@ export default function Quiz({
   const handleReshuffleClick = async () => {
     if (!onReshuffle) return;
     const confirmed = typeof window !== 'undefined'
-      ? window.confirm('Yakin ingin mengerjakan kuis baru? Nilai lama tetap tersimpan.')
+      ? window.confirm(t('quiz_reshuffle_confirm'))
       : true;
     if (!confirmed) return;
     resetAttemptState(false);
@@ -417,16 +418,17 @@ export default function Quiz({
 
     return (
       <section className={styles.quizSection}>
-        <h3 className={styles.quizHeader}>Waktu Kuis!</h3>
+        <h3 className={styles.quizHeader}>{t('quiz_header')}</h3>
         <div className={styles.completionPanel}>
           <div className={styles.completionCheck}>✓</div>
-          <div className={styles.completionTitle}>Anda sudah menyelesaikan kuis ini</div>
+          <div className={styles.completionTitle}>{t('quiz_completion_title')}</div>
           <div className={styles.completionScore}>
-            Skor terakhir: <strong>{latest.score}%</strong> ({latest.correctCount}/{latest.totalQuestions})
+            {t('quiz_completion_latest_score_prefix')}{' '}
+            <strong>{latest.score}%</strong> ({latest.correctCount}/{latest.totalQuestions})
           </div>
           <div className={styles.completionMeta}>
-            Attempt #{latest.attemptNumber}
-            {attemptCount > 1 && ` dari ${attemptCount}`} • {submittedLabel}
+            {t('quiz_completion_attempt_prefix')}{latest.attemptNumber}
+            {attemptCount > 1 && ` ${t('quiz_completion_attempt_of')} ${attemptCount}`} • {submittedLabel}
           </div>
           {onReshuffle && (
             <button
@@ -435,11 +437,11 @@ export default function Quiz({
               onClick={handleReshuffleClick}
               disabled={reshuffling}
             >
-              {reshuffling ? 'Menyiapkan kuis baru...' : '↻ Reshuffle Kuis (kerjakan baru)'}
+              {reshuffling ? t('quiz_reshuffle_preparing') : t('quiz_reshuffle_button')}
             </button>
           )}
           <div className={styles.completionHint}>
-            Nilai dan jawaban lama tetap tersimpan untuk riwayat.
+            {t('quiz_completion_hint')}
           </div>
         </div>
       </section>
@@ -449,9 +451,9 @@ export default function Quiz({
   if (!safeItems.length) {
     return (
       <section className={styles.quizSection}>
-        <h3 className={styles.quizHeader}>Waktu Kuis!</h3>
+        <h3 className={styles.quizHeader}>{t('quiz_header')}</h3>
         <div className={styles.noQuizMessage}>
-          <p>Quiz sedang disiapkan untuk subtopik ini. Silakan lanjut ke bagian selanjutnya atau kembali lagi nanti.</p>
+          <p>{t('quiz_empty_message')}</p>
         </div>
       </section>
     );
@@ -460,15 +462,16 @@ export default function Quiz({
   // ── Render: interactive quiz ──
   return (
     <section className={styles.quizSection}>
-      <h3 className={styles.quizHeader}>Waktu Kuis!</h3>
+      <h3 className={styles.quizHeader}>{t('quiz_header')}</h3>
       {showResults && submissionSummary && (
         <div className={styles.completionPanel}>
-          <div className={styles.completionTitle}>Hasil evaluasi tersimpan</div>
+          <div className={styles.completionTitle}>{t('quiz_results_panel_title')}</div>
           <div className={styles.completionScore}>
-            Skor: <strong>{submissionSummary.score}%</strong> ({submissionSummary.correctCount}/{submissionSummary.totalQuestions})
+            {t('quiz_results_score_prefix')}{' '}
+            <strong>{submissionSummary.score}%</strong> ({submissionSummary.correctCount}/{submissionSummary.totalQuestions})
           </div>
           {submissionSummary.attemptNumber && (
-            <div className={styles.completionMeta}>Attempt #{submissionSummary.attemptNumber}</div>
+            <div className={styles.completionMeta}>{t('quiz_results_attempt_prefix')}{submissionSummary.attemptNumber}</div>
           )}
         </div>
       )}
@@ -521,7 +524,7 @@ export default function Quiz({
             if (!correctAnswerText) return null;
             return (
               <div className={styles.completionHint}>
-                Jawaban benar: <strong>{correctAnswerText}</strong>
+                {t('quiz_correct_answer_prefix')} <strong>{correctAnswerText}</strong>
               </div>
             );
           })()}
@@ -529,8 +532,8 @@ export default function Quiz({
             <ReasoningNote
               value={reasoningNotes[qIdx]}
               onChange={(val) => handleReasoningChange(qIdx, val)}
-              label="Kenapa memilih jawaban ini?"
-              placeholder="Jelaskan alasan Anda memilih jawaban tersebut..."
+              label={t('quiz_reasoning_label')}
+              placeholder={t('quiz_reasoning_placeholder')}
             />
           )}
         </div>
@@ -541,7 +544,7 @@ export default function Quiz({
           <span aria-hidden="true">⚠️</span>
           <div className={styles.submitErrorBody}>
             <div>
-              <strong>Simpan gagal.</strong> {submitError}
+              <strong>{t('quiz_submit_error_heading')}</strong> {submitError}
             </div>
             <button
               type="button"
@@ -549,7 +552,7 @@ export default function Quiz({
               onClick={handleRetrySubmit}
               disabled={loading}
             >
-              {loading ? 'Mencoba ulang...' : '↻ Coba lagi'}
+              {loading ? t('quiz_submit_retrying') : t('quiz_submit_retry_button')}
             </button>
           </div>
         </div>
@@ -562,7 +565,11 @@ export default function Quiz({
           disabled={selectedAnswers.some((ans) => ans === null) || showResults || loading}
           className={styles.checkButton}
         >
-          {loading ? 'Menyimpan...' : showResults ? 'Selesai' : 'Cek Hasil'}
+          {loading
+            ? t('quiz_check_button_saving')
+            : showResults
+              ? t('quiz_check_button_done')
+              : t('quiz_check_button')}
         </button>
         {showResults && onReshuffle && (
           <button
@@ -571,7 +578,7 @@ export default function Quiz({
             onClick={handleReshuffleClick}
             disabled={reshuffling}
           >
-            {reshuffling ? 'Menyiapkan...' : '↻ Reshuffle Kuis'}
+            {reshuffling ? t('quiz_reshuffle_preparing_short') : t('quiz_reshuffle_button_short')}
           </button>
         )}
       </div>
