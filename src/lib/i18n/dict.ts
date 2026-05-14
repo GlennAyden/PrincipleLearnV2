@@ -34,6 +34,14 @@ const id = {
   course_header_menu_toggle: 'Toggle menu',
   course_outline_loading: 'Memuat outline…',
 
+  // ── Course layout sidebar / nav alert ────────────────────────────
+  course_nav_alert_close: 'Tutup pesan',
+  course_module_locked_default: 'Selesaikan modul sebelumnya terlebih dahulu.',
+  course_item_locked_default: 'Selesaikan langkah sebelumnya terlebih dahulu.',
+  course_sidebar_label: 'Kursus',
+  course_sidebar_expand: 'Buka sidebar',
+  course_sidebar_collapse: 'Sembunyikan sidebar',
+
   // ── Course product tour ──────────────────────────────────────────
   tour_step1_title: 'Daftar modul & subtopic',
   tour_step1_body:
@@ -229,6 +237,14 @@ const en = {
   course_header_logout: 'Logout',
   course_header_menu_toggle: 'Toggle menu',
   course_outline_loading: 'Loading outline…',
+
+  // ── Course layout sidebar / nav alert ────────────────────────────
+  course_nav_alert_close: 'Close message',
+  course_module_locked_default: 'Complete the previous module first.',
+  course_item_locked_default: 'Complete the previous step first.',
+  course_sidebar_label: 'Courses',
+  course_sidebar_expand: 'Expand sidebar',
+  course_sidebar_collapse: 'Collapse sidebar',
 
   // ── Course product tour ──────────────────────────────────────────
   tour_step1_title: 'Modules & subtopics list',

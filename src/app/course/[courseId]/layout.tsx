@@ -298,7 +298,7 @@ export default function CourseLayout({ children }: { children: ReactNode }) {
                 </svg>
               </div>
               <div className={styles.sidebarHeaderText}>
-                <div className={styles.coursesLabel}>Courses</div>
+                <div className={styles.coursesLabel}>{t('course_sidebar_label')}</div>
                 <div className={styles.levelLabel}>{course.level}</div>
               </div>
             </div>
@@ -306,7 +306,7 @@ export default function CourseLayout({ children }: { children: ReactNode }) {
               type="button"
               className={styles.sidebarToggle}
               onClick={toggleSidebar}
-              aria-label={isSidebarCollapsed ? 'Expand sidebar' : 'Collapse sidebar'}
+              aria-label={isSidebarCollapsed ? t('course_sidebar_expand') : t('course_sidebar_collapse')}
             >
               <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" width="24" height="24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
                 {isSidebarCollapsed ? (
@@ -325,7 +325,7 @@ export default function CourseLayout({ children }: { children: ReactNode }) {
               <button
                 type="button"
                 className={styles.navAlertClose}
-                aria-label="Tutup pesan"
+                aria-label={t('course_nav_alert_close')}
                 onClick={() => setNavAlert(null)}
               >✕</button>
             </div>
@@ -337,7 +337,7 @@ export default function CourseLayout({ children }: { children: ReactNode }) {
             const moduleLockedReason =
               moduleStatus?.discussion.reason ??
               progress?.nextRequired?.reason ??
-              'Selesaikan modul sebelumnya terlebih dahulu.';
+              t('course_module_locked_default');
 
             return (
               <div key={idx} className={styles.navModule}>
@@ -382,7 +382,7 @@ export default function CourseLayout({ children }: { children: ReactNode }) {
                       const itemLockedReason =
                         itemStatus?.reason ??
                         moduleLockedReason ??
-                        'Selesaikan langkah sebelumnya terlebih dahulu.';
+                        t('course_item_locked_default');
 
                       const href = isDiscussion
                         ? (() => {
