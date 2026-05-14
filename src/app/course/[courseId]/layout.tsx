@@ -12,6 +12,8 @@ import { useLearningProgress } from '@/hooks/useLearningProgress';
 import { useOnboardingState } from '@/hooks/useOnboardingState';
 import { apiFetch } from '@/lib/api-client';
 import ProductTour, { type TourStep } from '@/components/ProductTour/ProductTour';
+import LanguageToggle from '@/components/LanguageToggle/LanguageToggle';
+import { useLocale } from '@/context/LocaleContext';
 
 const COURSE_TOUR_STEPS: TourStep[] = [
   {
@@ -72,6 +74,7 @@ export default function CourseLayout({ children }: { children: ReactNode }) {
   const searchParams = useSearchParams();
   const isDiscussionPage = pathname?.includes('/discussion/');
   const { logout } = useAuth();
+  const { t } = useLocale();
 
   // Ambil module index dari query param "?module=..."
   const moduleParam = searchParams.get('module');
@@ -212,7 +215,7 @@ export default function CourseLayout({ children }: { children: ReactNode }) {
   };
 
   if (loading || !course?.outline) {
-    return <div className={styles.loading}>Loading outline…</div>;
+    return <div className={styles.loading}>{t('course_outline_loading')}</div>;
   }
 
   return (
@@ -225,17 +228,17 @@ export default function CourseLayout({ children }: { children: ReactNode }) {
       <header className={styles.header}>
         <div className={styles.headerContent}>
           <div className={styles.headerLeft}>
-            <button type="button" onClick={() => router.back()} className={styles.backBtn} aria-label="Go back">
+            <button type="button" onClick={() => router.back()} className={styles.backBtn} aria-label={t('course_header_back')}>
               <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" width="24" height="24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
                 <path d="M19 12H5M12 19l-7-7 7-7"/>
               </svg>
-              <span>Back</span>
+              <span>{t('course_header_back')}</span>
             </button>
-            <button 
+            <button
               type="button"
-              className={styles.mobileMenuToggle} 
+              className={styles.mobileMenuToggle}
               onClick={() => setShowMobileMenu(!showMobileMenu)}
-              aria-label="Toggle menu"
+              aria-label={t('course_header_menu_toggle')}
               aria-expanded={showMobileMenu}
             >
               <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" width="24" height="24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
@@ -255,20 +258,21 @@ export default function CourseLayout({ children }: { children: ReactNode }) {
               <path d="M2 3h6a4 4 0 0 1 4 4v14a3 3 0 0 0-3-3H2z"/>
               <path d="M22 3h-6a4 4 0 0 0-4 4v14a3 3 0 0 1 3-3h7z"/>
             </svg>
-            <h1 className={styles.brand}>PrincipleLearn</h1>
+            <h1 className={styles.brand}>{t('brand_name')}</h1>
           </Link>
-          
+
           <div className={styles.headerRight}>
+            <LanguageToggle />
             <div className={styles.userLevel}>
               <span className={styles.levelBadge}>{course.level}</span>
             </div>
-            <button type="button" className={styles.logoutBtn} onClick={handleLogout} aria-label="Logout">
+            <button type="button" className={styles.logoutBtn} onClick={handleLogout} aria-label={t('course_header_logout')}>
               <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" width="24" height="24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
                 <path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4" />
                 <polyline points="16 17 21 12 16 7" />
                 <line x1="21" y1="12" x2="9" y2="12" />
               </svg>
-              <span className={styles.logoutText}>Logout</span>
+              <span className={styles.logoutText}>{t('course_header_logout')}</span>
             </button>
           </div>
         </div>
