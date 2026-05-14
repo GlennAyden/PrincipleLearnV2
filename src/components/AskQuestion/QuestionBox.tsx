@@ -1,9 +1,11 @@
 // src/components/AskQuestion/QuestionBox.tsx
+'use client';
 import React, { useState, useCallback } from 'react';
 import styles from './QuestionBox.module.scss';
 import { useAuth } from '@/hooks/useAuth';
 import { apiFetch, readStream } from '@/lib/api-client';
 import PromptBuilder, { PromptComponents } from '@/components/PromptBuilder/PromptBuilder';
+import { useLocale } from '@/context/LocaleContext';
 
 interface QuestionBoxProps {
   context: string;
@@ -27,12 +29,13 @@ export default function QuestionBox({
   const [loading, setLoading] = useState(false);
   const [streamingAnswer, setStreamingAnswer] = useState('');
   const { user } = useAuth();
+  const { t } = useLocale();
 
   const handleSubmit = useCallback(async (fullPrompt: string, components: PromptComponents) => {
     if (!fullPrompt.trim()) return;
     if (!user?.id) {
       console.warn('AskQuestion submission blocked: user not authenticated');
-      onAnswer(fullPrompt, 'Kamu harus masuk untuk bertanya.');
+      onAnswer(fullPrompt, t('ask_question_must_login'));
       return;
     }
 
@@ -80,7 +83,7 @@ export default function QuestionBox({
     } finally {
       setLoading(false);
     }
-  }, [context, onAnswer, user, courseId, subtopic, moduleIndex, subtopicIndex, pageNumber]);
+  }, [context, onAnswer, user, courseId, subtopic, moduleIndex, subtopicIndex, pageNumber, t]);
 
   return (
     <div className={styles.questionBoxContainer}>

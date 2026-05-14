@@ -1,12 +1,15 @@
 // src/components/ChallengeThinking/FeedbackList.tsx
+'use client';
 import React from 'react';
 import styles from './FeedbackList.module.scss';
+import { useLocale } from '@/context/LocaleContext';
 
 interface FeedbackListProps {
   feedback: string;
 }
 
 export default function FeedbackList({ feedback }: FeedbackListProps) {
+  const { t } = useLocale();
   if (!feedback) return null;
 
   // Strip any HTML tags defensively — AI-generated feedback is rendered
@@ -120,7 +123,7 @@ export default function FeedbackList({ feedback }: FeedbackListProps) {
             </svg>
           )}
         </div>
-        <span>Umpan Balik:</span>
+        <span>{t('challenge_feedback_label')}</span>
       </div>
       <div className={styles.feedbackContent}>
         {formatFeedback(feedback)}

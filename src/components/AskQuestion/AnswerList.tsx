@@ -1,6 +1,8 @@
 // src/components/AskQuestion/AnswerList.tsx
+'use client';
 import React from 'react';
 import styles from './AnswerList.module.scss';
+import { useLocale } from '@/context/LocaleContext';
 
 interface QAItem {
   question: string;
@@ -12,6 +14,7 @@ interface AnswerListProps {
 }
 
 export default function AnswerList({ qaList }: AnswerListProps) {
+  const { t } = useLocale();
   if (!qaList.length) return null;
 
   // Function to safely render HTML content
@@ -149,12 +152,12 @@ export default function AnswerList({ qaList }: AnswerListProps) {
         <div key={idx} className={styles.answerItem}>
           <div className={styles.questionSection}>
             <span className={styles.bullet}>●</span>
-            <p className={styles.questionLabel}>Pertanyaan :</p>
+            <p className={styles.questionLabel}>{t('ask_question_question_label')}</p>
             <p className={styles.questionText}>{qa.question}</p>
           </div>
           <div className={styles.answerSection}>
             <span className={styles.bullet}>●</span>
-            <p className={styles.answerLabel}>Jawaban :</p>
+            <p className={styles.answerLabel}>{t('ask_question_answer_label')}</p>
             <div className={styles.answerText}>
               {formatAnswer(qa.answer)}
             </div>

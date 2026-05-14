@@ -353,6 +353,15 @@ const id = {
   course_overview_discussion_body_subtopic_part3:
     'melalui dialog Socratic empat fase. Mentor virtual akan mengecek capaian dan memberi umpan balik.',
 
+  // ── AskQuestion ──────────────────────────────────────────────────
+  ask_question_must_login: 'Kamu harus masuk untuk bertanya.',
+  ask_question_answer_label: 'Jawaban :',
+  ask_question_question_label: 'Pertanyaan :',
+
+  // ── ChallengeThinking ────────────────────────────────────────────
+  challenge_question_title: 'Pertanyaan:',
+  challenge_feedback_label: 'Umpan Balik:',
+
   // ── Quiz component ───────────────────────────────────────────────
   quiz_header: 'Waktu Kuis!',
   quiz_completion_title: 'Anda sudah menyelesaikan kuis ini',
@@ -850,6 +859,15 @@ const en = {
   course_overview_discussion_body_subtopic_part2: 'in the module',
   course_overview_discussion_body_subtopic_part3:
     'via a four-phase Socratic dialogue. The virtual mentor will check your progress and give feedback.',
+
+  // ── AskQuestion ──────────────────────────────────────────────────
+  ask_question_must_login: 'You must be logged in to ask a question.',
+  ask_question_answer_label: 'Answer :',
+  ask_question_question_label: 'Question :',
+
+  // ── ChallengeThinking ────────────────────────────────────────────
+  challenge_question_title: 'Question:',
+  challenge_feedback_label: 'Feedback:',
 
   // ── Quiz component ───────────────────────────────────────────────
   quiz_header: 'Quiz Time!',

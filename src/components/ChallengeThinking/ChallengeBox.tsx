@@ -1,14 +1,17 @@
 // src/components/ChallengeThinking/ChallengeBox.tsx
+'use client';
 import React from 'react';
 import styles from './ChallengeBox.module.scss';
+import { useLocale } from '@/context/LocaleContext';
 
 interface ChallengeBoxProps {
   question: string;
 }
 
 export default function ChallengeBox({ question }: ChallengeBoxProps) {
+  const { t } = useLocale();
   if (!question) return null;
-  
+
   return (
     <div className={styles.challengeBoxContainer}>
       <div className={styles.questionIcon}>
@@ -17,7 +20,7 @@ export default function ChallengeBox({ question }: ChallengeBoxProps) {
         </svg>
       </div>
       <div className={styles.questionContent}>
-        <h3 className={styles.title}>Pertanyaan:</h3>
+        <h3 className={styles.title}>{t('challenge_question_title')}</h3>
         <p className={styles.challengeQuestion}>{question}</p>
       </div>
     </div>
