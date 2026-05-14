@@ -7,6 +7,8 @@ import { useEffect, useState, useRef, type ReactNode } from 'react';
 import { useLocalStorage } from '@/hooks/useLocalStorage';
 import { useLearningProgress } from '@/hooks/useLearningProgress';
 import { apiFetch } from '@/lib/api-client';
+import { useLocale } from '@/context/LocaleContext';
+import type { DictKey } from '@/lib/i18n/dict';
 import styles from './page.module.scss';
 import { Level } from '@/context/RequestCourseContext';
 import {
@@ -33,19 +35,25 @@ interface Course {
   outline?: ModuleOutline[];
 }
 
-const PHASE_LABELS: Record<string, string> = {
-  diagnosis: 'Diagnosis',
-  exploration: 'Penjelasan',
-  explanation: 'Penjelasan',
-  practice: 'Latihan',
-  synthesis: 'Konsolidasi',
-  consolidation: 'Konsolidasi',
-  completed: 'Selesai',
-};
+function buildPhaseLabels(t: (key: DictKey) => string): Record<string, string> {
+  return {
+    diagnosis: t('course_overview_phase_diagnosis'),
+    exploration: t('course_overview_phase_explanation'),
+    explanation: t('course_overview_phase_explanation'),
+    practice: t('course_overview_phase_practice'),
+    synthesis: t('course_overview_phase_consolidation'),
+    consolidation: t('course_overview_phase_consolidation'),
+    completed: t('course_overview_phase_completed'),
+  };
+}
 
-function getPhaseLabel(phase?: string) {
-  if (!phase) return 'Belum Mulai';
-  return PHASE_LABELS[phase.toLowerCase()] ?? phase;
+function getPhaseLabel(
+  phase: string | undefined,
+  t: (key: DictKey) => string,
+  phaseLabels: Record<string, string>,
+) {
+  if (!phase) return t('course_overview_phase_not_started');
+  return phaseLabels[phase.toLowerCase()] ?? phase;
 }
 
 function cleanTitle(value?: string) {
@@ -54,6 +62,7 @@ function cleanTitle(value?: string) {
 }
 
 function DetailDisclosure({ children }: { children: ReactNode }) {
+  const { t } = useLocale();
   const [isOpen, setIsOpen] = useState(false);
 
   return (
@@ -64,7 +73,7 @@ function DetailDisclosure({ children }: { children: ReactNode }) {
         aria-expanded={isOpen}
         onClick={() => setIsOpen((current) => !current)}
       >
-        {isOpen ? 'Sembunyikan detail' : 'Lihat detail'}
+        {isOpen ? t('course_overview_detail_hide') : t('course_overview_detail_show')}
       </button>
       <div className={styles.cardText}>{children}</div>
     </div>
@@ -124,6 +133,8 @@ function DiscussionCard({
   lockedReason = null,
 }: DiscussionCardProps) {
   const router = useRouter();
+  const { t } = useLocale();
+  const phaseLabels = buildPhaseLabels(t);
   const isModuleScope = scope === 'module';
   const [loading, setLoading] = useState(false);
   const [session, setSession] = useState<DiscussionSession | null>(null);
@@ -158,7 +169,7 @@ function DiscussionCard({
           return;
         }
         if (!res.ok) {
-          throw new Error('Gagal memuat status diskusi');
+          throw new Error(t('course_overview_discussion_load_error'));
         }
         const data = await res.json();
         if (!cancelled) {
@@ -197,14 +208,14 @@ function DiscussionCard({
   const learningGoals = session?.learningGoals ?? [];
   const completedGoals = learningGoals.filter((goal) => goal.covered).length;
   const statusLabel = status === 'completed'
-    ? 'Selesai'
+    ? t('course_overview_discussion_status_completed')
     : status === 'failed'
-    ? 'Gagal'
+    ? t('course_overview_discussion_status_failed')
     : status === 'in_progress'
-    ? 'Berlangsung'
+    ? t('course_overview_discussion_status_in_progress')
     : locked
-    ? 'Terkunci'
-    : 'Siap';
+    ? t('course_overview_discussion_status_locked')
+    : t('course_overview_discussion_status_ready');
   const cleanedModuleTitle = cleanTitle(moduleTitle);
 
   const handleNavigate = () => {
@@ -237,7 +248,7 @@ function DiscussionCard({
         {moduleIndex + 1}.{displayIndex + 1}
       </div>
       <div className={styles.cardTitleRow}>
-        <div className={styles.cardTitle}>Diskusi Wajib</div>
+        <div className={styles.cardTitle}>{t('course_overview_discussion_title')}</div>
         {showCompletionBadge && (
           <span className={`${styles.discussionBadge} ${badgeClass}`}>{statusLabel}</span>
         )}
@@ -246,29 +257,32 @@ function DiscussionCard({
         <p>
           {isModuleScope ? (
             <>
-              Langkah wajib untuk menutup seluruh materi dalam modul{' '}
-              <strong>{cleanedModuleTitle || moduleTitle}</strong> lewat dialog Socratic empat
-              fase. Mentor virtual akan membantu menilai capaian setiap subtopik dan memberikan
-              umpan balik.
+              {t('course_overview_discussion_body_module_part1')}{' '}
+              <strong>{cleanedModuleTitle || moduleTitle}</strong>{' '}
+              {t('course_overview_discussion_body_module_part2')}
             </>
           ) : (
             <>
-              Langkah wajib untuk menutup subtopik <strong>{displaySubtopicTitle}</strong> dalam modul{' '}
-              <strong>{cleanedModuleTitle || moduleTitle}</strong> melalui dialog Socratic empat
-              fase. Mentor virtual akan mengecek capaian dan memberi umpan balik.
+              {t('course_overview_discussion_body_subtopic_part1')}{' '}
+              <strong>{displaySubtopicTitle}</strong>{' '}
+              {t('course_overview_discussion_body_subtopic_part2')}{' '}
+              <strong>{cleanedModuleTitle || moduleTitle}</strong>{' '}
+              {t('course_overview_discussion_body_subtopic_part3')}
             </>
           )}
         </p>
         {session && (
           <p className={styles.discussionMeta}>
-            Fase saat ini: <strong>{getPhaseLabel(session.phase)}</strong> •{' '}
-            {completedGoals}/{learningGoals.length} tujuan tercapai
+            {t('course_overview_discussion_phase_label')}:{' '}
+            <strong>{getPhaseLabel(session.phase, t, phaseLabels)}</strong> •{' '}
+            {completedGoals}/{learningGoals.length}{' '}
+            {t('course_overview_discussion_goals_suffix')}
           </p>
         )}
         {error && <p className={styles.discussionError}>{error}</p>}
         {locked && (
           <p className={styles.lockedHint}>
-            {lockedReason || 'Diskusi akan terbuka setelah semua prasyarat selesai.'}
+            {lockedReason || t('course_overview_discussion_locked_default')}
           </p>
         )}
       </DetailDisclosure>
@@ -279,21 +293,21 @@ function DiscussionCard({
         aria-disabled={locked}
       >
         {locked
-          ? 'Terkunci'
+          ? t('course_overview_discussion_btn_locked')
           : status === 'idle'
-          ? 'Mulai Diskusi Wajib'
+          ? t('course_overview_discussion_btn_start')
           : status === 'completed'
-          ? 'Lihat Ringkasan Diskusi Wajib'
-          : 'Lanjutkan Diskusi Wajib'}
+          ? t('course_overview_discussion_btn_summary')
+          : t('course_overview_discussion_btn_continue')}
       </button>
       {locked && lockedAlert && (
         <div className={styles.warningBanner} role="alert" aria-live="polite">
           <span className={styles.warningBannerIcon} aria-hidden="true">⚠️</span>
-          <span>{lockedReason || 'Selesaikan prasyarat modul terlebih dahulu.'}</span>
+          <span>{lockedReason || t('course_overview_discussion_locked_warn')}</span>
           <button
             type="button"
             className={styles.warningBannerClose}
-            aria-label="Tutup pesan"
+            aria-label={t('course_overview_discussion_close_aria')}
             onClick={() => setLockedAlert(false)}
           >✕</button>
         </div>
@@ -303,6 +317,7 @@ function DiscussionCard({
 }
 export default function CourseOverviewPage() {
   const router = useRouter();
+  const { t } = useLocale();
   const { courseId } = useParams<{ courseId: string }>();
   const searchParams = useSearchParams();
 
@@ -339,15 +354,15 @@ export default function CourseOverviewPage() {
         console.log(`[Course Page] DEBUG: Response ok:`, response.ok);
 
         if (response.status === 403) {
-          setError('Anda tidak memiliki akses ke kursus ini');
+          setError(t('course_overview_error_no_access'));
           return;
         }
         if (response.status === 404) {
-          setError('Kursus tidak ditemukan');
+          setError(t('course_overview_error_not_found'));
           return;
         }
         if (!response.ok) {
-          setError('Gagal memuat kursus');
+          setError(t('course_overview_error_load_failed'));
           return;
         }
 
@@ -362,7 +377,7 @@ export default function CourseOverviewPage() {
           // Check if subtopics exist
           if (!result.course.subtopics || !Array.isArray(result.course.subtopics)) {
             console.error(`[Course Page] ERROR: No subtopics or invalid subtopics array`);
-            setError('Course has no content available');
+            setError(t('course_overview_error_no_content'));
             return;
           }
           
@@ -403,7 +418,7 @@ export default function CourseOverviewPage() {
           // empty shell that confuses the user.
           if (parseFailures.length === result.course.subtopics.length) {
             console.error('[Course Page] All module outlines failed to parse', { parseFailures });
-            setError('Data kursus rusak. Silakan hubungi admin atau coba membuat kursus baru.');
+            setError(t('course_overview_error_corrupt'));
             return;
           }
           if (parseFailures.length > 0) {
@@ -426,11 +441,11 @@ export default function CourseOverviewPage() {
           
         } else {
           console.error('[Course Page] Failed to load course:', result.error);
-          setError(result.error || 'Failed to load course');
+          setError(result.error || t('course_overview_error_generic'));
         }
       } catch (error) {
         console.error('[Course Page] Error loading course:', error);
-        setError('Error loading course');
+        setError(t('course_overview_error_loading'));
       } finally {
         setLoading(false);
       }
@@ -443,15 +458,15 @@ export default function CourseOverviewPage() {
   if (error)
     return (
       <div className={styles.error}>
-        Error: {error}{' '}
-        <button onClick={() => window.location.reload()}>Coba Lagi</button>
+        {t('course_overview_error_prefix')}: {error}{' '}
+        <button onClick={() => window.location.reload()}>{t('course_overview_retry')}</button>
       </div>
     );
-  if (!course) return <div className={styles.loading}>Kursus tidak ditemukan</div>;
+  if (!course) return <div className={styles.loading}>{t('course_overview_loading')}</div>;
   if (!course.outline || course.outline.length === 0) {
     return (
       <div className={styles.error}>
-        No course content available. <button onClick={() => window.location.reload()}>Coba Lagi</button>
+        {t('course_overview_error_no_outline')} <button onClick={() => window.location.reload()}>{t('course_overview_retry')}</button>
       </div>
     );
   }
@@ -461,13 +476,12 @@ export default function CourseOverviewPage() {
   const currentModuleProgress =
     progress?.modules.find((item) => item.moduleIndex === activeModule) ?? null;
   const progressUnavailable = Boolean(progressError && !progress);
-  const progressUnavailableReason =
-    'Gagal memuat progres belajar. Silakan coba lagi sebelum membuka materi atau diskusi.';
+  const progressUnavailableReason = t('course_overview_progress_unavailable');
   
   // Fungsi untuk memformat overview text, mendeteksi paragraf atau lists
   const formatOverview = (text: string) => {
     // Jika tidak ada text, kembalikan pesan default
-    if (!text) return <p>Ringkasan singkat subtopik akan segera tersedia.</p>;
+    if (!text) return <p>{t('course_overview_summary_placeholder')}</p>;
     
     // Memisahkan teks menjadi paragraf berdasarkan baris baru
     const paragraphs = text.split(/\n+/);
@@ -501,7 +515,7 @@ export default function CourseOverviewPage() {
           {activeModule + 1}. {currentModule.module}
         </h1>
         <p className={styles.topicDescription}>
-          Pelajari konsep-konsep utama dalam modul ini dan kuasai aplikasinya.
+          {t('course_overview_description')}
         </p>
       </div>
 
@@ -547,8 +561,8 @@ export default function CourseOverviewPage() {
           const title = cleanTitle(rawTitle);
           const overview =
             typeof sub === 'string'
-              ? 'Ringkasan singkat subtopik akan segera tersedia.'
-              : sub?.overview ?? 'Ringkasan singkat subtopik akan segera tersedia.';
+              ? t('course_overview_summary_placeholder')
+              : sub?.overview ?? t('course_overview_summary_placeholder');
           const subtopicKey = `${courseId}:${activeModule}:${idx}`;
           const hasGenerated = Boolean(subtopicProgress?.[subtopicKey]);
           const subtopicStatus =
@@ -557,14 +571,14 @@ export default function CourseOverviewPage() {
           const lockedReason =
             progressUnavailable
               ? progressUnavailableReason
-              : subtopicStatus?.reason ?? 'Selesaikan langkah sebelumnya terlebih dahulu.';
+              : subtopicStatus?.reason ?? t('course_overview_locked_default');
           const buttonLabel = locked
-            ? 'Terkunci'
+            ? t('course_overview_button_locked')
             : subtopicStatus?.completed
-              ? 'Lihat Materi'
+              ? t('course_overview_button_view')
               : subtopicStatus?.generated || hasGenerated
-                ? 'Lanjutkan Materi'
-                : 'Mulai Materi';
+                ? t('course_overview_button_continue')
+                : t('course_overview_button_start');
 
           return (
             <div key={idx} className={styles.card}>

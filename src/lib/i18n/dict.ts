@@ -169,6 +169,66 @@ const id = {
   request_course_step3_incomplete:
     'Data topik/level belum lengkap. Kembali ke langkah 1.',
 
+  // ── Course overview page ────────────────────────────────────────
+  course_overview_loading: 'Kursus tidak ditemukan',
+  course_overview_error_no_access: 'Anda tidak memiliki akses ke kursus ini',
+  course_overview_error_not_found: 'Kursus tidak ditemukan',
+  course_overview_error_load_failed: 'Gagal memuat kursus',
+  course_overview_error_no_content: 'Course has no content available',
+  course_overview_error_corrupt:
+    'Data kursus rusak. Silakan hubungi admin atau coba membuat kursus baru.',
+  course_overview_error_generic: 'Failed to load course',
+  course_overview_error_loading: 'Error loading course',
+  course_overview_error_no_outline: 'No course content available.',
+  course_overview_error_prefix: 'Error',
+  course_overview_retry: 'Coba Lagi',
+  course_overview_progress_unavailable:
+    'Gagal memuat progres belajar. Silakan coba lagi sebelum membuka materi atau diskusi.',
+  course_overview_description:
+    'Pelajari konsep-konsep utama dalam modul ini dan kuasai aplikasinya.',
+  course_overview_summary_placeholder:
+    'Ringkasan singkat subtopik akan segera tersedia.',
+  course_overview_detail_hide: 'Sembunyikan detail',
+  course_overview_detail_show: 'Lihat detail',
+  course_overview_button_locked: 'Terkunci',
+  course_overview_button_view: 'Lihat Materi',
+  course_overview_button_continue: 'Lanjutkan Materi',
+  course_overview_button_start: 'Mulai Materi',
+  course_overview_locked_default: 'Selesaikan langkah sebelumnya terlebih dahulu.',
+  course_overview_discussion_title: 'Diskusi Wajib',
+  course_overview_discussion_status_completed: 'Selesai',
+  course_overview_discussion_status_failed: 'Gagal',
+  course_overview_discussion_status_in_progress: 'Berlangsung',
+  course_overview_discussion_status_locked: 'Terkunci',
+  course_overview_discussion_status_ready: 'Siap',
+  course_overview_discussion_phase_label: 'Fase saat ini',
+  course_overview_discussion_goals_suffix: 'tujuan tercapai',
+  course_overview_discussion_locked_default:
+    'Diskusi akan terbuka setelah semua prasyarat selesai.',
+  course_overview_discussion_locked_warn:
+    'Selesaikan prasyarat modul terlebih dahulu.',
+  course_overview_discussion_close_aria: 'Tutup pesan',
+  course_overview_discussion_btn_locked: 'Terkunci',
+  course_overview_discussion_btn_start: 'Mulai Diskusi Wajib',
+  course_overview_discussion_btn_summary: 'Lihat Ringkasan Diskusi Wajib',
+  course_overview_discussion_btn_continue: 'Lanjutkan Diskusi Wajib',
+  course_overview_discussion_load_error: 'Gagal memuat status diskusi',
+  course_overview_phase_diagnosis: 'Diagnosis',
+  course_overview_phase_explanation: 'Penjelasan',
+  course_overview_phase_practice: 'Latihan',
+  course_overview_phase_consolidation: 'Konsolidasi',
+  course_overview_phase_completed: 'Selesai',
+  course_overview_phase_not_started: 'Belum Mulai',
+  course_overview_discussion_body_module_part1:
+    'Langkah wajib untuk menutup seluruh materi dalam modul',
+  course_overview_discussion_body_module_part2:
+    'lewat dialog Socratic empat fase. Mentor virtual akan membantu menilai capaian setiap subtopik dan memberikan umpan balik.',
+  course_overview_discussion_body_subtopic_part1:
+    'Langkah wajib untuk menutup subtopik',
+  course_overview_discussion_body_subtopic_part2: 'dalam modul',
+  course_overview_discussion_body_subtopic_part3:
+    'melalui dialog Socratic empat fase. Mentor virtual akan mengecek capaian dan memberi umpan balik.',
+
   // ── Request course wizard — generating ───────────────────────────
   request_course_generating_stage_sending_label: 'Mengirim Permintaan',
   request_course_generating_stage_sending_desc: 'Mengirim detail kursus ke server...',
@@ -372,6 +432,66 @@ const en = {
   request_course_step3_must_login: 'You must be logged in to create a course',
   request_course_step3_incomplete:
     'Topic / level data is incomplete. Going back to step 1.',
+
+  // ── Course overview page ────────────────────────────────────────
+  course_overview_loading: 'Course not found',
+  course_overview_error_no_access: 'You do not have access to this course',
+  course_overview_error_not_found: 'Course not found',
+  course_overview_error_load_failed: 'Failed to load course',
+  course_overview_error_no_content: 'Course has no content available',
+  course_overview_error_corrupt:
+    'Course data is corrupted. Please contact admin or try creating a new course.',
+  course_overview_error_generic: 'Failed to load course',
+  course_overview_error_loading: 'Error loading course',
+  course_overview_error_no_outline: 'No course content available.',
+  course_overview_error_prefix: 'Error',
+  course_overview_retry: 'Try Again',
+  course_overview_progress_unavailable:
+    'Failed to load learning progress. Please try again before opening materials or discussions.',
+  course_overview_description:
+    'Learn the key concepts in this module and master their applications.',
+  course_overview_summary_placeholder:
+    'A brief subtopic overview will be available soon.',
+  course_overview_detail_hide: 'Hide details',
+  course_overview_detail_show: 'View details',
+  course_overview_button_locked: 'Locked',
+  course_overview_button_view: 'View Material',
+  course_overview_button_continue: 'Continue',
+  course_overview_button_start: 'Start',
+  course_overview_locked_default: 'Complete the previous step first.',
+  course_overview_discussion_title: 'Required Discussion',
+  course_overview_discussion_status_completed: 'Completed',
+  course_overview_discussion_status_failed: 'Failed',
+  course_overview_discussion_status_in_progress: 'In progress',
+  course_overview_discussion_status_locked: 'Locked',
+  course_overview_discussion_status_ready: 'Ready',
+  course_overview_discussion_phase_label: 'Current phase',
+  course_overview_discussion_goals_suffix: 'goals reached',
+  course_overview_discussion_locked_default:
+    'The discussion unlocks once all prerequisites are complete.',
+  course_overview_discussion_locked_warn:
+    'Complete the module prerequisites first.',
+  course_overview_discussion_close_aria: 'Close message',
+  course_overview_discussion_btn_locked: 'Locked',
+  course_overview_discussion_btn_start: 'Start Required Discussion',
+  course_overview_discussion_btn_summary: 'View Discussion Summary',
+  course_overview_discussion_btn_continue: 'Continue Discussion',
+  course_overview_discussion_load_error: 'Failed to load discussion status',
+  course_overview_phase_diagnosis: 'Diagnosis',
+  course_overview_phase_explanation: 'Explanation',
+  course_overview_phase_practice: 'Practice',
+  course_overview_phase_consolidation: 'Consolidation',
+  course_overview_phase_completed: 'Completed',
+  course_overview_phase_not_started: 'Not started',
+  course_overview_discussion_body_module_part1:
+    'A required step to close out the entire module',
+  course_overview_discussion_body_module_part2:
+    'via a four-phase Socratic dialogue. The virtual mentor will help assess your progress on each subtopic and provide feedback.',
+  course_overview_discussion_body_subtopic_part1:
+    'A required step to close out the subtopic',
+  course_overview_discussion_body_subtopic_part2: 'in the module',
+  course_overview_discussion_body_subtopic_part3:
+    'via a four-phase Socratic dialogue. The virtual mentor will check your progress and give feedback.',
 
   // ── Request course wizard — generating ───────────────────────────
   request_course_generating_stage_sending_label: 'Sending Request',
