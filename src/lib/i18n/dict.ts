@@ -160,6 +160,44 @@ const id = {
   request_course_step3_must_login: 'Kamu harus masuk untuk membuat kursus',
   request_course_step3_incomplete:
     'Data topik/level belum lengkap. Kembali ke langkah 1.',
+
+  // ── Request course wizard — generating ───────────────────────────
+  request_course_generating_stage_sending_label: 'Mengirim Permintaan',
+  request_course_generating_stage_sending_desc: 'Mengirim detail kursus ke server...',
+  request_course_generating_stage_ai_label: 'Proses AI',
+  request_course_generating_stage_ai_desc: 'AI sedang membuat outline kursusmu...',
+  request_course_generating_stage_processing_label: 'Memproses Respons',
+  request_course_generating_stage_processing_desc:
+    'Memeriksa dan memvalidasi respons AI...',
+  request_course_generating_stage_saving_label: 'Menyimpan Kursus',
+  request_course_generating_stage_saving_desc: 'Menyimpan kursus ke database...',
+  request_course_generating_stage_complete_label: 'Selesai!',
+  request_course_generating_stage_complete_desc:
+    'Kursus berhasil dibuat! Mengalihkan...',
+  request_course_generating_stage_error_label: 'Error',
+  request_course_generating_stage_error_desc: 'Terjadi kesalahan.',
+  request_course_generating_tip1: 'Menyusun modul berdasarkan level belajarmu...',
+  request_course_generating_tip2: 'Menghubungkan topik dengan masalah nyatamu...',
+  request_course_generating_tip3: 'Membangun jalur pembelajaran bertahap...',
+  request_course_generating_tip4: 'Menyesuaikan konten dengan tujuanmu...',
+  request_course_generating_tip5:
+    'Mengorganisir subtopik untuk pemahaman optimal...',
+  request_course_generating_tip6: 'Hampir selesai — menyempurnakan outline...',
+  request_course_generating_in_flight:
+    'Pembuatan kursus sudah berjalan di tab ini. Tunggu hingga selesai atau kembali ke step sebelumnya untuk mulai ulang.',
+  request_course_generating_before_unload:
+    'Kursusmu sedang dibuat. Keluar sekarang akan membatalkan proses.',
+  request_course_generating_timeout:
+    'Pembuatan kursus timeout. Coba lagi dengan topik yang lebih sederhana.',
+  request_course_generating_server_error:
+    'Terjadi error server. Coba lagi beberapa saat.',
+  request_course_generating_unexpected_status:
+    'Respons server tidak terduga. Coba lagi.',
+  request_course_generating_cancelled: 'Pembuatan kursus dibatalkan.',
+  request_course_generating_unexpected_error: 'Terjadi kesalahan tidak terduga',
+  request_course_generating_retry: 'Kembali & Coba Lagi',
+  request_course_generating_summary_topic: 'Topik',
+  request_course_generating_summary_level: 'Level',
 } as const;
 
 const en = {
@@ -318,6 +356,46 @@ const en = {
   request_course_step3_must_login: 'You must be logged in to create a course',
   request_course_step3_incomplete:
     'Topic / level data is incomplete. Going back to step 1.',
+
+  // ── Request course wizard — generating ───────────────────────────
+  request_course_generating_stage_sending_label: 'Sending Request',
+  request_course_generating_stage_sending_desc:
+    'Sending course details to the server...',
+  request_course_generating_stage_ai_label: 'AI Processing',
+  request_course_generating_stage_ai_desc:
+    'The AI is drafting your course outline...',
+  request_course_generating_stage_processing_label: 'Processing Response',
+  request_course_generating_stage_processing_desc:
+    'Checking and validating the AI response...',
+  request_course_generating_stage_saving_label: 'Saving Course',
+  request_course_generating_stage_saving_desc: 'Saving the course to the database...',
+  request_course_generating_stage_complete_label: 'Done!',
+  request_course_generating_stage_complete_desc:
+    'Course created successfully! Redirecting...',
+  request_course_generating_stage_error_label: 'Error',
+  request_course_generating_stage_error_desc: 'Something went wrong.',
+  request_course_generating_tip1: 'Building modules around your learning level...',
+  request_course_generating_tip2: 'Linking topics to your real-world problem...',
+  request_course_generating_tip3: 'Designing a step-by-step learning path...',
+  request_course_generating_tip4: 'Tuning content to your goal...',
+  request_course_generating_tip5:
+    'Organising subtopics for the best comprehension...',
+  request_course_generating_tip6: 'Almost done — polishing the outline...',
+  request_course_generating_in_flight:
+    'Course generation is already running in this tab. Wait for it to finish or go back to the previous step to start over.',
+  request_course_generating_before_unload:
+    'Your course is being created. Leaving now will cancel it.',
+  request_course_generating_timeout:
+    'Course generation timed out. Try again with a simpler topic.',
+  request_course_generating_server_error:
+    'A server error occurred. Try again in a moment.',
+  request_course_generating_unexpected_status:
+    'Unexpected server response. Try again.',
+  request_course_generating_cancelled: 'Course generation was cancelled.',
+  request_course_generating_unexpected_error: 'An unexpected error occurred',
+  request_course_generating_retry: 'Back & Try Again',
+  request_course_generating_summary_topic: 'Topic',
+  request_course_generating_summary_level: 'Level',
 } as const satisfies Record<keyof typeof id, string>;
 
 export const dict = { id, en } as const;

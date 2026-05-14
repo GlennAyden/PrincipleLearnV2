@@ -1,11 +1,13 @@
 // Path: src/app/request-course/generating/page.tsx
 'use client';
 
-import { useState, useEffect, useRef, useCallback } from 'react';
+import { useState, useEffect, useRef, useCallback, useMemo } from 'react';
 import { useRouter } from 'next/navigation';
 import { useRequestCourse } from '@/context/RequestCourseContext';
 import { useAuth } from '@/hooks/useAuth';
+import { useLocale } from '@/context/LocaleContext';
 import { apiFetch } from '@/lib/api-client';
+import type { DictKey } from '@/lib/i18n/dict';
 import styles from './page.module.scss';
 
 type Stage = 'sending' | 'ai-generating' | 'processing' | 'saving' | 'complete' | 'error';
@@ -17,28 +19,36 @@ interface StageInfo {
   targetPercent: number;
 }
 
-const STAGES: Record<Stage, StageInfo> = {
-  'sending':       { label: 'Mengirim Permintaan',  description: 'Mengirim detail kursus ke server...',             basePercent: 0,   targetPercent: 10 },
-  'ai-generating': { label: 'Proses AI',            description: 'AI sedang membuat outline kursusmu...',        basePercent: 10,  targetPercent: 65 },
-  'processing':    { label: 'Memproses Respons',    description: 'Memeriksa dan memvalidasi respons AI...',       basePercent: 65,  targetPercent: 75 },
-  'saving':        { label: 'Menyimpan Kursus',     description: 'Menyimpan kursus ke database...',              basePercent: 75,  targetPercent: 90 },
-  'complete':      { label: 'Selesai!',             description: 'Kursus berhasil dibuat! Mengalihkan...',       basePercent: 90,  targetPercent: 100 },
-  'error':         { label: 'Error',                description: 'Terjadi kesalahan.',                           basePercent: 0,   targetPercent: 0 },
-};
+function buildStages(t: (key: DictKey) => string): Record<Stage, StageInfo> {
+  return {
+    'sending':       { label: t('request_course_generating_stage_sending_label'),    description: t('request_course_generating_stage_sending_desc'),    basePercent: 0,   targetPercent: 10 },
+    'ai-generating': { label: t('request_course_generating_stage_ai_label'),         description: t('request_course_generating_stage_ai_desc'),         basePercent: 10,  targetPercent: 65 },
+    'processing':    { label: t('request_course_generating_stage_processing_label'), description: t('request_course_generating_stage_processing_desc'), basePercent: 65,  targetPercent: 75 },
+    'saving':        { label: t('request_course_generating_stage_saving_label'),     description: t('request_course_generating_stage_saving_desc'),     basePercent: 75,  targetPercent: 90 },
+    'complete':      { label: t('request_course_generating_stage_complete_label'),   description: t('request_course_generating_stage_complete_desc'),   basePercent: 90,  targetPercent: 100 },
+    'error':         { label: t('request_course_generating_stage_error_label'),      description: t('request_course_generating_stage_error_desc'),      basePercent: 0,   targetPercent: 0 },
+  };
+}
 
-const AI_TIPS = [
-  'Menyusun modul berdasarkan level belajarmu...',
-  'Menghubungkan topik dengan masalah nyatamu...',
-  'Membangun jalur pembelajaran bertahap...',
-  'Menyesuaikan konten dengan tujuanmu...',
-  'Mengorganisir subtopik untuk pemahaman optimal...',
-  'Hampir selesai — menyempurnakan outline...',
-];
+function buildAiTips(t: (key: DictKey) => string): string[] {
+  return [
+    t('request_course_generating_tip1'),
+    t('request_course_generating_tip2'),
+    t('request_course_generating_tip3'),
+    t('request_course_generating_tip4'),
+    t('request_course_generating_tip5'),
+    t('request_course_generating_tip6'),
+  ];
+}
 
 export default function GeneratingPage() {
   const router = useRouter();
   const { answers } = useRequestCourse();
   const { user, isAuthenticated, isLoading: authLoading } = useAuth();
+  const { t } = useLocale();
+
+  const STAGES = useMemo(() => buildStages(t), [t]);
+  const AI_TIPS = useMemo(() => buildAiTips(t), [t]);
 
   const [stage, setStage] = useState<Stage>('sending');
   const [percent, setPercent] = useState(0);
@@ -78,7 +88,7 @@ export default function GeneratingPage() {
     tipTimerRef.current = window.setInterval(() => {
       setTipIdx(prev => (prev + 1) % AI_TIPS.length);
     }, 5000);
-  }, []);
+  }, [STAGES, AI_TIPS.length]);
 
   const stopAiProgress = useCallback(() => {
     if (aiTimerRef.current) { clearInterval(aiTimerRef.current); aiTimerRef.current = null; }
@@ -107,7 +117,7 @@ export default function GeneratingPage() {
         const { startedAt } = JSON.parse(raw) as { startedAt: number };
         if (Number.isFinite(startedAt) && Date.now() - startedAt < GENERATION_FLAG_TTL_MS) {
           setStage('error');
-          setErrorMsg('Pembuatan kursus sudah berjalan di tab ini. Tunggu hingga selesai atau kembali ke step sebelumnya untuk mulai ulang.');
+          setErrorMsg(t('request_course_generating_in_flight'));
           return;
         }
         // Stale flag — clear and proceed
@@ -136,13 +146,13 @@ export default function GeneratingPage() {
       if (stage !== 'complete' && stage !== 'error') {
         e.preventDefault();
         // Legacy Chrome still reads returnValue
-        e.returnValue = 'Kursusmu sedang dibuat. Keluar sekarang akan membatalkan proses.';
+        e.returnValue = t('request_course_generating_before_unload');
         return e.returnValue;
       }
     };
     window.addEventListener('beforeunload', handleBeforeUnload);
     return () => window.removeEventListener('beforeunload', handleBeforeUnload);
-  }, [stage]);
+  }, [stage, t]);
 
   // Abort any in-flight request if the component unmounts (user navigates away).
   useEffect(() => {
@@ -187,11 +197,11 @@ export default function GeneratingPage() {
         const textResponse = await res.text();
         console.error('Non-JSON response:', textResponse);
         if (res.status === 504) {
-          throw new Error('Pembuatan kursus timeout. Coba lagi dengan topik yang lebih sederhana.');
+          throw new Error(t('request_course_generating_timeout'));
         } else if (res.status === 500) {
-          throw new Error('Terjadi error server. Coba lagi beberapa saat.');
+          throw new Error(t('request_course_generating_server_error'));
         }
-        throw new Error(`Respons server tidak terduga (${res.status}). Coba lagi.`);
+        throw new Error(`${t('request_course_generating_unexpected_status')} (${res.status})`);
       }
 
       setPercent(70);
@@ -219,10 +229,10 @@ export default function GeneratingPage() {
       try { sessionStorage.removeItem(GENERATION_FLAG_KEY); } catch { /* ignore */ }
       if (err instanceof Error && err.name === 'AbortError') {
         setStage('error');
-        setErrorMsg('Pembuatan kursus dibatalkan.');
+        setErrorMsg(t('request_course_generating_cancelled'));
       } else {
         setStage('error');
-        setErrorMsg(err instanceof Error ? err.message : 'Terjadi kesalahan tidak terduga');
+        setErrorMsg(err instanceof Error ? err.message : t('request_course_generating_unexpected_error'));
       }
     }
   };
@@ -321,18 +331,18 @@ export default function GeneratingPage() {
               <path d="M2 8C2 4.7 4.7 2 8 2C11.3 2 14 4.7 14 8C14 11.3 11.3 14 8 14C5.3 14 3 12.1 2.3 9.5" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" />
               <path d="M2 4V8H6" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" />
             </svg>
-            Kembali &amp; Coba Lagi
+            {t('request_course_generating_retry')}
           </button>
         )}
 
         {/* Course info summary */}
         <div className={styles.courseSummary}>
           <div className={styles.summaryItem}>
-            <span className={styles.summaryLabel}>Topik</span>
+            <span className={styles.summaryLabel}>{t('request_course_generating_summary_topic')}</span>
             <span className={styles.summaryValue}>{answers.topic || '—'}</span>
           </div>
           <div className={styles.summaryItem}>
-            <span className={styles.summaryLabel}>Level</span>
+            <span className={styles.summaryLabel}>{t('request_course_generating_summary_level')}</span>
             <span className={styles.summaryValue}>{answers.level || '—'}</span>
           </div>
         </div>
