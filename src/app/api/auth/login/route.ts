@@ -5,6 +5,8 @@ import {
   ACCESS_TOKEN_MAX_AGE_SECONDS,
   REFRESH_TOKEN_MAX_AGE_SECONDS,
 } from '@/lib/jwt';
+import { adminDb } from '@/lib/database';
+import { LOCALE_COOKIE, parseLocale } from '@/lib/i18n/locale';
 import {
   findUserByEmail,
   verifyPassword,
@@ -56,6 +58,27 @@ export async function POST(req: Request) {
 
     // Generate tokens
     const { accessToken, refreshToken } = generateAuthTokens(user);
+
+    // Load locale preference for the user so we can hand the client a primed
+    // cookie before the first dashboard render — avoids a flash of ID for
+    // users whose preference is EN. A missing row (user pre-onboarding) or a
+    // transient DB error must NOT block login, so we swallow and default to
+    // 'id' via parseLocale.
+    let locale = parseLocale(undefined);
+    try {
+      const { data: profileRow, error: profileError } = await adminDb
+        .from('learning_profiles')
+        .select('preferred_language')
+        .eq('user_id', user.id)
+        .maybeSingle() as { data: { preferred_language?: string } | null; error: { message: string } | null };
+      if (profileError) {
+        console.warn('[Login] Failed to load preferred_language, defaulting to id:', profileError.message);
+      } else {
+        locale = parseLocale(profileRow?.preferred_language);
+      }
+    } catch (localeErr) {
+      console.warn('[Login] Locale lookup threw, defaulting to id:', localeErr);
+    }
 
     // Persist the refresh token hash so future refresh calls can verify the
     // presented token still matches the most recently-issued one. Only write
@@ -113,7 +136,19 @@ export async function POST(req: Request) {
       maxAge: rememberMe ? REFRESH_TOKEN_MAX_AGE_SECONDS : ACCESS_TOKEN_MAX_AGE_SECONDS,
       path: '/'
     });
-    
+
+    // Locale cookie: matches the spec used by onboarding_done / intro_slides_done.
+    // Non-HttpOnly so the client can read it, Lax so it survives same-site
+    // navigations from /login → /dashboard. 1-year lifetime — it is a UX guard,
+    // not an auth boundary (DB column remains source of truth).
+    response.cookies.set(LOCALE_COOKIE, locale, {
+      httpOnly: false,
+      secure: process.env.NODE_ENV === 'production',
+      sameSite: 'lax',
+      maxAge: 60 * 60 * 24 * 365,
+      path: '/',
+    });
+
     return response;
   } catch (error: unknown) {
     console.error('Login error:', error);
