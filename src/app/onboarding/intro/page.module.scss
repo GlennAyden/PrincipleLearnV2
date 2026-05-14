@@ -43,6 +43,16 @@
   font-size: 1rem;
 }
 
+.languageToggleWrap {
+  position: fixed;
+  top: 1rem;
+  // Offset to the left of `.skipBtn` so the two top-right controls don't
+  // overlap. `.skipBtn` sits at ~1.25rem from the right edge; the toggle
+  // pill is ~64px wide, so 5rem leaves a small visual gap between them.
+  right: 5rem;
+  z-index: 50;
+}
+
 .skipBtn {
   position: absolute;
   top: max(1.25rem, env(safe-area-inset-top));
@@ -216,4 +226,5 @@
   .emoji { font-size: 2.5rem; }
   .title { font-size: 1.2rem; }
   .skipBtn { top: 0.5rem; right: 0.5rem; }
+  .languageToggleWrap { top: 0.5rem; right: 4rem; }
 }

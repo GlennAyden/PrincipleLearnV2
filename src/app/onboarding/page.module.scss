@@ -42,6 +42,13 @@
   font-size: 1rem;
 }
 
+.languageToggleWrap {
+  position: fixed;
+  top: 1rem;
+  right: 1rem;
+  z-index: 50;
+}
+
 .card {
   background: #fff;
   border-radius: 20px;

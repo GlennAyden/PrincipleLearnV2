@@ -145,14 +145,7 @@ export default function OnboardingIntroPage() {
       <div className={styles.bgOrb1} />
       <div className={styles.bgOrb2} />
 
-      <div
-        style={{
-          position: 'fixed',
-          top: '1rem',
-          right: '1rem',
-          zIndex: 50,
-        }}
-      >
+      <div className={styles.languageToggleWrap}>
         <LanguageToggle />
       </div>
 
