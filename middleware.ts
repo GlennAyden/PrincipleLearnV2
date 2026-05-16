@@ -241,6 +241,11 @@ export function middleware(req: NextRequest) {
 
 export const config = {
   matcher: [
-    '/((?!_next/static|_next/image|favicon.ico|public/).*)',
+    // Exclude /api/* from middleware — API routes handle their own auth
+    // via verifyToken in each handler. This isolates middleware bundle
+    // failures from breaking API serverless functions. (Edge runtime had
+    // been silently failing to bundle middleware that imports jsonwebtoken,
+    // causing every /api/* request to hang at zero bytes.)
+    '/((?!_next/static|_next/image|favicon.ico|public/|api/).*)',
   ],
 }
