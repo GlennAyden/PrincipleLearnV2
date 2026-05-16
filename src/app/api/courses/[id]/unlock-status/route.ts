@@ -7,12 +7,18 @@ import { computeCourseWeightedProgress } from '@/lib/course-unlock';
 const isUuid = (v: string | undefined): v is string =>
   !!v && /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(v);
 
-async function getHandler(req: NextRequest, ctx: { params: Promise<{ courseId: string }> }) {
+// NOTE: route folder uses `[id]` to match the sibling route at
+// /api/courses/[id]/route.ts. Next.js refuses to bundle a project that has
+// two different slug names at the same path level (`[id]` vs `[courseId]`),
+// which previously caused INTERNAL_FUNCTION_INVOCATION_TIMEOUT for every
+// /api/* route in production (the routing tree fails to init, so every
+// Lambda hangs).
+async function getHandler(req: NextRequest, ctx: { params: Promise<{ id: string }> }) {
   const token = req.cookies.get('access_token')?.value;
   const payload = token ? verifyToken(token) : null;
   if (!payload) return NextResponse.json({ error: 'Tidak terautentikasi' }, { status: 401 });
 
-  const { courseId } = await ctx.params;
+  const { id: courseId } = await ctx.params;
   if (!isUuid(courseId)) {
     return NextResponse.json({ error: 'Invalid courseId' }, { status: 400 });
   }
