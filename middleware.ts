@@ -22,6 +22,7 @@ export function middleware(req: NextRequest) {
     '/api/auth/refresh',
     '/api/auth/logout',
     '/api/admin/login',
+    '/api/health',
   ]
   
   // Check if the current route is public or an auth API route
@@ -242,10 +243,4 @@ export const config = {
   matcher: [
     '/((?!_next/static|_next/image|favicon.ico|public/).*)',
   ],
-  // Force Node runtime — jsonwebtoken (used by ./src/lib/jwt) depends on
-  // Node's crypto module, which Edge runtime polyfills only partially.
-  // Edge bundling can silently produce a middleware that hangs at cold
-  // start when it tries to load jsonwebtoken's createHmac binding. Pinning
-  // to Node guarantees full Node.js API availability.
-  runtime: 'nodejs',
 }
