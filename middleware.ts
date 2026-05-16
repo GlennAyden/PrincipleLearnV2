@@ -218,6 +218,18 @@ export function middleware(req: NextRequest) {
   requestHeaders.set('x-user-email', payload.email)
   requestHeaders.set('x-user-role', payload.role)
 
+  // MVR Item 10: forward the admin's selected mode (Umum vs Penelitian) to
+  // admin routes. Read from the non-HttpOnly `admin_mode` cookie set by
+  // AdminModeProvider on the client; default to `'general'` so legacy admin
+  // sessions without the cookie remain backward-compatible. Only injected
+  // for /admin/** pages and /api/admin/** routes — student-facing routes
+  // do not see this header.
+  if (isAdminPage || isAdminApi) {
+    const rawMode = req.cookies.get('admin_mode')?.value
+    const adminMode = rawMode === 'research' ? 'research' : 'general'
+    requestHeaders.set('x-admin-mode', adminMode)
+  }
+
   // Continue with the request
   return NextResponse.next({
     request: {

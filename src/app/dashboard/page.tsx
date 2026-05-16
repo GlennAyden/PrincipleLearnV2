@@ -1,13 +1,14 @@
 // File: src/app/dashboard/page.tsx
 'use client';
 
-import { useEffect, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import Link from 'next/link';
 import { useAuth } from '@/hooks/useAuth';
 import { apiFetch } from '@/lib/api-client';
 import LanguageToggle from '@/components/LanguageToggle/LanguageToggle';
 import { useLocale } from '@/context/LocaleContext';
+import { FaseEJalur } from '@/components/dashboard/FaseEJalur/FaseEJalur';
 import styles from './page.module.scss';
 
 type Level = 'Beginner' | 'Intermediate' | 'Advanced';
@@ -16,6 +17,7 @@ interface Course {
   id:    string;
   title: string;
   level: Level;
+  mode?: 'general' | 'research';
 }
 
 const levelConfig: Record<Level, { color: string; icon: string }> = {
@@ -103,6 +105,12 @@ export default function DashboardPage() {
   };
 
   const userName = user?.name || user?.email?.split('@')[0] || 'Learner';
+  // MVR Item 7b — show the Fase E jalur only when the student has at least
+  // one research-mode course (otherwise the section is noise).
+  const hasResearchCourse = useMemo(
+    () => courses.some((c) => c.mode === 'research'),
+    [courses],
+  );
 
   return (
     <div className={styles.page}>
@@ -174,6 +182,9 @@ export default function DashboardPage() {
             Buat Kursus
           </button>
         </div>
+
+        {/* MVR Item 7b — Fase E jalur card row, only rendered when relevant */}
+        {hasResearchCourse && <FaseEJalur />}
 
         {/* Course Grid */}
         <section className={styles.courseSection}>

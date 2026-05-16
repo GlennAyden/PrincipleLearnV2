@@ -2,6 +2,7 @@ import { NextResponse } from 'next/server'
 import type { NextRequest } from 'next/server'
 import { DatabaseService } from '@/lib/database'
 import { withProtection } from '@/lib/api-middleware'
+import { getAdminModeFromRequest } from '@/lib/admin-mode'
 
 const DEFAULT_PAGE_SIZE = 25
 const MAX_PAGE_SIZE = 100
@@ -150,6 +151,7 @@ function buildSubmissionQuery(filters: {
   select?: string
   limit: number
   offset?: number
+  mode?: string | null
 }) {
   const params = new URLSearchParams()
   params.set('select', filters.select ?? '*')
@@ -160,6 +162,8 @@ function buildSubmissionQuery(filters: {
   }
   if (filters.userId) appendFilter(params, 'user_id', 'eq', filters.userId)
   if (filters.courseId) appendFilter(params, 'course_id', 'eq', filters.courseId)
+  // quiz_submissions has a direct 'mode' column — filter at DB level
+  if (filters.mode) appendFilter(params, 'mode', 'eq', filters.mode)
   if (filters.subtopicIds?.length && filters.leafSubtopicIds?.length) {
     params.append('or', `(subtopic_id.in.(${filters.subtopicIds.join(',')}),leaf_subtopic_id.in.(${filters.leafSubtopicIds.join(',')}))`)
   } else if (filters.subtopicIds && filters.subtopicIds.length > 0) {
@@ -255,6 +259,7 @@ async function activityHandler(req: NextRequest) {
   console.log('[Activity API] Starting quiz activity fetch')
 
   try {
+    const adminMode = getAdminModeFromRequest(req);
     const { searchParams } = new URL(req.url)
     const userId = searchParams.get('userId')?.trim() || null
     const date = searchParams.get('date')?.trim() || null
@@ -263,6 +268,9 @@ async function activityHandler(req: NextRequest) {
     const topicFilter = searchParams.get('topic')?.trim() || null
     const page = parsePositiveInt(searchParams.get('page'), 1)
     const pageSize = parsePositiveInt(searchParams.get('pageSize'), DEFAULT_PAGE_SIZE, MAX_PAGE_SIZE)
+
+    // quiz_submissions has a direct 'mode' column; pass to query builder
+    const modeFilter = adminMode === 'research' ? 'research' : null;
 
     console.log('[Activity API] Request params:', { userId, date, dateTo, courseId, topic: topicFilter, page, pageSize })
 
@@ -312,6 +320,7 @@ async function activityHandler(req: NextRequest) {
       dateTo: dateToIso,
       select: 'id',
       limit: 1,
+      mode: modeFilter,
     })
     const countResult = await fetchSupabaseRows<{ id: string }>('quiz_submissions', countQuery)
     const totalItems = countResult.totalItems
@@ -329,6 +338,7 @@ async function activityHandler(req: NextRequest) {
       select: 'id,user_id,quiz_id,course_id,subtopic_id,leaf_subtopic_id,subtopic_label,module_index,subtopic_index,answer,is_correct,reasoning_note,attempt_number,quiz_attempt_id,created_at',
       limit: pageSize,
       offset,
+      mode: modeFilter,
     })
     const quizSubmissionsResult = await fetchSupabaseRows<QuizSubmission>('quiz_submissions', pageQuery)
     const quizSubmissions = quizSubmissionsResult.data

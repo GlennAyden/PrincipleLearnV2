@@ -1,0 +1,131 @@
+.block {
+  display: flex;
+  flex-direction: column;
+  gap: 0.85rem;
+  padding: 1rem;
+  background: white;
+  border: 1px solid #e2e8f0;
+  border-radius: 12px;
+}
+
+.prompt {
+  font-size: 0.95rem;
+  color: #1e293b;
+  line-height: 1.55;
+}
+
+.code {
+  margin: 0;
+  padding: 0.7rem 0.9rem;
+  background: #0f172a;
+  color: #f1f5f9;
+  font-family: 'SF Mono', Menlo, Monaco, Consolas, monospace;
+  font-size: 0.82rem;
+  line-height: 1.55;
+  border-radius: 8px;
+  overflow-x: auto;
+}
+
+.table {
+  width: 100%;
+  border-collapse: separate;
+  border-spacing: 0;
+  border: 1px solid #e2e8f0;
+  border-radius: 8px;
+  overflow: hidden;
+
+  th, td {
+    padding: 0.45rem 0.55rem;
+    font-size: 0.85rem;
+    text-align: left;
+    border-bottom: 1px solid #f1f5f9;
+  }
+
+  th {
+    background: #f8fafc;
+    color: #475569;
+    font-weight: 600;
+    font-size: 0.78rem;
+    text-transform: uppercase;
+  }
+}
+
+.rowLabel {
+  background: #f8fafc;
+  color: #64748b;
+  font-weight: 600;
+  width: 60px;
+  text-align: center;
+}
+
+.cellInput {
+  width: 100%;
+  padding: 0.3rem 0.45rem;
+  border: 1px solid #cbd5e1;
+  border-radius: 6px;
+  font-size: 0.88rem;
+  font-family: 'SF Mono', Menlo, Monaco, Consolas, monospace;
+
+  &:focus {
+    outline: none;
+    border-color: #6366f1;
+    box-shadow: 0 0 0 3px rgba(99, 102, 241, 0.15);
+  }
+
+  &:disabled {
+    background: #f8fafc;
+    color: #1e293b;
+  }
+}
+
+.cellOk  { background: #dcfce7; }
+.cellErr { background: #fee2e2; }
+
+.footer {
+  display: flex;
+  align-items: center;
+  gap: 0.65rem;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+  margin-top: 0.4rem;
+}
+
+.eventBadge {
+  margin-right: auto;
+  font-size: 0.75rem;
+  color: #64748b;
+  padding: 0.2rem 0.55rem;
+  background: #f1f5f9;
+  border-radius: 999px;
+  font-weight: 500;
+}
+
+.scoreBadge {
+  font-size: 0.82rem;
+  font-weight: 600;
+  color: #166534;
+  background: #dcfce7;
+  padding: 0.2rem 0.65rem;
+  border-radius: 999px;
+}
+
+.error {
+  font-size: 0.8rem;
+  color: #b91c1c;
+}
+
+.submitBtn {
+  padding: 0.5rem 1rem;
+  background: linear-gradient(135deg, #6366f1, #4f46e5);
+  color: white;
+  border: none;
+  border-radius: 8px;
+  font-size: 0.88rem;
+  font-weight: 600;
+  cursor: pointer;
+
+  &:disabled {
+    background: #cbd5e1;
+    cursor: not-allowed;
+  }
+}

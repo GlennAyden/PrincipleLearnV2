@@ -91,6 +91,32 @@ User-facing UI is bilingual ID / EN. The `LanguageToggle` button is mounted in u
 
 Static UI strings translated across: dashboard, course layout (header + tour steps + nav alerts + sidebar), course overview, subtopic page, onboarding intro + wizard, request-course wizard (step1–3 + generating), `LanguageToggle`, `PromptBuilder` (chips + labels), `HelpDrawer` (features + drawer chrome), `StructuredReflection` (fields + star labels), `Quiz`, `AskQuestion`, `ChallengeThinking`, `KeyTakeaways`, `WhatNext`, `NextSubtopics`, `AILoadingIndicator`, `ReasoningNote`.
 
+### Mode System (research vs general)
+
+Two parallel learning modes propagated via column `mode VARCHAR(20) NOT NULL DEFAULT 'general' CHECK IN ('general','research')` across 7 tables (`courses`, `learning_sessions`, `ask_question_history`, `challenge_responses`, `jurnal`, `quiz_submissions`, `prompt_classifications`) plus `subtopic_cache.mode` and `research_artifacts.mode`. Mode is set per-course at `request-course/step1` and inherited by all downstream writes. See [`docs/MODE_SYSTEM.md`](docs/MODE_SYSTEM.md) for full architecture.
+
+- **Student toggle**: radio at `request-course/step1`. Mode Penelitian forces selection from 4 pre-seeded template courses (`is_template=true`, `template_topic` slug). FaseEJalur dashboard card renders only when student has ≥1 research course.
+- **Admin toggle**: cookie `admin_mode=general|research` (non-HttpOnly, Lax, Path=/, 30-day Max-Age); `AdminModeProvider` mirrors `LocaleProvider` ([`src/context/AdminModeContext.tsx`](src/context/AdminModeContext.tsx)). Middleware injects header `x-admin-mode` into `/api/admin/*` requests.
+- **Helpers** ([`src/lib/admin-mode.ts`](src/lib/admin-mode.ts)): `getAdminModeFromRequest(req)`, `applyAdminModeFilter(qb, mode, column?)` (adds `.eq(col, 'research')` in research mode, passthrough in general), `assertResearchModeOnly(req)` (403 for `/api/admin/sumber/*` + `/api/admin/research/*`).
+- **Filter propagation**: `applyAdminModeFilter` used across ~15 admin endpoints (dashboard, activity/*, users*); grep `applyAdminModeFilter` to audit.
+- **Navigation guard**: admin sidebar items "Sumber" + "Riset" hidden in Mode Umum; direct URL access redirects to `/admin/dashboard?toast=research-only` with 5s banner.
+- **Audit trail**: every toggle writes `api_logs` row with `label='admin-mode-switched'` and `metadata={ from, to, admin_email }`. Admin layout footer surfaces last switch event (`GET /api/admin/mode-switch`).
+- **Research content determinism**: `subtopic_cache` rows for Mode Penelitian carry `locked=true` + `qa_status IN ('pending','approved','needs_revision','rejected')`. Researcher reviews via `/admin/sumber/cache-review` before students see content. See `docs/RAG_PIPELINE.md` §8 for the cache lock workflow.
+
+### Interactive Blocks System
+
+Mode Penelitian leaf-subtopiks carry a JSONB array `leaf_subtopics.interactive_blocks` of `{type, config}` entries that render 6 interactive components forcing students to **act** rather than read. Each submission produces a `research_artifacts` row with `interaction_events JSONB`, `completion_status`, and `component_score NUMERIC(3,2)` for RM3 evidence. See [`docs/INTERACTIVE_BLOCKS_SPEC.md`](docs/INTERACTIVE_BLOCKS_SPEC.md) for the full spec.
+
+- **6 components** ([`src/components/Interactive/`](src/components/Interactive/)):
+  - Ringan: TraceTable, OutputPredictor, ParsonsProblem (dnd-kit)
+  - Kompleks: BugHunt, FlowchartBuilder (pure SVG, no reactflow), PseudocodeBlockBuilder (dnd-kit)
+- **Type discriminator**: [`src/types/interactive-blocks.ts`](src/types/interactive-blocks.ts) — `InteractiveBlock = { type, config }` discriminated union.
+- **Renderer**: [`src/components/Interactive/InteractiveBlockRenderer.tsx`](src/components/Interactive/InteractiveBlockRenderer.tsx) switches on `block.type`. All 6 implemented; no fallback placeholders.
+- **Tracking**: [`src/hooks/useInteractionTracking.ts`](src/hooks/useInteractionTracking.ts) — capture events (`{ type, at, payload }`); auto-flush on submit or 30s idle.
+- **Submit**: POST `/api/research-artifacts/submit` with `artifactType`, `interactionEvents[]`, `completionStatus`, `componentScore`.
+- **Authoring**: peneliti edit JSON di `/admin/sumber/interactive-blocks` (Mode Penelitian only); preview live dengan `pointer-events: none`. Starter JSON di [`docs/examples/interactive-blocks/`](docs/examples/interactive-blocks/).
+- **Current state**: 19 instansiasi di 18 leaves (target ≥18); ~7 leaves konseptual tanpa block (1.1, 2.1, 2.2, 2.12, 3.1, 4.1).
+
 ### Database Architecture
 
 - **Primary interface**: `DatabaseService` class in `src/lib/database.ts` — generic CRUD over Supabase.
@@ -256,4 +282,73 @@ Admin pages: `src/app/admin/riset/{bukti,kognitif,prompt,readiness,triangulasi}/
 - [`README.md`](README.md) — project overview & onboarding for new contributors
 - [`AGENTS.md`](AGENTS.md) — contributor & AI-agent guidelines
 - [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md), [`docs/API_REFERENCE.md`](docs/API_REFERENCE.md), [`docs/SECURITY.md`](docs/SECURITY.md), [`docs/DATABASE_SCHEMA.md`](docs/DATABASE_SCHEMA.md), [`docs/SETUP_GUIDE.md`](docs/SETUP_GUIDE.md), [`docs/DEPLOYMENT.md`](docs/DEPLOYMENT.md), [`docs/TESTING.md`](docs/TESTING.md), [`docs/USER_GUIDE.md`](docs/USER_GUIDE.md), [`docs/admin-and-research-ops.md`](docs/admin-and-research-ops.md), [`docs/feature-flows.md`](docs/feature-flows.md)
+- **MVR thesis docs**: [`docs/MODE_SYSTEM.md`](docs/MODE_SYSTEM.md), [`docs/RAG_PIPELINE.md`](docs/RAG_PIPELINE.md), [`docs/CONTENT_SPEC_FASE_E.md`](docs/CONTENT_SPEC_FASE_E.md), [`docs/INTERACTIVE_BLOCKS_SPEC.md`](docs/INTERACTIVE_BLOCKS_SPEC.md), [`docs/thesis/CODEBOOK_RM2_RM3.md`](docs/thesis/CODEBOOK_RM2_RM3.md), [`rencana-eksekusi-mvr.md`](rencana-eksekusi-mvr.md), [`rencana-lanjutan-mvr.md`](rencana-lanjutan-mvr.md)
 - [`docs/thesis/`](docs/thesis/) — academic / pedagogy docs (RM, learning theory, rubric, milestones)
+- [`docs/sql/`](docs/sql/) — SQL migration audit trail; 11 MVR migration files prefixed `2026-05-16-w*-*.sql` capture the schema diff vs pre-MVR baseline
+
+<!-- Karpathy-rules-start -->
+
+# CLAUDE.md — 12-rule template
+
+These rules apply to every task in this project unless explicitly overridden.
+Bias: caution over speed on non-trivial work. Use judgment on trivial tasks.
+
+Rule 1 — Think Before Coding
+State assumptions explicitly. If uncertain, ask rather than guess.
+Present multiple interpretations when ambiguity exists.
+Push back when a simpler approach exists.
+Stop when confused. Name what's unclear.
+
+Rule 2 — Simplicity First
+Minimum code that solves the problem. Nothing speculative.
+No features beyond what was asked. No abstractions for single-use code.
+Test: would a senior engineer say this is overcomplicated? If yes, simplify.
+
+Rule 3 — Surgical Changes
+Touch only what you must. Clean up only your own mess.
+Don't "improve" adjacent code, comments, or formatting.
+Don't refactor what isn't broken. Match existing style.
+
+Rule 4 — Goal-Driven Execution
+Define success criteria. Loop until verified.
+Don't follow steps. Define success and iterate.
+Strong success criteria let you loop independently.
+
+Rule 5 — Use the model only for judgment calls
+Use me for: classification, drafting, summarization, extraction.
+Do NOT use me for: routing, retries, deterministic transforms.
+If code can answer, code answers.
+
+Rule 6 — Token budgets are not advisory
+Per-task: 4,000 tokens. Per-session: 30,000 tokens.
+If approaching budget, summarize and start fresh.
+Surface the breach. Do not silently overrun.
+
+Rule 7 — Surface conflicts, don't average them
+If two patterns contradict, pick one (more recent / more tested).
+Explain why. Flag the other for cleanup.
+Don't blend conflicting patterns.
+
+Rule 8 — Read before you write
+Before adding code, read exports, immediate callers, shared utilities.
+"Looks orthogonal" is dangerous. If unsure why code is structured a way, ask.
+
+Rule 9 — Tests verify intent, not just behavior
+Tests must encode WHY behavior matters, not just WHAT it does.
+A test that can't fail when business logic changes is wrong.
+
+Rule 10 — Checkpoint after every significant step
+Summarize what was done, what's verified, what's left.
+Don't continue from a state you can't describe back.
+If you lose track, stop and restate.
+
+Rule 11 — Match the codebase's conventions, even if you disagree
+Conformance > taste inside the codebase.
+If you genuinely think a convention is harmful, surface it. Don't fork silently.
+
+Rule 12 — Fail loud
+"Completed" is wrong if anything was skipped silently.
+"Tests pass" is wrong if any were skipped.
+Default to surfacing uncertainty, not hiding it.
+
+<!-- Karpathy-rules-end -->

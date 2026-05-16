@@ -1,4 +1,5 @@
 import { adminDb } from '@/lib/database';
+import { coerceLearningMode, type LearningMode } from '@/lib/course-mode';
 import {
   getWeekBucket,
   isUuid,
@@ -10,6 +11,7 @@ export interface ResearchSessionResolution {
   learningSessionId: string | null;
   sessionNumber: number;
   dataCollectionWeek: string | null;
+  mode: LearningMode;
 }
 
 export interface ResolveResearchSessionInput {
@@ -17,6 +19,7 @@ export interface ResolveResearchSessionInput {
   courseId: string;
   sessionNumber?: number | null;
   occurredAt?: string | Date | null;
+  mode?: LearningMode | null;
 }
 
 export interface ResearchEvidenceSyncInput {
@@ -193,12 +196,31 @@ async function findLearningSession(
   return (data as LearningSessionRow | null) ?? null;
 }
 
+async function resolveModeForSession(
+  input: ResolveResearchSessionInput,
+): Promise<LearningMode> {
+  if (input.mode) return coerceLearningMode(input.mode);
+
+  try {
+    const { data } = await adminDb
+      .from('courses')
+      .select('mode')
+      .eq('id', input.courseId)
+      .maybeSingle();
+    return coerceLearningMode((data as { mode?: unknown } | null)?.mode);
+  } catch (error) {
+    console.warn('[ResearchSession] Failed to read course.mode; defaulting to general', error);
+    return 'general';
+  }
+}
+
 export async function resolveResearchLearningSession(
   input: ResolveResearchSessionInput,
 ): Promise<ResearchSessionResolution> {
   const occurredAtIso = toIso(input.occurredAt);
   let sessionNumber = normalizePositiveInt(input.sessionNumber, 1);
   let dataCollectionWeek = getWeekBucket(occurredAtIso);
+  const mode = await resolveModeForSession(input);
 
   try {
     sessionNumber = await resolveSessionNumber(input, occurredAtIso);
@@ -221,6 +243,7 @@ export async function resolveResearchLearningSession(
         learningSessionId: existing.id,
         sessionNumber,
         dataCollectionWeek: existing.data_collection_week ?? dataCollectionWeek,
+        mode,
       };
     }
 
@@ -240,6 +263,7 @@ export async function resolveResearchLearningSession(
         readiness_score: 0,
         evidence_summary: {},
         last_research_sync_at: occurredAtIso,
+        mode,
       });
 
     if (!insertError && inserted && typeof inserted.id === 'string') {
@@ -247,6 +271,7 @@ export async function resolveResearchLearningSession(
         learningSessionId: inserted.id,
         sessionNumber,
         dataCollectionWeek,
+        mode,
       };
     }
 
@@ -255,6 +280,7 @@ export async function resolveResearchLearningSession(
       learningSessionId: racedSession?.id ?? null,
       sessionNumber,
       dataCollectionWeek: racedSession?.data_collection_week ?? dataCollectionWeek,
+      mode,
     };
   } catch (error) {
     console.warn('[ResearchSession] Failed to resolve learning session; continuing without link', error);
@@ -262,6 +288,7 @@ export async function resolveResearchLearningSession(
       learningSessionId: null,
       sessionNumber,
       dataCollectionWeek,
+      mode,
     };
   }
 }

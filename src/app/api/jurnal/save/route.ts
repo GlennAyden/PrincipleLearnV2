@@ -291,6 +291,7 @@ async function postHandler(req: NextRequest) {
       type,
       reflection: JSON.stringify(reflectionContext),
       learning_session_id: researchSession.learningSessionId,
+      mode: researchSession.mode,
       research_validity_status: 'valid',
       coding_status: type === 'structured_reflection' ? 'auto_coded' : 'uncoded',
       raw_evidence_snapshot: {

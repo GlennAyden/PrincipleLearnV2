@@ -5,6 +5,7 @@ import { adminDb, DatabaseService } from '@/lib/database';
 import { ensureAskQuestionHistorySeeded } from '@/lib/activitySeed';
 import { withProtection } from '@/lib/api-middleware';
 import { normalizeMicroMarkers } from '@/lib/research-normalizers';
+import { getAdminModeFromRequest, applyAdminModeFilter } from '@/lib/admin-mode';
 
 interface AskQuestionHistory {
   id: string;
@@ -235,6 +236,7 @@ async function fetchAskQuestionEvidence(promptIds: string[]): Promise<Map<string
 async function handler(req: NextRequest) {
   try {
     await ensureAskQuestionHistorySeeded();
+    const adminMode = getAdminModeFromRequest(req);
     const { searchParams } = new URL(req.url);
     const userId = searchParams.get('userId');
     const date = searchParams.get('date');
@@ -243,11 +245,19 @@ async function handler(req: NextRequest) {
     const courseId = searchParams.get('course');
     const topic = searchParams.get('topic');
 
+    // ask_question_history has a direct 'mode' column — apply filter at DB level
     let records: AskQuestionHistory[] = [];
     try {
-      records = await DatabaseService.getRecords<AskQuestionHistory>('ask_question_history', {
-        orderBy: { column: 'created_at', ascending: false },
-      });
+      const baseQuery = adminDb
+        .from('ask_question_history')
+        .select('*')
+        .order('created_at', { ascending: false });
+      const { data, error } = await applyAdminModeFilter(baseQuery, adminMode);
+      if (error) {
+        console.error('[Activity][AskQuestion] Failed to fetch ask_question_history:', error);
+        return NextResponse.json([], { status: 200 });
+      }
+      records = (Array.isArray(data) ? data : []) as AskQuestionHistory[];
     } catch (error) {
       console.error('[Activity][AskQuestion] Failed to fetch ask_question_history:', error);
       return NextResponse.json([], { status: 200 });

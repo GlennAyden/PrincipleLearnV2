@@ -528,12 +528,17 @@ async function upsertPromptClassification(
 
   const promptStage = normalizePromptStage(classification.stage);
   const microMarkers = normalizeMicroMarkers(classification.microMarkers);
+  // MVR Item 1: tag classification with course mode so research dashboards can
+  // filter auto-coded rows by Mode Penelitian without joining back to courses.
+  const { getCourseMode } = await import('@/lib/course-mode');
+  const courseMode = await getCourseMode(row.course_id);
   const payload = {
     prompt_source: evidenceSourceToPromptSource(row.source_type),
     prompt_id: promptId,
     learning_session_id: row.learning_session_id ?? null,
     user_id: row.user_id,
     course_id: row.course_id,
+    mode: courseMode,
     prompt_text: promptText,
     prompt_sequence: row.unit_sequence ?? null,
     prompt_stage: promptStage,

@@ -6,6 +6,7 @@ import { adminDb } from '@/lib/database'
 import { verifyToken } from '@/lib/jwt'
 import { normalizeText, parseStructuredReflectionFields } from '@/lib/reflection-submission'
 import { summarizeQuizAttempts } from '@/lib/admin-quiz-attempts'
+import { getAdminModeFromRequest, applyAdminModeFilter } from '@/lib/admin-mode'
 
 // ── Row Interfaces ──
 interface DiscussionSummaryRow {
@@ -213,6 +214,8 @@ export async function GET(
       return NextResponse.json({ error: 'User not found' }, { status: 404 })
     }
 
+    const adminMode = getAdminModeFromRequest(request)
+
     // ── Parallel queries for all activity types ───────────────────────────
     const [
       discussionRows,
@@ -236,6 +239,7 @@ export async function GET(
       courseCountRows,
     ] = await Promise.all([
       // Recent entries (limit 1, most recent)
+      // discussion_sessions has no direct mode col; passthrough (count is per-user scoped)
       safeQuery<DiscussionSummaryRow[]>(
         adminDb
           .from('discussion_sessions')
@@ -246,16 +250,21 @@ export async function GET(
         'recent discussion',
         []
       ),
+      // jurnal has a direct 'mode' column
       safeQuery<JournalSummaryRow[]>(
-        adminDb
-          .from('jurnal')
-          .select('id, content, reflection, type, subtopic_label, created_at')
-          .eq('user_id', userId)
-          .order('created_at', { ascending: false })
-          .limit(1),
+        applyAdminModeFilter(
+          adminDb
+            .from('jurnal')
+            .select('id, content, reflection, type, subtopic_label, created_at')
+            .eq('user_id', userId)
+            .order('created_at', { ascending: false })
+            .limit(1),
+          adminMode,
+        ),
         'recent journal',
         []
       ),
+      // transcript — passthrough (per-user scoped; mode filter via course would be extra complexity)
       safeQuery<TranscriptSummaryRow[]>(
         adminDb
           .from('transcript')
@@ -266,36 +275,49 @@ export async function GET(
         'recent transcript',
         []
       ),
+      // ask_question_history has a direct 'mode' column
       safeQuery<AskSummaryRow[]>(
-        adminDb
-          .from('ask_question_history')
-          .select('id, question, created_at')
-          .eq('user_id', userId)
-          .order('created_at', { ascending: false })
-          .limit(1),
+        applyAdminModeFilter(
+          adminDb
+            .from('ask_question_history')
+            .select('id, question, created_at')
+            .eq('user_id', userId)
+            .order('created_at', { ascending: false })
+            .limit(1),
+          adminMode,
+        ),
         'recent ask question',
         []
       ),
+      // challenge_responses has a direct 'mode' column
       safeQuery<ChallengeSummaryRow[]>(
-        adminDb
-          .from('challenge_responses')
-          .select('id, question, created_at')
-          .eq('user_id', userId)
-          .order('created_at', { ascending: false })
-          .limit(1),
+        applyAdminModeFilter(
+          adminDb
+            .from('challenge_responses')
+            .select('id, question, created_at')
+            .eq('user_id', userId)
+            .order('created_at', { ascending: false })
+            .limit(1),
+          adminMode,
+        ),
         'recent challenge',
         []
       ),
+      // quiz_submissions has a direct 'mode' column
       safeQuery<QuizSummaryRow[]>(
-        adminDb
-          .from('quiz_submissions')
-          .select('id, user_id, quiz_attempt_id, attempt_number, course_id, subtopic_id, leaf_subtopic_id, subtopic_label, is_correct, created_at')
-          .eq('user_id', userId)
-          .order('created_at', { ascending: false })
-          .limit(1),
+        applyAdminModeFilter(
+          adminDb
+            .from('quiz_submissions')
+            .select('id, user_id, quiz_attempt_id, attempt_number, course_id, subtopic_id, leaf_subtopic_id, subtopic_label, is_correct, created_at')
+            .eq('user_id', userId)
+            .order('created_at', { ascending: false })
+            .limit(1),
+          adminMode,
+        ),
         'recent quiz',
         []
       ),
+      // feedback — passthrough (per-user scoped; complex to filter via course for 1-row peek)
       safeQuery<FeedbackSummaryRow[]>(
         adminDb
           .from('feedback')
@@ -306,6 +328,7 @@ export async function GET(
         'recent feedback',
         []
       ),
+      // example_usage_events — passthrough for 1-row peek
       safeQuery<ExampleSummaryRow[]>(
         adminDb
           .from('example_usage_events')
@@ -316,13 +339,17 @@ export async function GET(
         'recent example usage',
         []
       ),
+      // courses has a direct 'mode' column
       safeQuery<IdRow[]>(
-        adminDb
-          .from('courses')
-          .select('id')
-          .eq('created_by', userId)
-          .order('created_at', { ascending: false })
-          .limit(1),
+        applyAdminModeFilter(
+          adminDb
+            .from('courses')
+            .select('id')
+            .eq('created_by', userId)
+            .order('created_at', { ascending: false })
+            .limit(1),
+          adminMode,
+        ),
         'recent course',
         []
       ),
@@ -333,7 +360,10 @@ export async function GET(
         []
       ),
       safeQuery<IdRow[]>(
-        adminDb.from('jurnal').select('id').eq('user_id', userId),
+        applyAdminModeFilter(
+          adminDb.from('jurnal').select('id').eq('user_id', userId),
+          adminMode,
+        ),
         'journal count',
         []
       ),
@@ -343,21 +373,30 @@ export async function GET(
         []
       ),
       safeQuery<IdRow[]>(
-        adminDb.from('ask_question_history').select('id').eq('user_id', userId),
+        applyAdminModeFilter(
+          adminDb.from('ask_question_history').select('id').eq('user_id', userId),
+          adminMode,
+        ),
         'ask question count',
         []
       ),
       safeQuery<IdRow[]>(
-        adminDb.from('challenge_responses').select('id').eq('user_id', userId),
+        applyAdminModeFilter(
+          adminDb.from('challenge_responses').select('id').eq('user_id', userId),
+          adminMode,
+        ),
         'challenge count',
         []
       ),
       safeQuery<QuizSummaryRow[]>(
-        adminDb
-          .from('quiz_submissions')
-          .select('id, user_id, quiz_attempt_id, attempt_number, course_id, subtopic_id, leaf_subtopic_id, subtopic_label, is_correct, created_at')
-          .eq('user_id', userId)
-          .order('created_at', { ascending: false }),
+        applyAdminModeFilter(
+          adminDb
+            .from('quiz_submissions')
+            .select('id, user_id, quiz_attempt_id, attempt_number, course_id, subtopic_id, leaf_subtopic_id, subtopic_label, is_correct, created_at')
+            .eq('user_id', userId)
+            .order('created_at', { ascending: false }),
+          adminMode,
+        ),
         'quiz attempt count',
         []
       ),
@@ -372,7 +411,10 @@ export async function GET(
         []
       ),
       safeQuery<IdRow[]>(
-        adminDb.from('courses').select('id').eq('created_by', userId),
+        applyAdminModeFilter(
+          adminDb.from('courses').select('id').eq('created_by', userId),
+          adminMode,
+        ),
         'course count',
         []
       ),

@@ -6,6 +6,7 @@ import { NextResponse } from 'next/server'
 import type { NextRequest } from 'next/server'
 import { adminDb } from '@/lib/database'
 import { withCacheHeaders } from '@/lib/api-middleware'
+import { getAdminModeFromRequest } from '@/lib/admin-mode'
 import jwt from 'jsonwebtoken'
 import type { TimeRange, ActivityItem, DashboardAPIResponse, CTBreakdown, CThBreakdown } from '@/types/dashboard'
 import {
@@ -102,9 +103,24 @@ async function safeQuery<T = Record<string, unknown>>(
   tableName: string,
   selectFields: string = '*',
   filters?: Record<string, string | number | boolean | null>,
-  options?: { dateSince?: Date | null; limit?: number; orderBy?: { column: string; ascending: boolean } }
+  options?: {
+    dateSince?: Date | null
+    limit?: number
+    orderBy?: { column: string; ascending: boolean }
+    // MVR Item 10: restrict by `mode='research'` when admin toggled into Mode Penelitian.
+    modeFilter?: { mode: 'general' | 'research'; column?: string }
+    // For tables without a direct `mode` column we 2-step filter via course_id IN (...).
+    // Empty values + research mode means "no research courses exist" → short-circuit to [].
+    inFilter?: { column: string; values: string[] }
+  }
 ): Promise<T[]> {
   try {
+    // Short-circuit when caller wants `column IN (empty set)` — common when
+    // admin is in research mode but there are no research courses yet.
+    if (options?.inFilter && options.inFilter.values.length === 0) {
+      return []
+    }
+
     let query = adminDb.from(tableName).select(selectFields)
 
     // Apply equality filters
@@ -112,6 +128,16 @@ async function safeQuery<T = Record<string, unknown>>(
       for (const [key, value] of Object.entries(filters)) {
         query = query.eq(key, value)
       }
+    }
+
+    // Apply admin mode filter — passthrough in general mode.
+    if (options?.modeFilter && options.modeFilter.mode === 'research') {
+      query = query.eq(options.modeFilter.column ?? 'mode', 'research')
+    }
+
+    // Apply IN filter (used to restrict by a pre-resolved course_id set).
+    if (options?.inFilter) {
+      query = query.in(options.inFilter.column, options.inFilter.values)
     }
 
     // Apply date filter at database level (instead of in-memory)
@@ -171,6 +197,9 @@ export async function GET(request: NextRequest) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
     }
 
+    // ── Admin Mode: Mode Penelitian restricts to mode='research' rows ──
+    const adminMode = getAdminModeFromRequest(request)
+
     // ── Parse time range ──
     const { searchParams } = new URL(request.url)
     const timeRange = (searchParams.get('range') || 'all') as TimeRange
@@ -179,6 +208,25 @@ export async function GET(request: NextRequest) {
     // ── Parallel Data Fetching with DB-level filtering ──────────────────────
     // NOTE: 'courses' table uses 'created_by' not 'user_id'
     const queryOpts = { dateSince, limit: 5000 }
+
+    // Helper: apply mode filter to a Supabase query builder for tables with a
+    // direct 'mode' column (courses, ask_question_history, challenge_responses,
+    // jurnal, quiz_submissions).
+    // For tables without 'mode' we use a 2-step approach: fetch filtered
+    // course_ids first, then .in('course_id', ...) on the target table.
+    const researchCourseIds: string[] = []
+    if (adminMode === 'research') {
+      const { data: modeFilteredCourses } = await adminDb
+        .from('courses')
+        .select('id')
+        .eq('mode', 'research')
+        .limit(5000)
+      if (Array.isArray(modeFilteredCourses)) {
+        for (const row of modeFilteredCourses) {
+          if (row && typeof row.id === 'string') researchCourseIds.push(row.id)
+        }
+      }
+    }
 
     const [
       users,
@@ -198,19 +246,61 @@ export async function GET(request: NextRequest) {
     ] = await Promise.all([
       // Users: always fetch ALL (not time-filtered) for user lookup
       safeQuery<UserRow>('users', 'id, email, role, created_at', { role: 'user' }, { limit: 5000 }),
-      // FIX: removed non-existent 'user_id' column — courses use 'created_by'
-      safeQuery<CourseRow>('courses', 'id, title, created_at, created_by', {}, queryOpts),
-      safeQuery<QuizSubmissionRow>('quiz_submissions', 'id, user_id, quiz_attempt_id, attempt_number, course_id, subtopic_id, leaf_subtopic_id, subtopic_label, is_correct, reasoning_note, created_at', {}, queryOpts),
-      safeQuery<DiscussionRow>('discussion_sessions', 'id, user_id, status, learning_goals, created_at', {}, queryOpts),
-      safeQuery<ReflectionJournalRow>('jurnal', 'id, user_id, course_id, subtopic_id, subtopic_label, module_index, subtopic_index, type, content, reflection, created_at', {}, queryOpts),
-      safeQuery<ChallengeRow>('challenge_responses', 'id, user_id, question, created_at', {}, queryOpts),
-      safeQuery<AskHistoryRow>('ask_question_history', 'id, user_id, question, prompt_components, prompt_stage, prompt_version, session_number, created_at', {}, queryOpts),
-      safeQuery<ReflectionFeedbackRow>('feedback', 'id, user_id, course_id, subtopic_id, subtopic_label, module_index, subtopic_index, rating, comment, created_at', {}, queryOpts),
-      safeQuery<TranscriptRow>('transcript', 'id, user_id, created_at', {}, queryOpts),
-      safeQuery<ExampleUsageRow>('example_usage_events', 'id, user_id, subtopic_label, examples_count, created_at', {}, queryOpts),
+      // courses has a direct 'mode' column → modeFilter applies directly
+      safeQuery<CourseRow>('courses', 'id, title, created_at, created_by', {}, {
+        ...queryOpts,
+        modeFilter: { mode: adminMode },
+      }),
+      // quiz_submissions has a direct 'mode' column
+      safeQuery<QuizSubmissionRow>('quiz_submissions', 'id, user_id, quiz_attempt_id, attempt_number, course_id, subtopic_id, leaf_subtopic_id, subtopic_label, is_correct, reasoning_note, created_at', {}, {
+        ...queryOpts,
+        modeFilter: { mode: adminMode },
+      }),
+      // discussion_sessions — no direct mode column; filter via researchCourseIds
+      safeQuery<DiscussionRow>('discussion_sessions', 'id, user_id, status, learning_goals, created_at', {}, {
+        ...queryOpts,
+        inFilter: adminMode === 'research' ? { column: 'course_id', values: researchCourseIds } : undefined,
+      }),
+      // jurnal has a direct 'mode' column
+      safeQuery<ReflectionJournalRow>('jurnal', 'id, user_id, course_id, subtopic_id, subtopic_label, module_index, subtopic_index, type, content, reflection, created_at', {}, {
+        ...queryOpts,
+        modeFilter: { mode: adminMode },
+      }),
+      // challenge_responses has a direct 'mode' column
+      safeQuery<ChallengeRow>('challenge_responses', 'id, user_id, question, created_at', {}, {
+        ...queryOpts,
+        modeFilter: { mode: adminMode },
+      }),
+      // ask_question_history has a direct 'mode' column
+      safeQuery<AskHistoryRow>('ask_question_history', 'id, user_id, question, prompt_components, prompt_stage, prompt_version, session_number, created_at', {}, {
+        ...queryOpts,
+        modeFilter: { mode: adminMode },
+      }),
+      // feedback — no direct mode column; filter via researchCourseIds
+      safeQuery<ReflectionFeedbackRow>('feedback', 'id, user_id, course_id, subtopic_id, subtopic_label, module_index, subtopic_index, rating, comment, created_at', {}, {
+        ...queryOpts,
+        inFilter: adminMode === 'research' ? { column: 'course_id', values: researchCourseIds } : undefined,
+      }),
+      // transcript — no direct mode column; filter via researchCourseIds
+      safeQuery<TranscriptRow>('transcript', 'id, user_id, created_at', {}, {
+        ...queryOpts,
+        inFilter: adminMode === 'research' ? { column: 'course_id', values: researchCourseIds } : undefined,
+      }),
+      // example_usage_events — no direct mode column; filter via researchCourseIds
+      safeQuery<ExampleUsageRow>('example_usage_events', 'id, user_id, subtopic_label, examples_count, created_at', {}, {
+        ...queryOpts,
+        inFilter: adminMode === 'research' ? { column: 'course_id', values: researchCourseIds } : undefined,
+      }),
       safeQuery<LearningProfileRow>('learning_profiles', 'id, user_id, created_at', {}, queryOpts),
-      // Research tables — graceful fallback if not created
-      safeQuery<PromptClassificationRow>('prompt_classifications', 'id, user_id, prompt_stage, prompt_stage_score, micro_markers, primary_marker, created_at', {}, queryOpts),
+      // prompt_classifications has a direct 'mode' column
+      safeQuery<PromptClassificationRow>('prompt_classifications', 'id, user_id, prompt_stage, prompt_stage_score, micro_markers, primary_marker, created_at', {}, {
+        ...queryOpts,
+        modeFilter: { mode: adminMode },
+      }),
+      // cognitive_indicators — no direct mode column; filter via user_id from
+      // research learning_sessions (complex; simplified to passthrough in Mode
+      // Umum). In Mode Penelitian we rely on the fact that research data is
+      // already scoped to research participants by the research pipeline.
       safeQuery<CognitiveIndicatorRow>('cognitive_indicators', 'id, user_id, ct_total_score, cth_total_score, ct_decomposition, ct_pattern_recognition, ct_abstraction, ct_algorithm_design, ct_evaluation_debugging, ct_generalization, cth_interpretation, cth_analysis, cth_evaluation, cth_inference, cth_explanation, cth_self_regulation, cognitive_depth_level, created_at', {}, queryOpts),
     ])
 

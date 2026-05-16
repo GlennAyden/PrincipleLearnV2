@@ -1,0 +1,24 @@
+{
+  "_meta": {
+    "type": "output_predictor",
+    "purpose": "MVR Item 9.2 — OutputPredictor example. Siswa memprediksi output sebelum sistem reveal hasil sebenarnya.",
+    "based_on": "Mushthofa dkk. 2023 Bab 2, sub-bab 2.3 Operator hal. 50",
+    "rm3_dimensions": ["cth_inference", "ct_abstraction"]
+  },
+  "interactive_blocks_value": [
+    {
+      "type": "output_predictor",
+      "config": {
+        "prompt": "Apa output yang dicetak oleh pseudokode berikut jika `a = 7` dan `b = 3`? Tulis hasilnya tanpa tanda kutip.",
+        "pseudocode": "INPUT a, b\nIF a MOD b = 0 THEN\n    OUTPUT \"habis dibagi\"\nELSE\n    OUTPUT a MOD b\nENDIF",
+        "inputs": {
+          "a": "7",
+          "b": "3"
+        },
+        "expectedOutput": "1",
+        "acceptableVariants": ["1.0"],
+        "hintAfterFail": "MOD adalah operator modulo (sisa pembagian). 7 dibagi 3 hasilnya 2 sisa 1; karena sisa ≠ 0 maka cabang ELSE yang dipakai."
+      }
+    }
+  ]
+}

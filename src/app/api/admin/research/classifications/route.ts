@@ -145,7 +145,13 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: 'Classification already exists for this prompt by this classifier' }, { status: 409 });
     }
 
-    const { data, error } = await adminDb.from('prompt_classifications').insert(normalized);
+    // MVR Item 1: tag manual admin classifications with the course mode so
+    // research dashboards filter them consistently with the auto-coded rows.
+    const { getCourseMode } = await import('@/lib/course-mode');
+    const classificationMode = await getCourseMode(normalized.course_id);
+    const insertPayload = { ...normalized, mode: classificationMode };
+
+    const { data, error } = await adminDb.from('prompt_classifications').insert(insertPayload);
     if (error) {
       console.error('Error creating prompt classification:', error);
       return NextResponse.json({ error: 'Failed to create classification' }, { status: 500 });

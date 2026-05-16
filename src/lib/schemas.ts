@@ -67,6 +67,10 @@ export const GenerateCourseSchema = z.object({
   extraTopics: z.string().optional(),
   problem: z.string().optional(),
   assumption: z.string().optional(),
+  // MVR Item 1 — selects between Mode Umum (default) and Mode Penelitian.
+  // For 'research' the route additionally validates a template_topic; see Item 2.
+  mode: z.enum(['general', 'research']).optional().default('general'),
+  templateTopic: z.string().trim().optional(),
 }).strict();
 
 // `module` and `subtopic` are both .trim().min(1) so an all-whitespace
@@ -156,6 +160,13 @@ export const AskQuestionSchema = z.object({
   reasoningNote: z.string().optional(),
   promptVersion: z.union([z.number(), z.string()]).optional(),
   sessionNumber: z.union([z.number(), z.string()]).optional(),
+  // MVR Item 7 — Hint tier mechanism. 1=diagnostik, 2=hint terarah, 3=solusi penuh.
+  // Only meaningful in research mode; ignored in Mode Umum.
+  scaffoldTier: z.union([z.literal(1), z.literal(2), z.literal(3)]).optional().default(1),
+  // MVR Item 9.1 — when the user clicks the "minta refleksi" button after
+  // submitting an interactive block, the frontend passes the artifact id so
+  // the AI can reference the student's actual result in the response.
+  triggeredByArtifactId: z.string().uuid().optional().nullable(),
 });
 
 export const ChallengeThinkingSchema = z.object({
@@ -305,6 +316,36 @@ export const OnboardingStateSchema = z.object({
     message: 'flag harus "intro_slides" atau "course_tour"',
   }),
   value: z.boolean().optional().default(true),
+});
+
+// ── IRR (Inter-Rater Reliability) schema ───────────────────────────
+// MVR Item 8d — researcher_2 submits independent stage + 12-dimension scores
+// for a previously-classified prompt. The route resolves the primary
+// classification via the supplied promptClassificationId.
+const irrScoreField = z
+  .union([z.literal(0), z.literal(1), z.literal(2)])
+  .or(z.number().int().min(0).max(2));
+
+export const IrrSubmitSchema = z.object({
+  promptClassificationId: z.string().uuid('promptClassificationId harus UUID'),
+  stage: z.enum(['SCP', 'SRP', 'MQP', 'REFLECTIVE'], {
+    message: 'stage harus SCP, SRP, MQP, atau REFLECTIVE',
+  }),
+  scores: z.object({
+    ct_decomposition: irrScoreField,
+    ct_pattern_recognition: irrScoreField,
+    ct_abstraction: irrScoreField,
+    ct_algorithm_design: irrScoreField,
+    ct_evaluation_debugging: irrScoreField,
+    ct_generalization: irrScoreField,
+    cth_interpretation: irrScoreField,
+    cth_analysis: irrScoreField,
+    cth_evaluation: irrScoreField,
+    cth_inference: irrScoreField,
+    cth_explanation: irrScoreField,
+    cth_self_regulation: irrScoreField,
+  }),
+  notes: z.string().trim().max(2000).optional(),
 });
 
 // ── Helper ──────────────────────────────────────────────────────────

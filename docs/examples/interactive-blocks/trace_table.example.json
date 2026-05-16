@@ -1,0 +1,28 @@
+{
+  "_meta": {
+    "type": "trace_table",
+    "purpose": "MVR Item 9.2 — TraceTable example. Copy & edit the `config` block; the outer wrapper shows how it sits inside leaf_subtopics.interactive_blocks JSONB.",
+    "based_on": "Mushthofa dkk. 2023 Bab 2, sub-bab 2.7 For-Loop hal. 59",
+    "rm3_dimensions": ["ct_evaluation_debugging", "ct_pattern_recognition"]
+  },
+  "interactive_blocks_value": [
+    {
+      "type": "trace_table",
+      "config": {
+        "prompt": "Telusuri eksekusi pseudokode berikut. Isi nilai `i` dan `total` di setiap langkah eksekusi loop.",
+        "pseudocode": "total <- 0\nFOR i FROM 1 TO 4 DO\n    total <- total + i\nENDFOR\nOUTPUT total",
+        "columns": [
+          { "key": "i",     "label": "i"     },
+          { "key": "total", "label": "total" }
+        ],
+        "rowLabelPrefix": "Iterasi",
+        "expectedRows": [
+          { "values": { "i": "1", "total": "1"  } },
+          { "values": { "i": "2", "total": "3"  } },
+          { "values": { "i": "3", "total": "6"  } },
+          { "values": { "i": "4", "total": "10" } }
+        ]
+      }
+    }
+  ]
+}

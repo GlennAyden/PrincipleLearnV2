@@ -2,9 +2,10 @@
 
 import { NextResponse } from 'next/server'
 import type { NextRequest } from 'next/server'
-import { DatabaseService } from '@/lib/database'
+import { adminDb, DatabaseService } from '@/lib/database'
 import { ensureCourseGenerationActivitySeeded } from '@/lib/activitySeed'
 import { withProtection } from '@/lib/api-middleware'
+import { getAdminModeFromRequest, applyAdminModeFilter } from '@/lib/admin-mode'
 
 interface Course {
   id: string;
@@ -34,15 +35,28 @@ interface CourseGenerationActivityRow {
 
 async function activityHandler(req: NextRequest) {
   console.log('[Activity API] Starting generate-course activity fetch');
-  
+
   try {
     await ensureCourseGenerationActivitySeeded();
+    const adminMode = getAdminModeFromRequest(req);
     const { searchParams } = new URL(req.url)
     const userId = searchParams.get('userId')
     const date = searchParams.get('date')
     const courseId = searchParams.get('course')
-    
+
     console.log('[Activity API] Request params:', { userId, date, courseId });
+
+    // Fetch research course_ids once for mode filtering (used in payload builders)
+    let researchCourseIds: string[] | null = null;
+    if (adminMode === 'research') {
+      const { data: courseData } = await applyAdminModeFilter(
+        adminDb.from('courses').select('id'),
+        adminMode,
+      );
+      researchCourseIds = (Array.isArray(courseData) ? courseData : []).map(
+        (r: { id: string }) => r.id,
+      );
+    }
 
     let activityRows: CourseGenerationActivityRow[] = []
     try {
@@ -54,12 +68,18 @@ async function activityHandler(req: NextRequest) {
       activityRows = []
     }
 
+    // In Mode Penelitian, filter activity rows to research courses only
+    if (adminMode === 'research' && researchCourseIds !== null) {
+      const researchSet = new Set(researchCourseIds)
+      activityRows = activityRows.filter((row) => row.course_id && researchSet.has(row.course_id))
+    }
+
     let payload
     if (activityRows.length > 0) {
       payload = await buildActivityPayload({ rows: activityRows, userId, date, courseId })
     } else {
       console.warn('[Activity API] Falling back to legacy course-based activity logs')
-      payload = await buildLegacyPayload({ userId, date })
+      payload = await buildLegacyPayload({ userId, date, researchCourseIds })
     }
 
     console.log(`[Activity API] Returning ${payload.length} formatted course generation records`)
@@ -172,9 +192,11 @@ async function fetchCached<T extends { id: string }>(
 async function buildLegacyPayload({
   userId,
   date,
+  researchCourseIds = null,
 }: {
   userId: string | null
   date: string | null
+  researchCourseIds?: string[] | null
 }) {
   try {
     const courses = await DatabaseService.getRecords<Course>('courses', {
@@ -182,6 +204,11 @@ async function buildLegacyPayload({
     })
 
     let filtered = courses
+    // Apply mode filter: only include research courses when researchCourseIds provided
+    if (researchCourseIds !== null) {
+      const researchSet = new Set(researchCourseIds)
+      filtered = filtered.filter((course) => researchSet.has(course.id))
+    }
     if (userId) {
       filtered = filtered.filter((course) => course.created_by === userId)
     }

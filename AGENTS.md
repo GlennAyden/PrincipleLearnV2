@@ -14,9 +14,10 @@ The app uses Next.js App Router with a clear separation between student-facing a
   - Discussion module: `services/discussion/{generateDiscussionTemplate,templatePreparation}.ts`.
 - **`src/lib/`** — Infrastructure & feature helpers.
   - Core: `database.ts` (`DatabaseService` + `adminDb` + `publicDb`), `schemas.ts` (**19 Zod schemas** + `parseBody()` helper), `api-client.ts` (frontend fetch wrapper with CSRF + 401 retry), `api-middleware.ts` (`withProtection()`, `withCacheHeaders()`), `api-logger.ts` (`withApiLogging()` → `api_logs`), `jwt.ts`, `rate-limit.ts`, `openai.ts`.
-  - Feature helpers: `admin-prompt-stage.ts`, `admin-queries.ts`, `admin-quiz-attempts.ts`, `admin-reflection-activity.ts`, `admin-reflection-summary.ts`, `auth-helper.ts`, `challenge-feedback.ts`, `discussion-prerequisites.ts`, `discussion/{resolveSubtopic,serializers,thinkingSkills}.ts`, `engagement.ts`, `leaf-subtopics.ts`, `learning-progress.ts`, `ownership.ts`, `quiz-content.ts`, `quiz-sync.ts`, `reflection-status.ts`, `reflection-submission.ts`, `research-normalizers.ts`, `supabase-batch.ts`, `activitySeed.ts`, `analytics/reflection-model.ts`.
-- **`src/components/`** — Organized by feature, not type. Each component has a co-located `.module.scss`. Admin-only components live in `components/admin/`. Active feature folders: `AILoadingIndicator/`, `AskQuestion/`, `ChallengeThinking/`, `Examples/`, `HelpDrawer/`, `KeyTakeaways/`, `NextSubtopics/`, `ProductTour/`, `PromptBuilder/`, `PromptTimeline/`, `Quiz/`, `ReasoningNote/`, `StructuredReflection/`, `WhatNext/`.
-- **`src/context/RequestCourseContext.tsx`** — Multi-step course-creation state (step1 → step2 → step3 → generating).
+  - i18n: `i18n/locale.ts` (`Locale` type, `LOCALES`, `LOCALE_COOKIE`, `parseLocale`), `i18n/dict.ts` (bilingual ID/EN dictionary, ~414 keys per locale, compile-time parity via `as const satisfies Record<keyof typeof id, string>`).
+  - Feature helpers: `admin-auth.ts`, `admin-prompt-stage.ts`, `admin-queries.ts`, `admin-quiz-attempts.ts`, `admin-reflection-activity.ts`, `admin-reflection-summary.ts`, `auth-helper.ts`, `challenge-feedback.ts`, `discussion-prerequisites.ts`, `discussion/{resolveSubtopic,serializers,thinkingSkills}.ts`, `engagement.ts`, `leaf-subtopics.ts`, `learning-progress.ts`, `ownership.ts`, `quiz-content.ts`, `quiz-sync.ts`, `reflection-status.ts`, `reflection-submission.ts`, `research-normalizers.ts`, `supabase-batch.ts`, `activitySeed.ts`, `analytics/reflection-model.ts`.
+- **`src/components/`** — Organized by feature, not type. Each component has a co-located `.module.scss`. Admin-only components live in `components/admin/`. Active feature folders: `AILoadingIndicator/`, `AskQuestion/`, `ChallengeThinking/`, `Examples/`, `HelpDrawer/`, `KeyTakeaways/`, `LanguageToggle/`, `NextSubtopics/`, `ProductTour/`, `PromptBuilder/`, `PromptTimeline/`, `Quiz/`, `ReasoningNote/`, `StructuredReflection/`, `WhatNext/`.
+- **`src/context/`** — `RequestCourseContext.tsx` (multi-step course-creation state), `LocaleContext.tsx` (UI locale provider + `useLocale` hook with `t(key)` lookup).
 - **`src/hooks/`** — `useAdmin`, `useAuth`, `useDebouncedValue`, `useLearningProgress`, `useLocalStorage`, `useOnboardingState`, `useSessionStorage`.
 - **`middleware.ts`** — JWT auth, role gate for admin routes, two-stage onboarding cookie gate (`onboarding_done` + `intro_slides_done`), CSRF validation, header injection (`x-user-id`, `x-user-email`, `x-user-role`).
 
@@ -98,6 +99,10 @@ Both cookies are non-HttpOnly UX guards; the server source of truth is `learning
 
 Admin gate: `/admin/...` and `/api/admin/...` require `role === 'admin'` (case-insensitive). Middleware handles this; admin handlers should not re-check.
 
+## Bilingual UI (ID / EN)
+
+User-facing UI is bilingual. The `LanguageToggle` button is mounted in user headers (dashboard, course layout, onboarding intro, onboarding wizard); admin pages remain Indonesian. Locale source of truth: `learning_profiles.preferred_language` (`VARCHAR(5) NOT NULL DEFAULT 'id' CHECK IN ('id','en')`). Mirrored to a non-HttpOnly `locale=id|en` cookie (Lax, Path=/, 1-year) — set on `/api/auth/login` from the DB row, updated by `LocaleProvider.setLocale`, and read in `src/app/layout.tsx` via `cookies()` to inject `<html lang>` for SSR. Dictionary lives in `src/lib/i18n/dict.ts` with flat snake_case keys (`<area>_<purpose>`); orphan keys break tsc. **AI-generated content stays in its generation language** — never translate course titles, subtopic bodies, quiz questions, AI Q&A responses, challenge feedback, or any value rendered from props/API/DB.
+
 ## Modules Marked "Not in Active Thesis Use"
 
 These are implemented but the researcher is not investing perfectionist work in them for the current thesis run. Document any change you make, but do not gold-plate:
@@ -110,8 +115,9 @@ These are implemented but the researcher is not investing perfectionist work in 
 
 Commits follow `type: description` convention:
 
-- `feat:` new features, `fix:` bug fixes, `chore:` maintenance, `docs:` documentation, `security:` security patches, `refactor:` non-behavioral cleanup.
+- `feat:` new features, `fix:` bug fixes, `chore:` maintenance, `docs:` documentation, `security:` security patches, `refactor:` non-behavioral cleanup, `test:` test-only changes, `i18n:` translation/locale work.
 - Messages are lowercase, descriptive. Use an em dash (`—`) to separate sub-descriptions, e.g. `fix: audit-driven hardening — auth, RLS, quiz parse, and mobile polish`.
+- For multi-file scope refactors that touch one cohesive surface, prefix with the surface name, e.g. `feat(dashboard):`, `feat(course):`, `feat(api):`, `docs(claude):`.
 
 Before opening a PR:
 

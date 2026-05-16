@@ -135,6 +135,25 @@ const id = {
   request_course_step1_continue: 'Lanjut',
   request_course_step1_fill_both: 'Mohon isi kedua kolom',
 
+  // ── Mode toggle (Umum vs Penelitian) — MVR Item 1/2 ──────────────
+  request_course_step1_mode_label: 'Mode Pembelajaran',
+  request_course_step1_mode_general: 'Umum',
+  request_course_step1_mode_general_desc:
+    'Buat kursus sesuai topik bebas, dengan AI yang membantu sepenuhnya seperti biasa.',
+  request_course_step1_mode_research: 'Penelitian (Algoritma SMA Fase E)',
+  request_course_step1_mode_research_desc:
+    'Pilih kursus dari kurikulum resmi Kemdikbudristek (Mushthofa dkk. 2023). AI berperan sebagai tutor Sokratik berbasis sumber.',
+  request_course_step1_template_label: 'Pilih Kursus Fase E',
+  request_course_step1_template_loading: 'Memuat daftar kursus...',
+  request_course_step1_template_error: 'Gagal memuat daftar kursus penelitian.',
+  request_course_step1_template_locked_prefix: 'Terkunci',
+  request_course_step1_template_source_prefix: 'Sumber:',
+  request_course_step1_template_select_required: 'Pilih salah satu kursus Fase E terlebih dahulu.',
+  request_course_step1_topic_research_label: 'Topik kursus (otomatis dari pilihan di atas)',
+  request_course_step1_goal_research_label: 'Tujuan belajar (opsional)',
+  request_course_step1_goal_research_placeholder:
+    'Boleh kosong — biarkan default mengikuti tujuan kurikulum Fase E.',
+
   // ── Request course wizard — step 2 ───────────────────────────────
   request_course_step2_back: 'Kembali',
   request_course_step2_title: 'Level pengetahuanmu',
@@ -672,6 +691,25 @@ const en = {
     'What do you want to achieve by studying this topic?',
   request_course_step1_continue: 'Continue',
   request_course_step1_fill_both: 'Please fill in both fields',
+
+  // ── Mode toggle (General vs Research) — MVR Item 1/2 ─────────────
+  request_course_step1_mode_label: 'Learning Mode',
+  request_course_step1_mode_general: 'General',
+  request_course_step1_mode_general_desc:
+    'Build a course on any topic you choose, with full AI assistance as usual.',
+  request_course_step1_mode_research: 'Research (High-School Algorithms — Phase E)',
+  request_course_step1_mode_research_desc:
+    'Pick a course from the official Indonesian Phase E curriculum (Mushthofa et al. 2023). AI acts as a source-grounded Socratic tutor.',
+  request_course_step1_template_label: 'Pick a Phase E Course',
+  request_course_step1_template_loading: 'Loading course list...',
+  request_course_step1_template_error: 'Failed to load research course list.',
+  request_course_step1_template_locked_prefix: 'Locked',
+  request_course_step1_template_source_prefix: 'Source:',
+  request_course_step1_template_select_required: 'Please select a Phase E course first.',
+  request_course_step1_topic_research_label: 'Course topic (auto-filled from your selection above)',
+  request_course_step1_goal_research_label: 'Learning goal (optional)',
+  request_course_step1_goal_research_placeholder:
+    'Optional — leave blank to follow the default Phase E curriculum goal.',
 
   // ── Request course wizard — step 2 ───────────────────────────────
   request_course_step2_back: 'Back',

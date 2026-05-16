@@ -803,6 +803,22 @@ async function postHandler(req: NextRequest) {
       throw new DatabaseError('Failed to insert quiz submissions', insertError);
     }
 
+    // MVR Item 1: stamp learning mode on persisted quiz_submissions rows.
+    // RPC `insert_quiz_attempt` signature does not (yet) accept p_mode, and
+    // the table DEFAULT is 'general' — so only research-mode submissions need
+    // the post-insert UPDATE. Failure is non-blocking: the rows are still
+    // valid student data, just untagged for research filtering.
+    if (researchSession.mode === 'research') {
+      try {
+        await adminDb
+          .from('quiz_submissions')
+          .eq('quiz_attempt_id', quizAttemptId)
+          .update({ mode: 'research' });
+      } catch (modeStampError) {
+        console.warn('[QuizSubmit] Failed to stamp mode=research on submissions', modeStampError);
+      }
+    }
+
     const insertedRowList = Array.isArray(insertedRows)
       ? insertedRows
       : insertedRows

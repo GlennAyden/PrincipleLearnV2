@@ -2,8 +2,9 @@
 
 import { NextResponse } from 'next/server'
 import type { NextRequest } from 'next/server'
-import { DB_ERROR_CODES, DatabaseError, DatabaseService } from '@/lib/database'
+import { DB_ERROR_CODES, DatabaseError, DatabaseService, adminDb } from '@/lib/database'
 import { withProtection } from '@/lib/api-middleware'
+import { getAdminModeFromRequest, applyAdminModeFilter } from '@/lib/admin-mode'
 
 interface Transcript {
   id: string;
@@ -60,8 +61,9 @@ function isMissingTableError(error: unknown, tableName: string): boolean {
 
 async function handler(req: NextRequest) {
   console.log('[Activity API] Starting transcript activity fetch');
-  
+
   try {
+    const adminMode = getAdminModeFromRequest(req);
     const { searchParams } = new URL(req.url)
     const userId = searchParams.get('userId')
     const date = searchParams.get('date')
@@ -69,15 +71,38 @@ async function handler(req: NextRequest) {
     const dateTo = searchParams.get('dateTo')
     const course = searchParams.get('course')
     const topic = searchParams.get('topic')
-  
+
     console.log('[Activity API] Request params:', { userId, date: dateFrom, dateTo, course, topic });
 
-    // Get all transcripts from database
+    // transcript has no direct 'mode' column; in Mode Penelitian filter via
+    // research course_ids fetched from courses table.
     let transcripts: Transcript[] = [];
     try {
-      transcripts = await DatabaseService.getRecords<Transcript>('transcript', {
-        orderBy: { column: 'created_at', ascending: false }
-      });
+      if (adminMode === 'research') {
+        // 2-step: get research course_ids, then filter transcript
+        const { data: courseData } = await applyAdminModeFilter(
+          adminDb.from('courses').select('id'),
+          adminMode,
+        );
+        const researchCourseIds = (Array.isArray(courseData) ? courseData : []).map(
+          (r: { id: string }) => r.id,
+        );
+        if (researchCourseIds.length === 0) {
+          transcripts = [];
+        } else {
+          const { data, error } = await adminDb
+            .from('transcript')
+            .select('*')
+            .in('course_id', researchCourseIds)
+            .order('created_at', { ascending: false });
+          if (error) throw error;
+          transcripts = (Array.isArray(data) ? data : []) as Transcript[];
+        }
+      } else {
+        transcripts = await DatabaseService.getRecords<Transcript>('transcript', {
+          orderBy: { column: 'created_at', ascending: false }
+        });
+      }
     } catch (dbError) {
       if (!isMissingTableError(dbError, 'transcript')) {
         console.error('[Activity API] Database error fetching transcripts:', dbError);

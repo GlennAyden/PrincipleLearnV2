@@ -18,7 +18,44 @@ import {
 import { withApiLogging } from '@/lib/api-logger';
 import { assertCourseOwnership, toOwnershipError } from '@/lib/ownership';
 import { buildLearningProgressStatus } from '@/lib/learning-progress';
+import { getOrGenerateResearchSubtopicContent } from '@/services/subtopic-cache-research.service';
 import type { ChatCompletionMessageParam } from 'openai/resources/chat/completions';
+
+/**
+ * MVR Item 4b — adapt the Sokratik markdown blob into the SubtopicResponse
+ * shape expected by the client. We split off the "**Poin Kunci**" section
+ * into `keyTakeaways` so the existing KeyTakeaways panel renders, and treat
+ * the pre-section text as a single "page" with paragraphs split on
+ * double-newline. Quiz array stays empty until research-mode quiz seeding
+ * lands in a follow-up sprint.
+ */
+function adaptResearchMarkdownToSubtopicResponse(markdown: string, leafTitle: string) {
+  const poinKunciRe = /(?:^|\n)\*\*Poin Kunci\*\*\s*\n+/i;
+  const match = markdown.match(poinKunciRe);
+  let bodyText = markdown;
+  let takeaways: string[] = [];
+  if (match && typeof match.index === 'number') {
+    bodyText = markdown.slice(0, match.index).trim();
+    const tail = markdown.slice(match.index + match[0].length);
+    takeaways = tail
+      .split('\n')
+      .map((line) => line.replace(/^[-*•]\s*/, '').trim())
+      .filter((line) => line.length > 0);
+  }
+
+  const paragraphs = bodyText
+    .split(/\n\s*\n/)
+    .map((p) => p.trim())
+    .filter((p) => p.length > 0);
+
+  return {
+    objectives: [] as string[],
+    pages: [{ title: leafTitle, paragraphs }],
+    keyTakeaways: takeaways,
+    quiz: [] as { question: string; options: string[] }[],
+    whatNext: { summary: '', encouragement: '' },
+  };
+}
 
 async function postHandler(request: NextRequest) {
   try {
@@ -95,6 +132,69 @@ async function postHandler(request: NextRequest) {
     });
     if (gateResponse) {
       return gateResponse;
+    }
+
+    // MVR Item 4b — research-mode content goes through the locked cache +
+    // QA workflow. The first student triggers AI generation from bank
+    // sumber, subsequent students get the SAME content once the researcher
+    // approves it via /admin/sumber/cache-review. Mode Umum falls through
+    // to the existing free-form generation path.
+    {
+      const { adminDb: adminDbForMode } = await import('@/lib/database');
+      const { data: courseModeRow } = await adminDbForMode
+        .from('courses')
+        .select('mode, template_topic, title')
+        .eq('id', courseId)
+        .maybeSingle();
+      const courseMode = (courseModeRow as { mode?: string } | null)?.mode === 'research'
+        ? 'research'
+        : 'general';
+      const courseTemplateTopic = (courseModeRow as { template_topic?: string | null } | null)?.template_topic ?? null;
+
+      if (courseMode === 'research' && courseTemplateTopic) {
+        const trimmedModuleTitle = sanitizePromptInput(rawModuleTitle);
+        const trimmedSubtopicTitle = sanitizePromptInput(rawSubtopic);
+        const cacheKey = buildSubtopicCacheKey(courseId, trimmedModuleTitle, trimmedSubtopicTitle);
+
+        const result = await getOrGenerateResearchSubtopicContent({
+          cacheKey,
+          courseId,
+          templateTopic: courseTemplateTopic,
+          leafTitle: trimmedSubtopicTitle,
+          moduleTitle: trimmedModuleTitle,
+          userId: authUserId,
+        });
+
+        if (result.status === 'approved') {
+          const markdown = (result.row.content as { markdown?: string } | null)?.markdown ?? '';
+          const payload = adaptResearchMarkdownToSubtopicResponse(markdown, trimmedSubtopicTitle);
+          return NextResponse.json(payload);
+        }
+
+        if (result.status === 'under_review' || result.status === 'generated') {
+          // Friendly 202 — content exists but is awaiting researcher QA.
+          // Client should surface this as "materi sedang disiapkan".
+          return NextResponse.json(
+            {
+              error: 'Materi sedang disiapkan peneliti. Coba lagi dalam 1-2 hari.',
+              code: 'CONTENT_UNDER_REVIEW',
+              cacheKey,
+            },
+            { status: 202 },
+          );
+        }
+
+        // status === 'error' — surface the underlying message to the admin
+        // logs while giving the student a generic 503.
+        console.error('[GenerateSubtopic] research cache lock error', result.error);
+        return NextResponse.json(
+          {
+            error: 'Materi belum tersedia. Hubungi peneliti jika berlanjut.',
+            code: 'RESEARCH_CONTENT_UNAVAILABLE',
+          },
+          { status: 503 },
+        );
+      }
     }
 
     // Sanitize user-provided prompt inputs before they reach the model.

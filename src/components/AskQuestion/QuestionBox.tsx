@@ -15,7 +15,20 @@ interface QuestionBoxProps {
   moduleIndex?: number;
   subtopicIndex?: number;
   pageNumber?: number;
+  /**
+   * MVR Item 7 — when 'research' the Hint Tier button is rendered after each
+   * answer so the student can request a more directive AI response. Default
+   * 'general' keeps backward compat (button hidden).
+   */
+  courseMode?: 'general' | 'research';
 }
+
+type ScaffoldTier = 1 | 2 | 3;
+const TIER_LABEL: Record<ScaffoldTier, string> = {
+  1: 'Tier 1 · Diagnostik',
+  2: 'Tier 2 · Hint terarah',
+  3: 'Tier 3 · Solusi penuh',
+};
 
 export default function QuestionBox({
   context,
@@ -25,13 +38,19 @@ export default function QuestionBox({
   moduleIndex = 0,
   subtopicIndex = 0,
   pageNumber = 0,
+  courseMode = 'general',
 }: QuestionBoxProps) {
   const [loading, setLoading] = useState(false);
   const [streamingAnswer, setStreamingAnswer] = useState('');
+  const [currentTier, setCurrentTier] = useState<ScaffoldTier>(1);
+  const [lastQuestion, setLastQuestion] = useState<{ prompt: string; components: PromptComponents } | null>(null);
+  const [hasAnswered, setHasAnswered] = useState(false);
   const { user } = useAuth();
   const { t } = useLocale();
 
-  const handleSubmit = useCallback(async (fullPrompt: string, components: PromptComponents) => {
+  const isResearchMode = courseMode === 'research';
+
+  const submitWithTier = useCallback(async (fullPrompt: string, components: PromptComponents, tier: ScaffoldTier) => {
     if (!fullPrompt.trim()) return;
     if (!user?.id) {
       console.warn('AskQuestion submission blocked: user not authenticated');
@@ -55,6 +74,7 @@ export default function QuestionBox({
           pageNumber,
           promptComponents: components,
           reasoningNote: components.reasoning || '',
+          scaffoldTier: tier,
         }),
       });
 
@@ -76,6 +96,7 @@ export default function QuestionBox({
       }
 
       onAnswer(fullPrompt, finalAnswer);
+      setHasAnswered(true);
     } catch (err: unknown) {
       console.error('AskQuestion error:', err);
       setStreamingAnswer('');
@@ -85,8 +106,40 @@ export default function QuestionBox({
     }
   }, [context, onAnswer, user, courseId, subtopic, moduleIndex, subtopicIndex, pageNumber, t]);
 
+  const handleSubmit = useCallback(async (fullPrompt: string, components: PromptComponents) => {
+    // New question resets the tier ladder.
+    setCurrentTier(1);
+    setLastQuestion({ prompt: fullPrompt, components });
+    setHasAnswered(false);
+    await submitWithTier(fullPrompt, components, 1);
+  }, [submitWithTier]);
+
+  const handleRequestNextHint = useCallback(async () => {
+    if (!lastQuestion || currentTier >= 3 || loading) return;
+    const nextTier = (currentTier + 1) as ScaffoldTier;
+    setCurrentTier(nextTier);
+    await submitWithTier(lastQuestion.prompt, lastQuestion.components, nextTier);
+  }, [lastQuestion, currentTier, loading, submitWithTier]);
+
   return (
     <div className={styles.questionBoxContainer}>
+      {isResearchMode && lastQuestion && hasAnswered && (
+        <div className={styles.tierStatus}>
+          <span className={styles.tierBadge} data-tier={currentTier}>
+            {TIER_LABEL[currentTier]}
+          </span>
+          {currentTier < 3 && (
+            <button
+              type="button"
+              className={styles.tierButton}
+              onClick={handleRequestNextHint}
+              disabled={loading}
+            >
+              Minta Hint Berikutnya →
+            </button>
+          )}
+        </div>
+      )}
       {streamingAnswer && (
         <div className={styles.streamingAnswer}>{streamingAnswer}</div>
       )}

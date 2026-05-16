@@ -3,7 +3,7 @@
 
 import { NextResponse } from 'next/server'
 import type { NextRequest } from 'next/server'
-import { DatabaseService, adminDb } from '@/lib/database'
+import { adminDb } from '@/lib/database'
 import {
   buildReflectionActivities,
   filterReflectionActivities,
@@ -15,16 +15,12 @@ import {
   type ReflectionUserRow,
 } from '@/lib/admin-reflection-activity'
 import { withProtection } from '@/lib/api-middleware'
+import { getAdminModeFromRequest, applyAdminModeFilter } from '@/lib/admin-mode'
 
-async function fetchRecords<T>(table: string) {
-  try {
-    return await DatabaseService.getRecords<T>(table, {
-      orderBy: { column: 'created_at', ascending: false },
-    })
-  } catch (error) {
-    console.error(`[Activity][Reflection] Failed to fetch ${table}:`, error)
-    return []
-  }
+async function fetchModeFilteredCourseIds(mode: import('@/lib/admin-mode').AdminMode): Promise<string[] | null> {
+  if (mode !== 'research') return null
+  const { data } = await adminDb.from('courses').select('id').eq('mode', 'research').limit(5000)
+  return (Array.isArray(data) ? data : []).map((r: { id: string }) => r.id)
 }
 
 async function fetchUsers(userIds: string[]) {
@@ -68,6 +64,7 @@ async function fetchSubtopics(subtopicIds: string[]) {
 
 async function handler(req: NextRequest) {
   try {
+    const adminMode = getAdminModeFromRequest(req)
     const { searchParams } = new URL(req.url)
     const userId = searchParams.get('userId')
     const courseId = searchParams.get('course')
@@ -75,9 +72,44 @@ async function handler(req: NextRequest) {
     const dateFrom = searchParams.get('dateFrom') ?? searchParams.get('date')
     const dateTo = searchParams.get('dateTo')
 
+    // jurnal has a direct 'mode' column; feedback uses course_id for filtering
+    const researchCourseIds = await fetchModeFilteredCourseIds(adminMode)
+
     const [journals, feedbacks] = await Promise.all([
-      fetchRecords<ReflectionJournalRow>('jurnal'),
-      fetchRecords<ReflectionFeedbackRow>('feedback'),
+      // jurnal: direct mode column
+      (async () => {
+        try {
+          const baseQuery = adminDb.from('jurnal').select('*').order('created_at', { ascending: false })
+          const { data, error } = await applyAdminModeFilter(baseQuery, adminMode)
+          if (error) {
+            console.error('[Activity][Reflection] Failed to fetch jurnal:', error)
+            return []
+          }
+          return (Array.isArray(data) ? data : []) as ReflectionJournalRow[]
+        } catch (error) {
+          console.error('[Activity][Reflection] Failed to fetch jurnal:', error)
+          return []
+        }
+      })(),
+      // feedback: no direct mode column; filter via course_id
+      (async () => {
+        try {
+          let q = adminDb.from('feedback').select('*').order('created_at', { ascending: false })
+          if (adminMode === 'research') {
+            if (researchCourseIds && researchCourseIds.length > 0) q = q.in('course_id', researchCourseIds)
+            else q = q.in('course_id', ['__no_match__'])
+          }
+          const { data, error } = await q
+          if (error) {
+            console.error('[Activity][Reflection] Failed to fetch feedback:', error)
+            return []
+          }
+          return (Array.isArray(data) ? data : []) as ReflectionFeedbackRow[]
+        } catch (error) {
+          console.error('[Activity][Reflection] Failed to fetch feedback:', error)
+          return []
+        }
+      })(),
     ])
 
     const userIds = Array.from(

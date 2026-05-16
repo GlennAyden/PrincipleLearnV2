@@ -8,6 +8,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { adminDb } from '@/lib/database';
 import { requireAdminMutation, verifyAdminFromCookie } from '@/lib/admin-auth';
+import { assertResearchModeOnly } from '@/lib/admin-mode';
 import {
   EVIDENCE_SOURCE_TYPES,
   formatAnonParticipant,
@@ -129,6 +130,9 @@ interface ArtifactSourceRow extends BaseSourceRow {
 
 export async function GET(request: NextRequest) {
   try {
+    const modeGuard = assertResearchModeOnly(request);
+    if (modeGuard) return modeGuard;
+
     const admin = verifyAdminFromCookie(request);
     if (!admin) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
 

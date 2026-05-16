@@ -1,6 +1,6 @@
 // src/app/api/generate-course/route.ts
 import { NextRequest, NextResponse } from 'next/server';
-import { DatabaseService, DatabaseError } from '@/lib/database';
+import { DatabaseService, DatabaseError, adminDb } from '@/lib/database';
 import type { ChatCompletionMessageParam } from 'openai/resources/chat/completions';
 import { ZodError } from 'zod';
 import { withApiLogging } from '@/lib/api-logger';
@@ -77,7 +77,38 @@ async function postHandler(req: NextRequest) {
 
     const parsed = parseBody(GenerateCourseSchema, requestBody);
     if (!parsed.success) return parsed.response;
-    const { topic, goal, level, extraTopics, problem, assumption } = parsed.data;
+    const { topic, goal, level, extraTopics, problem, assumption, mode, templateTopic } = parsed.data;
+
+    // MVR Item 2: research mode is restricted to the 4 Fase E template topics
+    // seeded in `course_unlock_dependencies`. Reject unknown / missing topics
+    // before consuming any OpenAI tokens. Item 7b later adds the prereq
+    // (≥70% on prior course) gate on top of this whitelist check.
+    if (mode === 'research') {
+      const normalizedTopic = templateTopic?.trim();
+      if (!normalizedTopic) {
+        return NextResponse.json(
+          {
+            error: 'Mode Penelitian membutuhkan templateTopic. Pilih salah satu kursus Fase E.',
+            code: 'RESEARCH_TEMPLATE_REQUIRED',
+          },
+          { status: 400, headers: corsHeaders },
+        );
+      }
+      const { data: depRow } = await adminDb
+        .from('course_unlock_dependencies')
+        .select('course_template_topic')
+        .eq('course_template_topic', normalizedTopic)
+        .maybeSingle();
+      if (!depRow) {
+        return NextResponse.json(
+          {
+            error: 'templateTopic tidak dikenal. Pilih salah satu dari 4 kursus Fase E.',
+            code: 'RESEARCH_TEMPLATE_UNKNOWN',
+          },
+          { status: 400, headers: corsHeaders },
+        );
+      }
+    }
 
     // Resolve authenticated user context. `withProtection` has already
     // verified CSRF + JWT and set `x-user-id` / `x-user-email` headers, so
@@ -233,6 +264,8 @@ Important: Write all titles and overviews in the same language as the user's inp
             subject: topic,
             difficulty_level: level,
             estimated_duration: Math.max(outline.length * 15, 30),
+            mode,
+            template_topic: mode === 'research' ? (templateTopic?.trim() || null) : null,
           },
           userRecord.id,
           outline,

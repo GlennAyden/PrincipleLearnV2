@@ -9,6 +9,7 @@ import { buildRecentReflection, countUnifiedReflections } from '@/lib/admin-refl
 import { normalizeText } from '@/lib/reflection-submission'
 import { deriveAdminPromptStage } from '@/lib/admin-prompt-stage'
 import { summarizeQuizAttempts } from '@/lib/admin-quiz-attempts'
+import { getAdminModeFromRequest, applyAdminModeFilter } from '@/lib/admin-mode'
 
 // Row interfaces
 interface UserDetailRow {
@@ -191,6 +192,8 @@ export async function GET(
 
     const user = userRecord as unknown as UserDetailRow
 
+    const adminMode = getAdminModeFromRequest(request)
+
     const [
       courses,
       quizSubmissions,
@@ -205,42 +208,65 @@ export async function GET(
       promptClassifications,
     ] = await Promise.all([
       safeQuery<CourseDetailRow[]>(
-        adminDb.from('courses').select('id, title, created_at').eq('created_by', userId).order('created_at', { ascending: false }),
+        // courses has a direct 'mode' column
+        applyAdminModeFilter(
+          adminDb.from('courses').select('id, title, created_at').eq('created_by', userId).order('created_at', { ascending: false }),
+          adminMode,
+        ),
         'courses',
         []
       ),
       safeQuery<QuizDetailRow[]>(
-        adminDb.from('quiz_submissions').select('id, user_id, quiz_id, quiz_attempt_id, attempt_number, course_id, subtopic_id, leaf_subtopic_id, subtopic_label, answer, is_correct, reasoning_note, created_at').eq('user_id', userId).order('created_at', { ascending: false }),
+        // quiz_submissions has a direct 'mode' column
+        applyAdminModeFilter(
+          adminDb.from('quiz_submissions').select('id, user_id, quiz_id, quiz_attempt_id, attempt_number, course_id, subtopic_id, leaf_subtopic_id, subtopic_label, answer, is_correct, reasoning_note, created_at').eq('user_id', userId).order('created_at', { ascending: false }),
+          adminMode,
+        ),
         'quiz_submissions',
         []
       ),
       safeQuery<JournalDetailRow[]>(
-        adminDb.from('jurnal').select('id, content, reflection, course_id, created_at, subtopic_label').eq('user_id', userId).order('created_at', { ascending: false }),
+        // jurnal has a direct 'mode' column
+        applyAdminModeFilter(
+          adminDb.from('jurnal').select('id, content, reflection, course_id, created_at, subtopic_label').eq('user_id', userId).order('created_at', { ascending: false }),
+          adminMode,
+        ),
         'journals',
         []
       ),
       safeQuery<TranscriptDetailRow[]>(
-        adminDb.from('transcript').select('id, content, created_at').eq('user_id', userId).order('created_at', { ascending: false }),
+        // transcript has no direct 'mode' column; filter via course_id done post-query
+        adminDb.from('transcript').select('id, content, created_at, course_id').eq('user_id', userId).order('created_at', { ascending: false }),
         'transcripts',
         []
       ),
       safeQuery<AskDetailRow[]>(
-        adminDb.from('ask_question_history').select('id, question, course_id, subtopic_label, prompt_stage, prompt_components, created_at').eq('user_id', userId).order('created_at', { ascending: false }),
+        // ask_question_history has a direct 'mode' column
+        applyAdminModeFilter(
+          adminDb.from('ask_question_history').select('id, question, course_id, subtopic_label, prompt_stage, prompt_components, created_at').eq('user_id', userId).order('created_at', { ascending: false }),
+          adminMode,
+        ),
         'ask_questions',
         []
       ),
       safeQuery<ChallengeDetailRow[]>(
-        adminDb.from('challenge_responses').select('id, question, module_index, course_id, created_at').eq('user_id', userId).order('created_at', { ascending: false }),
+        // challenge_responses has a direct 'mode' column
+        applyAdminModeFilter(
+          adminDb.from('challenge_responses').select('id, question, module_index, course_id, created_at').eq('user_id', userId).order('created_at', { ascending: false }),
+          adminMode,
+        ),
         'challenges',
         []
       ),
       safeQuery<DiscussionDetailRow[]>(
-        adminDb.from('discussion_sessions').select('id, status, phase, learning_goals, updated_at, created_at').eq('user_id', userId).order('updated_at', { ascending: false }),
+        // discussion_sessions has no direct 'mode'; filter post-query via course_id
+        adminDb.from('discussion_sessions').select('id, status, phase, learning_goals, updated_at, created_at, course_id').eq('user_id', userId).order('updated_at', { ascending: false }),
         'discussions',
         []
       ),
       safeQuery<FeedbackDetailRow[]>(
-        adminDb.from('feedback').select('id, rating, comment, created_at').eq('user_id', userId).order('created_at', { ascending: false }),
+        // feedback has no direct 'mode'; filter post-query via course_id
+        adminDb.from('feedback').select('id, rating, comment, created_at, course_id').eq('user_id', userId).order('created_at', { ascending: false }),
         'feedbacks',
         []
       ),
@@ -260,6 +286,32 @@ export async function GET(
         []
       ),
     ])
+
+    // In Mode Penelitian: restrict transcript/discussion/feedback to research courses
+    const researchCourseIdSet = adminMode === 'research'
+      ? new Set(courses.map((c) => c.id))
+      : null
+
+    const filteredTranscripts = researchCourseIdSet
+      ? transcripts.filter((t) => {
+          const courseId = (t as TranscriptDetailRow & { course_id?: string | null }).course_id
+          return courseId ? researchCourseIdSet.has(courseId) : false
+        })
+      : transcripts
+
+    const filteredDiscussions = researchCourseIdSet
+      ? discussions.filter((d) => {
+          const courseId = (d as DiscussionDetailRow & { course_id?: string | null }).course_id
+          return courseId ? researchCourseIdSet.has(courseId) : false
+        })
+      : discussions
+
+    const filteredFeedbacks = researchCourseIdSet
+      ? feedbacks.filter((f) => {
+          const courseId = (f as FeedbackDetailRow & { course_id?: string | null }).course_id
+          return courseId ? researchCourseIdSet.has(courseId) : false
+        })
+      : feedbacks
 
     const courseIds = courses.map((course) => course.id)
     let allSubtopics: SubtopicDetailRow[] = []
@@ -331,20 +383,20 @@ export async function GET(
       }
     })
 
-    const reflectionCount = countUnifiedReflections(journals.length, feedbacks.length)
+    const reflectionCount = countUnifiedReflections(journals.length, filteredFeedbacks.length)
 
     const engagementScore = computeEngagementScore({
       courses: courses.length,
       quizzes: totalQuizAttempts,
       journals: reflectionCount,
-      transcripts: transcripts.length,
+      transcripts: filteredTranscripts.length,
       askQuestions: askQuestions.length,
       challenges: challenges.length,
-      discussions: discussions.length,
-      feedbacks: feedbacks.length,
+      discussions: filteredDiscussions.length,
+      feedbacks: filteredFeedbacks.length,
     })
 
-    const interactionCount = askQuestions.length + challenges.length + discussions.length
+    const interactionCount = askQuestions.length + challenges.length + filteredDiscussions.length
     const promptStage = deriveAdminPromptStage({
       classifications: promptClassifications,
       prompts: askQuestions,
@@ -361,11 +413,11 @@ export async function GET(
       ...courses.map((course) => parseValidDate(course.created_at)),
       ...quizSubmissions.map((quiz) => parseValidDate(quiz.created_at)),
       ...journals.map((journal) => parseValidDate(journal.created_at)),
-      ...transcripts.map((transcript) => parseValidDate(transcript.created_at)),
+      ...filteredTranscripts.map((transcript) => parseValidDate(transcript.created_at)),
       ...askQuestions.map((ask) => parseValidDate(ask.created_at)),
       ...challenges.map((challenge) => parseValidDate(challenge.created_at)),
-      ...discussions.map((discussion) => parseValidDate(discussion.updated_at ?? discussion.created_at)),
-      ...feedbacks.map((feedback) => parseValidDate(feedback.created_at)),
+      ...filteredDiscussions.map((discussion) => parseValidDate(discussion.updated_at ?? discussion.created_at)),
+      ...filteredFeedbacks.map((feedback) => parseValidDate(feedback.created_at)),
     ].filter((date): date is Date => date !== null)
 
     const lastActivityDate = allDates.length > 0
@@ -411,7 +463,7 @@ export async function GET(
           detail: typeof journal.content === 'string' ? journal.content.slice(0, 120) : '',
           timestamp: journal.created_at,
         }))
-      : feedbacks.slice(0, 5).map((feedback) => ({
+      : filteredFeedbacks.slice(0, 5).map((feedback) => ({
           id: feedback.id,
           type: 'reflection' as const,
           title: `Refleksi - Rating ${feedback.rating ?? 'N/A'}`,
@@ -421,7 +473,7 @@ export async function GET(
 
     recentActivity.push(...reflectionEntries)
 
-    for (const transcript of transcripts.slice(0, 5)) {
+    for (const transcript of filteredTranscripts.slice(0, 5)) {
       recentActivity.push({
         id: transcript.id,
         type: 'transcript',
@@ -451,7 +503,7 @@ export async function GET(
       })
     }
 
-    for (const discussion of discussions.slice(0, 5)) {
+    for (const discussion of filteredDiscussions.slice(0, 5)) {
       recentActivity.push({
         id: discussion.id,
         type: 'discussion',
@@ -491,7 +543,7 @@ export async function GET(
       }
     }
 
-    const recentReflection = buildRecentReflection(journals[0] ?? null, feedbacks[0] ?? null)
+    const recentReflection = buildRecentReflection(journals[0] ?? null, filteredFeedbacks[0] ?? null)
 
     const response = {
       id: user.id,
@@ -500,7 +552,7 @@ export async function GET(
       role: (user.role || 'user').toUpperCase(),
       createdAt: user.created_at,
       totalCourses: courses.length,
-      totalTranscripts: transcripts.length,
+      totalTranscripts: filteredTranscripts.length,
       totalQuizzes: totalQuizAttempts,
       totalQuizAttempts,
       quizAttemptCount: totalQuizAttempts,
@@ -509,8 +561,8 @@ export async function GET(
       totalReflections: reflectionCount,
       totalChallenges: challenges.length,
       totalAskQuestions: askQuestions.length,
-      totalDiscussions: discussions.length,
-      totalFeedbacks: feedbacks.length,
+      totalDiscussions: filteredDiscussions.length,
+      totalFeedbacks: filteredFeedbacks.length,
       recentReflection,
       promptStage,
       engagementScore,

@@ -18,6 +18,55 @@ $transition: 0.25s cubic-bezier(0.4, 0, 0.2, 1);
   margin-bottom: 0.75rem;
 }
 
+/* MVR Item 7 — Hint tier badge + escalation button (research mode only) */
+.tierStatus {
+  display: flex;
+  align-items: center;
+  gap: 0.6rem;
+  padding: 0.4rem 0.65rem;
+  margin-bottom: 0.5rem;
+  background: #faf5ff;
+  border: 1px solid #e9d5ff;
+  border-radius: 8px;
+  flex-wrap: wrap;
+}
+
+.tierBadge {
+  display: inline-flex;
+  align-items: center;
+  font-size: 0.78rem;
+  font-weight: 600;
+  padding: 0.2rem 0.55rem;
+  border-radius: 999px;
+  color: white;
+
+  &[data-tier="1"] { background: linear-gradient(135deg, #818cf8, #6366f1); }
+  &[data-tier="2"] { background: linear-gradient(135deg, #a78bfa, #7c3aed); }
+  &[data-tier="3"] { background: linear-gradient(135deg, #ec4899, #c026d3); }
+}
+
+.tierButton {
+  margin-left: auto;
+  padding: 0.32rem 0.75rem;
+  background: white;
+  border: 1px solid #c4b5fd;
+  border-radius: 6px;
+  color: #6d28d9;
+  font-size: 0.8rem;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.15s;
+
+  &:hover:not(:disabled) {
+    background: #ede9fe;
+  }
+
+  &:disabled {
+    opacity: 0.5;
+    cursor: not-allowed;
+  }
+}
+
 .questionForm {
   display: flex;
   flex-direction: column;

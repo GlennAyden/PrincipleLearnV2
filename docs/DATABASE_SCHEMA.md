@@ -1074,6 +1074,26 @@ Files most relevant to active maintenance:
 - RLS hardening: `add_rls_policies_all_tables.sql`, `harden_leaf_subtopic_rpc_permissions.sql`, `fix_supabase_advisor_discussion_rate_limits.sql`
 - Research model: `create_research_tables.sql`, `alter_learning_sessions_add_fields.sql`, `add_discussion_assessment_research_model.sql`, `add_ask_question_research_columns.sql`
 
+### 12.1 MVR Sprint Migrations (2026-05-16)
+
+Eleven migrations applied as a single batch on 2026-05-16 implement the Minimum Viable Revision (MVR) deliverables documented in [`rencana-eksekusi-mvr.md`](../rencana-eksekusi-mvr.md). Each file in `docs/sql/` is a verbatim snapshot of the SQL applied to the live Supabase project; the live database remains source of truth.
+
+| File | MVR item(s) | Tables affected | Summary |
+| --- | --- | --- | --- |
+| [`2026-05-16-w1-add-mode-column.sql`](./sql/2026-05-16-w1-add-mode-column.sql) | 1 | `courses`, `learning_sessions`, `ask_question_history`, `challenge_responses`, `jurnal`, `quiz_submissions`, `prompt_classifications` | Add `mode VARCHAR(20) NOT NULL DEFAULT 'general' CHECK IN ('general','research')` + 7 indexes. |
+| [`2026-05-16-w2-course-template-unlock-seed.sql`](./sql/2026-05-16-w2-course-template-unlock-seed.sql) | 2 | `courses` (+ new `course_unlock_dependencies`), `subtopics`, `leaf_subtopics` | Add `is_template`, `template_topic`, `source_reference` to `courses`; create `course_unlock_dependencies` (4 rows); seed 4 Fase E template courses + 26 leaf-subtopiks. |
+| [`2026-05-16-w3-materials-chunks-pgvector.sql`](./sql/2026-05-16-w3-materials-chunks-pgvector.sql) | 3 | new `materials`, `material_chunks` | Enable `vector` extension; create bank-sumber tables (`embedding vector(1536)`, ivfflat index, GIN on `template_topics`). |
+| [`2026-05-16-w4-5-citation-scaffold-prompt-cols.sql`](./sql/2026-05-16-w4-5-citation-scaffold-prompt-cols.sql) | 4, 5, 7 | `ask_question_history`, `challenge_responses` | Add `cited_material_chunk_ids UUID[]`, `scaffold_tier INT CHECK BETWEEN 1 AND 3`, `prompt_template_version VARCHAR(20)`. |
+| [`2026-05-16-w5-subtopic-cache-lock-qa.sql`](./sql/2026-05-16-w5-subtopic-cache-lock-qa.sql) | 4b | `subtopic_cache` | Add 9 columns (`mode`, `locked`, `qa_status`, `qa_reviewed_by`, `qa_reviewed_at`, `qa_notes`, `source_chunk_ids UUID[]`, `generation_seed`, `generated_by`). |
+| [`2026-05-16-w5-match-material-chunks-function.sql`](./sql/2026-05-16-w5-match-material-chunks-function.sql) | 4 | function | `match_material_chunks(...)` SECURITY DEFINER RPC for RAG retrieval. |
+| [`2026-05-16-w8-research-artifacts-interactive.sql`](./sql/2026-05-16-w8-research-artifacts-interactive.sql) | 6, 9.1 | `research_artifacts` | Add `interaction_events JSONB`, `completion_status`, `component_score`, `mode`; extend `artifact_type` CHECK with 6 interactive types. |
+| [`2026-05-16-w8-leaf-subtopics-interactive-blocks.sql`](./sql/2026-05-16-w8-leaf-subtopics-interactive-blocks.sql) | 9.1 | `leaf_subtopics` | Add `interactive_blocks JSONB` + GIN index. |
+| [`2026-05-16-w11-users-participant-code.sql`](./sql/2026-05-16-w11-users-participant-code.sql) | 8c | `users` | Add `participant_code VARCHAR(20)` (unique partial), `consent_given_at`, `consent_version`. |
+| [`2026-05-16-w12-security-advisor-fixes.sql`](./sql/2026-05-16-w12-security-advisor-fixes.sql) | hygiene | functions | Pin `search_path` on 2 trigger functions; revoke EXECUTE on 2 SECURITY DEFINER helpers. |
+| [`2026-05-16-w12-backfill-participant-codes.sql`](./sql/2026-05-16-w12-backfill-participant-codes.sql) | 8c | `users` | Idempotent CTE backfill `S001..SNNN` for users with ≥1 research session. |
+
+**Tabel baru** (3): `course_unlock_dependencies`, `materials`, `material_chunks`. **Kolom baru di tabel existing**: ringkasan di [`docs/MODE_SYSTEM.md`](./MODE_SYSTEM.md) (kolom `mode`), [`docs/RAG_PIPELINE.md`](./RAG_PIPELINE.md) (kolom citation + subtopic_cache lock), dan [`docs/INTERACTIVE_BLOCKS_SPEC.md`](./INTERACTIVE_BLOCKS_SPEC.md) (kolom `interactive_blocks` + `research_artifacts` extension).
+
 ---
 
 ## 13. Cross-References

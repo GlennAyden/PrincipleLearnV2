@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { adminDb } from '@/lib/database';
 import { withProtection } from '@/lib/api-middleware';
+import { getAdminModeFromRequest, applyAdminModeFilter } from '@/lib/admin-mode';
 
 type ExportFormat = 'csv' | 'json';
 type ActivityType =
@@ -186,6 +187,9 @@ function csvCell(value: unknown): string {
   return `"${text.replace(/"/g, '""')}"`;
 }
 
+// Tables with a direct 'mode' column
+const EXPORT_TABLES_WITH_MODE_COL = new Set(['ask_question_history', 'challenge_responses', 'quiz_submissions', 'jurnal']);
+
 async function fetchRowsForSource(
   source: SourceConfig,
   filters: {
@@ -194,8 +198,13 @@ async function fetchRowsForSource(
     startDate: string | null;
     endDate: string | null;
     topic: string | null;
+    researchCourseIds?: string[] | null;
+    adminMode?: import('@/lib/admin-mode').AdminMode;
   },
 ): Promise<ActivityExportRow[]> {
+  const adminMode = filters.adminMode ?? 'general';
+  const researchCourseIds = filters.researchCourseIds ?? null;
+
   const rows: DynamicRow[] = [];
   for (let offset = 0; offset < MAX_EXPORT_ROWS_PER_SOURCE; offset += EXPORT_PAGE_SIZE) {
     let query = adminDb
@@ -205,7 +214,20 @@ async function fetchRowsForSource(
       .range(offset, offset + EXPORT_PAGE_SIZE - 1);
 
     if (filters.userId) query = query.eq('user_id', filters.userId);
-    if (filters.courseId) query = query.eq('course_id', filters.courseId);
+    if (filters.courseId) {
+      query = query.eq('course_id', filters.courseId);
+    } else if (adminMode === 'research') {
+      // Apply mode filter only when no explicit courseId requested
+      if (EXPORT_TABLES_WITH_MODE_COL.has(source.table)) {
+        query = applyAdminModeFilter(query, adminMode);
+      } else if (researchCourseIds !== null) {
+        if (researchCourseIds.length > 0) {
+          query = query.in('course_id', researchCourseIds);
+        } else {
+          break; // No research courses — skip this source
+        }
+      }
+    }
     if (filters.startDate) query = query.gte('created_at', filters.startDate);
     if (filters.endDate) query = query.lte('created_at', filters.endDate);
 
@@ -295,6 +317,7 @@ async function enrichRows(rows: ActivityExportRow[], anonymize: boolean): Promis
 
 async function handler(req: NextRequest) {
   try {
+    const adminMode = getAdminModeFromRequest(req);
     const { searchParams } = new URL(req.url);
     const format = (searchParams.get('format') || 'csv') as ExportFormat;
     if (format !== 'csv' && format !== 'json') {
@@ -310,12 +333,26 @@ async function handler(req: NextRequest) {
       return NextResponse.json({ error: 'Invalid activity type.' }, { status: 400 });
     }
 
+    // In Mode Penelitian: fetch research course_ids for tables without direct mode column
+    let researchCourseIds: string[] | null = null;
+    if (adminMode === 'research') {
+      const { data: courseData } = await applyAdminModeFilter(
+        adminDb.from('courses').select('id'),
+        adminMode,
+      );
+      researchCourseIds = (Array.isArray(courseData) ? courseData : []).map(
+        (r: { id: string }) => r.id,
+      );
+    }
+
     const filters = {
       userId: searchParams.get('userId') || null,
       courseId: searchParams.get('courseId') || searchParams.get('course') || null,
       startDate: normalizeStartDate(searchParams.get('startDate') || searchParams.get('dateFrom')),
       endDate: normalizeEndDate(searchParams.get('endDate') || searchParams.get('dateTo')),
       topic: searchParams.get('topic')?.trim().toLowerCase() || null,
+      adminMode,
+      researchCourseIds,
     };
     const anonymize = searchParams.get('anonymize') === 'true';
 

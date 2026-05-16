@@ -11,14 +11,17 @@ import React, {
 
 // 1. Perlu include '' di union agar default state valid
 export type Level = '' | 'Beginner' | 'Intermediate' | 'Advanced';
+export type RequestCourseMode = 'general' | 'research';
 
 export interface RequestCourseAnswers {
-  topic:       string;
-  goal:        string;
-  level:       Level;
-  extraTopics: string;
-  problem:     string;
-  assumption:  string;
+  topic:         string;
+  goal:          string;
+  level:         Level;
+  extraTopics:   string;
+  problem:       string;
+  assumption:    string;
+  mode:          RequestCourseMode;
+  templateTopic: string;
 }
 
 interface ContextValue {
@@ -28,12 +31,14 @@ interface ContextValue {
 }
 
 const defaultVals: RequestCourseAnswers = {
-  topic:       '',
-  goal:        '',
-  level:       '',    // sekarang valid karena Level includes ''
-  extraTopics: '',
-  problem:     '',
-  assumption:  '',
+  topic:         '',
+  goal:          '',
+  level:         '',    // sekarang valid karena Level includes ''
+  extraTopics:   '',
+  problem:       '',
+  assumption:    '',
+  mode:          'general',
+  templateTopic: '',
 };
 
 const STORAGE_KEY = 'requestCourseAnswers';

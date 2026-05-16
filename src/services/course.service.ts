@@ -1,4 +1,5 @@
 import { DatabaseService } from '@/lib/database';
+import type { LearningMode } from '@/lib/course-mode';
 
 export interface CourseRecord {
   id: string;
@@ -6,6 +7,7 @@ export interface CourseRecord {
   description: string;
   subject: string;
   difficulty_level: string;
+  mode: LearningMode;
   created_by: string;
   created_at: string;
 }
@@ -28,6 +30,7 @@ export async function listUserCourses(userId: string) {
     id: course.id,
     title: course.title,
     level: course.difficulty_level || 'Beginner',
+    mode: (course.mode ?? 'general') as LearningMode,
   }));
 }
 
@@ -89,12 +92,16 @@ export async function createCourseWithSubtopics(
     subject: string;
     difficulty_level: string;
     estimated_duration: number;
+    mode?: LearningMode;
+    template_topic?: string | null;
   },
   userId: string,
   modules: CourseModuleInput[]
 ) {
   const course = (await DatabaseService.insertRecord('courses', {
     ...data,
+    mode: data.mode ?? 'general',
+    template_topic: data.template_topic ?? null,
     created_by: userId,
   })) as unknown as { id: string };
 

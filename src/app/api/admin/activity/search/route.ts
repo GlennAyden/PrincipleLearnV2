@@ -3,6 +3,7 @@ import { adminDb } from '@/lib/database';
 import type { GlobalActivityItem, ActivityType } from '@/types/activity';
 import { withProtection } from '@/lib/api-middleware';
 import { deriveAdminPromptStage } from '@/lib/admin-prompt-stage';
+import { getAdminModeFromRequest, applyAdminModeFilter } from '@/lib/admin-mode';
 
 const TABLES: Record<ActivityType, string> = {
   generate: 'course_generation_activity',
@@ -22,9 +23,21 @@ const TABLES: Record<ActivityType, string> = {
 type DynamicRow = Record<string, any>;
 type SearchActivityItem = GlobalActivityItem & { sortTime: number };
 
-async function safeQuery(table: string): Promise<DynamicRow[]> {
+async function safeQuery(
+  table: string,
+  courseIdFilter?: string[] | null,
+): Promise<DynamicRow[]> {
   try {
-    const { data, error } = await adminDb.from(table).select('*').limit(1000);
+    let q = adminDb.from(table).select('*').limit(1000);
+    if (courseIdFilter !== undefined && courseIdFilter !== null) {
+      if (courseIdFilter.length > 0) {
+        q = q.in('course_id', courseIdFilter);
+      } else {
+        // No research courses — return empty immediately
+        return [];
+      }
+    }
+    const { data, error } = await q;
     if (error) {
       throw new Error(`[Activity Search] Query ${table} failed: ${error.message}`);
     }
@@ -94,7 +107,13 @@ async function getUserEmailMap(userIds: string[]): Promise<Map<string, string>> 
   );
 }
 
+// Tables that have a direct 'mode' column and can be filtered directly
+const TABLES_WITH_MODE = new Set(['ask_question_history', 'challenge_responses', 'quiz_submissions', 'jurnal']);
+// Tables that link to courses via course_id (no direct mode column)
+const TABLES_WITH_COURSE_ID = new Set(['feedback', 'transcript', 'discussion_sessions', 'example_usage_events', 'course_generation_activity']);
+
 async function handler(req: NextRequest) {
+  const adminMode = getAdminModeFromRequest(req);
   const { searchParams } = new URL(req.url);
   const timeRange = searchParams.get('timeRange') || '7d';
   const userId = searchParams.get('userId') || undefined;
@@ -103,6 +122,18 @@ async function handler(req: NextRequest) {
   const page = parseInt(searchParams.get('page') || '1');
   const pageSize = parseInt(searchParams.get('size') || '50');
 
+  // In Mode Penelitian: get research course_ids for tables without direct mode column
+  let researchCourseIds: string[] | null = null;
+  if (adminMode === 'research') {
+    const { data: courseData } = await applyAdminModeFilter(
+      adminDb.from('courses').select('id'),
+      adminMode,
+    );
+    researchCourseIds = (Array.isArray(courseData) ? courseData : []).map(
+      (r: { id: string }) => r.id,
+    );
+  }
+
   const dateFilter = getDateFilter(timeRange);
   const rawItems: Array<{ type: ActivityType; row: DynamicRow }> = [];
 
@@ -110,7 +141,21 @@ async function handler(req: NextRequest) {
     const type = typeStr as ActivityType;
     if (types && !types.includes(type)) continue;
 
-    const items = await safeQuery(table);
+    let items: DynamicRow[];
+    if (adminMode === 'research' && TABLES_WITH_MODE.has(table)) {
+      // Filter directly via mode column
+      const { data, error } = await applyAdminModeFilter(
+        adminDb.from(table).select('*').limit(1000),
+        adminMode,
+      );
+      if (error) throw new Error(`[Activity Search] Query ${table} failed: ${error.message}`);
+      items = (Array.isArray(data) ? data : []) as DynamicRow[];
+    } else if (adminMode === 'research' && TABLES_WITH_COURSE_ID.has(table)) {
+      // Filter via course_id
+      items = await safeQuery(table, researchCourseIds);
+    } else {
+      items = await safeQuery(table);
+    }
     rawItems.push(...items.map((row) => ({ type, row })));
   }
 

@@ -1,0 +1,49 @@
+.toggle {
+  display: inline-flex;
+  gap: 0.25rem;
+  padding: 0.25rem;
+  background: #f1f5f9;
+  border: 1px solid #e2e8f0;
+  border-radius: 999px;
+}
+
+.option {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.4rem;
+  padding: 0.4rem 0.85rem;
+  background: transparent;
+  border: none;
+  border-radius: 999px;
+  cursor: pointer;
+  font-size: 0.85rem;
+  font-weight: 500;
+  color: #64748b;
+  transition: all 0.18s ease;
+
+  &:hover {
+    color: #1e293b;
+  }
+
+  &[data-active="true"] {
+    color: #fff;
+    box-shadow: 0 1px 4px rgba(15, 23, 42, 0.18);
+  }
+
+  &[data-active="true"][data-mode="general"] {
+    background: linear-gradient(135deg, #64748b, #334155);
+  }
+
+  &[data-active="true"][data-mode="research"] {
+    background: linear-gradient(135deg, #8b5cf6, #6d28d9);
+  }
+}
+
+.icon {
+  font-size: 0.95rem;
+  line-height: 1;
+}
+
+.label {
+  white-space: nowrap;
+}

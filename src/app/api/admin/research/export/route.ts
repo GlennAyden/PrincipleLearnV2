@@ -8,6 +8,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { adminDb } from '@/lib/database';
 import jwt from 'jsonwebtoken';
+import { assertResearchModeOnly } from '@/lib/admin-mode';
 import type {
     LearningSession,
     PromptClassification,
@@ -158,6 +159,13 @@ function convertSPSStoCSV(data: Record<string, unknown>[]): string {
 // GET: Export research data
 export async function GET(request: NextRequest) {
     try {
+        // MVR Item 10 — research-data export is gated to Mode Penelitian so
+        // an admin cannot accidentally exfiltrate research data while toggled
+        // into Mode Umum. The cookie audit (api_logs) records the mode at
+        // every flip so the source of any export is auditable.
+        const modeGuard = assertResearchModeOnly(request);
+        if (modeGuard) return modeGuard;
+
         const user = verifyAdminFromCookie(request);
         if (!user) {
             return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
@@ -216,10 +224,151 @@ export async function GET(request: NextRequest) {
         }
 
         // Regular export validation
-        if (!dataType || !['sessions', 'classifications', 'indicators', 'evidence', 'longitudinal', 'readiness', 'all'].includes(dataType)) {
+        if (!dataType || !['sessions', 'classifications', 'indicators', 'evidence', 'longitudinal', 'readiness', 'all', 'prompts_detail'].includes(dataType)) {
             return NextResponse.json({
-                error: 'Invalid data_type. Must be one of: sessions, classifications, indicators, evidence, longitudinal, readiness, all'
+                error: 'Invalid data_type. Must be one of: sessions, classifications, indicators, evidence, longitudinal, readiness, all, prompts_detail'
             }, { status: 400 });
+        }
+
+        // MVR Item 8b — prompts_detail: per-prompt CSV/JSON for thesis defense
+        // data appendix. Joins ask_question_history × prompt_classifications ×
+        // auto_cognitive_scores × prompt_revisions and anonymises via
+        // users.participant_code (never users.email/id).
+        if (dataType === 'prompts_detail') {
+            let askQuery = adminDb
+                .from('ask_question_history')
+                .select('id, user_id, course_id, learning_session_id, question, answer, prompt_components, prompt_stage, prompt_version, session_number, scaffold_tier, prompt_template_version, cited_material_chunk_ids, is_follow_up, follow_up_of, mode, created_at')
+                .eq('mode', 'research')
+                .order('created_at', { ascending: true });
+            if (userId) askQuery = askQuery.eq('user_id', userId);
+            if (courseId) askQuery = askQuery.eq('course_id', courseId);
+            if (startDate) askQuery = askQuery.gte('created_at', `${startDate}T00:00:00`);
+            if (endDate) askQuery = askQuery.lte('created_at', `${endDate}T23:59:59`);
+
+            const { data: prompts, error: promptError } = await askQuery;
+            if (promptError) {
+                console.error('[export prompts_detail] ask_question_history error', promptError);
+                return NextResponse.json({ error: 'Gagal mengambil data prompt riset' }, { status: 500 });
+            }
+
+            type AskRow = {
+                id: string;
+                user_id: string;
+                course_id: string | null;
+                learning_session_id: string | null;
+                question: string;
+                answer: string;
+                prompt_components: unknown;
+                prompt_stage: string | null;
+                prompt_version: string | number | null;
+                session_number: number | null;
+                scaffold_tier: number | null;
+                prompt_template_version: string | null;
+                cited_material_chunk_ids: string[] | null;
+                is_follow_up: boolean | null;
+                follow_up_of: string | null;
+                mode: string;
+                created_at: string;
+            };
+            const promptRows = (prompts ?? []) as AskRow[];
+            const promptIds = promptRows.map((p) => p.id);
+            const userIds = Array.from(new Set(promptRows.map((p) => p.user_id))).filter(Boolean);
+            const courseIds = Array.from(new Set(promptRows.map((p) => p.course_id).filter((c): c is string => !!c)));
+
+            const [{ data: users }, { data: courseMeta }, { data: revisions }, { data: scores }, { data: classifications }] = await Promise.all([
+                userIds.length > 0
+                    ? adminDb.from('users').select('id, participant_code').in('id', userIds)
+                    : Promise.resolve({ data: [] }),
+                courseIds.length > 0
+                    ? adminDb.from('courses').select('id, template_topic').in('id', courseIds)
+                    : Promise.resolve({ data: [] }),
+                promptIds.length > 0
+                    ? adminDb.from('prompt_revisions')
+                        .select('current_prompt_id, revision_type, revision_sequence, stage_improved, previous_stage, current_stage')
+                        .in('current_prompt_id', promptIds)
+                    : Promise.resolve({ data: [] }),
+                promptIds.length > 0
+                    ? adminDb.from('auto_cognitive_scores')
+                        .select('source_id, ct_total_score, cth_total_score, cognitive_depth_level')
+                        .in('source_id', promptIds)
+                    : Promise.resolve({ data: [] }),
+                promptIds.length > 0
+                    ? adminDb.from('prompt_classifications')
+                        .select('prompt_id, prompt_stage_score, confidence_score')
+                        .in('prompt_id', promptIds)
+                    : Promise.resolve({ data: [] }),
+            ]);
+
+            const codeByUser = new Map<string, string>(
+                ((users ?? []) as Array<{ id: string; participant_code: string | null }>)
+                    .map((u) => [u.id, u.participant_code ?? `ANON-${u.id.slice(0, 8)}`])
+            );
+            const topicByCourse = new Map<string, string>(
+                ((courseMeta ?? []) as Array<{ id: string; template_topic: string | null }>)
+                    .map((c) => [c.id, c.template_topic ?? 'general'])
+            );
+            const revByPrompt = new Map<string, { revision_type: string | null; revision_sequence: number | null; stage_improved: boolean | null }>(
+                ((revisions ?? []) as Array<{ current_prompt_id: string; revision_type: string | null; revision_sequence: number | null; stage_improved: boolean | null }>)
+                    .map((r) => [r.current_prompt_id, r])
+            );
+            const scoreByPrompt = new Map<string, { ct_total_score: number | null; cth_total_score: number | null; cognitive_depth_level: string | null }>(
+                ((scores ?? []) as Array<{ source_id: string; ct_total_score: number | null; cth_total_score: number | null; cognitive_depth_level: string | null }>)
+                    .map((s) => [s.source_id, s])
+            );
+            const classByPrompt = new Map<string, { prompt_stage_score: number | null; confidence_score: number | null }>(
+                ((classifications ?? []) as Array<{ prompt_id: string; prompt_stage_score: number | null; confidence_score: number | null }>)
+                    .map((c) => [c.prompt_id, c])
+            );
+
+            const detailRows = promptRows.map((p) => {
+                const rev = revByPrompt.get(p.id);
+                const score = scoreByPrompt.get(p.id);
+                const klass = classByPrompt.get(p.id);
+                return {
+                    prompt_id: p.id,
+                    user_pseudo_id: codeByUser.get(p.user_id) ?? `ANON-${p.user_id.slice(0, 8)}`,
+                    course_id: p.course_id,
+                    template_topic: p.course_id ? topicByCourse.get(p.course_id) ?? null : null,
+                    learning_session_id: p.learning_session_id,
+                    session_number: p.session_number,
+                    prompt_text: p.question,
+                    prompt_components: p.prompt_components,
+                    prompt_stage: p.prompt_stage,
+                    prompt_stage_score: klass?.prompt_stage_score ?? null,
+                    classification_confidence: klass?.confidence_score ?? null,
+                    scaffold_tier: p.scaffold_tier,
+                    prompt_template_version: p.prompt_template_version,
+                    ai_response_text: p.answer,
+                    cited_material_chunk_ids: p.cited_material_chunk_ids,
+                    cited_material_chunk_count: Array.isArray(p.cited_material_chunk_ids) ? p.cited_material_chunk_ids.length : 0,
+                    is_follow_up: p.is_follow_up,
+                    follow_up_of: p.follow_up_of,
+                    revision_type: rev?.revision_type ?? null,
+                    revision_sequence: rev?.revision_sequence ?? null,
+                    stage_improved: rev?.stage_improved ?? null,
+                    ct_total_score: score?.ct_total_score ?? null,
+                    cth_total_score: score?.cth_total_score ?? null,
+                    cognitive_depth_level: score?.cognitive_depth_level ?? null,
+                    created_at: p.created_at,
+                };
+            });
+
+            if (format === 'csv') {
+                const csv = convertSPSStoCSV(detailRows);
+                return new NextResponse(csv, {
+                    status: 200,
+                    headers: {
+                        'Content-Type': 'text/csv; charset=utf-8',
+                        'Content-Disposition': `attachment; filename="principlelearn_prompts_detail_${new Date().toISOString().split('T')[0]}.csv"`,
+                    },
+                });
+            }
+            return NextResponse.json({
+                success: true,
+                data_type: 'prompts_detail',
+                total_rows: detailRows.length,
+                rows: detailRows,
+            });
         }
 
         // Collect data based on type
@@ -663,7 +812,9 @@ function normalizeDataType(raw: string | null, spssFormat: boolean): string | nu
     if (value === 'rm3') return 'indicators';
     if (value === 'evidence' || value === 'triangulation' || value === 'artifacts') return 'evidence';
     if (value === 'field_readiness' || value === 'kesiapan') return 'readiness';
-    if (['sessions', 'classifications', 'indicators', 'evidence', 'longitudinal', 'readiness', 'all'].includes(value)) return value;
+    // MVR Item 8b — per-prompt detail for thesis defense data appendix.
+    if (value === 'prompts_detail' || value === 'prompt_detail') return 'prompts_detail';
+    if (['sessions', 'classifications', 'indicators', 'evidence', 'longitudinal', 'readiness', 'all', 'prompts_detail'].includes(value)) return value;
     return null;
 }
 

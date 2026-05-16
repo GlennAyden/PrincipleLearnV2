@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { adminDb } from '@/lib/database';
 import { withProtection } from '@/lib/api-middleware';
+import { getAdminModeFromRequest, applyAdminModeFilter } from '@/lib/admin-mode';
 
 interface ExampleUsageRow {
   id: string;
@@ -47,6 +48,7 @@ function fallbackTopic(moduleIndex: number | null, subtopicIndex: number | null)
 
 async function handler(req: NextRequest) {
   try {
+    const adminMode = getAdminModeFromRequest(req);
     const { searchParams } = new URL(req.url);
     const userId = searchParams.get('userId');
     const date = searchParams.get('date');
@@ -55,6 +57,19 @@ async function handler(req: NextRequest) {
     const courseId = searchParams.get('course');
     const topic = searchParams.get('topic')?.trim().toLowerCase() || '';
 
+    // example_usage_events has no direct 'mode' column; filter via course_id
+    // In Mode Penelitian: restrict to research course_ids
+    let researchCourseIds: string[] | null = null;
+    if (adminMode === 'research') {
+      const { data: courseData } = await applyAdminModeFilter(
+        adminDb.from('courses').select('id'),
+        adminMode,
+      );
+      researchCourseIds = (Array.isArray(courseData) ? courseData : []).map(
+        (r: { id: string }) => r.id,
+      );
+    }
+
     let query = adminDb
       .from('example_usage_events')
       .select('id,user_id,course_id,module_index,subtopic_index,page_number,subtopic_label,examples_count,context_length,usage_scope,data_collection_week,created_at')
@@ -62,7 +77,16 @@ async function handler(req: NextRequest) {
       .limit(1000);
 
     if (userId) query = query.eq('user_id', userId);
-    if (courseId) query = query.eq('course_id', courseId);
+    if (courseId) {
+      query = query.eq('course_id', courseId);
+    } else if (adminMode === 'research') {
+      // Apply mode filter only when no specific courseId requested
+      if (researchCourseIds && researchCourseIds.length > 0) {
+        query = query.in('course_id', researchCourseIds);
+      } else {
+        query = query.in('course_id', ['__no_match__']);
+      }
+    }
 
     const dateRange = buildDateRange(dateFrom, dateTo);
     if (dateRange) {

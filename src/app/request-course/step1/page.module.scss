@@ -333,6 +333,144 @@ $shadow-xl: 0 25px 50px -12px rgba(0, 0, 0, 0.1);
   }
 }
 
+/* ========================================
+   MODE TOGGLE (MVR Item 1/2) — pair of click cards.
+   ======================================== */
+.modeGroup {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 0.6rem;
+
+  @media (max-width: 580px) {
+    grid-template-columns: 1fr;
+  }
+}
+
+.modeOption {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 0.25rem;
+  padding: 0.75rem 0.85rem;
+  background: $gray-50;
+  border: 1.5px solid $gray-200;
+  border-radius: $radius-md;
+  cursor: pointer;
+  text-align: left;
+  transition: all 0.18s ease;
+
+  &:hover {
+    border-color: $primary-400;
+    background: #fff;
+  }
+
+  &[data-active="true"] {
+    border-color: $primary-500;
+    background: $primary-50;
+    box-shadow: 0 0 0 3px rgba($primary-500, 0.1);
+  }
+}
+
+.modeOptionTitle {
+  font-size: 0.92rem;
+  font-weight: 600;
+  color: $gray-900;
+}
+
+.modeOptionDesc {
+  font-size: 0.78rem;
+  color: $gray-500;
+  line-height: 1.4;
+}
+
+/* ========================================
+   TEMPLATE GRID (MVR Item 2) — 4 Fase E cards
+   ======================================== */
+.templateGrid {
+  display: grid;
+  grid-template-columns: 1fr;
+  gap: 0.55rem;
+}
+
+.templateCard {
+  display: grid;
+  grid-template-columns: 28px 1fr;
+  grid-template-rows: auto auto auto;
+  grid-template-areas:
+    "order title"
+    "order source"
+    "lock  lock";
+  column-gap: 0.6rem;
+  row-gap: 0.2rem;
+  padding: 0.75rem 0.85rem;
+  background: $gray-50;
+  border: 1.5px solid $gray-200;
+  border-radius: $radius-md;
+  cursor: pointer;
+  text-align: left;
+  transition: all 0.18s ease;
+
+  &:hover:not([data-locked="true"]) {
+    border-color: $primary-400;
+    background: #fff;
+  }
+
+  &[data-selected="true"] {
+    border-color: $primary-500;
+    background: $primary-50;
+    box-shadow: 0 0 0 3px rgba($primary-500, 0.1);
+  }
+
+  &[data-locked="true"] {
+    opacity: 0.55;
+    cursor: not-allowed;
+  }
+}
+
+.templateOrder {
+  grid-area: order;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 28px; height: 28px;
+  border-radius: 50%;
+  background: $primary-100;
+  color: $primary-700;
+  font-size: 0.85rem;
+  font-weight: 700;
+}
+
+.templateTitle {
+  grid-area: title;
+  font-size: 0.95rem;
+  font-weight: 600;
+  color: $gray-900;
+  line-height: 1.35;
+}
+
+.templateSource {
+  grid-area: source;
+  font-size: 0.72rem;
+  color: $gray-500;
+  line-height: 1.35;
+}
+
+.templateLock {
+  grid-area: lock;
+  margin-top: 0.35rem;
+  font-size: 0.75rem;
+  color: #b45309;
+  background: #fef3c7;
+  padding: 0.3rem 0.5rem;
+  border-radius: $radius-sm;
+}
+
+.muted {
+  font-size: 0.85rem;
+  color: $gray-500;
+  margin: 0.25rem 0 0;
+}
+
 /* Mobile: float the submit CTA just above the viewport bottom so users on a
  * long form never need to hunt for it. `position: sticky` keeps it inside
  * the form flow so we don't need extra padding, and the safe-area inset

@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { adminDb } from '@/lib/database';
 import { withCacheHeaders, withProtection } from '@/lib/api-middleware';
 import type { ActivityAnalytics, ActivityType } from '@/types/activity';
+import { getAdminModeFromRequest, applyAdminModeFilter } from '@/lib/admin-mode';
 
 function subDays(date: Date, days: number): Date {
   const result = new Date(date);
@@ -48,13 +49,40 @@ interface ActivityAnalyticsRow {
   timestamp: Date;
 }
 
-async function getActivityRows(type: ActivityType, table: string, days: number): Promise<ActivityAnalyticsRow[]> {
+// Tables with a direct 'mode' column
+const ANALYTICS_TABLES_WITH_MODE = new Set(['ask_question_history', 'challenge_responses', 'quiz_submissions', 'jurnal']);
+// Tables without mode, filterable via course_id
+const ANALYTICS_TABLES_WITH_COURSE_ID = new Set(['feedback', 'transcript', 'discussion_sessions', 'example_usage_events', 'course_generation_activity']);
+
+async function getActivityRows(
+  type: ActivityType,
+  table: string,
+  days: number,
+  options?: {
+    adminMode?: import('@/lib/admin-mode').AdminMode
+    researchCourseIds?: string[] | null
+  },
+): Promise<ActivityAnalyticsRow[]> {
   try {
     const since = subDays(new Date(), days).toISOString();
-    const { data, error } = await adminDb
-      .from(table)
-      .select('id,user_id,created_at')
-      .gte('created_at', since);
+    const mode = options?.adminMode ?? 'general';
+    const researchCourseIds = options?.researchCourseIds ?? null;
+
+    let q = adminDb.from(table).select('id,user_id,created_at').gte('created_at', since);
+
+    if (mode === 'research') {
+      if (ANALYTICS_TABLES_WITH_MODE.has(table)) {
+        q = applyAdminModeFilter(q, mode);
+      } else if (ANALYTICS_TABLES_WITH_COURSE_ID.has(table)) {
+        if (researchCourseIds && researchCourseIds.length > 0) {
+          q = q.in('course_id', researchCourseIds);
+        } else {
+          return []; // No research courses — nothing to return
+        }
+      }
+    }
+
+    const { data, error } = await q;
     if (error) {
       throw new Error(`[Activity Analytics] Query ${table} failed: ${error.message}`);
     }
@@ -95,8 +123,21 @@ async function getUserEmailMap(userIds: string[]): Promise<Map<string, string>> 
 }
 
 async function handler(req: NextRequest) {
+  const adminMode = getAdminModeFromRequest(req);
   const { searchParams } = new URL(req.url);
   const days = parseInt(searchParams.get('days') || '7');
+
+  // In Mode Penelitian: get research course_ids once for tables without direct mode column
+  let researchCourseIds: string[] | null = null;
+  if (adminMode === 'research') {
+    const { data: courseData } = await applyAdminModeFilter(
+      adminDb.from('courses').select('id'),
+      adminMode,
+    );
+    researchCourseIds = (Array.isArray(courseData) ? courseData : []).map(
+      (r: { id: string }) => r.id,
+    );
+  }
 
   const typeDist = {} as Record<ActivityType, number>;
   const trends: Array<{date: string; events: number; avgEngagement: number}> = [];
@@ -105,7 +146,10 @@ async function handler(req: NextRequest) {
 
   for (const [type, table] of Object.entries(TABLES)) {
     const activityType = type as ActivityType;
-    const tableRows = await getActivityRows(activityType, table, days);
+    const tableRows = await getActivityRows(activityType, table, days, {
+      adminMode,
+      researchCourseIds,
+    });
     rows.push(...tableRows);
     typeDist[activityType] = tableRows.length;
   }

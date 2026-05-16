@@ -7,6 +7,7 @@ import { verifyToken } from '@/lib/jwt'
 import { computeEngagementScore } from '@/lib/engagement'
 import { deriveAdminPromptStage } from '@/lib/admin-prompt-stage'
 import { getQuizAttemptCountsByUser, type QuizAttemptMetricRow } from '@/lib/admin-quiz-attempts'
+import { getAdminModeFromRequest, applyAdminModeFilter } from '@/lib/admin-mode'
 import type { StudentListItem } from '@/types/student'
 
 // ─── Auth Helper ──────────────────────────────────────────────────────────────
@@ -92,6 +93,21 @@ export async function GET(request: NextRequest) {
   const admin = requireAdmin(request)
   if (!admin) return unauthorized()
 
+  // In Mode Penelitian, filter users who have participated in at least one
+  // research learning_session. We resolve this as a set of user_ids.
+  const adminMode = getAdminModeFromRequest(request)
+  let researchUserIds: Set<string> | null = null
+  if (adminMode === 'research') {
+    const { data: sessionData } = await applyAdminModeFilter(
+      adminDb.from('learning_sessions').select('user_id'),
+      adminMode,
+    )
+    const ids = (Array.isArray(sessionData) ? sessionData : [])
+      .map((r: { user_id?: string | null }) => r.user_id)
+      .filter((id): id is string => typeof id === 'string' && id.length > 0)
+    researchUserIds = new Set(ids)
+  }
+
   try {
     const [statsResult, promptClassifications, promptHistory, quizAttemptRows] = await Promise.all([
       // Single aggregated query via Postgres function (replaces 9 parallel full-table scans)
@@ -119,7 +135,13 @@ export async function GET(request: NextRequest) {
       return NextResponse.json({ error: 'Failed to fetch users' }, { status: 500 })
     }
 
-    const rows = data as UserStatsRow[]
+    let rows = data as UserStatsRow[]
+
+    // In Mode Penelitian, restrict to users who participated in research sessions
+    if (researchUserIds !== null) {
+      rows = rows.filter((row) => researchUserIds!.has(row.id))
+    }
+
     const classificationsByUser = groupByUser(promptClassifications)
     const promptsByUser = groupByUser(promptHistory)
     const quizCountsByUser = getQuizAttemptCountsByUser(quizAttemptRows)

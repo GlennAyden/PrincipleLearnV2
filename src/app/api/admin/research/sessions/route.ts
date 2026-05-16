@@ -11,6 +11,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { adminDb } from '@/lib/database';
 import { verifyCsrfToken } from '@/lib/admin-auth';
+import { assertResearchModeOnly } from '@/lib/admin-mode';
 import jwt from 'jsonwebtoken';
 import type {
     LearningSession,
@@ -41,6 +42,9 @@ function verifyAdminFromCookie(request: NextRequest): { userId: string; role: st
 // GET: List learning sessions with filters and server-side pagination
 export async function GET(request: NextRequest) {
     try {
+        const modeGuard = assertResearchModeOnly(request);
+        if (modeGuard) return modeGuard;
+
         const user = verifyAdminFromCookie(request);
         if (!user) {
             return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });

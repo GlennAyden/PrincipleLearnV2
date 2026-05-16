@@ -9,6 +9,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { adminDb } from '@/lib/database';
 import { verifyAdminFromCookie } from '@/lib/admin-auth';
+import { assertResearchModeOnly } from '@/lib/admin-mode';
 import { withCacheHeaders } from '@/lib/api-middleware';
 import type { PromptStage, TransitionStatus } from '@/types/research';
 import {
@@ -133,6 +134,12 @@ const CTH_KEYS = [
 
 export async function GET(request: NextRequest) {
   try {
+    // MVR Item 10 — research analytics is research-only; in Mode Umum the
+    // sidebar even hides this endpoint, but a direct curl/postman call must
+    // still be rejected.
+    const modeGuard = assertResearchModeOnly(request);
+    if (modeGuard) return modeGuard;
+
     const admin = verifyAdminFromCookie(request);
     if (!admin) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
 

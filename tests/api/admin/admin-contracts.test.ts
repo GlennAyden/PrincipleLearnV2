@@ -167,16 +167,22 @@ import { GET as searchActivity } from '@/app/api/admin/activity/search/route'
 import { GET as getResearchEvidence } from '@/app/api/admin/research/evidence/route'
 import { GET as exportInsights } from '@/app/api/admin/insights/export/route'
 
-function createRequest(path: string): NextRequest {
+function createRequest(path: string, options?: { adminMode?: 'general' | 'research' }): NextRequest {
   const token = sign(
     { userId: 'admin-1', email: 'admin@example.com', role: 'admin' },
     JWT_SECRET,
     { expiresIn: '15m' },
   )
 
+  // MVR Item 10: research-only endpoints (`/api/admin/research/*`, `/api/admin/sumber/*`)
+  // require `admin_mode=research` cookie via `assertResearchModeOnly`. Tests
+  // calling those endpoints must opt-in by passing { adminMode: 'research' }.
+  const cookieParts = [`access_token=${token}`]
+  if (options?.adminMode) cookieParts.push(`admin_mode=${options.adminMode}`)
+
   return new NextRequest(`http://localhost:3000${path}`, {
     method: 'GET',
-    headers: { Cookie: `access_token=${token}` },
+    headers: { Cookie: cookieParts.join('; ') },
   })
 }
 
@@ -327,7 +333,7 @@ describe('GET /api/admin/research/evidence contracts', () => {
       ],
     })
 
-    const response = await getResearchEvidence(createRequest('/api/admin/research/evidence?source_type=ask_question&limit=2&offset=2'))
+    const response = await getResearchEvidence(createRequest('/api/admin/research/evidence?source_type=ask_question&limit=2&offset=2', { adminMode: 'research' }))
     const payload = await response.json()
 
     expect(response.status).toBe(200)

@@ -1,8 +1,9 @@
 // src/app/api/admin/activity/feedback/route.ts
 
 import { NextRequest, NextResponse } from 'next/server';
-import { DatabaseService } from '@/lib/database';
+import { adminDb, DatabaseService } from '@/lib/database';
 import { withProtection } from '@/lib/api-middleware';
+import { getAdminModeFromRequest, applyAdminModeFilter } from '@/lib/admin-mode';
 
 interface FeedbackRow {
   id: string;
@@ -42,6 +43,7 @@ const DATE_OPTIONS: Intl.DateTimeFormatOptions = {
 
 async function handler(req: NextRequest) {
   try {
+    const adminMode = getAdminModeFromRequest(req);
     const { searchParams } = new URL(req.url);
     const userId = searchParams.get('userId');
     const date = searchParams.get('date');
@@ -49,11 +51,35 @@ async function handler(req: NextRequest) {
     const courseId = searchParams.get('course');
     const topic = searchParams.get('topic');
 
+    // feedback has no direct 'mode' column; filter via JOIN to courses
+    // In Mode Penelitian we add an inner join filter courses.mode='research'
     let feedbackRows: FeedbackRow[] = [];
     try {
-      feedbackRows = await DatabaseService.getRecords<FeedbackRow>('feedback', {
-        orderBy: { column: 'created_at', ascending: false },
-      });
+      if (adminMode === 'research') {
+        // 2-step: get research course_ids, then filter feedback
+        const { data: courseData } = await applyAdminModeFilter(
+          adminDb.from('courses').select('id'),
+          adminMode,
+        );
+        const researchCourseIds = (Array.isArray(courseData) ? courseData : []).map(
+          (r: { id: string }) => r.id,
+        );
+        if (researchCourseIds.length === 0) {
+          feedbackRows = [];
+        } else {
+          const { data, error } = await adminDb
+            .from('feedback')
+            .select('*')
+            .in('course_id', researchCourseIds)
+            .order('created_at', { ascending: false });
+          if (error) throw error;
+          feedbackRows = (Array.isArray(data) ? data : []) as FeedbackRow[];
+        }
+      } else {
+        feedbackRows = await DatabaseService.getRecords<FeedbackRow>('feedback', {
+          orderBy: { column: 'created_at', ascending: false },
+        });
+      }
     } catch (error) {
       console.error('[Activity][Feedback] Failed to fetch feedback table:', error);
       return NextResponse.json([], { status: 200 });

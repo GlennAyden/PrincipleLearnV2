@@ -112,6 +112,7 @@ async function postHandler(req: NextRequest) {
         feedback: normalizedFeedback,
         reasoning_note: normalizedReasoning ? normalizedReasoning : null,
         learning_session_id: researchSession.learningSessionId,
+        mode: researchSession.mode,
         research_validity_status: 'valid',
         coding_status: 'uncoded',
         raw_evidence_snapshot: {

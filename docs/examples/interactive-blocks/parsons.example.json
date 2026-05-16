@@ -1,0 +1,27 @@
+{
+  "_meta": {
+    "type": "parsons",
+    "purpose": "MVR Item 9.2 — ParsonsProblem example. Baris pseudokode disajikan acak; siswa drag-drop ke urutan benar.",
+    "based_on": "Mushthofa dkk. 2023 Bab 2, sub-bab 1.5 Pseudokode hal. 39",
+    "rm3_dimensions": ["ct_decomposition", "ct_pattern_recognition"]
+  },
+  "interactive_blocks_value": [
+    {
+      "type": "parsons",
+      "config": {
+        "prompt": "Susun baris-baris pseudokode berikut menjadi algoritma yang menghitung luas persegi panjang dari panjang dan lebar yang dimasukkan pengguna.",
+        "orderedLines": [
+          "BEGIN",
+          "INPUT panjang, lebar",
+          "luas <- panjang * lebar",
+          "OUTPUT luas",
+          "END"
+        ],
+        "distractors": [
+          "luas <- panjang + lebar",
+          "INPUT luas"
+        ]
+      }
+    }
+  ]
+}

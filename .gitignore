@@ -70,6 +70,8 @@ yarn-error.log*
 /.vscode/
 /skills/
 /skills-lock.json
+.mcp.json
+/docs/superpowers/
 
 # local Codex/dev-server logs and verification artifacts
 /.codex-dev-*.log

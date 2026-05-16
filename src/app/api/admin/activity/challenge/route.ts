@@ -1,9 +1,10 @@
 // src/app/api/admin/activity/challenge/route.ts
 
 import { NextRequest, NextResponse } from 'next/server';
-import { DatabaseService } from '@/lib/database';
+import { adminDb, DatabaseService } from '@/lib/database';
 import { ensureChallengeResponsesSeeded } from '@/lib/activitySeed';
 import { withProtection } from '@/lib/api-middleware';
+import { getAdminModeFromRequest, applyAdminModeFilter } from '@/lib/admin-mode';
 
 interface ChallengeResponseRow {
   id: string;
@@ -99,6 +100,7 @@ async function fetchLeafSubtopicTitles(courseId?: string | null) {
 async function handler(req: NextRequest) {
   try {
     await ensureChallengeResponsesSeeded();
+    const adminMode = getAdminModeFromRequest(req);
     const { searchParams } = new URL(req.url);
     const userId = searchParams.get('userId');
     const date = searchParams.get('date');
@@ -107,11 +109,19 @@ async function handler(req: NextRequest) {
     const courseId = searchParams.get('course');
     const topic = searchParams.get('topic');
 
+    // challenge_responses has a direct 'mode' column — apply filter at DB level
     let responses: ChallengeResponseRow[] = [];
     try {
-      responses = await DatabaseService.getRecords<ChallengeResponseRow>('challenge_responses', {
-        orderBy: { column: 'created_at', ascending: false },
-      });
+      const baseQuery = adminDb
+        .from('challenge_responses')
+        .select('*')
+        .order('created_at', { ascending: false });
+      const { data, error } = await applyAdminModeFilter(baseQuery, adminMode);
+      if (error) {
+        console.error('[Activity][Challenge] Failed to fetch challenge_responses:', error);
+        return NextResponse.json([], { status: 200 });
+      }
+      responses = (Array.isArray(data) ? data : []) as ChallengeResponseRow[];
     } catch (error) {
       console.error('[Activity][Challenge] Failed to fetch challenge_responses:', error);
       return NextResponse.json([], { status: 200 });

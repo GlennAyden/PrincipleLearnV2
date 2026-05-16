@@ -1,0 +1,340 @@
+// ─── Outer block ──────────────────────────────────────────────────────────────
+
+.block {
+  display: flex;
+  flex-direction: column;
+  gap: 0.85rem;
+  padding: 1rem;
+  background: white;
+  border: 1px solid #e2e8f0;
+  border-radius: 12px;
+}
+
+// ─── Prompt ───────────────────────────────────────────────────────────────────
+
+.prompt {
+  font-size: 0.95rem;
+  color: #1e293b;
+  line-height: 1.55;
+}
+
+// ─── Side-by-side layout: palette + canvas ────────────────────────────────────
+
+.layout {
+  display: flex;
+  gap: 0.75rem;
+  align-items: flex-start;
+
+  @media (max-width: 719px) {
+    flex-direction: column;
+  }
+}
+
+// ─── Palette sidebar ──────────────────────────────────────────────────────────
+
+.palette {
+  display: flex;
+  flex-direction: column;
+  gap: 0.45rem;
+  min-width: 108px;
+  flex-shrink: 0;
+}
+
+.paletteHeader {
+  font-size: 0.7rem;
+  font-weight: 700;
+  color: #475569;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  padding: 0 0.1rem;
+}
+
+.paletteBtn {
+  display: flex;
+  align-items: center;
+  gap: 0.45rem;
+  padding: 0.4rem 0.6rem;
+  background: #f8fafc;
+  border: 1px solid #e2e8f0;
+  border-radius: 7px;
+  font-size: 0.78rem;
+  color: #334155;
+  cursor: pointer;
+  transition: background 0.12s ease, border-color 0.12s ease;
+  text-align: left;
+
+  &:hover:not(:disabled) {
+    background: #ede9fe;
+    border-color: #8b5cf6;
+    color: #5b21b6;
+  }
+
+  &:disabled {
+    opacity: 0.5;
+    cursor: not-allowed;
+  }
+}
+
+.paletteBtnIcon {
+  display: inline-block;
+  width: 14px;
+  height: 14px;
+  border: 1.5px solid currentColor;
+  flex-shrink: 0;
+
+  &[data-type='terminator'] {
+    border-radius: 50%;
+  }
+
+  &[data-type='process'] {
+    border-radius: 2px;
+  }
+
+  &[data-type='decision'] {
+    transform: rotate(45deg);
+    width: 10px;
+    height: 10px;
+  }
+
+  &[data-type='io'] {
+    transform: skewX(-15deg);
+  }
+}
+
+.paletteDivider {
+  height: 1px;
+  background: #e2e8f0;
+  margin: 0.25rem 0;
+}
+
+.paletteHint {
+  font-size: 0.7rem;
+  color: #94a3b8;
+  line-height: 1.45;
+}
+
+// ─── Canvas ───────────────────────────────────────────────────────────────────
+
+.canvasWrap {
+  position: relative;
+  width: 480px;
+  height: 360px;
+  border: 1px solid #e2e8f0;
+  border-radius: 8px;
+  overflow: hidden;
+  flex-shrink: 0;
+  background: #0d1117;
+  cursor: default;
+
+  @media (max-width: 719px) {
+    width: 100%;
+    min-width: 0;
+  }
+}
+
+.canvasGrid {
+  position: absolute;
+  inset: 0;
+  background-image: radial-gradient(circle, #334155 1px, transparent 1px);
+  background-size: 24px 24px;
+  pointer-events: none;
+  opacity: 0.5;
+}
+
+.edgeSvg {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  pointer-events: none;
+  z-index: 1;
+
+  // Allow click events on paths explicitly
+  path.edgePath {
+    pointer-events: stroke;
+  }
+}
+
+.edgePath {
+  pointer-events: stroke;
+  cursor: pointer;
+}
+
+// ─── Node wrapper (absolute-positioned) ──────────────────────────────────────
+
+.nodeWrap {
+  position: absolute;
+  z-index: 2;
+  cursor: grab;
+  user-select: none;
+
+  &:active {
+    cursor: grabbing;
+  }
+
+  // Show action buttons on hover
+  &:hover .nodeActions,
+  &:focus-within .nodeActions {
+    opacity: 1;
+  }
+}
+
+.nodeActions {
+  position: absolute;
+  top: -22px;
+  right: 0;
+  display: flex;
+  gap: 2px;
+  opacity: 0;
+  transition: opacity 0.15s ease;
+  z-index: 3;
+}
+
+.nodeActionBtn {
+  padding: 0.1rem 0.4rem;
+  font-size: 0.72rem;
+  font-weight: 700;
+  border: none;
+  border-radius: 4px;
+  cursor: pointer;
+  background: #334155;
+  color: #f1f5f9;
+  line-height: 1.4;
+  transition: background 0.1s ease;
+
+  &:hover {
+    background: #8b5cf6;
+  }
+}
+
+.nodeActionBtnActive {
+  background: #22c55e !important;
+  color: #0f172a;
+}
+
+.nodeActionBtnDanger {
+  &:hover {
+    background: #ef4444 !important;
+  }
+}
+
+.labelInput {
+  position: absolute;
+  inset: 0;
+  border: 2px solid #8b5cf6;
+  border-radius: 4px;
+  background: rgba(139, 92, 246, 0.15);
+  color: #f1f5f9;
+  font-family: 'SF Mono', Menlo, Monaco, Consolas, monospace;
+  font-size: 0.75rem;
+  text-align: center;
+  padding: 0.15rem 0.3rem;
+  cursor: text;
+  outline: none;
+  z-index: 4;
+}
+
+// ─── Edge label input ─────────────────────────────────────────────────────────
+
+.edgeLabelInput {
+  position: absolute;
+  z-index: 5;
+  width: 80px;
+  padding: 0.15rem 0.35rem;
+  background: #1e293b;
+  border: 1px solid #8b5cf6;
+  border-radius: 4px;
+  color: #f1f5f9;
+  font-family: 'SF Mono', Menlo, Monaco, Consolas, monospace;
+  font-size: 0.72rem;
+  outline: none;
+}
+
+// ─── Empty state ──────────────────────────────────────────────────────────────
+
+.emptyHint {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  text-align: center;
+  padding: 1rem;
+  font-size: 0.8rem;
+  color: #475569;
+  pointer-events: none;
+}
+
+// ─── Footer ───────────────────────────────────────────────────────────────────
+
+.footer {
+  display: flex;
+  align-items: center;
+  gap: 0.65rem;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+  margin-top: 0.4rem;
+}
+
+.eventBadge {
+  margin-right: auto;
+  font-size: 0.75rem;
+  color: #64748b;
+  padding: 0.2rem 0.55rem;
+  background: #f1f5f9;
+  border-radius: 999px;
+  font-weight: 500;
+}
+
+.countBadge {
+  font-size: 0.75rem;
+  color: #475569;
+  padding: 0.2rem 0.55rem;
+  background: #f1f5f9;
+  border-radius: 999px;
+}
+
+.scoreBadge {
+  font-size: 0.82rem;
+  font-weight: 600;
+  color: #166534;
+  background: #dcfce7;
+  padding: 0.2rem 0.65rem;
+  border-radius: 999px;
+}
+
+.error {
+  font-size: 0.8rem;
+  color: #b91c1c;
+}
+
+.submitBtn {
+  padding: 0.5rem 1rem;
+  background: linear-gradient(135deg, #6366f1, #4f46e5);
+  color: white;
+  border: none;
+  border-radius: 8px;
+  font-size: 0.88rem;
+  font-weight: 600;
+  cursor: pointer;
+
+  &:disabled {
+    background: #cbd5e1;
+    cursor: not-allowed;
+  }
+}
+
+@media (max-width: 719px) {
+  .footer {
+    flex-direction: column;
+    align-items: stretch;
+
+    .eventBadge {
+      margin-right: 0;
+    }
+
+    .submitBtn {
+      width: 100%;
+    }
+  }
+}
