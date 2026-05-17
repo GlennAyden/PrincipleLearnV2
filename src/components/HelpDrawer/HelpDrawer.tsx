@@ -3,22 +3,33 @@
 import React, { useEffect, useMemo, useState } from 'react';
 import { createPortal } from 'react-dom';
 import styles from './HelpDrawer.module.scss';
-import { buildSubtopicHelpFeatures, type HelpFeature } from './featureData';
+import {
+  buildSubtopicHelpFeatures,
+  filterFeaturesForMode,
+  type HelpFeature,
+} from './featureData';
 import { useLocale } from '@/context/LocaleContext';
 
 interface HelpDrawerProps {
   open: boolean;
   onClose: () => void;
   features?: HelpFeature[];
+  /** Controls which research-only features are shown. Defaults to 'general'. */
+  mode?: 'general' | 'research';
 }
 
 export default function HelpDrawer({
   open,
   onClose,
   features,
+  mode = 'general',
 }: HelpDrawerProps) {
   const { t } = useLocale();
-  const defaultFeatures = useMemo(() => buildSubtopicHelpFeatures(t), [t]);
+  const allDefaultFeatures = useMemo(() => buildSubtopicHelpFeatures(t), [t]);
+  const defaultFeatures = useMemo(
+    () => filterFeaturesForMode(allDefaultFeatures, mode),
+    [allDefaultFeatures, mode],
+  );
   const resolvedFeatures = features ?? defaultFeatures;
   const [mounted, setMounted] = useState(false);
   const [expandedId, setExpandedId] = useState<string | null>(null);

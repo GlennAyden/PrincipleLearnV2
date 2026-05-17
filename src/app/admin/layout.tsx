@@ -6,11 +6,13 @@ import { useRouter, usePathname, useSearchParams } from 'next/navigation'
 import {
   FiGrid, FiUsers, FiActivity,
   FiLogOut, FiClipboard, FiMenu, FiX,
-  FiDownload, FiBookOpen,
+  FiDownload, FiBookOpen, FiInfo, FiRadio,
 } from 'react-icons/fi'
 import { apiFetch } from '@/lib/api-client'
 import { AdminModeProvider, useAdminMode } from '@/context/AdminModeContext'
 import { AdminModeToggle } from '@/components/admin/AdminModeToggle/AdminModeToggle'
+import SidangMode from '@/components/SidangMode/SidangMode'
+import DemoCueCards from '@/components/admin/DemoCueCards/DemoCueCards'
 import styles from './layout.module.scss'
 
 interface ModeSwitchStatus {
@@ -58,6 +60,8 @@ const NAV_ITEMS: NavItemSpec[] = [
   { href: '/admin/riset',     label: 'Riset',     icon: FiClipboard, researchOnly: true },
   { href: '/admin/sumber',    label: 'Sumber',    icon: FiBookOpen,  researchOnly: true },
   { href: '/admin/ekspor',    label: 'Ekspor',    icon: FiDownload },
+  { href: '/admin/live',      label: 'Live',      icon: FiRadio },
+  { href: '/admin/about',     label: 'Tentang',   icon: FiInfo },
 ]
 
 // Research-only routes — when admin is in Mode Umum we redirect away with
@@ -220,6 +224,7 @@ function AdminLayoutInner({ children }: AdminLayoutProps) {
             </span>
           )}
           {adminMode === 'general' && <span className={styles.generalBanner} />}
+          <SidangMode />
           <AdminModeToggle />
         </div>
         {toast && (
@@ -238,6 +243,9 @@ function AdminLayoutInner({ children }: AdminLayoutProps) {
           )}
         </footer>
       </main>
+
+      {/* Demo cue cards — floating button visible on all admin pages */}
+      <DemoCueCards />
     </div>
   )
 }

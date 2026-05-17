@@ -1,0 +1,369 @@
+/* src/app/admin/live/page.module.scss — Full-screen dark "control room" monitor */
+
+$bg:          #0a0f1e;
+$bg-sector:   #111827;
+$border:      #1f2937;
+$border-mid:  #374151;
+$text-primary: #f1f5f9;
+$text-dim:     #6b7280;
+$text-mid:     #9ca3af;
+$green-live:   #22c55e;
+$indigo:       #6366f1;
+$font-mono:    'JetBrains Mono', 'Fira Code', 'Consolas', monospace;
+$font-sans:    'Plus Jakarta Sans', 'Inter', system-ui, sans-serif;
+
+/* ── Boot screen ── */
+.bootScreen {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  height: 100vh;
+  background: $bg;
+  color: $text-dim;
+  font-family: $font-mono;
+  font-size: 0.9rem;
+  letter-spacing: 0.05em;
+}
+
+/* ── Page root ── */
+.page {
+  display: flex;
+  flex-direction: column;
+  min-height: 100vh;
+  background: $bg;
+  color: $text-primary;
+  font-family: $font-sans;
+  overflow: hidden;
+}
+
+/* ── Header ── */
+.header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 0.75rem 1.5rem;
+  border-bottom: 1px solid $border;
+  background: #0d1424;
+  flex-shrink: 0;
+}
+
+.headerLeft {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+}
+
+.headerRight {
+  display: flex;
+  align-items: center;
+  gap: 1rem;
+}
+
+/* Pulsing green LIVE dot */
+@keyframes livePulse {
+  0%, 100% { box-shadow: 0 0 0 0 rgba(34, 197, 94, 0.7); }
+  60%       { box-shadow: 0 0 0 6px rgba(34, 197, 94, 0); }
+}
+.liveDot {
+  width: 10px;
+  height: 10px;
+  border-radius: 50%;
+  background: $green-live;
+  animation: livePulse 1.8s ease-in-out infinite;
+}
+
+.liveLabel {
+  font-family: $font-mono;
+  font-size: 0.8rem;
+  font-weight: 700;
+  letter-spacing: 0.1em;
+  color: $green-live;
+}
+
+.headerTitle {
+  font-size: 0.95rem;
+  font-weight: 600;
+  color: $text-primary;
+  letter-spacing: -0.01em;
+}
+
+.lastFetch {
+  font-family: $font-mono;
+  font-size: 0.7rem;
+  color: $text-dim;
+  letter-spacing: 0.02em;
+}
+
+.adminEmail {
+  font-size: 0.75rem;
+  color: $text-dim;
+  padding: 3px 10px;
+  background: #1f2937;
+  border-radius: 14px;
+  border: 1px solid $border-mid;
+}
+
+.errorChip {
+  font-size: 0.72rem;
+  color: #f87171;
+  background: rgba(239, 68, 68, 0.1);
+  border: 1px solid rgba(239, 68, 68, 0.3);
+  padding: 3px 10px;
+  border-radius: 14px;
+}
+
+/* ── 2×2 Grid ── */
+.grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  grid-template-rows: 1fr 1fr;
+  flex: 1;
+  gap: 1px;
+  background: $border;
+  min-height: 0;
+}
+
+/* ── Sector (each quadrant) ── */
+.sector {
+  background: $bg-sector;
+  padding: 1.75rem 2rem;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+}
+
+.sectorTitle {
+  font-size: 0.78rem;
+  font-weight: 600;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: $text-dim;
+  margin: 0 0 0.35rem;
+}
+
+.sectorSub {
+  font-size: 0.65rem;
+  font-family: $font-mono;
+  color: $text-dim;
+  margin: 0 0 1.25rem;
+  letter-spacing: 0.02em;
+}
+
+/* ── Big metric numbers ── */
+.metricPair {
+  display: flex;
+  gap: 3rem;
+  align-items: flex-start;
+  flex: 1;
+  padding-top: 0.5rem;
+}
+
+.tokenBlock {
+  display: flex;
+  flex-direction: column;
+  gap: 0.4rem;
+  flex: 1;
+  padding-top: 0.5rem;
+}
+
+/* TokenMeter komponen embed di dalam sector dark */
+.tokenMeterWrap {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  /* Hapus padding top agar TokenMeter punya lebih banyak ruang */
+  margin-top: 0.25rem;
+}
+
+.bigMetric {
+  display: flex;
+  flex-direction: column;
+  gap: 0.25rem;
+}
+
+.bigNumber {
+  font-family: $font-mono;
+  font-size: clamp(2.5rem, 5vw, 4.5rem);
+  font-weight: 700;
+  color: $text-primary;
+  line-height: 1;
+  letter-spacing: -0.03em;
+}
+
+.bigLabel {
+  font-size: 0.85rem;
+  font-weight: 600;
+  color: $text-mid;
+  margin-top: 0.35rem;
+}
+
+.bigSub {
+  font-size: 0.65rem;
+  font-family: $font-mono;
+  color: $text-dim;
+  margin-top: 0.15rem;
+}
+
+.costEstimate {
+  font-family: $font-mono;
+  font-size: 1rem;
+  color: #34d399;
+  font-weight: 500;
+  margin-top: 0.25rem;
+}
+
+/* ── Bloom bar chart ── */
+.bloomChart {
+  display: flex;
+  flex-direction: column;
+  gap: 0.75rem;
+  flex: 1;
+}
+
+.bloomRow {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+}
+
+.bloomLabel {
+  font-family: $font-mono;
+  font-size: 0.72rem;
+  font-weight: 600;
+  color: $text-mid;
+  width: 70px;
+  flex-shrink: 0;
+  letter-spacing: 0.03em;
+}
+
+.bloomTrack {
+  flex: 1;
+  height: 20px;
+  background: #1f2937;
+  border-radius: 4px;
+  overflow: hidden;
+}
+
+.bloomFill {
+  height: 100%;
+  border-radius: 4px;
+  transition: width 0.6s ease;
+  min-width: 2px;
+}
+
+.bloomCount {
+  font-family: $font-mono;
+  font-size: 0.75rem;
+  font-weight: 600;
+  color: $text-primary;
+  width: 28px;
+  text-align: right;
+  flex-shrink: 0;
+}
+
+.bloomTotal {
+  font-family: $font-mono;
+  font-size: 0.65rem;
+  color: $text-dim;
+  margin: 0.5rem 0 0;
+}
+
+/* ── Event list (log tail) ── */
+.eventList {
+  display: flex;
+  flex-direction: column;
+  gap: 0;
+  flex: 1;
+  overflow: hidden;
+}
+
+.emptyNote {
+  font-family: $font-mono;
+  font-size: 0.75rem;
+  color: $text-dim;
+  margin: 0;
+}
+
+/* New event: slide-in from top + yellow highlight */
+@keyframes eventSlideIn {
+  from {
+    transform: translateY(-12px);
+    opacity: 0;
+    background-color: rgba(251, 191, 36, 0.12);
+  }
+  30% {
+    background-color: rgba(251, 191, 36, 0.12);
+  }
+  to {
+    transform: translateY(0);
+    opacity: 1;
+    background-color: transparent;
+  }
+}
+
+.eventRow {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  padding: 0.4rem 0.5rem;
+  border-radius: 6px;
+  transition: background 0.3s ease;
+  font-family: $font-mono;
+  font-size: 0.7rem;
+
+  &:not(:last-child) {
+    border-bottom: 1px solid $border;
+  }
+}
+
+.eventNew {
+  animation: eventSlideIn 1.2s ease forwards;
+}
+
+.eventError {
+  background: rgba(239, 68, 68, 0.06);
+}
+
+.eventTime {
+  color: $text-dim;
+  flex-shrink: 0;
+  letter-spacing: 0.02em;
+  width: 56px;
+}
+
+.eventPath {
+  flex: 1;
+  color: $text-mid;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.eventEmail {
+  font-size: 0.65rem;
+  color: $text-dim;
+  max-width: 140px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  flex-shrink: 0;
+}
+
+.statusOk {
+  font-size: 0.65rem;
+  font-weight: 600;
+  color: #34d399;
+  flex-shrink: 0;
+  width: 32px;
+  text-align: right;
+}
+
+.statusErr {
+  font-size: 0.65rem;
+  font-weight: 600;
+  color: #f87171;
+  flex-shrink: 0;
+  width: 32px;
+  text-align: right;
+}

@@ -9,6 +9,8 @@ import { apiFetch } from '@/lib/api-client';
 import LanguageToggle from '@/components/LanguageToggle/LanguageToggle';
 import { useLocale } from '@/context/LocaleContext';
 import { FaseEJalur } from '@/components/dashboard/FaseEJalur/FaseEJalur';
+import ContinueLearningCard from '@/components/ContinueLearning/ContinueLearningCard';
+import SidangMode from '@/components/SidangMode/SidangMode';
 import styles from './page.module.scss';
 
 type Level = 'Beginner' | 'Intermediate' | 'Advanced';
@@ -138,6 +140,7 @@ export default function DashboardPage() {
           </Link>
 
           <div className={styles.headerRight}>
+            <SidangMode />
             <LanguageToggle />
             <div className={styles.userBadge}>
               <div className={styles.avatar}>
@@ -182,6 +185,9 @@ export default function DashboardPage() {
             Buat Kursus
           </button>
         </div>
+
+        {/* Continue Learning hero card — renders only when user has progress */}
+        <ContinueLearningCard />
 
         {/* MVR Item 7b — Fase E jalur card row, only rendered when relevant */}
         {hasResearchCourse && <FaseEJalur />}

@@ -75,7 +75,23 @@ async function postHandler(req: NextRequest) {
       );
     }
 
-    const parsed = parseBody(GenerateCourseSchema, requestBody);
+    // A2 preview flow: extract providedOutline before Zod validation because
+    // GenerateCourseSchema uses .strict() and would reject unknown fields.
+    type RawBody = Record<string, unknown>;
+    const providedOutline =
+      requestBody !== null &&
+      typeof requestBody === 'object' &&
+      Array.isArray((requestBody as RawBody).providedOutline)
+        ? ((requestBody as RawBody).providedOutline as unknown[])
+        : null;
+
+    // Strip providedOutline before schema validation (schema is .strict())
+    const bodyForValidation =
+      providedOutline !== null && requestBody !== null && typeof requestBody === 'object'
+        ? (({ providedOutline: _po, ...rest }) => rest)(requestBody as RawBody & { providedOutline: unknown })
+        : requestBody;
+
+    const parsed = parseBody(GenerateCourseSchema, bodyForValidation);
     if (!parsed.success) return parsed.response;
     const { topic, goal, level, extraTopics, problem, assumption, mode, templateTopic } = parsed.data;
 
@@ -203,40 +219,62 @@ Return a PURE JSON array (no Markdown code fences):
 Important: Write all titles and overviews in the same language as the user's inputs above.`
     };
 
-    console.log('[Generate Course] Calling OpenAI API');
+    // A2: If pre-approved outline from preview flow is present, skip the
+    // OpenAI call — saves ~30-45s and uses the user-reviewed structure.
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any -- dynamic outline shape from AI + appendDiscussionNodes
+    let outline: any[];
 
-    // Call OpenAI with retry logic + timeout via service
-    let response;
-    try {
-      response = await chatCompletionWithRetry({
-        messages: [systemMessage, userMessage],
-        maxTokens: 8192,
-        timeoutMs: 90000,
-        maxAttempts: 3,
-      });
-    } catch (aiErr) {
-      throw new AIServiceError(
-        aiErr instanceof Error ? aiErr.message : String(aiErr),
-        aiErr,
-      );
-    }
+    if (providedOutline && providedOutline.length > 0) {
+      console.log(`[Generate Course] Using provided outline (${providedOutline.length} modules) — skipping OpenAI`);
+      outline = (providedOutline as Array<Record<string, unknown>>).map((mod, mi) => ({
+        module: typeof mod.module === 'string' ? mod.module : `Module ${mi + 1}`,
+        subtopics: Array.isArray(mod.subtopics)
+          ? (mod.subtopics as Array<Record<string, unknown>>).map((s, si) => ({
+              title: typeof s.title === 'string' ? s.title : `Subtopic ${si + 1}`,
+              overview: typeof s.summary === 'string'
+                ? s.summary
+                : typeof s.overview === 'string'
+                ? s.overview
+                : '',
+            }))
+          : [],
+      }));
+    } else {
+      console.log('[Generate Course] Calling OpenAI API');
 
-    console.log('[Generate Course] Received response from OpenAI');
+      // Call OpenAI with retry logic + timeout via service
+      let response;
+      try {
+        response = await chatCompletionWithRetry({
+          messages: [systemMessage, userMessage],
+          maxTokens: 8192,
+          timeoutMs: 90000,
+          maxAttempts: 3,
+        });
+      } catch (aiErr) {
+        throw new AIServiceError(
+          aiErr instanceof Error ? aiErr.message : String(aiErr),
+          aiErr,
+        );
+      }
 
-    // Parse JSON outline from AI response
-    const textRaw = response.choices?.[0]?.message?.content;
-    if (!textRaw || !textRaw.trim()) {
-      console.error('[Generate Course] Empty content! Full message:', JSON.stringify(response.choices?.[0]?.message));
-      throw new AIResponseInvalidError('Respons kosong dari model');
-    }
+      console.log('[Generate Course] Received response from OpenAI');
 
-    let outline;
-    try {
-      outline = parseAndValidateAIResponse(textRaw, CourseOutlineResponseSchema, 'Generate Course');
-      console.log(`[Generate Course] Validated outline with ${outline.length} modules`);
-    } catch (parseErr: unknown) {
-      console.error('[Generate Course] Failed to parse/validate AI response:', parseErr instanceof Error ? parseErr.message : parseErr);
-      throw new AIResponseInvalidError('Invalid or malformed AI response', parseErr);
+      // Parse JSON outline from AI response
+      const textRaw = response.choices?.[0]?.message?.content;
+      if (!textRaw || !textRaw.trim()) {
+        console.error('[Generate Course] Empty content! Full message:', JSON.stringify(response.choices?.[0]?.message));
+        throw new AIResponseInvalidError('Respons kosong dari model');
+      }
+
+      try {
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any -- dynamic outline shape
+        outline = parseAndValidateAIResponse(textRaw, CourseOutlineResponseSchema, 'Generate Course') as any[];
+        console.log(`[Generate Course] Validated outline with ${outline.length} modules`);
+      } catch (parseErr: unknown) {
+        console.error('[Generate Course] Failed to parse/validate AI response:', parseErr instanceof Error ? parseErr.message : parseErr);
+        throw new AIResponseInvalidError('Invalid or malformed AI response', parseErr);
+      }
     }
 
     // 7.1 Tambahkan node diskusi penutup untuk setiap subtopik

@@ -1,0 +1,251 @@
+// src/components/admin/ActivityTimeline/ActivityTimeline.module.scss
+
+.root {
+  font-family: 'Plus Jakarta Sans', 'Inter', -apple-system, sans-serif;
+}
+
+// ─── Controls ─────────────────────────────────────────────────────────────────
+
+.controls {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 14px;
+  flex-wrap: wrap;
+}
+
+.controlLabel {
+  font-size: 0.82rem;
+  font-weight: 600;
+  color: #64748b;
+}
+
+.rangeBtn {
+  padding: 0.3rem 0.75rem;
+  border-radius: 999px;
+  border: 1px solid #e2e8f0;
+  background: white;
+  font-size: 0.82rem;
+  font-weight: 500;
+  color: #475569;
+  cursor: pointer;
+  transition: background 0.15s, border-color 0.15s;
+
+  &:hover {
+    background: #f8fafc;
+    border-color: #c7d2fe;
+  }
+}
+
+.rangeBtnActive {
+  background: #eef2ff;
+  border-color: #6366f1;
+  color: #4f46e5;
+  font-weight: 700;
+}
+
+.eventCount {
+  margin-left: auto;
+  font-size: 0.78rem;
+  color: #94a3b8;
+  font-weight: 500;
+}
+
+// ─── SVG wrapper ──────────────────────────────────────────────────────────────
+
+.svgWrap {
+  position: relative;
+  width: 100%;
+  background: white;
+  border: 1px solid #e2e8f0;
+  border-radius: 12px;
+  overflow: hidden;
+  user-select: none;
+}
+
+.svg {
+  display: block;
+  width: 100%;
+  cursor: crosshair;
+  overflow: visible;
+}
+
+// ─── SVG text styles ─────────────────────────────────────────────────────────
+
+.laneLabel {
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: 0.03em;
+  font-family: inherit;
+  text-transform: uppercase;
+}
+
+.tickLabel {
+  font-size: 9px;
+  font-family: inherit;
+}
+
+// ─── Lane track ──────────────────────────────────────────────────────────────
+
+.laneTrack {
+  opacity: 0.5;
+}
+
+// ─── Guideline ────────────────────────────────────────────────────────────────
+
+.guideline {
+  pointer-events: none;
+}
+
+// ─── Dots ─────────────────────────────────────────────────────────────────────
+
+.dot {
+  cursor: pointer;
+  opacity: 0;
+  transform-origin: center;
+  transform: scale(0.4);
+  transition: transform 0.15s ease, opacity 0.15s ease;
+
+  &:hover {
+    transform: scale(1.5);
+    filter: drop-shadow(0 0 4px currentColor);
+  }
+}
+
+.dotVisible {
+  animation: dotIn 0.35s ease forwards;
+}
+
+@keyframes dotIn {
+  from {
+    opacity: 0;
+    transform: scale(0.3);
+  }
+  70% {
+    transform: scale(1.2);
+  }
+  to {
+    opacity: 1;
+    transform: scale(1);
+  }
+}
+
+// ─── Tooltip ─────────────────────────────────────────────────────────────────
+
+.tooltip {
+  position: absolute;
+  pointer-events: none;
+  background: white;
+  border: 1px solid #e2e8f0;
+  border-radius: 10px;
+  padding: 8px 12px;
+  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.1);
+  min-width: 180px;
+  max-width: 220px;
+  z-index: 10;
+}
+
+.tooltipKind {
+  font-size: 0.78rem;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  margin-bottom: 2px;
+}
+
+.tooltipTime {
+  font-size: 0.8rem;
+  color: #475569;
+  font-weight: 600;
+  margin-bottom: 4px;
+}
+
+.tooltipSub {
+  font-size: 0.75rem;
+  color: #64748b;
+  line-height: 1.4;
+  display: -webkit-box;
+  -webkit-line-clamp: 3;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+}
+
+// ─── Legend ──────────────────────────────────────────────────────────────────
+
+.legend {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 12px;
+  margin-top: 12px;
+  padding: 8px 12px;
+  background: #f8fafc;
+  border-radius: 8px;
+  border: 1px solid #e2e8f0;
+}
+
+.legendItem {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  font-size: 0.78rem;
+  color: #475569;
+  font-weight: 500;
+}
+
+.legendDot {
+  width: 10px;
+  height: 10px;
+  border-radius: 50%;
+  flex-shrink: 0;
+}
+
+// ─── States ──────────────────────────────────────────────────────────────────
+
+.loading {
+  text-align: center;
+  padding: 40px;
+  color: #94a3b8;
+  font-size: 0.9rem;
+}
+
+.error {
+  padding: 10px 14px;
+  background: #fef2f2;
+  border: 1px solid #fecaca;
+  border-radius: 8px;
+  color: #b91c1c;
+  font-size: 0.85rem;
+}
+
+.empty {
+  text-align: center;
+  padding: 40px;
+  color: #94a3b8;
+  font-size: 0.88rem;
+  background: #f8fafc;
+  border-radius: 10px;
+  border: 1px dashed #e2e8f0;
+}
+
+// ─── Print ────────────────────────────────────────────────────────────────────
+
+@media print {
+  .controls {
+    display: none;
+  }
+
+  .svgWrap {
+    border: 1px solid #000;
+    page-break-inside: avoid;
+  }
+
+  .tooltip {
+    display: none !important;
+  }
+
+  .dot {
+    opacity: 1 !important;
+    transform: scale(1) !important;
+    animation: none !important;
+  }
+}

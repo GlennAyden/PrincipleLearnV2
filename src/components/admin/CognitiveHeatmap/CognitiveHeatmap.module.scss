@@ -1,0 +1,521 @@
+/* CognitiveHeatmap.module.scss */
+@use '../../../app/admin/_tokens' as *;
+
+/* ─── Wrapper ────────────────────────────────────────────────────── */
+
+.wrapper {
+  font-family: $font-sans;
+  display: flex;
+  flex-direction: column;
+  gap: 1rem;
+}
+
+/* ─── Toolbar ────────────────────────────────────────────────────── */
+
+.toolbar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  flex-wrap: wrap;
+  gap: 0.75rem;
+}
+
+.toolbarLeft,
+.toolbarRight {
+  display: flex;
+  align-items: center;
+  gap: 0.6rem;
+  flex-wrap: wrap;
+}
+
+.toolbarLabel {
+  font-size: 0.82rem;
+  color: $gray-500;
+  font-weight: 600;
+  white-space: nowrap;
+}
+
+.segmentedControl {
+  display: flex;
+  border: 1px solid $gray-200;
+  border-radius: $radius-sm;
+  overflow: hidden;
+  background: $gray-50;
+}
+
+.segmentBtn {
+  padding: 0.35rem 0.85rem;
+  border: none;
+  background: none;
+  font-size: 0.8rem;
+  font-weight: 500;
+  color: $gray-500;
+  cursor: pointer;
+  transition: background $transition-fast, color $transition-fast;
+  white-space: nowrap;
+
+  &:hover {
+    background: $gray-100;
+    color: $gray-700;
+  }
+
+  &:not(:last-child) {
+    border-right: 1px solid $gray-200;
+  }
+}
+
+.segmentActive {
+  background: $primary-600 !important;
+  color: white !important;
+  font-weight: 600;
+}
+
+.toggleBtn {
+  padding: 0.35rem 0.85rem;
+  border: 1px solid $gray-200;
+  border-radius: $radius-sm;
+  background: white;
+  color: $gray-500;
+  font-size: 0.78rem;
+  font-weight: 500;
+  cursor: pointer;
+  transition: all $transition-fast;
+  white-space: nowrap;
+
+  &:hover {
+    border-color: $primary-400;
+    color: $primary-600;
+  }
+}
+
+.toggleActive {
+  background: $indigo-50;
+  border-color: $indigo-400;
+  color: $indigo-600;
+}
+
+/* ─── Legend ─────────────────────────────────────────────────────── */
+
+.legend {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  flex-wrap: wrap;
+}
+
+.legendTitle {
+  font-size: 0.75rem;
+  color: $gray-400;
+  font-weight: 600;
+}
+
+.legendItem {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  font-size: 0.75rem;
+  color: $gray-500;
+}
+
+.legendDot {
+  width: 14px;
+  height: 14px;
+  border-radius: 3px;
+  display: inline-block;
+  flex-shrink: 0;
+}
+
+/* ─── Print Button ───────────────────────────────────────────────── */
+
+.printBtn {
+  padding: 0.35rem 0.85rem;
+  border: 1px solid $gray-200;
+  border-radius: $radius-sm;
+  background: white;
+  color: $gray-600;
+  font-size: 0.78rem;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all $transition-fast;
+  white-space: nowrap;
+
+  &:hover {
+    background: $gray-50;
+    border-color: $gray-300;
+  }
+}
+
+/* ─── States ─────────────────────────────────────────────────────── */
+
+.loadingState,
+.emptyState,
+.errorState {
+  padding: 2.5rem 1rem;
+  text-align: center;
+  font-size: 0.9rem;
+  color: $gray-400;
+  background: white;
+  border: 1px solid $gray-200;
+  border-radius: $radius-md;
+}
+
+.errorState {
+  color: $red-600;
+  background: $red-50;
+  border-color: $red-500;
+}
+
+/* ─── Matrix container ───────────────────────────────────────────── */
+
+.matrixOuter {
+  background: white;
+  border: 1px solid $gray-200;
+  border-radius: $radius-md;
+  overflow: hidden;
+}
+
+.matrixScroll {
+  overflow-x: auto;
+  -webkit-overflow-scrolling: touch;
+}
+
+/* ─── Table ──────────────────────────────────────────────────────── */
+
+.matrix {
+  border-collapse: collapse;
+  width: 100%;
+  min-width: 480px;
+  font-size: 0.8rem;
+}
+
+/* Column headers (X-axis) */
+.colHeader {
+  padding: 0.5rem 0.35rem;
+  text-align: center;
+  font-size: 0.72rem;
+  font-weight: 600;
+  color: $gray-500;
+  background: $gray-50;
+  border-bottom: 2px solid $gray-200;
+  white-space: nowrap;
+  min-width: 52px;
+  max-width: 80px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  vertical-align: bottom;
+
+  /* Fade-in reveal animation */
+  animation: fadeSlideIn 0.3s ease both;
+
+  @media (prefers-reduced-motion: reduce) {
+    animation: none;
+  }
+}
+
+.rowGroupLabel {
+  padding: 0.5rem 0.8rem;
+  text-align: left;
+  font-size: 0.72rem;
+  font-weight: 600;
+  color: $gray-500;
+  background: $gray-50;
+  border-bottom: 2px solid $gray-200;
+  min-width: 120px;
+  white-space: nowrap;
+  vertical-align: bottom;
+}
+
+/* Group label rows (CT / CTH) */
+.groupLabelRow {
+  background: $indigo-50;
+}
+
+.groupLabelCell {
+  padding: 0.35rem 0.8rem;
+  font-size: 0.72rem;
+  font-weight: 700;
+  color: $indigo-600;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+}
+
+/* Data rows */
+.dataRow {
+  &:hover {
+    background: $gray-50;
+  }
+}
+
+/* Row label (Y-axis) */
+.dimLabel {
+  padding: 0.4rem 0.8rem;
+  font-size: 0.78rem;
+  font-weight: 500;
+  color: $gray-700;
+  white-space: nowrap;
+  text-align: left;
+  border-right: 1px solid $gray-100;
+  min-width: 120px;
+  max-width: 160px;
+}
+
+/* ─── Cells ──────────────────────────────────────────────────────── */
+
+.cell {
+  width: 52px;
+  min-width: 44px;
+  height: 36px;
+  text-align: center;
+  vertical-align: middle;
+  border: 1px solid $gray-100;
+  cursor: default;
+  position: relative;
+  transition: filter $transition-fast, transform $transition-fast;
+
+  /* Staggered reveal */
+  animation: cellReveal 0.25s ease both;
+
+  @media (prefers-reduced-motion: reduce) {
+    animation: none;
+  }
+
+  &:hover {
+    filter: brightness(0.92);
+    transform: scale(1.08);
+    z-index: 2;
+  }
+}
+
+.cellValue {
+  font-size: 0.75rem;
+  font-weight: 700;
+  color: $gray-700;
+}
+
+/* Score colors */
+.cellScore0 {
+  background-color: #f1f5f9;
+  .cellValue { color: $gray-500; }
+}
+
+.cellScore0half {
+  background-color: #fef9c3;
+  .cellValue { color: #a16207; }
+}
+
+.cellScore1 {
+  background-color: #fde68a;
+  .cellValue { color: #92400e; }
+}
+
+.cellScore2 {
+  background-color: #34d399;
+  .cellValue { color: #064e3b; }
+}
+
+.cellEmpty {
+  background-color: white;
+  border: 1px dashed $gray-300 !important;
+  .cellValue { display: none; }
+}
+
+.cellHidden {
+  background-color: transparent;
+  border: none !important;
+  visibility: hidden;
+}
+
+/* ─── Row totals (rightmost column) ──────────────────────────────── */
+
+.rowTotalHeader {
+  padding: 0.5rem 0.6rem;
+  font-size: 0.72rem;
+  font-weight: 600;
+  color: $gray-500;
+  background: $gray-50;
+  border-bottom: 2px solid $gray-200;
+  border-left: 2px solid $gray-200;
+  white-space: nowrap;
+  text-align: center;
+}
+
+.rowTotal {
+  text-align: center;
+  font-size: 0.78rem;
+  font-weight: 700;
+  color: $primary-600;
+  border-left: 2px solid $gray-200;
+  padding: 0 0.5rem;
+  background: $primary-50;
+}
+
+/* ─── Column totals (bottom row) ─────────────────────────────────── */
+
+.colTotalRow {
+  background: $gray-50;
+  border-top: 2px solid $gray-200;
+}
+
+.colTotalLabel {
+  padding: 0.4rem 0.8rem;
+  font-size: 0.72rem;
+  font-weight: 700;
+  color: $gray-600;
+  text-align: left;
+}
+
+.colTotal {
+  text-align: center;
+  font-size: 0.78rem;
+  font-weight: 700;
+  color: $primary-700;
+  padding: 0.4rem 0.2rem;
+  border-left: 1px solid $gray-200;
+}
+
+.cornerCell {
+  text-align: center;
+  font-size: 0.78rem;
+  font-weight: 700;
+  color: $indigo-600;
+  background: $indigo-50;
+  border-left: 2px solid $gray-200;
+  padding: 0 0.5rem;
+}
+
+/* ─── Meta info ──────────────────────────────────────────────────── */
+
+.matrixMeta {
+  display: flex;
+  justify-content: space-between;
+  padding: 0.5rem 1rem;
+  font-size: 0.72rem;
+  color: $gray-400;
+  border-top: 1px solid $gray-100;
+}
+
+/* ─── Tooltip ─────────────────────────────────────────────────────── */
+
+.tooltip {
+  position: fixed;
+  transform: translateX(-50%) translateY(-100%);
+  background: $gray-900;
+  color: white;
+  border-radius: $radius-sm;
+  padding: 0.65rem 0.85rem;
+  font-size: 0.78rem;
+  max-width: 260px;
+  z-index: 9999;
+  pointer-events: none;
+  box-shadow: 0 8px 20px rgba(0, 0, 0, 0.25);
+  line-height: 1.5;
+}
+
+.tooltipHeader {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.5rem;
+  margin-bottom: 0.3rem;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.15);
+  padding-bottom: 0.3rem;
+
+  strong {
+    font-size: 0.82rem;
+    color: white;
+  }
+}
+
+.tooltipCol {
+  font-size: 0.7rem;
+  color: $gray-400;
+}
+
+.tooltipScore {
+  margin-bottom: 0.2rem;
+
+  strong {
+    color: #34d399;
+  }
+}
+
+.tooltipDate,
+.tooltipSource,
+.tooltipConfidence {
+  font-size: 0.72rem;
+  color: $gray-400;
+}
+
+.tooltipEvidence {
+  margin-top: 0.35rem;
+  font-size: 0.72rem;
+  color: $gray-300;
+  border-top: 1px solid rgba(255, 255, 255, 0.1);
+  padding-top: 0.3rem;
+  font-style: italic;
+}
+
+/* ─── Animations ─────────────────────────────────────────────────── */
+
+@keyframes fadeSlideIn {
+  from {
+    opacity: 0;
+    transform: translateY(-6px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+@keyframes cellReveal {
+  from {
+    opacity: 0;
+    transform: scale(0.85);
+  }
+  to {
+    opacity: 1;
+    transform: scale(1);
+  }
+}
+
+/* ─── Print styles ───────────────────────────────────────────────── */
+
+@media print {
+  .toolbar {
+    display: none;
+  }
+
+  .tooltip {
+    display: none;
+  }
+
+  .wrapper {
+    page-break-inside: avoid;
+  }
+
+  .matrixOuter {
+    border: 1px solid #e2e8f0;
+    box-shadow: none;
+    overflow: visible;
+  }
+
+  .matrixScroll {
+    overflow: visible;
+  }
+
+  .matrix {
+    font-size: 0.65rem;
+  }
+
+  .cell {
+    animation: none;
+    width: 40px;
+    min-width: 36px;
+    height: 28px;
+  }
+
+  .colHeader {
+    animation: none;
+  }
+}

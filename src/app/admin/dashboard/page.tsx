@@ -21,6 +21,7 @@ import type {
   DashboardTab, TimeRange, DashboardKPI, RM2Data, RM3Data,
   ActivityItem, StudentRow, SystemHealth, DashboardAPIResponse,
 } from '@/types/dashboard'
+import TokenMeter from '@/components/admin/TokenMeter/TokenMeter'
 
 const STAGE_COLORS: Record<string, string> = { SCP: '#ef4444', SRP: '#f59e0b', MQP: '#3b82f6', REFLECTIVE: '#10b981' }
 const STAGE_LABELS: Record<string, string> = { SCP: 'Simple Copy-Paste', SRP: 'Structured Prompt', MQP: 'Multi-Quality Prompt', REFLECTIVE: 'Reflective Prompt' }
@@ -305,6 +306,17 @@ export default function AdminDashboardPage() {
                   <FiClipboard className={styles.quickNavIcon} />
                   <div><strong>Riset</strong><p>Analisis RM2 & RM3</p></div>
                   <FiArrowRight />
+                </div>
+              </section>
+
+              {/* ── Biaya AI — Token Cost Meter ── */}
+              <section className={styles.aiCostSection}>
+                <div className={styles.aiCostHeader}>
+                  <h2>Biaya AI</h2>
+                  <p>Estimasi penggunaan token OpenAI oleh siswa</p>
+                </div>
+                <div className={styles.aiCostCard}>
+                  <TokenMeter defaultPeriod="today" />
                 </div>
               </section>
 

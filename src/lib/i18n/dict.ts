@@ -480,6 +480,17 @@ const id = {
   help_feature_discussion_title: 'Syarat buka diskusi',
   help_feature_discussion_desc:
     'Diskusi modul terbuka setelah kamu menyelesaikan SEMUA subtopic dalam modul itu (quiz + refleksi). Indikator terkunci di sidebar.',
+  help_feature_rag_title: 'Sumber & Kutipan',
+  help_feature_rag_desc:
+    'Jawaban AI di Mode Penelitian didukung oleh dokumen sumber yang telah dikurasi peneliti. Ikon kutipan di setiap jawaban membuka panel sumber.',
+  help_feature_interactive_title: 'Blok Interaktif',
+  help_feature_interactive_desc:
+    'Aktivitas hands-on (TraceTable, BugHunt, Parsons, dll.) di akhir subtopic penelitian. Setiap submission dicatat sebagai artefak penelitian.',
+
+  // ── SidangMode ───────────────────────────────────────────────────
+  sidang_mode_label: 'Mode Sidang',
+  sidang_mode_on_aria: 'Aktifkan Mode Sidang',
+  sidang_mode_off_aria: 'Nonaktifkan Mode Sidang',
 
   // ── PromptBuilder ────────────────────────────────────────────────
   prompt_mode_simple: '⚡ Langsung',
@@ -559,6 +570,45 @@ const id = {
   request_course_generating_retry: 'Kembali & Coba Lagi',
   request_course_generating_summary_topic: 'Topik',
   request_course_generating_summary_level: 'Level',
+
+  // Outline preview (Fase 6 A2)
+  request_course_preview_title: 'Pratinjau Outline Kursus',
+  request_course_preview_subtitle: 'Tinjau dan sesuaikan struktur kursus sebelum menghasilkan konten lengkap.',
+  request_course_preview_loading: 'Membuat outline...',
+  request_course_preview_regenerating: 'Membuat ulang outline...',
+  request_course_preview_regenerate: 'Buat Ulang',
+  request_course_preview_back: 'Kembali',
+  request_course_preview_approve: 'Setujui & Lanjutkan',
+  request_course_preview_module_label: 'Modul',
+  request_course_preview_subtopics_count: 'subtopik',
+  request_course_preview_add_subtopic: '+ Tambah Subtopik',
+  request_course_preview_delete_subtopic: 'Hapus subtopik',
+  request_course_preview_edit_title: 'Ubah judul',
+  request_course_preview_edit_summary: 'Ubah ringkasan',
+  request_course_preview_placeholder_title: 'Judul subtopik',
+  request_course_preview_placeholder_summary: 'Ringkasan singkat',
+  request_course_preview_error_title: 'Gagal memuat outline',
+  request_course_preview_error_retry: 'Coba lagi',
+
+  // RAG citation (Fase 2 B1)
+  citation_section_label: 'Sumber Referensi AI',
+  citation_card_page_prefix: 'Hal.',
+  citation_modal_loading: 'Memuat kutipan...',
+  citation_modal_error: 'Gagal memuat kutipan sumber.',
+  citation_modal_close: 'Tutup',
+  citation_modal_chunk_label: 'Kutipan',
+  citation_modal_context_before: 'Konteks sebelum',
+  citation_modal_context_after: 'Konteks sesudah',
+  citation_modal_author_label: 'Penulis',
+  citation_modal_edition_label: 'Edisi',
+  citation_modal_open_pdf: 'Buka PDF asli',
+
+  // Retry banner (Fase 6 A4)
+  course_retry_banner_message: 'Beberapa subtopik gagal dibuat saat pertama. Anda bisa coba ulang sekarang.',
+  course_retry_banner_cta: 'Coba ulang subtopik yang gagal',
+  course_retry_banner_retrying: 'Mengulang...',
+  course_retry_banner_success: 'Semua subtopik berhasil dibuat ulang.',
+  course_retry_banner_error: 'Sebagian masih gagal. Coba lagi nanti.',
 } as const;
 
 const en = {
@@ -1037,6 +1087,17 @@ const en = {
   help_feature_discussion_title: 'How to unlock the discussion',
   help_feature_discussion_desc:
     'The module discussion unlocks once you complete EVERY subtopic in that module (quiz + reflection). The locked indicator shows in the sidebar.',
+  help_feature_rag_title: 'Sources & Citations',
+  help_feature_rag_desc:
+    'AI answers in Research Mode are backed by researcher-curated documents. The citation icon on each answer opens the source panel.',
+  help_feature_interactive_title: 'Interactive Blocks',
+  help_feature_interactive_desc:
+    'Hands-on activities (TraceTable, BugHunt, Parsons, etc.) at the end of research subtopics. Each submission is recorded as a research artifact.',
+
+  // ── SidangMode ───────────────────────────────────────────────────
+  sidang_mode_label: 'Defense Mode',
+  sidang_mode_on_aria: 'Enable Defense Mode',
+  sidang_mode_off_aria: 'Disable Defense Mode',
 
   // ── PromptBuilder ────────────────────────────────────────────────
   prompt_mode_simple: '⚡ Quick',
@@ -1118,6 +1179,45 @@ const en = {
   request_course_generating_retry: 'Back & Try Again',
   request_course_generating_summary_topic: 'Topic',
   request_course_generating_summary_level: 'Level',
+
+  // Outline preview (Fase 6 A2)
+  request_course_preview_title: 'Course Outline Preview',
+  request_course_preview_subtitle: 'Review and adjust the course structure before generating full content.',
+  request_course_preview_loading: 'Generating outline...',
+  request_course_preview_regenerating: 'Regenerating outline...',
+  request_course_preview_regenerate: 'Regenerate',
+  request_course_preview_back: 'Back',
+  request_course_preview_approve: 'Approve & Continue',
+  request_course_preview_module_label: 'Module',
+  request_course_preview_subtopics_count: 'subtopics',
+  request_course_preview_add_subtopic: '+ Add subtopic',
+  request_course_preview_delete_subtopic: 'Delete subtopic',
+  request_course_preview_edit_title: 'Edit title',
+  request_course_preview_edit_summary: 'Edit summary',
+  request_course_preview_placeholder_title: 'Subtopic title',
+  request_course_preview_placeholder_summary: 'Brief summary',
+  request_course_preview_error_title: 'Failed to load outline',
+  request_course_preview_error_retry: 'Try again',
+
+  // RAG citation (Fase 2 B1)
+  citation_section_label: 'AI Source References',
+  citation_card_page_prefix: 'p.',
+  citation_modal_loading: 'Loading citation...',
+  citation_modal_error: 'Failed to load source citation.',
+  citation_modal_close: 'Close',
+  citation_modal_chunk_label: 'Excerpt',
+  citation_modal_context_before: 'Context before',
+  citation_modal_context_after: 'Context after',
+  citation_modal_author_label: 'Author',
+  citation_modal_edition_label: 'Edition',
+  citation_modal_open_pdf: 'Open original PDF',
+
+  // Retry banner (Fase 6 A4)
+  course_retry_banner_message: 'Some subtopics failed during initial generation. You can retry them now.',
+  course_retry_banner_cta: 'Retry failed subtopics',
+  course_retry_banner_retrying: 'Retrying...',
+  course_retry_banner_success: 'All subtopics regenerated successfully.',
+  course_retry_banner_error: 'Some still failed. Try again later.',
 } as const satisfies Record<keyof typeof id, string>;
 
 export const dict = { id, en } as const;

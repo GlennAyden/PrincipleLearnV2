@@ -1,0 +1,459 @@
+// src/components/admin/TokenMeter/TokenMeter.module.scss
+@use '../../../app/admin/_tokens' as *;
+
+// ── Dark-mode palette (digunakan di /admin/live) ─────────────────────────
+$dark-bg:        #111827;
+$dark-bg-card:   #1a2234;
+$dark-border:    #1f2937;
+$dark-text:      #f1f5f9;
+$dark-dim:       #6b7280;
+$dark-mid:       #9ca3af;
+$dark-track:     #1f2937;
+$dark-skeleton:  linear-gradient(90deg, #1f2937 25%, #273348 50%, #1f2937 75%);
+
+// ─────────────────────────────────────────────────────────────────────────
+
+/* ── Card shell ── */
+.card {
+  background: white;
+  border: 1px solid $gray-200;
+  border-radius: $radius-md;
+  padding: 1.1rem 1.25rem 1rem;
+  display: flex;
+  flex-direction: column;
+  gap: 0.85rem;
+  position: relative;
+  overflow: hidden;
+  transition: box-shadow $transition-fast;
+
+  &::before {
+    content: '';
+    position: absolute;
+    inset: 0 0 auto 0;
+    height: 3px;
+    background: linear-gradient(90deg, $indigo-500, $indigo-400, #818cf8);
+    border-radius: $radius-md $radius-md 0 0;
+  }
+
+  &:hover { box-shadow: $shadow-sm; }
+}
+
+.cardDark {
+  background: $dark-bg-card;
+  border-color: $dark-border;
+  color: $dark-text;
+
+  &::before {
+    background: linear-gradient(90deg, #6366f1, #818cf8, #a78bfa);
+  }
+}
+
+.cardCompact {
+  padding: 0.75rem 1rem;
+  gap: 0.6rem;
+  &::before { display: none; }
+}
+
+.cardErr {
+  border-color: #fecaca;
+  &::before { background: linear-gradient(90deg, $red-500, #fca5a5); }
+}
+
+/* ── Header ── */
+.header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.5rem;
+  flex-wrap: wrap;
+}
+
+.headerLeft {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+}
+
+.headerRight {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+}
+
+/* Pulsing live dot */
+@keyframes livePulse {
+  0%, 100% { box-shadow: 0 0 0 0 rgba(34, 197, 94, 0.7); }
+  60%       { box-shadow: 0 0 0 5px rgba(34, 197, 94, 0); }
+}
+
+.liveDot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: #22c55e;
+  animation: livePulse 1.8s ease-in-out infinite;
+  flex-shrink: 0;
+}
+
+.liveDotDark { /* same animation, different context */ }
+
+.liveLabel {
+  font-size: 0.65rem;
+  font-weight: 700;
+  letter-spacing: 0.1em;
+  color: #22c55e;
+  font-family: $font-mono;
+}
+
+.liveLabelDark { color: #4ade80; }
+
+.title {
+  font-size: 0.78rem;
+  font-weight: 600;
+  color: $gray-500;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+}
+
+.titleDark { color: $dark-mid; }
+
+.estBadge {
+  font-size: 0.62rem;
+  background: $amber-50;
+  color: $amber-600;
+  border: 1px solid #fde68a;
+  padding: 1px 7px;
+  border-radius: 999px;
+  font-weight: 500;
+}
+
+.refreshTime {
+  font-family: $font-mono;
+  font-size: 0.65rem;
+  color: $gray-400;
+  letter-spacing: 0.02em;
+}
+.refreshTimeDark { color: $dark-dim; }
+
+/* Period dropdown */
+.periodSelect {
+  font-size: 0.72rem;
+  padding: 3px 8px;
+  border: 1px solid $gray-200;
+  border-radius: $radius-sm;
+  background: $gray-50;
+  color: $gray-700;
+  cursor: pointer;
+  outline: none;
+  font-family: $font-sans;
+  transition: border-color $transition-fast;
+
+  &:focus { border-color: $indigo-500; }
+}
+
+.periodSelectDark {
+  background: $dark-border;
+  border-color: $dark-border;
+  color: $dark-mid;
+
+  option { background: $dark-bg-card; }
+}
+
+/* Refresh button */
+.refreshBtn {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 28px;
+  height: 28px;
+  border: 1px solid $gray-200;
+  border-radius: $radius-sm;
+  background: none;
+  color: $gray-500;
+  cursor: pointer;
+  transition: all $transition-fast;
+  flex-shrink: 0;
+
+  &:hover:not(:disabled) {
+    border-color: $indigo-500;
+    color: $indigo-500;
+    background: $indigo-50;
+  }
+
+  &:disabled { opacity: 0.5; cursor: not-allowed; }
+}
+
+.refreshBtnDark {
+  border-color: $dark-border;
+  color: $dark-mid;
+
+  &:hover:not(:disabled) {
+    border-color: #818cf8;
+    color: #818cf8;
+    background: rgba(99, 102, 241, 0.1);
+  }
+}
+
+@keyframes spin {
+  to { transform: rotate(360deg); }
+}
+.spinning { animation: spin 0.8s linear infinite; }
+
+/* Compact controls strip */
+.compactControls {
+  display: flex;
+  justify-content: flex-end;
+}
+
+/* ── 4-stat grid ── */
+.statsGrid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 0.6rem;
+}
+
+.statCard {
+  background: $gray-50;
+  border: 1px solid $gray-200;
+  border-radius: $radius-sm;
+  padding: 0.6rem 0.75rem;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.statCardDark {
+  background: rgba(255, 255, 255, 0.04);
+  border-color: $dark-border;
+}
+
+.statCardAccent {
+  border-color: $indigo-400;
+  background: $indigo-50;
+}
+
+.statValue {
+  font-size: 1.4rem;
+  font-weight: 700;
+  color: $gray-800;
+  line-height: 1.05;
+  letter-spacing: -0.03em;
+  font-family: $font-mono;
+  font-variant-numeric: tabular-nums;
+}
+
+.statValueDark {
+  color: $dark-text;
+}
+
+.statValueUsd { color: #059669; }
+.statValueIdr { color: $indigo-600; }
+
+.statLabel {
+  font-size: 0.65rem;
+  font-weight: 600;
+  color: $gray-400;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+}
+
+.statLabelDark { color: $dark-dim; }
+
+/* ── Section wrapper ── */
+.section {
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+}
+
+.sectionTitle {
+  font-size: 0.7rem;
+  font-weight: 600;
+  color: $gray-400;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  margin: 0;
+}
+
+.sectionTitleDark { color: $dark-dim; }
+
+/* ── Endpoint bar chart ── */
+.epBars {
+  display: flex;
+  flex-direction: column;
+  gap: 0.45rem;
+}
+
+.epRow {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+}
+
+.epLabel {
+  width: 110px;
+  font-size: 0.68rem;
+  color: $gray-600;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  flex-shrink: 0;
+}
+
+.epLabelDark { color: $dark-mid; }
+
+.epTrack {
+  flex: 1;
+  height: 14px;
+  background: $gray-100;
+  border-radius: 4px;
+  overflow: hidden;
+}
+
+.epFill {
+  height: 100%;
+  border-radius: 4px;
+  transition: width 0.6s cubic-bezier(0.25, 0.46, 0.45, 0.94);
+  min-width: 2px;
+}
+
+.epStat {
+  font-family: $font-mono;
+  font-size: 0.68rem;
+  font-weight: 600;
+  color: $gray-600;
+  width: 70px;
+  text-align: right;
+  flex-shrink: 0;
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 4px;
+}
+
+.epStatDark { color: $dark-mid; }
+
+.epShare {
+  font-size: 0.6rem;
+  color: $gray-400;
+  font-weight: 400;
+}
+
+/* ── Sparkline ── */
+.sparkWrap {
+  position: relative;
+  padding-bottom: 18px; /* ruang untuk label tanggal */
+}
+
+.sparkSvg {
+  width: 100%;
+  height: 52px;
+  display: block;
+  overflow: visible;
+}
+
+.sparkDot {
+  cursor: pointer;
+  transition: r 0.12s ease;
+}
+
+.sparkTip {
+  position: absolute;
+  top: -58px;
+  transform: translateX(-50%);
+  background: $gray-800;
+  color: white;
+  border-radius: $radius-sm;
+  padding: 5px 9px;
+  font-size: 0.68rem;
+  white-space: nowrap;
+  pointer-events: none;
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+  z-index: 10;
+  box-shadow: $shadow-md;
+
+  strong {
+    font-size: 0.72rem;
+    font-weight: 600;
+  }
+
+  &::after {
+    content: '';
+    position: absolute;
+    bottom: -5px;
+    left: 50%;
+    transform: translateX(-50%);
+    border: 5px solid transparent;
+    border-top-color: $gray-800;
+    border-bottom: none;
+  }
+}
+
+.sparkTipDark {
+  background: #374151;
+  &::after { border-top-color: #374151; }
+}
+
+/* ── Skeleton loader ── */
+.skeleton {
+  height: 80px;
+  background: linear-gradient(90deg, $gray-100 25%, $gray-50 50%, $gray-100 75%);
+  background-size: 200% 100%;
+  animation: shimmer 1.5s infinite;
+  border-radius: $radius-sm;
+}
+
+.skeletonDark {
+  background: $dark-skeleton;
+  background-size: 200% 100%;
+  animation: shimmer 1.5s infinite;
+}
+
+@keyframes shimmer {
+  0%   { background-position: 200% 0; }
+  100% { background-position: -200% 0; }
+}
+
+/* ── States ── */
+.emptyMsg {
+  font-size: 0.8rem;
+  color: $gray-400;
+  text-align: center;
+  padding: 1rem 0 0.5rem;
+}
+
+.emptyMsgDark { color: $dark-dim; }
+
+.errMsg {
+  font-size: 0.78rem;
+  color: $red-600;
+  margin: 0;
+}
+
+.retryBtn {
+  align-self: flex-start;
+  font-size: 0.73rem;
+  background: none;
+  border: 1px solid #fecaca;
+  color: $red-600;
+  padding: 4px 10px;
+  border-radius: $radius-sm;
+  cursor: pointer;
+  transition: all $transition-fast;
+
+  &:hover { background: #fef2f2; }
+}
+
+/* ── Footnote ── */
+.footnote {
+  font-size: 0.62rem;
+  color: $gray-300;
+  margin: 0;
+  text-align: right;
+  font-family: $font-mono;
+  letter-spacing: 0.01em;
+}
+
+.footnoteDark { color: $dark-dim; }

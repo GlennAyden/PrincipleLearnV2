@@ -1,0 +1,366 @@
+/* src/components/admin/DemoCueCards/DemoCueCards.module.scss */
+
+// ── Floating trigger ──────────────────────────────────────────────────────────
+.trigger {
+  position: fixed;
+  bottom: 1.75rem;
+  right: 1.75rem;
+  z-index: 800;
+  display: inline-flex;
+  align-items: center;
+  gap: 0.5rem;
+  padding: 0.65rem 1.1rem;
+  background: linear-gradient(135deg, #7c3aed, #4f46e5);
+  color: #fff;
+  border: none;
+  border-radius: 999px;
+  font-size: 0.88rem;
+  font-weight: 600;
+  cursor: pointer;
+  box-shadow:
+    0 4px 16px rgba(124, 58, 237, 0.4),
+    0 1px 4px rgba(0, 0, 0, 0.15);
+  transition: transform 0.2s ease, box-shadow 0.2s ease;
+  white-space: nowrap;
+
+  &:hover {
+    transform: translateY(-2px) scale(1.02);
+    box-shadow:
+      0 6px 22px rgba(124, 58, 237, 0.52),
+      0 2px 6px rgba(0, 0, 0, 0.18);
+  }
+
+  &:active {
+    transform: translateY(0) scale(0.98);
+  }
+}
+
+.triggerIcon {
+  font-size: 1.05rem;
+  line-height: 1;
+}
+
+.triggerLabel {
+  @media (max-width: 480px) {
+    display: none;
+  }
+}
+
+// ── Overlay root ─────────────────────────────────────────────────────────────
+.root {
+  position: fixed;
+  inset: 0;
+  z-index: 9100;
+  pointer-events: none;
+}
+
+// ── Spotlight veils ──────────────────────────────────────────────────────────
+.veil {
+  position: fixed;
+  background: rgba(9, 9, 11, 0.65);
+  pointer-events: auto;
+  animation: fadeIn 0.25s ease-out;
+  backdrop-filter: blur(1px);
+}
+
+.veilFull {
+  inset: 0;
+}
+
+// ── Spotlight ring ───────────────────────────────────────────────────────────
+.ring {
+  position: fixed;
+  border: 2px solid rgba(167, 139, 250, 0.9);
+  border-radius: 10px;
+  box-shadow:
+    0 0 0 4px rgba(124, 58, 237, 0.25),
+    0 0 28px rgba(167, 139, 250, 0.55);
+  pointer-events: none;
+  transition: top 0.35s cubic-bezier(0.4, 0, 0.2, 1),
+              left 0.35s cubic-bezier(0.4, 0, 0.2, 1),
+              width 0.35s cubic-bezier(0.4, 0, 0.2, 1),
+              height 0.35s cubic-bezier(0.4, 0, 0.2, 1);
+  animation: ringPulse 2.4s ease-in-out infinite;
+}
+
+// ── Cue card ─────────────────────────────────────────────────────────────────
+.card {
+  position: fixed;
+  background: linear-gradient(160deg, #1e1b4b 0%, #12102a 100%);
+  border: 1px solid rgba(167, 139, 250, 0.25);
+  border-radius: 18px;
+  box-shadow:
+    0 20px 60px rgba(0, 0, 0, 0.55),
+    0 0 0 1px rgba(255, 255, 255, 0.05);
+  pointer-events: auto;
+  z-index: 9101;
+  animation: cardSlideIn 0.3s cubic-bezier(0.16, 1, 0.3, 1);
+  overflow: hidden;
+  color: #fff;
+}
+
+.cardHeader {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 1rem 1rem 0.5rem;
+}
+
+.stepBadge {
+  font-size: 0.7rem;
+  font-weight: 700;
+  letter-spacing: 0.07em;
+  text-transform: uppercase;
+  color: #a78bfa;
+  background: rgba(167, 139, 250, 0.12);
+  padding: 0.2rem 0.6rem;
+  border-radius: 999px;
+}
+
+.closeBtn {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 28px;
+  height: 28px;
+  background: rgba(255, 255, 255, 0.06);
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  border-radius: 8px;
+  color: #94a3b8;
+  cursor: pointer;
+  transition: background 0.15s, color 0.15s;
+
+  &:hover {
+    background: rgba(255, 255, 255, 0.12);
+    color: #fff;
+  }
+}
+
+// ── Progress bar ──────────────────────────────────────────────────────────────
+.progressBar {
+  height: 3px;
+  background: rgba(255, 255, 255, 0.08);
+  margin: 0 1rem;
+  border-radius: 999px;
+  overflow: hidden;
+}
+
+.progressFill {
+  height: 100%;
+  background: linear-gradient(90deg, #a78bfa, #60a5fa);
+  border-radius: 999px;
+  transition: width 0.4s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+// ── Card body ─────────────────────────────────────────────────────────────────
+.cardBody {
+  padding: 0.9rem 1rem 0.75rem;
+}
+
+.stepTitle {
+  font-size: 1.05rem;
+  font-weight: 700;
+  color: #f1f5f9;
+  margin: 0 0 0.45rem;
+  line-height: 1.3;
+}
+
+.stepNarasi {
+  font-size: 0.875rem;
+  color: #cbd5e1;
+  line-height: 1.6;
+  margin: 0 0 0.65rem;
+}
+
+.urlHint {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.35rem;
+  font-size: 0.72rem;
+  font-family: 'Fira Code', 'Cascadia Code', monospace;
+  color: #60a5fa;
+  background: rgba(96, 165, 250, 0.08);
+  padding: 0.2rem 0.55rem;
+  border-radius: 6px;
+  border: 1px solid rgba(96, 165, 250, 0.15);
+}
+
+// ── Navigating banner ─────────────────────────────────────────────────────────
+.navigatingBanner {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  padding: 0.45rem 1rem;
+  font-size: 0.8rem;
+  color: #a78bfa;
+  background: rgba(124, 58, 237, 0.1);
+  border-top: 1px solid rgba(124, 58, 237, 0.15);
+}
+
+.navSpinner {
+  display: inline-block;
+  width: 14px;
+  height: 14px;
+  border: 2px solid rgba(167, 139, 250, 0.3);
+  border-top-color: #a78bfa;
+  border-radius: 50%;
+  animation: spin 0.7s linear infinite;
+}
+
+// ── Footer ────────────────────────────────────────────────────────────────────
+.cardFooter {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 0.5rem;
+  padding: 0.65rem 1rem 0.5rem;
+  border-top: 1px solid rgba(255, 255, 255, 0.06);
+}
+
+.exitBtn {
+  background: transparent;
+  border: none;
+  color: #64748b;
+  font-size: 0.78rem;
+  font-weight: 500;
+  padding: 0.35rem 0.5rem;
+  cursor: pointer;
+  border-radius: 6px;
+  transition: color 0.15s, background 0.15s;
+
+  &:hover {
+    color: #94a3b8;
+    background: rgba(255, 255, 255, 0.05);
+  }
+}
+
+.navBtns {
+  display: flex;
+  gap: 0.4rem;
+}
+
+.backBtn {
+  background: rgba(255, 255, 255, 0.06);
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  color: #cbd5e1;
+  font-size: 0.82rem;
+  font-weight: 500;
+  padding: 0.45rem 0.8rem;
+  border-radius: 9px;
+  cursor: pointer;
+  min-height: 36px;
+  transition: background 0.15s, border-color 0.15s;
+
+  &:hover:not(:disabled) {
+    background: rgba(255, 255, 255, 0.1);
+    border-color: rgba(255, 255, 255, 0.18);
+  }
+
+  &:disabled {
+    opacity: 0.45;
+    cursor: not-allowed;
+  }
+}
+
+.nextBtn {
+  background: linear-gradient(135deg, #7c3aed, #4f46e5);
+  color: #fff;
+  border: none;
+  font-size: 0.85rem;
+  font-weight: 600;
+  padding: 0.5rem 1rem;
+  border-radius: 9px;
+  cursor: pointer;
+  min-height: 36px;
+  box-shadow: 0 3px 12px rgba(124, 58, 237, 0.38);
+  transition: transform 0.15s, box-shadow 0.2s;
+
+  &:hover:not(:disabled) {
+    transform: translateY(-1px);
+    box-shadow: 0 5px 18px rgba(124, 58, 237, 0.52);
+  }
+
+  &:disabled {
+    opacity: 0.55;
+    cursor: not-allowed;
+  }
+}
+
+// ── Dot indicators ────────────────────────────────────────────────────────────
+.dots {
+  display: flex;
+  justify-content: center;
+  gap: 0.35rem;
+  padding: 0.5rem 1rem 0.85rem;
+}
+
+.dot {
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  background: rgba(255, 255, 255, 0.15);
+  border: none;
+  cursor: pointer;
+  padding: 0;
+  transition: background 0.2s, transform 0.2s, width 0.2s;
+
+  &:hover {
+    background: rgba(255, 255, 255, 0.3);
+  }
+}
+
+.dotActive {
+  background: #a78bfa;
+  width: 18px;
+  border-radius: 999px;
+  transform: none;
+}
+
+.dotDone {
+  background: rgba(167, 139, 250, 0.45);
+}
+
+// ── Animations ────────────────────────────────────────────────────────────────
+@keyframes fadeIn {
+  from { opacity: 0; }
+  to   { opacity: 1; }
+}
+
+@keyframes cardSlideIn {
+  from { opacity: 0; transform: translateY(8px) scale(0.97); }
+  to   { opacity: 1; transform: translateY(0) scale(1); }
+}
+
+@keyframes ringPulse {
+  0%, 100% {
+    box-shadow:
+      0 0 0 4px rgba(124, 58, 237, 0.25),
+      0 0 28px rgba(167, 139, 250, 0.55);
+  }
+  50% {
+    box-shadow:
+      0 0 0 8px rgba(124, 58, 237, 0.12),
+      0 0 40px rgba(167, 139, 250, 0.7);
+  }
+}
+
+@keyframes spin {
+  to { transform: rotate(360deg); }
+}
+
+// ── Mobile responsive ─────────────────────────────────────────────────────────
+@media (max-width: 520px) {
+  .card {
+    left: 12px !important;
+    right: 12px;
+    width: auto !important;
+    top: auto !important;
+    bottom: 16px;
+    transform: none !important;
+  }
+
+  .trigger {
+    bottom: 1.25rem;
+    right: 1.25rem;
+  }
+}

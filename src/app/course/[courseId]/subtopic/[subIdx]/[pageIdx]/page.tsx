@@ -62,6 +62,7 @@ interface CourseState {
   id: string;
   title: string;
   level: string;
+  mode?: 'general' | 'research';
   outline: ModuleOutline[];
   subtopicDetails?: Record<number, Record<number, SubtopicResponse>>;
 }
@@ -423,6 +424,7 @@ export default function SubtopicPage() {
             id: result.course.id,
             title: result.course.title,
             level: result.course.difficulty_level || 'Beginner',
+            mode: result.course.mode === 'research' ? 'research' : 'general',
             outline
           };
 
@@ -1483,7 +1485,11 @@ export default function SubtopicPage() {
       </div>
 
       <HelpButton onClick={() => setHelpDrawerOpen(true)} />
-      <HelpDrawer open={helpDrawerOpen} onClose={() => setHelpDrawerOpen(false)} />
+      <HelpDrawer
+        open={helpDrawerOpen}
+        onClose={() => setHelpDrawerOpen(false)}
+        mode={course?.mode ?? 'general'}
+      />
     </>
   );
 }

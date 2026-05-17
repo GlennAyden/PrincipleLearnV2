@@ -1,0 +1,98 @@
+/* src/components/RetryBanner/RetryBanner.module.scss */
+
+$yellow-50:  #fefce8;
+$yellow-200: #fef08a;
+$yellow-600: #ca8a04;
+$yellow-800: #854d0e;
+$green-600:  #16a34a;
+$red-600:    #dc2626;
+$gray-600:   #475569;
+
+@keyframes spin { to { transform: rotate(360deg); } }
+
+.banner {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.75rem;
+  padding: 0.6rem 1rem;
+  background: $yellow-50;
+  border: 1px solid $yellow-200;
+  border-radius: 8px;
+  margin-bottom: 1rem;
+  font-size: 0.875rem;
+  color: $yellow-800;
+  flex-wrap: wrap;
+}
+
+.left {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  flex: 1;
+  min-width: 0;
+}
+
+.icon {
+  flex-shrink: 0;
+  color: $yellow-600;
+}
+
+.right {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  flex-shrink: 0;
+}
+
+.retryBtn {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.35rem;
+  padding: 0.35rem 0.8rem;
+  background: $yellow-600;
+  color: #fff;
+  border: none;
+  border-radius: 6px;
+  font-size: 0.82rem;
+  font-weight: 600;
+  cursor: pointer;
+  transition: background 0.2s;
+  white-space: nowrap;
+  &:hover:not(:disabled) { background: $yellow-800; }
+  &:disabled { opacity: 0.6; cursor: default; }
+}
+
+.dismissBtn {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 24px; height: 24px;
+  border: none;
+  background: transparent;
+  color: $yellow-600;
+  border-radius: 4px;
+  cursor: pointer;
+  padding: 0;
+  transition: background 0.15s;
+  &:hover { background: $yellow-200; }
+}
+
+.spinner {
+  display: inline-block;
+  width: 12px; height: 12px;
+  border: 2px solid rgba(255,255,255,0.4);
+  border-top-color: #fff;
+  border-radius: 50%;
+  animation: spin 0.7s linear infinite;
+}
+
+.feedbackSuccess {
+  color: $green-600;
+  font-weight: 500;
+}
+
+.feedbackError {
+  color: $red-600;
+  font-weight: 500;
+}

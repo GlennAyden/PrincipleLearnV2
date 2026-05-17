@@ -1,0 +1,552 @@
+@use '../../../tokens' as *;
+
+// ── Page shell ──────────────────────────────────────────────────────────────
+
+.page {
+    @include page-container;
+    display: flex;
+    flex-direction: column;
+    gap: $section-gap;
+}
+
+// ── Back nav ────────────────────────────────────────────────────────────────
+
+.backBtn {
+    @include secondary-button;
+    align-self: flex-start;
+}
+
+// ── Page header ─────────────────────────────────────────────────────────────
+
+.pageHeader {
+    background: white;
+    border: 1px solid $gray-200;
+    border-radius: $radius-md;
+    box-shadow: $shadow-sm;
+    display: flex;
+    align-items: flex-start;
+    justify-content: space-between;
+    gap: 1.5rem;
+    padding: 1.5rem 1.75rem;
+}
+
+.pageHeaderMeta {
+    display: flex;
+    flex-direction: column;
+    gap: 0.65rem;
+}
+
+.metaRow {
+    display: flex;
+    align-items: center;
+    gap: 0.75rem;
+
+    strong {
+        color: $gray-800;
+        font-size: 1.05rem;
+        font-weight: 700;
+    }
+}
+
+.metaIcon {
+    color: $primary-500;
+    font-size: 1.1rem;
+    display: flex;
+}
+
+.metaEmail {
+    display: block;
+    color: $gray-400;
+    font-size: 0.8rem;
+    margin-top: 0.1rem;
+}
+
+.courseTitle {
+    color: $gray-500;
+    font-size: 0.85rem;
+    margin: 0;
+
+    em {
+        color: $gray-700;
+        font-style: normal;
+        font-weight: 600;
+    }
+}
+
+.badgeRow {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+    flex-wrap: wrap;
+}
+
+.recordDate {
+    color: $gray-400;
+    font-size: 0.78rem;
+    margin: 0;
+}
+
+.pageHeaderIcon {
+    color: $indigo-400;
+    font-size: 2rem;
+    opacity: 0.25;
+    flex-shrink: 0;
+}
+
+// ── RM badge ────────────────────────────────────────────────────────────────
+
+.rmBadge {
+    border-radius: $radius-sm;
+    display: inline-flex;
+    font-size: 0.74rem;
+    font-weight: 700;
+    padding: 0.25rem 0.6rem;
+    white-space: nowrap;
+}
+
+.rmRm2 {
+    background: $primary-50;
+    color: $primary-600;
+}
+
+.rmRm3 {
+    background: $green-50;
+    color: $green-700;
+}
+
+.rmBoth {
+    background: $purple-50;
+    color: $purple-600;
+}
+
+.indicatorCode {
+    background: $gray-100;
+    border: 1px solid $gray-200;
+    border-radius: $radius-sm;
+    color: $gray-700;
+    font-family: $font-mono;
+    font-size: 0.75rem;
+    font-weight: 700;
+    padding: 0.22rem 0.5rem;
+    white-space: nowrap;
+}
+
+// ── Convergence badge ────────────────────────────────────────────────────────
+
+.convergenceBadge {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.35rem;
+    border-radius: 999px;
+    font-size: 0.8rem;
+    font-weight: 700;
+    padding: 0.3rem 0.85rem;
+    white-space: nowrap;
+}
+
+.convScore {
+    font-size: 0.72rem;
+    font-weight: 600;
+    opacity: 0.8;
+    border-left: 1px solid currentColor;
+    padding-left: 0.45rem;
+    margin-left: 0.1rem;
+}
+
+.convConverged {
+    background: $green-50;
+    color: $green-700;
+    border: 1.5px solid rgba($green-500, 0.3);
+}
+
+.convPartial {
+    background: $amber-50;
+    color: $amber-600;
+    border: 1.5px solid rgba($amber-500, 0.3);
+}
+
+.convDivergent {
+    background: $red-50;
+    color: $red-600;
+    border: 1.5px solid rgba($red-500, 0.3);
+}
+
+.convMissing {
+    background: $gray-100;
+    color: $gray-500;
+    border: 1.5px solid $gray-200;
+}
+
+// ── Section heading ──────────────────────────────────────────────────────────
+
+.sectionTitle {
+    @include section-title;
+    font-size: 0.95rem;
+    margin-bottom: 0.75rem;
+}
+
+// ── 3-column source grid ─────────────────────────────────────────────────────
+
+.sourcesSection {
+    // wrapper — no extra bg needed, grid handles it
+}
+
+.sourcesGrid {
+    display: grid;
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+    gap: $card-gap;
+}
+
+// ── Source panel ─────────────────────────────────────────────────────────────
+
+.sourcePanel {
+    background: white;
+    border: 1px solid $gray-200;
+    border-radius: $radius-md;
+    box-shadow: $shadow-sm;
+    display: flex;
+    flex-direction: column;
+    overflow: hidden;
+    transition: box-shadow $transition-fast;
+
+    &:hover {
+        box-shadow: $shadow-md;
+    }
+}
+
+.sourcePanelAbsent {
+    border-color: $gray-100;
+    box-shadow: none;
+    opacity: 0.7;
+}
+
+.sourcePanelHeader {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+    padding: 0.85rem 1rem;
+    background: $gray-50;
+    border-bottom: 1px solid $gray-100;
+}
+
+.sourcePanelIcon {
+    font-size: 1.1rem;
+    flex-shrink: 0;
+}
+
+.sourcePanelLabel {
+    font-size: 0.85rem;
+    font-weight: 700;
+    color: $gray-700;
+    flex: 1;
+}
+
+// ── Source status badges ──────────────────────────────────────────────────────
+
+.sourceBadge {
+    border-radius: 999px;
+    font-size: 0.7rem;
+    font-weight: 700;
+    padding: 0.18rem 0.55rem;
+    white-space: nowrap;
+    flex-shrink: 0;
+}
+
+.statusPresent {
+    background: $green-50;
+    color: $green-700;
+}
+
+.statusPartial {
+    background: $amber-50;
+    color: $amber-600;
+}
+
+.statusAbsent {
+    background: $gray-100;
+    color: $gray-500;
+}
+
+// ── Panel body ────────────────────────────────────────────────────────────────
+
+.sourcePanelBody {
+    padding: 1rem;
+    flex: 1;
+    overflow-y: auto;
+    max-height: 280px;
+}
+
+.evidenceText {
+    color: $gray-700;
+    font-size: 0.86rem;
+    line-height: 1.65;
+    margin: 0;
+    white-space: pre-wrap;
+    word-break: break-word;
+}
+
+.absentNote {
+    color: $gray-400;
+    font-size: 0.83rem;
+    font-style: italic;
+    margin: 0;
+    text-align: center;
+    padding: 1.5rem 0;
+}
+
+// ── Interview footer section ──────────────────────────────────────────────────
+
+.interviewSection {
+    background: white;
+    border: 1px solid $gray-200;
+    border-radius: $radius-md;
+    box-shadow: $shadow-sm;
+    padding: 1rem 1.25rem;
+}
+
+.interviewHeader {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+    margin-bottom: 0.75rem;
+    padding-bottom: 0.65rem;
+    border-bottom: 1px solid $gray-100;
+
+    > span:first-child {
+        font-size: 1.1rem;
+    }
+}
+
+// ── Decision card ─────────────────────────────────────────────────────────────
+
+.decisionSection {
+    // wrapper
+}
+
+.decisionCard {
+    background: white;
+    border: 1px solid $gray-200;
+    border-radius: $radius-md;
+    box-shadow: $shadow-sm;
+    display: flex;
+    flex-direction: column;
+    gap: 0;
+    overflow: hidden;
+}
+
+.decisionRow {
+    display: flex;
+    align-items: baseline;
+    gap: 1rem;
+    padding: 0.85rem 1.25rem;
+    border-bottom: 1px solid $gray-100;
+}
+
+.rationaleBlock {
+    padding: 0.85rem 1.25rem;
+    border-bottom: 1px solid $gray-100;
+
+    &:last-child {
+        border-bottom: none;
+    }
+}
+
+.decisionLabel {
+    color: $gray-400;
+    font-size: 0.72rem;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+    white-space: nowrap;
+    display: block;
+    margin-bottom: 0.35rem;
+}
+
+.decisionValue {
+    color: $gray-800;
+    font-size: 0.9rem;
+    font-weight: 600;
+}
+
+.rationaleText {
+    color: $gray-700;
+    font-size: 0.86rem;
+    line-height: 1.6;
+    margin: 0;
+    white-space: pre-wrap;
+}
+
+.excerpt {
+    color: $gray-600;
+    font-style: italic;
+}
+
+// ── Researcher notes ──────────────────────────────────────────────────────────
+
+.notesSection {
+    // wrapper
+}
+
+.notesCard {
+    background: white;
+    border: 1px solid $gray-200;
+    border-radius: $radius-md;
+    box-shadow: $shadow-sm;
+    overflow: hidden;
+}
+
+.notesTextarea {
+    width: 100%;
+    border: none;
+    border-bottom: 1px solid $gray-100;
+    border-radius: 0;
+    color: $gray-700;
+    font-family: $font-sans;
+    font-size: 0.875rem;
+    line-height: 1.6;
+    padding: 1rem 1.25rem;
+    resize: vertical;
+    outline: none;
+    box-sizing: border-box;
+
+    &::placeholder {
+        color: $gray-300;
+    }
+
+    &:focus {
+        border-bottom-color: $primary-200;
+        background: $primary-50;
+    }
+}
+
+.notesFooter {
+    display: flex;
+    align-items: center;
+    gap: 0.75rem;
+    padding: 0.65rem 1rem;
+    background: $gray-50;
+}
+
+.notesError {
+    display: flex;
+    align-items: center;
+    gap: 0.35rem;
+    color: $red-600;
+    font-size: 0.8rem;
+    flex: 1;
+}
+
+.notesSaved {
+    display: flex;
+    align-items: center;
+    gap: 0.35rem;
+    color: $green-600;
+    font-size: 0.8rem;
+    flex: 1;
+}
+
+.saveNotesBtn {
+    @include primary-button;
+    margin-left: auto;
+}
+
+// ── Loading / error states ────────────────────────────────────────────────────
+
+.loading {
+    @include loading-state;
+}
+
+.errorPage {
+    @include loading-state;
+    flex-direction: column;
+    gap: 0.75rem;
+
+    svg {
+        font-size: 2.5rem;
+        color: $red-500;
+    }
+
+    p {
+        color: $gray-600;
+        margin: 0;
+    }
+}
+
+// ── Responsive: tablet → tabs ─────────────────────────────────────────────────
+
+@media (max-width: 900px) {
+    .sourcesGrid {
+        grid-template-columns: 1fr;
+    }
+
+    .sourcePanelBody {
+        max-height: none;
+    }
+
+    .pageHeader {
+        flex-direction: column;
+    }
+
+    .pageHeaderIcon {
+        display: none;
+    }
+}
+
+// ── Print ─────────────────────────────────────────────────────────────────────
+
+@media print {
+    .page {
+        padding: 0;
+        font-size: 11pt;
+    }
+
+    .backBtn,
+    .saveNotesBtn,
+    .notesTextarea,
+    .notesFooter {
+        display: none;
+    }
+
+    .sourcesGrid {
+        display: grid;
+        grid-template-columns: repeat(3, 1fr);
+        gap: 0.5rem;
+        page-break-inside: avoid;
+    }
+
+    .sourcePanel,
+    .decisionCard,
+    .notesCard,
+    .interviewSection {
+        box-shadow: none;
+        border: 1px solid #ccc;
+        page-break-inside: avoid;
+    }
+
+    .sourcePanelBody {
+        max-height: none;
+        overflow: visible;
+    }
+
+    .convergenceBadge,
+    .rmBadge,
+    .sourceBadge {
+        border: 1px solid currentColor;
+    }
+
+    .notesSection {
+        page-break-before: always;
+    }
+
+    .notesCard {
+        padding: 0.75rem;
+    }
+
+    .notesCard::before {
+        content: attr(data-notes);
+        display: block;
+        font-size: 10pt;
+        color: #444;
+        white-space: pre-wrap;
+    }
+}
