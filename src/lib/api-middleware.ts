@@ -9,12 +9,23 @@ import { verifyToken } from './jwt';
  */
 export function withProtection(
   handler: (req: NextRequest) => Promise<NextResponse>,
-  options: { 
+  opts: {
     csrfProtection?: boolean;
     requireAuth?: boolean;
     adminOnly?: boolean;
-  } = { csrfProtection: true, requireAuth: true, adminOnly: false }
+  } = {}
 ) {
+  // SECURITY: defaults must be applied per-field (not via the parameter
+  // default object). Otherwise a caller passing `{ adminOnly: true }` would
+  // wipe out `requireAuth` to undefined, and the !options.requireAuth branch
+  // below short-circuits straight into the handler with NO auth check.
+  // Regression discovered 2026-05-17 (token-meter exposed admin data without
+  // a cookie). Per-field merge prevents the class of bug entirely.
+  const options = {
+    csrfProtection: opts.csrfProtection ?? true,
+    requireAuth: opts.requireAuth ?? true,
+    adminOnly: opts.adminOnly ?? false,
+  };
   return async (req: NextRequest) => {
     // Skip protection for GET requests if CSRF protection is enabled
     if (options.csrfProtection && req.method !== 'GET') {

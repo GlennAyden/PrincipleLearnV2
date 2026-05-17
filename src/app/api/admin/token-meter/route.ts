@@ -264,7 +264,7 @@ async function getHandler(req: NextRequest): Promise<NextResponse> {
   });
 }
 
-export const GET = withApiLogging(withProtection(getHandler, { adminOnly: true }), {
-  label: 'token-meter',
-  awaitLog: false,
-});
+export const GET = withApiLogging(
+  withProtection(getHandler, { adminOnly: true, requireAuth: true, csrfProtection: false }),
+  { label: 'token-meter', awaitLog: false },
+);

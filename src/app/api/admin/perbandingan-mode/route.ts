@@ -7,6 +7,7 @@ import { NextResponse } from 'next/server'
 import type { NextRequest } from 'next/server'
 import { adminDb } from '@/lib/database'
 import { withApiLogging } from '@/lib/api-logger'
+import { verifyAdminFromCookie } from '@/lib/admin-auth'
 
 export interface ModeStats {
   courses: number
@@ -28,7 +29,11 @@ type InteractiveRow = {
   subtopics: { courses: { mode: string } }
 }
 
-async function handler(_req: NextRequest): Promise<NextResponse> {
+async function handler(req: NextRequest): Promise<NextResponse> {
+  const admin = verifyAdminFromCookie(req)
+  if (!admin) {
+    return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+  }
   try {
     // Query 1: course counts per mode
     const [generalCoursesRes, researchCoursesRes] = await Promise.all([
